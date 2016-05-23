@@ -65,4 +65,5 @@ CFLAGS = `pkg-config --cflags glib-2.0`
 LDLIBS = `pkg-config --libs glib-2.0`
 
 $ sudo apt-get install g++ libglib2.0-dev libcurl4-openssl-dev
+(or, try sudo aptitude install libglib2.0 libcurl4-openssl-dev)
 $ make PIN_ROOT=<where you extract pin-2.13>
