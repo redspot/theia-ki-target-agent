@@ -1,0 +1,3 @@
+#define __stub___kernel_sinl
+#define __stub___kernel_cosl
+#define __stub___kernel_tanl

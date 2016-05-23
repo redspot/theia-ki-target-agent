@@ -1,0 +1,68 @@
+1) Get the required software
+
+Omniplay runs on the 12.04.2 LTS Ubuntu Linux 32-bit distribution.  You should install
+this distro before proceeeding.
+The ISO file is available at: http://old-releases.ubuntu.com/releases/12.04.2/ubuntu-12.04.2-desktop-i386.iso.
+
+2) Obtain the omniplay source code
+
+Just clone the GitHub repository:
+$ git clone https://github.com/endplay/omniplay.git 
+
+This will create a number of sub-directories that contain the user-level and kernel source
+for omniplay.
+
+3) Build and install
+
+Assuming that <omniplay> is the root directory where you installed the source:
+
+3.0) One-time setup
+
+$ cd <omniplay>/scripts
+$ ./setup.sh
+$ source $HOME/.omniplay_setup
+
+3.1) Build the Omniplay kernel 
+
+$ cd $OMNIPLAY_DIR/linux-lts-quantal-3.5.0
+$ wget http://web.eecs.umich.edu/~ddevec/omniplay.config
+$ mv omniplay.config .config
+$ ./compile
+$ sudo make modules_install
+$ ./compile
+$ sudo reboot
+
+3.2) Build glibc
+install textinfo:
+$ cd dependencies.yang/textinfo;
+$ sudo apt-get install libncurses5-dev
+$ ./configure; make; sudo make install
+$ sudo apt-get install gawk autoconf gettext
+
+$ cd $OMNIPLAY_DIR/eglibc-2.15/
+$ mkdir build
+$ mkdir prefix
+$ cd build
+$ ../configure --prefix=$OMNIPLAY_DIR/eglibc-2.15/prefix --disable-profile --enable-add-on --without-gd --without-selinux --without-cvs --enable-kernel=3.2.0
+$ make
+$ mkdir /var/db
+$ chown <user> /var/db
+$ touch ../prefix/etc/ld.so.conf
+$ make install
+$ cd $OMNIPLAY_DIR/eglibc-2.15/prefix
+$ ln -s /usr/lib/locale
+
+3.3) Build the tool
+$ cd $OMNIPLAY_DIR/test/dev
+$ make
+$ cd ..
+$ make
+
+3.4) make pintool
+$ cd pin_tools
+Add the following to pin_tools/makefile.rule
+CFLAGS = `pkg-config --cflags glib-2.0`
+LDLIBS = `pkg-config --libs glib-2.0`
+
+$ sudo apt-get install g++ libglib2.0-dev libcurl4-openssl-dev
+$ make PIN_ROOT=<where you extract pin-2.13>

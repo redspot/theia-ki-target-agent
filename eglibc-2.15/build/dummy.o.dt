@@ -1,0 +1,10 @@
+/home/yang/omniplay/eglibc-2.15/build/dummy.o: \
+ /home/yang/omniplay/eglibc-2.15/build/dummy.c ../include/libc-symbols.h \
+ /home/yang/omniplay/eglibc-2.15/build/config.h \
+ ../sysdeps/wordsize-32/symbol-hacks.h
+
+../include/libc-symbols.h:
+
+/home/yang/omniplay/eglibc-2.15/build/config.h:
+
+../sysdeps/wordsize-32/symbol-hacks.h:
