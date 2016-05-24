@@ -2063,6 +2063,7 @@ new_record_thread (struct record_group* prg, u_long recpid, struct record_cache_
 	prp->rp_expected_clock = 0;
 	prp->rp_ulog_opened = 0;			
 	prp->rp_klog_opened = 0;			
+	prp->ahg_rp_log_opened = 0;			
 	prp->rp_read_ulog_pos = 0;	
 	prp->rp_repsignal_context_stack = NULL;
 	prp->rp_record_hook = 0;
@@ -7462,6 +7463,17 @@ replay_write (unsigned int fd, const char __user * buf, size_t count)
 asmlinkage ssize_t shim_write (unsigned int fd, const char __user * buf, size_t count) SHIM_CALL (write, 4, fd, buf, count);
 
 #ifdef CACHE_READS
+
+//Yang
+struct open_ahgv {
+  long            fd;
+  char            filename[200];
+  int             flags;
+  int             mode;
+	dev_t           dev;
+	u_long          ino;
+};
+
 static asmlinkage long							
 record_open (const char __user * filename, int flags, int mode)
 {								
@@ -7490,6 +7502,24 @@ record_open (const char __user * filename, int flags, int mode)
 		} while (0);
 		*/
 		MPRINT ("record_open of name %s with flags %x returns fd %ld\n", filename, flags, rc);
+    
+//Yang
+    struct open_ahgv* pahgv = NULL;
+    int copied_length = 0;
+    pahgv = AHG_ARGSKMALLOC(sizeof(struct open_ahgv), GFP_KERNEL);
+    pahgv->fd = rc;
+    pahgv->flags = flags;
+    pahgv->mode = mode;
+    file = fget (rc);
+    inode = file->f_dentry->d_inode;
+    pahgv->dev = inode->i_sb->s_dev;
+    pahgv->ino = inode->i_ino;
+    if ((copied_length = strncpy_from_user(pahgv->filename, filename, sizeof(pahgv->filename))) != strlen(filename)) {
+      printk ("record_open: can't copy filename to ahgv, filename length %d, copied %d\n", strlen(filename), copied_length); 
+      AHG_ARGSKFREE(pahgv, sizeof(struct open_ahgv));	
+    }
+    
+
 		if ((flags&O_ACCMODE) == O_RDONLY && !(flags&(O_CREAT|O_DIRECTORY))) {
 			file = fget (rc);
 			inode = file->f_dentry->d_inode;
