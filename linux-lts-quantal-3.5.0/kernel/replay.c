@@ -862,7 +862,7 @@ struct record_thread {
 
 	char rp_ulog_opened;		// Flag that says whether or not the user log has been opened 
 	char rp_klog_opened;		// Flag that says whether or not the kernel log has been opened 
-	char rp_ahglog_opened;		// Flag that says whether or not the ahg log has been opened 
+	char ahg_rp_log_opened;		// Flag that says whether or not the ahg log has been opened 
 	loff_t rp_read_ulog_pos;	// The current position in the ulog file that is being read
 	struct repsignal_context* rp_repsignal_context_stack;  // Saves replay context on signal delivery
 	u_long rp_record_hook;          // Used for dumbass linking in glibc
@@ -4197,7 +4197,7 @@ write_and_free_handler (struct work_struct *work)
 	if (file) {
 		MPRINT ("Writing %lu records for pid %d\n", prect->rp_in_ptr, current->pid);
 		write_psr = &prect->rp_log[0];
-		write_log_data (file, &pos, prect, write_psr, prect->rp_in_ptr);
+		write_log_data (file, &pos, prect, write_psr, prect->rp_in_ptr, false);
 		term_log_write (file, fd);
 	}
 #ifdef LOG_COMPRESS_1
@@ -14675,7 +14675,7 @@ struct file* ahg_init_log_write (struct record_thread* prect, loff_t* ppos, int*
 
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
-	if (prect->rp_klog_opened) {
+	if (prect->ahg_rp_log_opened) {
 		rc = sys_stat64(filename, &st);
 		if (rc < 0) {
 			printk ("Stat of file %s failed\n", filename);
@@ -14702,7 +14702,7 @@ struct file* ahg_init_log_write (struct record_thread* prect, loff_t* ppos, int*
 		}
 		MPRINT ("Opened log file %s\n", filename);
 		*ppos = 0;
-		prect->rp_ahglog_opened = 1;
+		prect->ahg_rp_log_opened = 1;
 	}
 	set_fs(old_fs);
 	if (*pfd < 0) {
