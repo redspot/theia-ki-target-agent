@@ -1,3 +1,16 @@
 *.a
 *.o
 .deps
+filemap
+getstats
+launcher
+parse_ahglog
+parseckpt
+parseklog
+parseklog_old
+parsemlog
+parseulog
+replay_pause
+reset_ndx
+resume
+
