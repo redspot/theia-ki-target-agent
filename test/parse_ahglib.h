@@ -46,6 +46,7 @@
 
 //#define USE_HPC
 
+
 #ifdef TRACE_READ_WRITE
 struct replayfs_syscache_id {
 	loff_t unique_id : 48; 
@@ -104,6 +105,16 @@ struct repsignal {
 struct rvalues {
 	int cnt;
 	long val[REPLAY_MAX_RANDOM_VALUES];
+};
+
+//Yang AHG params definition
+struct open_ahgv {                                                               
+  long            fd;                                                            
+  char            filename[204];                                                 
+  int             flags;                                                         
+  int             mode;                                                          
+  u_long          dev;                                                           
+  u_long          ino;                                                           
 };
 
 
@@ -318,10 +329,15 @@ struct klog_result {
 	struct klog_signal *signal;
 
 	void (*printfcn)(FILE *, struct klog_result *);
+  
+  //Yang
+  void *ahgparams;
+  int ahgparams_size;
 };
 
 struct parse_rules {
 	u_long (*get_retparamsize)(struct klogfile *log, struct klog_result *result);
+  int ahgparamsize;
 	int retparamsize;
 };
 

@@ -1,4 +1,4 @@
-#include "parseklib.h"
+#include "parse_ahglib.h"
 
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -102,7 +102,7 @@ static void free_active_psrs(struct klogfile *log) {
 	free(log->active_psrs);
 	log->active_psrs = NULL;
 }
-
+/*
 static u_long getretparamsize(struct klogfile *log,
 		struct klog_result *res) {
 	u_long ret = 0;
@@ -115,6 +115,20 @@ static u_long getretparamsize(struct klogfile *log,
 		} else {
 			ret = log->parse_rules[psr->sysnum]->retparamsize;
 		}
+		assert(ret >= 0);
+	}
+
+	return ret;
+}
+*/
+static u_long getahgparamsize(struct klogfile *log,
+		struct klog_result *res) {
+	u_long ret = 0;
+	struct syscall_result *psr = &res->psr;
+
+	if (res->psr.flags & SR_HAS_AHGPARAMS) {
+		assert(log->parse_rules[psr->sysnum]);
+    ret = log->parse_rules[psr->sysnum]->ahgparamsize;
 		assert(ret >= 0);
 	}
 
@@ -255,7 +269,7 @@ static int read_psr_chunk(struct klogfile *log) {
 			rc = read (log->fd, &clock, sizeof(u_long));
 			debugf("Reading stopclock,%lx,%ld\n",clock,lseek(log->fd, 0, SEEK_CUR));
 			if (rc != sizeof(u_long)) {
-				fprintf(stderr, "cannot read start clock value\n");
+				fprintf(stderr, "cannot read stop clock value\n");
 				return rc;
 			}
 
@@ -263,13 +277,42 @@ static int read_psr_chunk(struct klogfile *log) {
 		}
 		log->expected_clock = apsr->stop_clock + 1;
 
-		apsr->retparams_size = getretparamsize(log, apsr);
-		assert(apsr->retparams_size >= 0);
-		debugf("Got retparams_size %d\n", apsr->retparams_size);
-		if (apsr->retparams_size > 0) {
+    //Yang
+//		apsr->retparams_size = getretparamsize(log, apsr);
+		apsr->ahgparams_size = getahgparamsize(log, apsr);
+		assert(apsr->ahgparams_size >= 0);
+//		assert(apsr->retparams_size >= 0);
+		debugf("Got ahgparams_size %d\n", apsr->ahgparams_size);
+
+		if (apsr->ahgparams_size > 0) {
+			long rc;
+			apsr->ahgparams = malloc(apsr->ahgparams_size);
+			assert(apsr->ahgparams);
+
+			rc = lseek(log->fd, 0, SEEK_CUR);
+			debugf("Reading ahgparams (%d) from %ld\n", apsr->ahgparams_size, rc);
+			bytes_read = 0;
+			do {
+				rc = read(log->fd, apsr->ahgparams+bytes_read, apsr->ahgparams_size-bytes_read);
+			  debugf("ahgparam:filename:%s, ino:%lx, struct %d\n", ((struct open_ahgv*)(apsr->ahgparams))->filename, ((struct open_ahgv*)(apsr->ahgparams))->ino, sizeof(struct open_ahgv));
+        debugf("long %d, int %d, dev_t %d, u_long %d\n", sizeof(long),sizeof(int),sizeof(dev_t),sizeof(u_long));
+				if (rc != apsr->ahgparams_size) {
+					fprintf(stderr, "could not read apsr->ahgparams (rc=%ld, size=%d)!\n", rc, apsr->ahgparams_size);
+					if (rc <= 0) {
+						apsr->ahgparams_size = 0;
+						klog_print(stderr, apsr);
+						
+						free_active_psrs(log);
+						goto out_free;
+					}
+				}
+				bytes_read += rc;
+			} while (bytes_read != apsr->ahgparams_size);
+		}
+
+/*		if (apsr->retparams_size > 0) {
 			long rc;
 			apsr->retparams = malloc(apsr->retparams_size);
-			/* FIXME: should fail nicely... */
 			assert(apsr->retparams);
 
 			rc = lseek(log->fd, 0, SEEK_CUR);
@@ -290,7 +333,7 @@ static int read_psr_chunk(struct klogfile *log) {
 				bytes_read += rc;
 			} while (bytes_read != apsr->retparams_size);
 		}
-
+*/
 		if (apsr->psr.flags & SR_HAS_SIGNAL) {
 			struct klog_signal *n;
 			do {
@@ -1047,19 +1090,22 @@ static u_long getretparams_pread64 (struct klogfile *log, struct klog_result *re
 
 /* Rules for klog parsing */
 /*{{{*/
-#define _DEFRULE(sysnr, default, fcn) \
+#define _DEFRULE(sysnr, default, ahgsize, fcn) \
 	static struct parse_rules exception_##sysnr = { \
 		.get_retparamsize = (fcn), \
+		.ahgparamsize = (ahgsize), \
 		.retparamsize = (default) \
 	}
 
-#define DEFRULE(sysnr, size) _DEFRULE(sysnr, size, NULL)
-#define DEFRULE_FCN(sysnr, fcn) _DEFRULE(sysnr, 0, fcn)
+#define DEFRULE_AHG(sysnr, size, ahgsize) _DEFRULE(sysnr, size, ahgsize, NULL)
+#define DEFRULE(sysnr, size) _DEFRULE(sysnr, size, 0, NULL)
+#define DEFRULE_FCN(sysnr, fcn) _DEFRULE(sysnr, 0, 0, fcn)
 
 #define ADDRULE(sysnr, log) log->parse_rules[sysnr]=&exception_##sysnr
 DEFRULE_FCN(3, getretparams_read);
 DEFRULE_FCN(4, getretparams_write);
-DEFRULE(5, sizeof(struct open_retvals));
+DEFRULE_AHG(5, sizeof(struct open_retvals), sizeof(struct open_ahgv));
+//DEFRULE(5, sizeof(struct open_retvals));
 DEFRULE(7, sizeof(int));
 DEFRULE(11, sizeof(struct execve_retvals));
 DEFRULE(13, sizeof(time_t));

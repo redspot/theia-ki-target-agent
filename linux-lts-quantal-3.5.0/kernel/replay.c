@@ -155,6 +155,10 @@ unsigned int replay_pause_tool = 0;
 #define AHG_ARGSKMALLOC(size, flags) ahg_argsalloc(size)
 #define AHG_ARGSKFREE(ptr, size) ahg_argsfree(ptr, size)
 
+#define new_syscall_exit(sysnum, retparam) _new_syscall_exit(sysnum, retparam, NULL)
+#define ahg_new_syscall_exit(sysnum, retparam, ahgparam) _new_syscall_exit(sysnum, retparam, ahgparam)
+  
+
 /* Performance evaluation timers... micro monitoring */
 //struct perftimer *write_btwn_timer;
 struct perftimer *write_in_timer;
@@ -562,7 +566,8 @@ struct repsignal_context {
 #define SR_HAS_NONZERO_RETVAL   0x10
 #define SR_HAS_SPECIAL_FIRST	0x20
 #define SR_HAS_SPECIAL_SECOND	0x40
-#define SR_HAS_SPECIAL_THIRD 	0x80
+//#define SR_HAS_SPECIAL_THIRD 	0x80
+#define SR_HAS_AHGPARAMS 	0x80
 
 // This structure records the result of a system call
 struct syscall_result {
@@ -1760,6 +1765,8 @@ change_log_special_second(void)
 	psr->flags |= SR_HAS_SPECIAL_SECOND;
 }
 
+//Yang
+/*
 inline void
 change_log_special_third(void)
 {
@@ -1768,7 +1775,7 @@ change_log_special_third(void)
 	psr = &prt->rp_log[prt->rp_in_ptr];
 	psr->flags |= SR_HAS_SPECIAL_THIRD;
 }
-
+*/
 inline void init_evs(void)
 {
 #ifdef MULTI_GROUP
@@ -3764,6 +3771,10 @@ new_syscall_enter (long sysnum)
 		p = ARGSKMALLOC(sizeof(u_long), GFP_KERNEL);
 		if (unlikely (p == NULL)) return -ENOMEM;
 		*p = start_clock;
+//Yang
+		p = AHG_ARGSKMALLOC(sizeof(u_long), GFP_KERNEL);
+		if (unlikely (p == NULL)) return -ENOMEM;
+		*p = start_clock;
 #ifdef LOG_COMPRESS_1
 		// compression for start_clock
 		encodeValue ((unsigned int) start_clock, 32, 4, clog_alloc (4));
@@ -3816,6 +3827,10 @@ new_syscall_done (long sysnum, long retval)
 		p = ARGSKMALLOC(sizeof(long), GFP_KERNEL);
 		if (unlikely (p == NULL)) return -ENOMEM;
 		*p = retval;
+//Yang
+		p = AHG_ARGSKMALLOC(sizeof(long), GFP_KERNEL);
+		if (unlikely (p == NULL)) return -ENOMEM;
+		*p = retval;
 	} 
 
 	new_clock = atomic_add_return (1, prt->rp_precord_clock);
@@ -3823,6 +3838,10 @@ new_syscall_done (long sysnum, long retval)
 	if (stop_clock) {
 		psr->flags |= SR_HAS_STOP_CLOCK_SKIP;
 		ulp = ARGSKMALLOC(sizeof(u_long), GFP_KERNEL);
+		if (unlikely (ulp == NULL)) return -ENOMEM;
+		*ulp = stop_clock;
+//Yang
+		ulp = AHG_ARGSKMALLOC(sizeof(u_long), GFP_KERNEL);
 		if (unlikely (ulp == NULL)) return -ENOMEM;
 		*ulp = stop_clock;
 	}
@@ -3837,14 +3856,18 @@ static inline long new_syscall_done (long sysnum, long retval) {
 }
 #endif
 
+//Yang
 static inline long
-new_syscall_exit (long sysnum, void* retparams)
+_new_syscall_exit (long sysnum, void* retparams, void* ahgparams)
 {
 	struct syscall_result* psr;
 	struct record_thread* prt = current->record_thrd;
 
 	psr = &prt->rp_log[prt->rp_in_ptr];
 	psr->flags = retparams ? (psr->flags | SR_HAS_RETPARAMS) : psr->flags;
+//Yang
+	psr->flags = ahgparams ? (psr->flags | SR_HAS_AHGPARAMS) : psr->flags;
+  printk("new_syscall_exit flag is %x\n",psr->flags);
 #ifdef USE_HPC
 	psr->hpc_end = rdtsc();
 #endif
@@ -7467,7 +7490,7 @@ asmlinkage ssize_t shim_write (unsigned int fd, const char __user * buf, size_t 
 //Yang
 struct open_ahgv {
   long            fd;
-  char            filename[200];
+  char            filename[204];
   int             flags;
   int             mode;
 	dev_t           dev;
@@ -7480,6 +7503,7 @@ record_open (const char __user * filename, int flags, int mode)
 	struct file* file;
 	struct inode* inode;
 	struct open_retvals* recbuf = NULL;
+  struct open_ahgv* pahgv = NULL;
 	long rc;	
 
 	perftimer_start(open_timer);
@@ -7501,10 +7525,9 @@ record_open (const char __user * filename, int flags, int mode)
 			fput(file);
 		} while (0);
 		*/
-		MPRINT ("record_open of name %s with flags %x returns fd %ld\n", filename, flags, rc);
+		MPRINT ("record_open of name %s with flags %x returns fd %ld, sizeof open_ahgv %d\n", filename, flags, rc, sizeof(struct open_ahgv));
     
 //Yang
-    struct open_ahgv* pahgv = NULL;
     int copied_length = 0;
     pahgv = AHG_ARGSKMALLOC(sizeof(struct open_ahgv), GFP_KERNEL);
     pahgv->fd = rc;
@@ -7542,7 +7565,8 @@ record_open (const char __user * filename, int flags, int mode)
 		}
 	}
 
-	new_syscall_exit (5, recbuf);			
+  //Yang
+	ahg_new_syscall_exit (5, recbuf, pahgv);			
 
 	perftimer_stop(open_timer);
 
