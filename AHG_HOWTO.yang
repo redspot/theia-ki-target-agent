@@ -1,0 +1,8 @@
+1. add more hooks at replay.c
+a) Refer to record_open as example, add the open_ahgv struct for what you need.
+b) In the record_open, add AHG_ARGSKMALLOC to append the ahgv strcut to the linked list.
+
+2. add more handler at test/parse_ahglib.c
+a) add the definition of open_ahgv struct in parse_ahglib.h (make sure it is identical as in the kernel!!!)
+b) add DEFRULE_AHG(sysnr, size, ahgsize)
+c) add what you want to get in the read_psr_chunk
