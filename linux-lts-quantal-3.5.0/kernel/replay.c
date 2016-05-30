@@ -7497,6 +7497,13 @@ struct open_ahgv {
 	u_long          ino;
 };
 
+void packahgv_open (struct open_ahgv sys_args) {
+  printk("startahg|%d|%ld|%s|%d|%d|%lu|endahg", 
+    5, sys_args.fd, sys_args.filename, sys_args.flags, sys_args.mode,
+    sys_args.dev, sys_args.ino);
+}
+
+
 static asmlinkage long							
 record_open (const char __user * filename, int flags, int mode)
 {								
@@ -7541,6 +7548,7 @@ record_open (const char __user * filename, int flags, int mode)
       printk ("record_open: can't copy filename to ahgv, filename length %d, copied %d\n", strlen(filename), copied_length); 
       AHG_ARGSKFREE(pahgv, sizeof(struct open_ahgv));	
     }
+    packahgv_open(*pahgv);
     
 
 		if ((flags&O_ACCMODE) == O_RDONLY && !(flags&(O_CREAT|O_DIRECTORY))) {
