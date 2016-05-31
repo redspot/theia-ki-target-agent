@@ -532,8 +532,8 @@ atomic_t vmalloc_cnt = ATOMIC_INIT(0);
 
 /* Variables configurable via /proc file system */
 unsigned int syslog_recs = 20000;
-unsigned int replay_debug = 1;
-unsigned int replay_min_debug = 1;
+unsigned int replay_debug = 0;
+unsigned int replay_min_debug = 0;
 unsigned long argsalloc_size = (512*1024);
 // If the replay clock is greater than this value, MPRINT out the syscalls made by pin
 unsigned long pin_debug_clock = LONG_MAX;
@@ -3867,7 +3867,7 @@ _new_syscall_exit (long sysnum, void* retparams, void* ahgparams)
 	psr->flags = retparams ? (psr->flags | SR_HAS_RETPARAMS) : psr->flags;
 //Yang
 	psr->flags = ahgparams ? (psr->flags | SR_HAS_AHGPARAMS) : psr->flags;
-  printk("new_syscall_exit flag is %x\n",psr->flags);
+//  printk("new_syscall_exit flag is %x\n",psr->flags);
 #ifdef USE_HPC
 	psr->hpc_end = rdtsc();
 #endif
@@ -7498,7 +7498,7 @@ struct open_ahgv {
 };
 
 void packahgv_open (struct open_ahgv sys_args) {
-  printk("startahg|%d|%ld|%s|%d|%d|%lu|endahg", 
+  printk("startahg|%d|%ld|%s|%d|%d|%lu|endahg\n", 
     5, sys_args.fd, sys_args.filename, sys_args.flags, sys_args.mode,
     sys_args.dev, sys_args.ino);
 }
