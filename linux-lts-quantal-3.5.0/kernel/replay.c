@@ -7535,6 +7535,7 @@ record_open (const char __user * filename, int flags, int mode)
 		MPRINT ("record_open of name %s with flags %x returns fd %ld, sizeof open_ahgv %d\n", filename, flags, rc, sizeof(struct open_ahgv));
     
 //Yang
+		//Use the parallel linked list channel
     int copied_length = 0;
     pahgv = AHG_ARGSKMALLOC(sizeof(struct open_ahgv), GFP_KERNEL);
     pahgv->fd = rc;
@@ -7548,6 +7549,8 @@ record_open (const char __user * filename, int flags, int mode)
       printk ("record_open: can't copy filename to ahgv, filename length %d, copied %d\n", strlen(filename), copied_length); 
       AHG_ARGSKFREE(pahgv, sizeof(struct open_ahgv));	
     }
+
+		//Reuse dmesg channel
     packahgv_open(*pahgv);
     
 
