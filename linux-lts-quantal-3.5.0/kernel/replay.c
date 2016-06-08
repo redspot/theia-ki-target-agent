@@ -7489,6 +7489,7 @@ asmlinkage ssize_t shim_write (unsigned int fd, const char __user * buf, size_t 
 
 //Yang
 struct open_ahgv {
+	int							pid;
   long            fd;
   char            filename[204];
   int             flags;
@@ -7499,7 +7500,7 @@ struct open_ahgv {
 
 void packahgv_open (struct open_ahgv sys_args) {
   printk("startahg|%d|%ld|%s|%d|%d|%lu|endahg\n", 
-    5, sys_args.fd, sys_args.filename, sys_args.flags, sys_args.mode,
+    sys_args.pid, 5, sys_args.fd, sys_args.filename, sys_args.flags, sys_args.mode,
     sys_args.dev, sys_args.ino);
 }
 
@@ -7538,6 +7539,7 @@ record_open (const char __user * filename, int flags, int mode)
 		//Use the parallel linked list channel
     int copied_length = 0;
     pahgv = AHG_ARGSKMALLOC(sizeof(struct open_ahgv), GFP_KERNEL);
+		pahgv->pid = current->pid;
     pahgv->fd = rc;
     pahgv->flags = flags;
     pahgv->mode = mode;
