@@ -13,4 +13,5 @@ parseulog
 replay_pause
 reset_ndx
 resume
-
+*.output
+*.out
