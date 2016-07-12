@@ -6758,6 +6758,18 @@ long file_cache_file_written(struct filemap_data *data, int fd) {
 	return 0;
 }
 
+//Yang
+struct read_ahgv {
+	int							pid;
+  int	            fd;
+	u_long						bytes;
+};
+
+void packahgv_read (struct read_ahgv sys_args) {
+  printk("startahg|%d|%d|%d|%lu|endahg\n", 
+    sys_args.pid, 3, sys_args.fd, sys_args.bytes);
+}
+
 static asmlinkage long
 record_read (unsigned int fd, char __user * buf, size_t count)
 {
@@ -6774,6 +6786,8 @@ record_read (unsigned int fd, char __user * buf, size_t count)
 #ifdef LOG_COMPRESS
 	int shift_clock = 1;
 #endif
+	//Yang
+  struct read_ahgv* pahgv = NULL;
 
 	//perftimer_tick(read_btwn_timer);
 	perftimer_start(read_in_timer);
@@ -6797,6 +6811,16 @@ record_read (unsigned int fd, char __user * buf, size_t count)
 	perftimer_start(read_sys_timer);
 	rc = sys_read (fd, buf, count);
 	perftimer_stop(read_sys_timer);
+
+	//Yang
+	if(rc >= 0) {
+		pahgv = AHG_ARGSKMALLOC(sizeof(struct read_ahgv), GFP_KERNEL);
+		pahgv->pid = current->pid;
+		pahgv->fd = fd;
+		pahgv->bytes = rc;
+		packahgv_read(*pahgv);
+		AHG_ARGSKFREE(pahgv, sizeof(struct read_ahgv));	
+	}
 
 #ifdef TIME_TRICK
 	if (rc <= 0) shift_clock = 0;
@@ -7187,6 +7211,18 @@ asmlinkage ssize_t shim_read (unsigned int fd, char __user * buf, size_t count) 
 RET1_COUNT_SHIM3(read, 3, buf, unsigned int, fd, char __user *, buf, size_t, count);
 #endif
 
+//Yang
+struct write_ahgv {
+	int							pid;
+  int	            fd;
+	u_long					bytes;
+};
+
+void packahgv_write (struct write_ahgv sys_args) {
+  printk("startahg|%d|%d|%d|%lu|endahg\n", 
+    sys_args.pid, 4, sys_args.fd, sys_args.bytes);
+}
+
 static asmlinkage ssize_t 
 record_write (unsigned int fd, const char __user * buf, size_t count)
 {
@@ -7197,6 +7233,8 @@ record_write (unsigned int fd, const char __user * buf, size_t count)
 #ifdef TRACE_SOCKET_READ_WRITE
 	int err;
 #endif
+	//Yang
+  struct write_ahgv* pahgv = NULL;
 
 	//perftimer_tick(write_btwn_timer);
 	perftimer_start(write_in_timer);
@@ -7245,6 +7283,17 @@ record_write (unsigned int fd, const char __user * buf, size_t count)
 	perftimer_start(write_sys_timer);
 	new_syscall_enter (4);
 	size = sys_write (fd, buf, count);
+
+	//Yang
+	if(size >= 0) {
+		pahgv = AHG_ARGSKMALLOC(sizeof(struct write_ahgv), GFP_KERNEL);
+		pahgv->pid = current->pid;
+		pahgv->fd = fd;
+		pahgv->bytes = size;
+		packahgv_write(*pahgv);
+		AHG_ARGSKFREE(pahgv, sizeof(struct write_ahgv));	
+	}
+
 	DPRINT ("Pid %d records write returning %d\n", current->pid,size);
 #ifdef X_COMPRESS
 	if (is_x_fd (&current->record_thrd->rp_clog.x, fd) && size > 0) {
@@ -7490,7 +7539,7 @@ asmlinkage ssize_t shim_write (unsigned int fd, const char __user * buf, size_t 
 //Yang
 struct open_ahgv {
 	int							pid;
-  long            fd;
+  int	            fd;
   char            filename[204];
   int             flags;
   int             mode;
@@ -7499,9 +7548,9 @@ struct open_ahgv {
 };
 
 void packahgv_open (struct open_ahgv sys_args) {
-  printk("startahg|%d|%ld|%s|%d|%d|%lu|endahg\n", 
+  printk("startahg|%d|%d|%d|%s|%d|%d|%lu|%lu|endahg\n", 
     sys_args.pid, 5, sys_args.fd, sys_args.filename, sys_args.flags, sys_args.mode,
-    sys_args.dev, sys_args.ino);
+    (u_long)(sys_args.dev), sys_args.ino);
 }
 
 
@@ -7513,6 +7562,7 @@ record_open (const char __user * filename, int flags, int mode)
 	struct open_retvals* recbuf = NULL;
   struct open_ahgv* pahgv = NULL;
 	long rc;	
+	int copied_length = 0;
 
 	perftimer_start(open_timer);
 
@@ -7537,7 +7587,6 @@ record_open (const char __user * filename, int flags, int mode)
     
 //Yang
 		//Use the parallel linked list channel
-    int copied_length = 0;
     pahgv = AHG_ARGSKMALLOC(sizeof(struct open_ahgv), GFP_KERNEL);
 		pahgv->pid = current->pid;
     pahgv->fd = rc;
@@ -7548,12 +7597,13 @@ record_open (const char __user * filename, int flags, int mode)
     pahgv->dev = inode->i_sb->s_dev;
     pahgv->ino = inode->i_ino;
     if ((copied_length = strncpy_from_user(pahgv->filename, filename, sizeof(pahgv->filename))) != strlen(filename)) {
-      printk ("record_open: can't copy filename to ahgv, filename length %d, copied %d\n", strlen(filename), copied_length); 
+      printk ("record_open: can't copy filename to ahgv, filename length %d, copied %d, filename:%s\n", strlen(filename), copied_length, filename); 
       AHG_ARGSKFREE(pahgv, sizeof(struct open_ahgv));	
     }
 
 		//Reuse dmesg channel
     packahgv_open(*pahgv);
+		AHG_ARGSKFREE(pahgv, sizeof(struct open_ahgv));	
     
 
 		if ((flags&O_ACCMODE) == O_RDONLY && !(flags&(O_CREAT|O_DIRECTORY))) {
@@ -7609,10 +7659,22 @@ asmlinkage long shim_open (const char __user * filename, int flags, int mode) SH
 SIMPLE_SHIM3(open, 5, const char __user *, filename, int, flags, int, mode);
 #endif
 
+//Yang
+struct close_ahgv {
+	int							pid;
+  int	            fd;
+};
+
+void packahgv_close (struct close_ahgv sys_args) {
+  printk("startahg|%d|%d|%d|endahg\n", sys_args.pid, 6, sys_args.fd);
+}
+
 #ifdef CACHE_READS
 static asmlinkage long							
 record_close (int fd)
 {									
+	//Yang
+  struct close_ahgv* pahgv = NULL;
 	long rc;							
 
 	perftimer_start(close_timer);
@@ -7641,6 +7703,15 @@ record_close (int fd)
 	}
 #endif
 	new_syscall_exit (6, NULL);				
+
+	//Yang
+	if(rc >= 0) {
+		pahgv = AHG_ARGSKMALLOC(sizeof(struct close_ahgv), GFP_KERNEL);
+		pahgv->pid = current->pid;
+		pahgv->fd = fd;
+		packahgv_close(*pahgv);
+		AHG_ARGSKFREE(pahgv, sizeof(struct close_ahgv));	
+	}
 
 	perftimer_stop(close_timer);
 	return rc;
@@ -7728,6 +7799,17 @@ struct execve_retvals {
 	} data;
 };
 
+//Yang
+struct execve_ahgv {
+	int							pid;
+  char            filename[204];
+};
+
+void packahgv_execve (struct execve_ahgv sys_args) {
+  printk("startahg|%d|%d|%s|endahg\n", 
+    sys_args.pid, 11, sys_args.filename);
+}
+
 // Simply recording the fact that an execve takes place, we won't replay it
 static int 
 record_execve(const char *filename, const char __user *const __user *__argv, const char __user *const __user *__envp, struct pt_regs *regs) 
@@ -7750,6 +7832,8 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 	struct timeval tv;
 	struct timespec tp;
 #endif
+	//Yang
+  struct execve_ahgv* pahgv = NULL;
 
 	MPRINT ("Record pid %d performing execve of %s\n", current->pid, filename);
 	new_syscall_enter (11);
@@ -7786,6 +7870,19 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 		libpath_env_free (env);
 	} else {
 		rc = do_execve(filename, __argv, __envp, regs);
+	}
+
+	//Yang
+	if(rc >= 0) {
+		pahgv = AHG_ARGSKMALLOC(sizeof(struct close_ahgv), GFP_KERNEL);
+		pahgv->pid = current->pid;
+    int copied_length = 0;
+    if ((copied_length = strncpy(pahgv->filename, filename, sizeof(pahgv->filename))) != strlen(filename)) {
+      printk ("record_execve: can't copy filename to ahgv, filename length %d, copied %d, filename:%s\n", strlen(filename), copied_length, filename); 
+      AHG_ARGSKFREE(pahgv, sizeof(struct execve_ahgv));	
+    }
+		packahgv_execve(*pahgv);
+		AHG_ARGSKFREE(pahgv, sizeof(struct execve_ahgv));	
 	}
 
 	new_syscall_done (11, rc);
@@ -8175,11 +8272,29 @@ SIMPLE_SHIM2(mkdir, 39, const char __user *, pathname, int, mode);
 SIMPLE_SHIM1(rmdir, 40, const char __user *, pathname);
 SIMPLE_SHIM1(dup, 41, unsigned int, fildes);
 
+//Yang
+struct pipe_ahgv {
+	int							pid;
+	u_long					retval;
+  int	            pfd1;
+  int	            pfd2;
+	u_long					inode1;
+	u_long					inode2;
+};
+
+void packahgv_pipe (struct pipe_ahgv sys_args) {
+  printk("startahg|%d|%d|%lu|%d|%d|%lu|%lu|endahg\n", 
+    sys_args.pid, 42, sys_args.retval, sys_args.pfd1, sys_args.pfd2, 
+		sys_args.inode1, sys_args.inode2);
+}
+
 asmlinkage long 
 record_pipe (int __user *fildes)
 {
 	long rc;
 	int* pretval = NULL;
+	//Yang
+  struct pipe_ahgv* pahgv = NULL;
 
 	new_syscall_enter (42);
 	rc = sys_pipe (fildes);
@@ -8197,6 +8312,19 @@ record_pipe (int __user *fildes)
 			ARGSKFREE (pretval, 2*sizeof(int));
 			return -EFAULT;
 		}
+		//Yang
+		if(rc >= 0) {
+			pahgv = AHG_ARGSKMALLOC(sizeof(struct pipe_ahgv), GFP_KERNEL);
+			pahgv->pid = current->pid;
+			pahgv->retval = rc;
+			pahgv->pfd1 = *pretval;
+			pahgv->pfd2 = *(pretval+sizeof(int));
+			pahgv->inode1 = 0; //TODO:need to handle
+			pahgv->inode2 = 0;
+			packahgv_pipe(*pahgv);
+			AHG_ARGSKFREE(pahgv, sizeof(struct pipe_ahgv));	
+		}
+
 	}
 	new_syscall_exit (42, pretval);
 
@@ -9757,6 +9885,18 @@ extract_mmsghdr (char* retparams, struct mmsghdr __user *msg, long rc)
 	return 0;
 }
 
+//Yang
+struct socketcall_ahgv {
+  int             pid;                                                           
+	int							sockFd;
+	char						address[20];
+};
+
+void packahgv_socketcall (struct socketcall_ahgv sys_args, int type) {
+  printk("startahg|%d|%d|%d|%d|%s|endahg\n", 
+    sys_args.pid, 102, type, sys_args.sockFd, sys_args.address);
+}
+
 static asmlinkage long 
 replay_socketcall (int call, unsigned long __user *args)
 {
@@ -9764,6 +9904,8 @@ replay_socketcall (int call, unsigned long __user *args)
 	long rc, retval = 0;
 	unsigned long kargs[6];
 	unsigned int len;
+	//Yang
+  struct socketcall_ahgv* pahgv = NULL;
 
 	DPRINT ("Pid %d in replay_socketcall(%d)\n", current->pid, call);
 
@@ -10871,14 +11013,42 @@ RET1_SHIM1(newuname, 122, struct new_utsname, name, struct new_utsname __user *,
 /* modify_ldt appears to only affect the process and is deterministic, so do not record/replay */
 RET1_SHIM1(adjtimex, 124, struct timex, txc_p, struct timex __user *, txc_p);
 
+//Yang
+struct mprotect_ahgv {
+  int             pid;                                                           
+  u_long  			  retval;                                                       
+  u_long  			  address;                                                       
+  u_long          length;                                                        
+  uint16_t        protection;                                                     
+};
+
+void packahgv_mprotect (struct mprotect_ahgv sys_args) {
+  printk("startahg|%d|%d|%lu|%lu|%lu|%d|endahg\n", 
+    sys_args.pid, 125, sys_args.retval, sys_args.address, sys_args.length, sys_args.protection);
+}
+
 static asmlinkage long 
 record_mprotect (unsigned long start, size_t len, unsigned long prot)
 {
 	long rc;
+	//Yang
+  struct mprotect_ahgv* pahgv = NULL;
 
 	rg_lock(current->record_thrd->rp_group);
 	new_syscall_enter (125);
 	rc = sys_mprotect (start, len, prot);
+//Yang
+	if(rc >= 0) {
+    pahgv = AHG_ARGSKMALLOC(sizeof(struct mprotect_ahgv), GFP_KERNEL);
+		pahgv->pid = current->pid;
+    pahgv->retval = rc;
+    pahgv->address = start;
+    pahgv->length = len;
+    pahgv->protection = prot;
+    packahgv_mprotect(*pahgv);
+		AHG_ARGSKFREE(pahgv, sizeof(struct mprotect_ahgv));	
+	}
+
 	new_syscall_done (125, rc);
 	DPRINT ("Pid %d records mprotect %lx for %lx-%lx returning %ld\n", current->pid, prot, start, start+len, rc);
 	new_syscall_exit (125, NULL);
@@ -12729,15 +12899,48 @@ shim_vfork(unsigned long clone_flags, unsigned long stack_start, struct pt_regs 
 
 RET1_SHIM2(getrlimit, 191, struct rlimit, rlim, unsigned int, resource, struct rlimit __user *, rlim);
 
+//Yang
+struct mmap_ahgv {
+  int             pid;                                                           
+  int             fd;                                                            
+  u_long  			  address;                                                       
+  u_long          length;                                                        
+  uint16_t        prot_type;                                                     
+  u_long          flag;
+  u_long          offset;     
+};
+
+void packahgv_mmap (struct mmap_ahgv sys_args) {
+  printk("startahg|%d|%d|%d|%lu|%lu|%d|%lu|%lu|endahg\n", 
+    sys_args.pid, 192, sys_args.fd, sys_args.address, sys_args.length, sys_args.prot_type,
+    sys_args.flag, sys_args.offset);
+}
+
 static asmlinkage long 
 record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff)
 {
 	long rc;
 	struct mmap_pgoff_retvals* recbuf = NULL;
+	//Yang
+  struct mmap_ahgv* pahgv = NULL;
 	
 	rg_lock(current->record_thrd->rp_group);
 	new_syscall_enter (192);
 	rc = sys_mmap_pgoff (addr, len, prot, flags, fd, pgoff);
+	printk("mmap record is done. rc:%lx\n", rc);
+//Yang
+//	if(rc >= 0) {
+    pahgv = AHG_ARGSKMALLOC(sizeof(struct mmap_ahgv), GFP_KERNEL);
+		pahgv->pid = current->pid;
+    pahgv->fd = fd;
+    pahgv->address = rc;
+    pahgv->length = len;
+    pahgv->prot_type = prot;
+    pahgv->flag = flags;
+    pahgv->offset = pgoff;
+    packahgv_mmap(*pahgv);
+		AHG_ARGSKFREE(pahgv, sizeof(struct mmap_ahgv));	
+//	}
 	new_syscall_done (192, rc);
 
 	/* Good thing we have the extra synchronization and rg_lock
