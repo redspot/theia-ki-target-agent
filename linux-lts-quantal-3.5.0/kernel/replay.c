@@ -7553,17 +7553,59 @@ void packahgv_open (struct open_ahgv sys_args) {
     (u_long)(sys_args.dev), sys_args.ino);
 }
 
+void theia_open_ahg(const char __user * filename, int flags, int mode, long rc)
+{
+  const char *togglefile;                                                        
+	int ret;
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+  togglefile = "/tmp/theia-on.conf";                                              
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
+	set_fs(old_fs);                                                              
+
+	struct file* file;
+	struct inode* inode;
+  struct open_ahgv* pahgv = NULL;
+	int copied_length = 0;
+
+	pahgv = (struct open_ahgv*)KMALLOC(sizeof(struct open_ahgv), GFP_KERNEL);
+	if(pahgv == NULL) {
+		printk ("theia_open_ahg: failed to KMALLOC.\n");
+		return;
+	}
+	pahgv->pid = current->pid;
+	pahgv->fd = (int)rc;
+	pahgv->flags = flags;
+	pahgv->mode = mode;
+	file = fget ((unsigned int)rc);
+	inode = file->f_dentry->d_inode;
+//	pahgv->dev = inode->i_sb->s_dev;
+//	pahgv->ino = inode->i_ino;
+	pahgv->dev = 0;
+	pahgv->ino = 0;
+	if ((copied_length = strncpy_from_user(pahgv->filename, filename, sizeof(pahgv->filename))) != strlen(filename)) {
+		printk ("theia_open_ahg: can't copy filename to ahgv, filename length %d, copied %d, filename:%s\n", strlen(filename), copied_length, filename); 
+		KFREE(pahgv);	
+	}
+
+	//Reuse dmesg channel
+	packahgv_open(*pahgv);
+	KFREE(pahgv);	
+}
 
 static asmlinkage long							
 record_open (const char __user * filename, int flags, int mode)
 {								
+	long rc;
 	struct file* file;
 	struct inode* inode;
 	struct open_retvals* recbuf = NULL;
-  struct open_ahgv* pahgv = NULL;
-	long rc;	
-	int copied_length = 0;
-
 	perftimer_start(open_timer);
 
 	new_syscall_enter (5);	      
@@ -7586,24 +7628,8 @@ record_open (const char __user * filename, int flags, int mode)
 		MPRINT ("record_open of name %s with flags %x returns fd %ld, sizeof open_ahgv %d\n", filename, flags, rc, sizeof(struct open_ahgv));
     
 //Yang
-		//Use the parallel linked list channel
-    pahgv = AHG_ARGSKMALLOC(sizeof(struct open_ahgv), GFP_KERNEL);
-		pahgv->pid = current->pid;
-    pahgv->fd = rc;
-    pahgv->flags = flags;
-    pahgv->mode = mode;
-    file = fget (rc);
-    inode = file->f_dentry->d_inode;
-    pahgv->dev = inode->i_sb->s_dev;
-    pahgv->ino = inode->i_ino;
-    if ((copied_length = strncpy_from_user(pahgv->filename, filename, sizeof(pahgv->filename))) != strlen(filename)) {
-      printk ("record_open: can't copy filename to ahgv, filename length %d, copied %d, filename:%s\n", strlen(filename), copied_length, filename); 
-      AHG_ARGSKFREE(pahgv, sizeof(struct open_ahgv));	
-    }
+		theia_open_ahg(filename, flags, mode, rc);
 
-		//Reuse dmesg channel
-    packahgv_open(*pahgv);
-		AHG_ARGSKFREE(pahgv, sizeof(struct open_ahgv));	
     
 
 		if ((flags&O_ACCMODE) == O_RDONLY && !(flags&(O_CREAT|O_DIRECTORY))) {
@@ -7629,7 +7655,7 @@ record_open (const char __user * filename, int flags, int mode)
 	}
 
   //Yang
-	ahg_new_syscall_exit (5, recbuf, pahgv);			
+	new_syscall_exit (5, recbuf);			
 
 	perftimer_stop(open_timer);
 
@@ -7654,7 +7680,17 @@ replay_open (const char __user * filename, int flags, int mode)
 	return rc;
 }
 
-asmlinkage long shim_open (const char __user * filename, int flags, int mode) SHIM_CALL (open, 5, filename, flags, mode);
+int theia_sys_open(const char __user * filename, int flags, int mode) {
+	long rc;
+	rc = sys_open(filename, flags, mode);
+
+	theia_open_ahg(filename, flags, mode, rc);
+	return rc;
+}
+
+asmlinkage long shim_open (const char __user * filename, int flags, int mode)
+//SHIM_CALL (open, 5, filename, flags, mode);
+SHIM_CALL_MAIN(5, record_open(filename, flags, mode), replay_open(filename, flags, mode), theia_sys_open(filename, flags, mode))
 #else
 SIMPLE_SHIM3(open, 5, const char __user *, filename, int, flags, int, mode);
 #endif
