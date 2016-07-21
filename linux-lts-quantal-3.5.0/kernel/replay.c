@@ -7623,6 +7623,11 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc)
 {
   const char *togglefile;                                                        
 	int ret;
+	struct file* file;
+	struct inode* inode;
+  struct open_ahgv* pahgv = NULL;
+	int copied_length = 0;
+
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
 
@@ -7634,11 +7639,6 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc)
   } 
 
 	set_fs(old_fs);                                                              
-
-	struct file* file;
-	struct inode* inode;
-  struct open_ahgv* pahgv = NULL;
-	int copied_length = 0;
 
 	pahgv = (struct open_ahgv*)KMALLOC(sizeof(struct open_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {
@@ -7950,6 +7950,33 @@ void packahgv_execve (struct execve_ahgv sys_args) {
     sys_args.pid, 11, sys_args.filename);
 }
 
+void theia_execve_ahg(const char *filename) {
+  const char *togglefile;                                                        
+	int ret;
+  struct execve_ahgv* pahgv = NULL;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+  togglefile = "/tmp/theia-on.conf";                                              
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
+	set_fs(old_fs);                                                              
+
+	pahgv = (struct execve_ahgv*)KMALLOC(sizeof(struct execve_ahgv), GFP_KERNEL);
+	if(pahgv == NULL) {
+		printk ("theia_execve_ahg: failed to KMALLOC.\n");
+		return;
+	}
+	pahgv->pid = current->pid;
+	strncpy(pahgv->filename, filename, sizeof(pahgv->filename));
+	packahgv_execve(*pahgv);
+	KFREE(pahgv);	
+}
+
 // Simply recording the fact that an execve takes place, we won't replay it
 static int 
 record_execve(const char *filename, const char __user *const __user *__argv, const char __user *const __user *__envp, struct pt_regs *regs) 
@@ -7972,8 +7999,6 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 	struct timeval tv;
 	struct timespec tp;
 #endif
-	//Yang
-  struct execve_ahgv* pahgv = NULL;
 
 	MPRINT ("Record pid %d performing execve of %s\n", current->pid, filename);
 	new_syscall_enter (11);
@@ -8013,17 +8038,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 	}
 
 	//Yang
-	if(rc >= 0) {
-		pahgv = AHG_ARGSKMALLOC(sizeof(struct close_ahgv), GFP_KERNEL);
-		pahgv->pid = current->pid;
-    int copied_length = 0;
-    if ((copied_length = strncpy(pahgv->filename, filename, sizeof(pahgv->filename))) != strlen(filename)) {
-      printk ("record_execve: can't copy filename to ahgv, filename length %d, copied %d, filename:%s\n", strlen(filename), copied_length, filename); 
-      AHG_ARGSKFREE(pahgv, sizeof(struct execve_ahgv));	
-    }
-		packahgv_execve(*pahgv);
-		AHG_ARGSKFREE(pahgv, sizeof(struct execve_ahgv));	
-	}
+	theia_execve_ahg(filename);
 
 	new_syscall_done (11, rc);
 	if (rc >= 0) {
@@ -8291,8 +8306,18 @@ replay_execve(const char *filename, const char __user *const __user *__argv, con
 	return retval;
 }
 
+int theia_sys_execve(const char *filename, const char __user *const __user *__argv, const char __user *const __user *__envp, struct pt_regs *regs) {
+	long rc;
+	rc = do_execve(filename, __argv, __envp, regs);
+
+	if (rc >= 0) { // we only care the success case
+		theia_execve_ahg(filename);
+	}
+	return rc;
+}
+
 int shim_execve(const char *filename, const char __user *const __user *__argv, const char __user *const __user *__envp, struct pt_regs *regs) 
-SHIM_CALL_MAIN(11, record_execve(filename, __argv, __envp, regs), replay_execve(filename, __argv, __envp, regs), do_execve(filename, __argv, __envp, regs))
+SHIM_CALL_MAIN(11, record_execve(filename, __argv, __envp, regs), replay_execve(filename, __argv, __envp, regs), theia_sys_execve(filename, __argv, __envp, regs))
 
 SIMPLE_SHIM1(chdir, 12, const char __user *, filename);
 
@@ -10045,7 +10070,7 @@ replay_socketcall (int call, unsigned long __user *args)
 	unsigned long kargs[6];
 	unsigned int len;
 	//Yang
-  struct socketcall_ahgv* pahgv = NULL;
+//  struct socketcall_ahgv* pahgv = NULL;
 
 	DPRINT ("Pid %d in replay_socketcall(%d)\n", current->pid, call);
 
