@@ -7609,14 +7609,14 @@ struct open_ahgv {
   char            filename[204];
   int             flags;
   int             mode;
-	dev_t           dev;
+	u_long          dev;
 	u_long          ino;
 };
 
 void packahgv_open (struct open_ahgv sys_args) {
-  printk("startahg|%d|%d|%d|%s|%d|%d|%lu|%lu|endahg\n", 
+  printk("startahg|%d|%d|%d|%s|%d|%d|%lx|%lx|endahg\n", 
     sys_args.pid, 5, sys_args.fd, sys_args.filename, sys_args.flags, sys_args.mode,
-    (u_long)(sys_args.dev), sys_args.ino);
+    sys_args.dev, sys_args.ino);
 }
 
 void theia_open_ahg(const char __user * filename, int flags, int mode, long rc)
@@ -7651,10 +7651,9 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc)
 	pahgv->mode = mode;
 	file = fget ((unsigned int)rc);
 	inode = file->f_dentry->d_inode;
-//	pahgv->dev = inode->i_sb->s_dev;
-//	pahgv->ino = inode->i_ino;
-	pahgv->dev = 0;
-	pahgv->ino = 0;
+//	printk("!!!!!!inode is %p, i_sb: %p,s_dev: %lu, i_ino %lu\n", inode, inode->i_sb, inode->i_sb->s_dev, inode->i_ino);
+	pahgv->dev = inode->i_sb->s_dev;
+	pahgv->ino = inode->i_ino;
 	if ((copied_length = strncpy_from_user(pahgv->filename, filename, sizeof(pahgv->filename))) != strlen(filename)) {
 		printk ("theia_open_ahg: can't copy filename to ahgv, filename length %d, copied %d, filename:%s\n", strlen(filename), copied_length, filename); 
 		KFREE(pahgv);	
