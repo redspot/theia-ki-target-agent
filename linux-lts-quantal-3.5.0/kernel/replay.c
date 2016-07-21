@@ -13081,31 +13081,52 @@ void packahgv_mmap (struct mmap_ahgv sys_args) {
     sys_args.flag, sys_args.offset);
 }
 
+void theia_mmap_ahg(int fd, u_long address, u_long len, uint16_t prot, u_long flags, u_long pgoff, long rc) {
+  const char *togglefile;                                                        
+	int ret;
+  struct mmap_ahgv* pahgv = NULL;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+  togglefile = "/tmp/theia-on.conf";                                              
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
+	set_fs(old_fs);                                                              
+
+	pahgv = (struct mmap_ahgv*)KMALLOC(sizeof(struct mmap_ahgv), GFP_KERNEL);
+	if(pahgv == NULL) {
+		printk ("theia_mmap_ahg: failed to KMALLOC.\n");
+		return;
+	}
+	pahgv->pid = current->pid;
+	pahgv->fd = fd;
+	pahgv->address = (u_long)rc;
+	pahgv->length = len;
+	pahgv->prot_type = prot;
+	pahgv->flag = flags;
+	pahgv->offset = pgoff;
+	packahgv_mmap(*pahgv);
+	KFREE(pahgv);	
+
+}
+
 static asmlinkage long 
 record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff)
 {
 	long rc;
 	struct mmap_pgoff_retvals* recbuf = NULL;
-	//Yang
-  struct mmap_ahgv* pahgv = NULL;
 	
 	rg_lock(current->record_thrd->rp_group);
 	new_syscall_enter (192);
 	rc = sys_mmap_pgoff (addr, len, prot, flags, fd, pgoff);
 	printk("mmap record is done. rc:%lx\n", rc);
 //Yang
-//	if(rc >= 0) {
-    pahgv = AHG_ARGSKMALLOC(sizeof(struct mmap_ahgv), GFP_KERNEL);
-		pahgv->pid = current->pid;
-    pahgv->fd = fd;
-    pahgv->address = rc;
-    pahgv->length = len;
-    pahgv->prot_type = prot;
-    pahgv->flag = flags;
-    pahgv->offset = pgoff;
-    packahgv_mmap(*pahgv);
-		AHG_ARGSKFREE(pahgv, sizeof(struct mmap_ahgv));	
-//	}
+	theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc);
+	
 	new_syscall_done (192, rc);
 
 	/* Good thing we have the extra synchronization and rg_lock
@@ -13199,7 +13220,19 @@ replay_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 	return rc;
 }
 
-asmlinkage long shim_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff) SHIM_CALL(mmap_pgoff, 192, addr, len, prot, flags, fd, pgoff);
+int theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff) {
+	long rc;
+	rc = sys_mmap_pgoff(addr, len, prot, flags, fd, pgoff);
+
+	if (rc >= 0) { // we only care the success case
+		theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc);
+	}
+	return rc;
+}
+
+asmlinkage long shim_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff) 
+//SHIM_CALL(mmap_pgoff, 192, addr, len, prot, flags, fd, pgoff);
+SHIM_CALL_MAIN(192, record_mmap_pgoff(addr, len, prot, flags, fd, pgoff), replay_mmap_pgoff(addr, len, prot, flags, fd, pgoff), theia_sys_mmap(addr, len, prot, flags, fd, pgoff))
 
 SIMPLE_SHIM2(truncate64, 193, const char __user *, path, loff_t, length);
 SIMPLE_SHIM2(ftruncate64, 194, unsigned int, fd, loff_t, length);
