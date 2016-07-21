@@ -7684,7 +7684,9 @@ int theia_sys_open(const char __user * filename, int flags, int mode) {
 	long rc;
 	rc = sys_open(filename, flags, mode);
 
-	theia_open_ahg(filename, flags, mode, rc);
+	if (rc >= 0) { // we only care the success case
+		theia_open_ahg(filename, flags, mode, rc);
+	}
 	return rc;
 }
 
@@ -7705,12 +7707,40 @@ void packahgv_close (struct close_ahgv sys_args) {
   printk("startahg|%d|%d|%d|endahg\n", sys_args.pid, 6, sys_args.fd);
 }
 
+void theia_close_ahg(int fd) {
+  const char *togglefile;                                                        
+	int ret;
+  struct close_ahgv* pahgv = NULL;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+  togglefile = "/tmp/theia-on.conf";                                              
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
+	set_fs(old_fs);                                                              
+
+	pahgv = (struct close_ahgv*)KMALLOC(sizeof(struct close_ahgv), GFP_KERNEL);
+	if(pahgv == NULL) {
+		printk ("theia_close_ahg: failed to KMALLOC.\n");
+		return;
+	}
+	pahgv->pid = current->pid;
+	pahgv->fd = fd;
+	packahgv_close(*pahgv);
+	KFREE(pahgv);	
+
+}
+
+
 #ifdef CACHE_READS
 static asmlinkage long							
 record_close (int fd)
 {									
 	//Yang
-  struct close_ahgv* pahgv = NULL;
 	long rc;							
 
 	perftimer_start(close_timer);
@@ -7741,13 +7771,7 @@ record_close (int fd)
 	new_syscall_exit (6, NULL);				
 
 	//Yang
-	if(rc >= 0) {
-		pahgv = AHG_ARGSKMALLOC(sizeof(struct close_ahgv), GFP_KERNEL);
-		pahgv->pid = current->pid;
-		pahgv->fd = fd;
-		packahgv_close(*pahgv);
-		AHG_ARGSKFREE(pahgv, sizeof(struct close_ahgv));	
-	}
+	theia_close_ahg(fd);
 
 	perftimer_stop(close_timer);
 	return rc;
@@ -7779,7 +7803,21 @@ replay_close (int fd)
 	return rc;
 }
 
-asmlinkage long shim_close (int fd) SHIM_CALL (close, 6, fd);
+int theia_sys_close(int fd) {
+	long rc;
+	rc = sys_close(fd);
+
+	if (rc >= 0) { // we only care the success case
+		theia_close_ahg(fd);
+	}
+	return rc;
+}
+
+
+
+asmlinkage long shim_close (int fd) 
+//SHIM_CALL (close, 6, fd);
+SHIM_CALL_MAIN(6, record_close(fd), replay_close(fd), theia_sys_close(fd))
 #else
 SIMPLE_SHIM1(close, 6, int, fd);
 #endif
