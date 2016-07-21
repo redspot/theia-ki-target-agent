@@ -2934,30 +2934,30 @@ static inline struct clog_node* clog_mark_done_replay (void) {
  * and the allocated memory needs to be freed
  */
 //Yang
-static void ahg_argsfree (const void* ptr, size_t size)
-{
-	struct record_thread* prect;
-	struct argsalloc_node* ra_node;
-	prect = current->record_thrd;
-	ra_node = list_first_entry(&prect->ahg_argsalloc_list, struct argsalloc_node, list);
-	
-	if (ptr == NULL) 
-		return;
-	
-	if (ra_node->head == ra_node->pos)
-		return;
-
-	// simply rollback allocation (there is the rare case where allocation has
-	// created a new slab, but in that case we simply roll back the allocation 
-	// and keep the slab since calling argsfree itself is rare)
-	if ((ra_node->pos - size) >= ra_node->head) {
-		ra_node->pos -= size;
-		return;
-	} else {
-		printk("Pid %d ahg_argsfree: unhandled case\n", current->pid);
-		return;
-	}
-}
+//static void ahg_argsfree (const void* ptr, size_t size)
+//{
+//	struct record_thread* prect;
+//	struct argsalloc_node* ra_node;
+//	prect = current->record_thrd;
+//	ra_node = list_first_entry(&prect->ahg_argsalloc_list, struct argsalloc_node, list);
+//	
+//	if (ptr == NULL) 
+//		return;
+//	
+//	if (ra_node->head == ra_node->pos)
+//		return;
+//
+//	// simply rollback allocation (there is the rare case where allocation has
+//	// created a new slab, but in that case we simply roll back the allocation 
+//	// and keep the slab since calling argsfree itself is rare)
+//	if ((ra_node->pos - size) >= ra_node->head) {
+//		ra_node->pos -= size;
+//		return;
+//	} else {
+//		printk("Pid %d ahg_argsfree: unhandled case\n", current->pid);
+//		return;
+//	}
+//}
 static void argsfree (const void* ptr, size_t size)
 {
 	struct record_thread* prect;
@@ -11234,26 +11234,47 @@ void packahgv_mprotect (struct mprotect_ahgv sys_args) {
     sys_args.pid, 125, sys_args.retval, sys_args.address, sys_args.length, sys_args.protection);
 }
 
+void theia_mprotect_ahg(u_long address, u_long len, uint16_t prot, long rc) {
+	int ret;
+  struct mprotect_ahgv* pahgv = NULL;
+  const char *togglefile;                                                        
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+  togglefile = "/tmp/theia-on.conf";                                              
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
+	set_fs(old_fs);                                                              
+
+	pahgv = (struct mprotect_ahgv*)KMALLOC(sizeof(struct mprotect_ahgv), GFP_KERNEL);
+	if(pahgv == NULL) {
+		printk ("theia_mprotect_ahg: failed to KMALLOC.\n");
+		return;
+	}
+	pahgv->pid = current->pid;
+	pahgv->retval = (u_long)rc;
+	pahgv->address = address;
+	pahgv->length = len;
+	pahgv->protection = prot;
+	packahgv_mprotect(*pahgv);
+	KFREE(pahgv);	
+}
+
 static asmlinkage long 
 record_mprotect (unsigned long start, size_t len, unsigned long prot)
 {
 	long rc;
-	//Yang
-  struct mprotect_ahgv* pahgv = NULL;
 
 	rg_lock(current->record_thrd->rp_group);
 	new_syscall_enter (125);
 	rc = sys_mprotect (start, len, prot);
 //Yang
 	if(rc >= 0) {
-    pahgv = AHG_ARGSKMALLOC(sizeof(struct mprotect_ahgv), GFP_KERNEL);
-		pahgv->pid = current->pid;
-    pahgv->retval = rc;
-    pahgv->address = start;
-    pahgv->length = len;
-    pahgv->protection = prot;
-    packahgv_mprotect(*pahgv);
-		AHG_ARGSKFREE(pahgv, sizeof(struct mprotect_ahgv));	
+		theia_mprotect_ahg(start, (u_long)len, (uint16_t)prot, rc);
 	}
 
 	new_syscall_done (125, rc);
@@ -11286,7 +11307,19 @@ replay_mprotect (unsigned long start, size_t len, unsigned long prot)
 	return rc;
 }
 
-asmlinkage long shim_mprotect (unsigned long start, size_t len, unsigned long prot) SHIM_CALL(mprotect, 125, start, len, prot);
+int theia_sys_mprotect(unsigned long start, size_t len, unsigned long prot) {
+	long rc;
+	rc = sys_mprotect (start, len, prot);
+
+	if (rc >= 0) { // we only care the success case
+		theia_mprotect_ahg(start, (u_long)len, (uint16_t)prot, rc);
+	}
+	return rc;
+}
+
+asmlinkage long shim_mprotect (unsigned long start, size_t len, unsigned long prot) 
+//SHIM_CALL(mprotect, 125, start, len, prot);
+SHIM_CALL_MAIN(125, record_mprotect(start, len, prot), replay_mprotect(start, len, prot), theia_sys_mprotect(start, len, prot))
 
 RET1_SHIM3(sigprocmask, 126, old_sigset_t, oset, int, how, old_sigset_t __user *, set, old_sigset_t __user *, oset);
 SIMPLE_SHIM3(init_module, 128, void __user *, umod, unsigned long,  len, const char __user *, uargs);
