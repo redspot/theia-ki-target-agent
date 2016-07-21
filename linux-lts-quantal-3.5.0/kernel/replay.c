@@ -6766,7 +6766,7 @@ struct read_ahgv {
 };
 
 void packahgv_read (struct read_ahgv sys_args) {
-  printk("startahg|%d|%d|%d|%lu|endahg\n", 
+  printk("startahg|%d|%d|%d|%lx|endahg\n", 
     sys_args.pid, 3, sys_args.fd, sys_args.bytes);
 }
 
@@ -7253,7 +7253,7 @@ struct write_ahgv {
 };
 
 void packahgv_write (struct write_ahgv sys_args) {
-  printk("startahg|%d|%d|%d|%lu|endahg\n", 
+  printk("startahg|%d|%d|%d|%lx|endahg\n", 
     sys_args.pid, 4, sys_args.fd, sys_args.bytes);
 }
 
@@ -8447,7 +8447,7 @@ struct pipe_ahgv {
 };
 
 void packahgv_pipe (struct pipe_ahgv sys_args) {
-  printk("startahg|%d|%d|%lu|%d|%d|%lu|%lu|endahg\n", 
+  printk("startahg|%d|%d|%lx|%d|%d|%lx|%lx|endahg\n", 
     sys_args.pid, 42, sys_args.retval, sys_args.pfd1, sys_args.pfd2, 
 		sys_args.inode1, sys_args.inode2);
 }
@@ -11230,7 +11230,7 @@ struct mprotect_ahgv {
 };
 
 void packahgv_mprotect (struct mprotect_ahgv sys_args) {
-  printk("startahg|%d|%d|%lu|%lu|%lu|%d|endahg\n", 
+  printk("startahg|%d|%d|%lx|%lx|%lx|%d|endahg\n", 
     sys_args.pid, 125, sys_args.retval, sys_args.address, sys_args.length, sys_args.protection);
 }
 
@@ -13151,7 +13151,7 @@ struct mmap_ahgv {
 };
 
 void packahgv_mmap (struct mmap_ahgv sys_args) {
-  printk("startahg|%d|%d|%d|%lu|%lu|%d|%lu|%lu|endahg\n", 
+  printk("startahg|%d|%d|%d|%lx|%lu|%d|%lx|%lx|endahg\n", 
     sys_args.pid, 192, sys_args.fd, sys_args.address, sys_args.length, sys_args.prot_type,
     sys_args.flag, sys_args.offset);
 }
@@ -13299,9 +13299,8 @@ int theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, un
 	long rc;
 	rc = sys_mmap_pgoff(addr, len, prot, flags, fd, pgoff);
 
-	if (rc >= 0) { // we only care the success case
-		theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc);
-	}
+	theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc);
+
 	return rc;
 }
 
