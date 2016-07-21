@@ -8453,13 +8453,42 @@ void packahgv_pipe (struct pipe_ahgv sys_args) {
 		sys_args.inode1, sys_args.inode2);
 }
 
+void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
+  const char *togglefile;                                                        
+	int ret;
+  struct pipe_ahgv* pahgv = NULL;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+  togglefile = "/tmp/theia-on.conf";                                              
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
+	set_fs(old_fs);                                                              
+
+	pahgv = (struct pipe_ahgv*)KMALLOC(sizeof(struct pipe_ahgv), GFP_KERNEL);
+	if(pahgv == NULL) {
+		printk ("theia_pipe_ahg: failed to KMALLOC.\n");
+		return;
+	}
+	pahgv->pid = current->pid;
+	pahgv->retval = retval;
+	pahgv->pfd1 = pfd1;
+	pahgv->pfd2 = pfd2;
+	pahgv->inode1 = 0; //TODO:need to handle
+	pahgv->inode2 = 0;
+	packahgv_pipe(*pahgv);
+	KFREE(pahgv);
+}
+
 asmlinkage long 
 record_pipe (int __user *fildes)
 {
 	long rc;
 	int* pretval = NULL;
-	//Yang
-  struct pipe_ahgv* pahgv = NULL;
 
 	new_syscall_enter (42);
 	rc = sys_pipe (fildes);
@@ -8479,15 +8508,7 @@ record_pipe (int __user *fildes)
 		}
 		//Yang
 		if(rc >= 0) {
-			pahgv = AHG_ARGSKMALLOC(sizeof(struct pipe_ahgv), GFP_KERNEL);
-			pahgv->pid = current->pid;
-			pahgv->retval = rc;
-			pahgv->pfd1 = *pretval;
-			pahgv->pfd2 = *(pretval+sizeof(int));
-			pahgv->inode1 = 0; //TODO:need to handle
-			pahgv->inode2 = 0;
-			packahgv_pipe(*pahgv);
-			AHG_ARGSKFREE(pahgv, sizeof(struct pipe_ahgv));	
+			theia_pipe_ahg((u_long)rc, *pretval, *(pretval+sizeof(int)));
 		}
 
 	}
@@ -8524,7 +8545,29 @@ static asmlinkage long replay_pipe (int __user *fildes)	{
 }
 #endif
 
-asmlinkage long shim_pipe (int __user *fildes) SHIM_CALL(pipe, 42, fildes);
+int theia_sys_pipe(int __user *fildes) {
+	long rc;
+	int* pretval = NULL;
+	rc = sys_pipe(fildes);
+		pretval = KMALLOC(2*sizeof(int), GFP_KERNEL);
+		if (pretval == NULL) {
+			printk("theia_sys_pipe: can't allocate buffer\n");
+			return -ENOMEM;
+		}
+		if (copy_from_user (pretval, fildes, 2*sizeof(int))) {
+			KFREE (pretval);
+			return -EFAULT;
+		}
+
+	if (rc >= 0) { // we only care the success case
+		theia_pipe_ahg((u_long)rc, *pretval, *(pretval+sizeof(int)));
+	}
+	return rc;
+}
+
+asmlinkage long shim_pipe (int __user *fildes) 
+//SHIM_CALL(pipe, 42, fildes);
+SHIM_CALL_MAIN(42, record_pipe(fildes), replay_pipe(fildes), theia_sys_pipe(fildes))
 
 RET1_SHIM1(times, 43, struct tms, tbuf, struct tms __user *, tbuf);
 
