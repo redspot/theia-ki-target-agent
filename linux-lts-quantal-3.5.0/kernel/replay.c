@@ -6770,6 +6770,37 @@ void packahgv_read (struct read_ahgv sys_args) {
     sys_args.pid, 3, sys_args.fd, sys_args.bytes);
 }
 
+void theia_read_ahg(unsigned int fd, long rc) {
+  const char *togglefile;                                                        
+	int ret;
+  struct read_ahgv* pahgv = NULL;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+  togglefile = "/tmp/theia-on.conf";                                              
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
+	set_fs(old_fs);                                                              
+
+	if(rc >= 0) {
+		pahgv = (struct read_ahgv*)KMALLOC(sizeof(struct read_ahgv), GFP_KERNEL);
+		if(pahgv == NULL) {
+			printk ("theia_read_ahg: failed to KMALLOC.\n");
+			return;
+		}
+		pahgv->pid = current->pid;
+		pahgv->fd = (int)fd;
+		pahgv->bytes = rc;
+		packahgv_read(*pahgv);
+		KFREE(pahgv);	
+	}
+
+}
+	
 static asmlinkage long
 record_read (unsigned int fd, char __user * buf, size_t count)
 {
@@ -6786,8 +6817,6 @@ record_read (unsigned int fd, char __user * buf, size_t count)
 #ifdef LOG_COMPRESS
 	int shift_clock = 1;
 #endif
-	//Yang
-  struct read_ahgv* pahgv = NULL;
 
 	//perftimer_tick(read_btwn_timer);
 	perftimer_start(read_in_timer);
@@ -6813,14 +6842,7 @@ record_read (unsigned int fd, char __user * buf, size_t count)
 	perftimer_stop(read_sys_timer);
 
 	//Yang
-	if(rc >= 0) {
-		pahgv = AHG_ARGSKMALLOC(sizeof(struct read_ahgv), GFP_KERNEL);
-		pahgv->pid = current->pid;
-		pahgv->fd = fd;
-		pahgv->bytes = rc;
-		packahgv_read(*pahgv);
-		AHG_ARGSKFREE(pahgv, sizeof(struct read_ahgv));	
-	}
+	theia_read_ahg(fd, rc);
 
 #ifdef TIME_TRICK
 	if (rc <= 0) shift_clock = 0;
@@ -7206,7 +7228,19 @@ replay_read (unsigned int fd, char __user * buf, size_t count)
 	return rc;							
 }									
 
-asmlinkage ssize_t shim_read (unsigned int fd, char __user * buf, size_t count) SHIM_CALL (read, 3, fd, buf, count);
+int theia_sys_read(unsigned int fd, char __user * buf, size_t count) {
+	long rc;
+	rc = sys_read(fd, buf, count);
+
+	if (rc >= 0) { // we only care the success case
+		theia_read_ahg(fd, rc);
+	}
+	return rc;
+}
+
+asmlinkage ssize_t shim_read (unsigned int fd, char __user * buf, size_t count) 
+//SHIM_CALL (read, 3, fd, buf, count);
+SHIM_CALL_MAIN(3, record_read(fd, buf, count), replay_read(fd, buf, count), theia_sys_read(fd, buf, count))
 #else
 RET1_COUNT_SHIM3(read, 3, buf, unsigned int, fd, char __user *, buf, size_t, count);
 #endif
