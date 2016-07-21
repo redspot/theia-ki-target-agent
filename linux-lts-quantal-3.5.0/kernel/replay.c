@@ -7257,6 +7257,35 @@ void packahgv_write (struct write_ahgv sys_args) {
     sys_args.pid, 4, sys_args.fd, sys_args.bytes);
 }
 
+void theia_write_ahg(unsigned int fd, long rc) {
+  const char *togglefile;                                                        
+	int ret;
+  struct write_ahgv* pahgv = NULL;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+  togglefile = "/tmp/theia-on.conf";                                              
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
+	set_fs(old_fs);                                                              
+
+	pahgv = (struct write_ahgv*)KMALLOC(sizeof(struct write_ahgv), GFP_KERNEL);
+	if(pahgv == NULL) {
+		printk ("theia_write_ahg: failed to KMALLOC.\n");
+		return;
+	}
+	pahgv->pid = current->pid;
+	pahgv->fd = (int)fd;
+	pahgv->bytes = (u_long)rc;
+	packahgv_write(*pahgv);
+	KFREE(pahgv);	
+
+}
+
 static asmlinkage ssize_t 
 record_write (unsigned int fd, const char __user * buf, size_t count)
 {
@@ -7267,8 +7296,6 @@ record_write (unsigned int fd, const char __user * buf, size_t count)
 #ifdef TRACE_SOCKET_READ_WRITE
 	int err;
 #endif
-	//Yang
-  struct write_ahgv* pahgv = NULL;
 
 	//perftimer_tick(write_btwn_timer);
 	perftimer_start(write_in_timer);
@@ -7319,14 +7346,7 @@ record_write (unsigned int fd, const char __user * buf, size_t count)
 	size = sys_write (fd, buf, count);
 
 	//Yang
-	if(size >= 0) {
-		pahgv = AHG_ARGSKMALLOC(sizeof(struct write_ahgv), GFP_KERNEL);
-		pahgv->pid = current->pid;
-		pahgv->fd = fd;
-		pahgv->bytes = size;
-		packahgv_write(*pahgv);
-		AHG_ARGSKFREE(pahgv, sizeof(struct write_ahgv));	
-	}
+	theia_write_ahg(fd, size);
 
 	DPRINT ("Pid %d records write returning %d\n", current->pid,size);
 #ifdef X_COMPRESS
@@ -7566,7 +7586,19 @@ replay_write (unsigned int fd, const char __user * buf, size_t count)
 	return rc;
 }
 
-asmlinkage ssize_t shim_write (unsigned int fd, const char __user * buf, size_t count) SHIM_CALL (write, 4, fd, buf, count);
+int theia_sys_write(unsigned int fd, const char __user * buf, size_t count) {
+	long rc;
+	rc = sys_write(fd, buf, count);
+
+	if (rc >= 0) { // we only care the success case
+		theia_write_ahg(fd, rc);
+	}
+	return rc;
+}
+
+asmlinkage ssize_t shim_write (unsigned int fd, const char __user * buf, size_t count) 
+//SHIM_CALL (write, 4, fd, buf, count);
+SHIM_CALL_MAIN(4, record_write(fd, buf, count), replay_write(fd, buf, count), theia_sys_write(fd, buf, count))
 
 #ifdef CACHE_READS
 
