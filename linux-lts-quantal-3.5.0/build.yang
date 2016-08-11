@@ -1,0 +1,3 @@
+./compile < cred.yang;
+sudo make modules_install;
+./compile < cred.yang;
