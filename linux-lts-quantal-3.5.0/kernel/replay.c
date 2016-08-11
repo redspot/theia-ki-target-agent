@@ -61,6 +61,11 @@
 
 #include <linux/replay_configs.h>
 
+//Yang
+#include <linux/relay.h>
+#include <linux/debugfs.h>
+
+
 //xdou
 #include <linux/xcomp.h>
 #include <linux/encodebuffer.h>
@@ -78,6 +83,10 @@
 
 /* For debugging failing fs operations */
 int debug_flag = 0;
+
+//Yang
+const char* togglefile = "/home/yang/theia-on.conf";
+struct rchan* theia_rchan = NULL;
 
 //#define REPLAY_PARANOID
 
@@ -158,6 +167,59 @@ unsigned int replay_pause_tool = 0;
 #define new_syscall_exit(sysnum, retparam) _new_syscall_exit(sysnum, retparam, NULL)
 #define ahg_new_syscall_exit(sysnum, retparam, ahgparam) _new_syscall_exit(sysnum, retparam, ahgparam)
   
+#define SUBBUF_SIZE 262144
+#define N_SUBBUFS 4
+
+/*
+ * create_buf_file() callback.  Creates relay file in debugfs.
+ */
+static struct dentry *create_buf_file_handler(const char *filename,
+		struct dentry *parent,
+		int mode,
+		struct rchan_buf *buf,
+		int *is_global)
+{
+	return debugfs_create_file(filename, mode, parent, buf,
+			&relay_file_operations);
+}
+
+/*
+ * remove_buf_file() callback.  Removes relay file from debugfs.
+ */
+static int remove_buf_file_handler(struct dentry *dentry)
+{
+	debugfs_remove(dentry);
+
+	return 0;
+}
+
+static int subbuf_start(struct rchan_buf *buf,
+                        void *subbuf,
+			void *prev_subbuf,
+			unsigned int prev_padding)
+{
+	if (prev_subbuf)
+		*((unsigned *)prev_subbuf) = prev_padding;
+
+	if (relay_buf_full(buf))
+		return 0;
+
+	subbuf_start_reserve(buf, sizeof(unsigned int));
+
+	return 1;
+}
+
+
+/*
+ * relay interface callbacks
+ */
+static struct rchan_callbacks relay_callbacks =
+{
+	.create_buf_file = create_buf_file_handler,
+	.remove_buf_file = remove_buf_file_handler,
+	.subbuf_start = subbuf_start,
+};
+
 
 /* Performance evaluation timers... micro monitoring */
 //struct perftimer *write_btwn_timer;
@@ -6766,8 +6828,18 @@ struct read_ahgv {
 };
 
 void packahgv_read (struct read_ahgv sys_args) {
-  printk("startahg|%d|%d|%d|%lx|endahg\n", 
-    sys_args.pid, 3, sys_args.fd, sys_args.bytes);
+	//Yang
+	if(theia_rchan == NULL) {
+		theia_rchan = relay_open("theialog", NULL, SUBBUF_SIZE, N_SUBBUFS, &relay_callbacks, NULL);
+	}
+	if(theia_rchan) {
+		char buf[256];
+		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|endahg\n", 
+				sys_args.pid, 3, sys_args.fd, sys_args.bytes);
+		relay_write(theia_rchan, buf, size);
+	}
+	else
+		printk("theia_rchan invalid\n");
 }
 
 void theia_read_ahg(unsigned int fd, long rc) {
@@ -16308,6 +16380,7 @@ static int __init replay_init(void)
 
 	/* Performance monitoring */
 	perftimer_init();
+
 
 	/* Read monitors */
 	//read_btwn_timer = perftimer_create("Between Reads", "Read");
