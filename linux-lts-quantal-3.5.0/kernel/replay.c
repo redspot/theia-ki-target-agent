@@ -64,6 +64,9 @@
 //Yang
 #include <linux/relay.h>
 #include <linux/debugfs.h>
+#include <linux/module.h>
+#include <linux/random.h>
+#include <linux/delay.h>
 
 
 //xdou
@@ -86,7 +89,6 @@ int debug_flag = 0;
 
 //Yang
 const char* togglefile = "/home/yang/theia-on.conf";
-struct rchan* theia_rchan = NULL;
 
 //#define REPLAY_PARANOID
 
@@ -170,21 +172,59 @@ unsigned int replay_pause_tool = 0;
 #define SUBBUF_SIZE 262144
 #define N_SUBBUFS 4
 
+#define APP_DIR		"theia_logs"
+static struct rchan	*theia_chan = NULL;
+static struct dentry	*theia_dir = NULL;
+static size_t		subbuf_size = 262144;
+static size_t		n_subbufs = 4;
+static size_t		event_n = 20;
+static size_t write_count;
+static int suspended;
+
 /*
- * create_buf_file() callback.  Creates relay file in debugfs.
+ * subbuf_start() relay callback.
+ *
+ * Defined so that we know when events are dropped due to the buffer-full
+ * condition.
  */
-static struct dentry *create_buf_file_handler(const char *filename,
-		struct dentry *parent,
-		int mode,
-		struct rchan_buf *buf,
-		int *is_global)
+static int subbuf_start_handler(struct rchan_buf *buf,
+				  void *subbuf,
+				  void *prev_subbuf,
+				  unsigned int prev_padding)
 {
-	return debugfs_create_file(filename, mode, parent, buf,
-			&relay_file_operations);
+	if (relay_buf_full(buf)) {
+		if (!suspended) {
+			suspended = 1;
+			printk("cpu %d buffer full!!!\n", smp_processor_id());
+		}
+		return 0;
+	} else if (suspended) {
+		suspended = 0;
+		printk("cpu %d buffer no longer full.\n", smp_processor_id());
+	}
+
+	return 1;
 }
 
 /*
- * remove_buf_file() callback.  Removes relay file from debugfs.
+ * file_create() callback.  Creates relay file in debugfs.
+ */
+static struct dentry *create_buf_file_handler(const char *filename,
+					      struct dentry *parent,
+					      int mode,
+					      struct rchan_buf *buf,
+					      int *is_global)
+{
+	struct dentry *buf_file;
+	
+	buf_file = debugfs_create_file(filename, mode, parent, buf,
+				       &relay_file_operations);
+
+	return buf_file;
+}
+
+/*
+ * file_remove() default callback.  Removes relay file in debugfs.
  */
 static int remove_buf_file_handler(struct dentry *dentry)
 {
@@ -193,33 +233,51 @@ static int remove_buf_file_handler(struct dentry *dentry)
 	return 0;
 }
 
-static int subbuf_start(struct rchan_buf *buf,
-                        void *subbuf,
-			void *prev_subbuf,
-			unsigned int prev_padding)
-{
-	if (prev_subbuf)
-		*((unsigned *)prev_subbuf) = prev_padding;
-
-	if (relay_buf_full(buf))
-		return 0;
-
-	subbuf_start_reserve(buf, sizeof(unsigned int));
-
-	return 1;
-}
-
-
 /*
- * relay interface callbacks
+ * relay callbacks
  */
 static struct rchan_callbacks relay_callbacks =
 {
+	.subbuf_start = subbuf_start_handler,
 	.create_buf_file = create_buf_file_handler,
 	.remove_buf_file = remove_buf_file_handler,
-	.subbuf_start = subbuf_start,
 };
 
+
+/**
+ *	create_channel - creates channel /debug/APP_DIR/cpuXXX
+ *
+ *	Creates channel along with associated produced/consumed control files
+ *
+ *	Returns channel on success, NULL otherwise
+ */
+static struct rchan *create_channel(unsigned size,
+				    unsigned n)
+{
+	struct rchan *channel;
+	
+	channel = relay_open("cpu", theia_dir, size, n, &relay_callbacks, NULL);
+	
+	if (!channel) {
+		printk("relay app channel creation failed\n");
+		return NULL;
+	}
+
+	return channel;
+}
+
+/**
+ *	destroy_channel - destroys channel /debug/APP_DIR/cpuXXX
+ *
+ *	Destroys channel along with associated produced/consumed control files
+ */
+static void destroy_channel(void)
+{
+	if (theia_chan) {
+		relay_close(theia_chan);
+		theia_chan = NULL;
+	}
+}
 
 /* Performance evaluation timers... micro monitoring */
 //struct perftimer *write_btwn_timer;
@@ -6829,17 +6887,28 @@ struct read_ahgv {
 
 void packahgv_read (struct read_ahgv sys_args) {
 	//Yang
-	if(theia_rchan == NULL) {
-		theia_rchan = relay_open("theialog", NULL, SUBBUF_SIZE, N_SUBBUFS, &relay_callbacks, NULL);
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
 	}
-	if(theia_rchan) {
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|endahg\n", 
 				sys_args.pid, 3, sys_args.fd, sys_args.bytes);
-		relay_write(theia_rchan, buf, size);
+		relay_write(theia_chan, buf, size);
 	}
 	else
-		printk("theia_rchan invalid\n");
+		printk("theia_chan invalid\n");
 }
 
 void theia_read_ahg(unsigned int fd, long rc) {
@@ -7324,17 +7393,28 @@ struct write_ahgv {
 
 void packahgv_write (struct write_ahgv sys_args) {
 	//Yang
-	if(theia_rchan == NULL) {
-		theia_rchan = relay_open("theialog", NULL, SUBBUF_SIZE, N_SUBBUFS, &relay_callbacks, NULL);
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
 	}
-	if(theia_rchan) {
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|endahg\n", 
 				sys_args.pid, 4, sys_args.fd, sys_args.bytes);
-		relay_write(theia_rchan, buf, size);
+		relay_write(theia_chan, buf, size);
 	}
 	else
-		printk("theia_rchan invalid\n");
+		printk("theia_chan invalid\n");
 }
 
 void theia_write_ahg(unsigned int fd, long rc) {
@@ -7693,18 +7773,29 @@ struct open_ahgv {
 
 void packahgv_open (struct open_ahgv sys_args) {
 	//Yang
-	if(theia_rchan == NULL) {
-		theia_rchan = relay_open("theialog", NULL, SUBBUF_SIZE, N_SUBBUFS, &relay_callbacks, NULL);
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
 	}
-	if(theia_rchan) {
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%lx|%lx|endahg\n", 
 				sys_args.pid, 5, sys_args.fd, sys_args.filename, sys_args.flags, sys_args.mode,
 				sys_args.dev, sys_args.ino);
-		relay_write(theia_rchan, buf, size);
+		relay_write(theia_chan, buf, size);
 	}
 	else
-		printk("theia_rchan invalid\n");
+		printk("theia_chan invalid\n");
 }
 
 void theia_open_ahg(const char __user * filename, int flags, int mode, long rc)
@@ -7859,16 +7950,27 @@ struct close_ahgv {
 
 void packahgv_close (struct close_ahgv sys_args) {
 	//Yang
-	if(theia_rchan == NULL) {
-		theia_rchan = relay_open("theialog", NULL, SUBBUF_SIZE, N_SUBBUFS, &relay_callbacks, NULL);
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return; 
+		}
 	}
-	if(theia_rchan) {
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%d|endahg\n", sys_args.pid, 6, sys_args.fd);
-		relay_write(theia_rchan, buf, size);
+		relay_write(theia_chan, buf, size);
 	}
 	else
-		printk("theia_rchan invalid\n");
+		printk("theia_chan invalid\n");
 }
 
 void theia_close_ahg(int fd) {
@@ -8043,17 +8145,28 @@ struct execve_ahgv {
 
 void packahgv_execve (struct execve_ahgv sys_args) {
 	//Yang
-	if(theia_rchan == NULL) {
-		theia_rchan = relay_open("theialog", NULL, SUBBUF_SIZE, N_SUBBUFS, &relay_callbacks, NULL);
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return; 
+		}
 	}
-	if(theia_rchan) {
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return; 
+		}
+	}
+	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%s|endahg\n", 
 				sys_args.pid, 11, sys_args.filename);
-		relay_write(theia_rchan, buf, size);
+		relay_write(theia_chan, buf, size);
 	}
 	else
-		printk("theia_rchan invalid\n");
+		printk("theia_chan invalid\n");
 }
 
 void theia_execve_ahg(const char *filename) {
@@ -8553,18 +8666,29 @@ struct pipe_ahgv {
 
 void packahgv_pipe (struct pipe_ahgv sys_args) {
 	//Yang
-	if(theia_rchan == NULL) {
-		theia_rchan = relay_open("theialog", NULL, SUBBUF_SIZE, N_SUBBUFS, &relay_callbacks, NULL);
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return; 
+		}
 	}
-	if(theia_rchan) {
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return; 
+		}
+	}
+	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%lx|%d|%d|%lx|%lx|endahg\n", 
 				sys_args.pid, 42, sys_args.retval, sys_args.pfd1, sys_args.pfd2, 
 				sys_args.inode1, sys_args.inode2);
-		relay_write(theia_rchan, buf, size);
+		relay_write(theia_chan, buf, size);
 	}
 	else
-		printk("theia_rchan invalid\n");
+		printk("theia_chan invalid\n");
 }
 
 void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
@@ -10214,17 +10338,28 @@ struct socketcall_ahgv {
 
 void packahgv_socketcall (struct socketcall_ahgv sys_args, int type) {
 	//Yang
-	if(theia_rchan == NULL) {
-		theia_rchan = relay_open("theialog", NULL, SUBBUF_SIZE, N_SUBBUFS, &relay_callbacks, NULL);
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return; 
+		}
 	}
-	if(theia_rchan) {
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return; 
+		}
+	}
+	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|endahg\n", 
 				sys_args.pid, 102, type, sys_args.sockFd, sys_args.address);
-		relay_write(theia_rchan, buf, size);
+		relay_write(theia_chan, buf, size);
 	}
 	else
-		printk("theia_rchan invalid\n");
+		printk("theia_chan invalid\n");
 }
 
 static asmlinkage long 
@@ -11354,17 +11489,28 @@ struct mprotect_ahgv {
 
 void packahgv_mprotect (struct mprotect_ahgv sys_args) {
 	//Yang
-	if(theia_rchan == NULL) {
-		theia_rchan = relay_open("theialog", NULL, SUBBUF_SIZE, N_SUBBUFS, &relay_callbacks, NULL);
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
 	}
-	if(theia_rchan) {
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%lx|%lx|%lx|%d|endahg\n", 
 				sys_args.pid, 125, sys_args.retval, sys_args.address, sys_args.length, sys_args.protection);
-		relay_write(theia_rchan, buf, size);
+		relay_write(theia_chan, buf, size);
 	}
 	else
-		printk("theia_rchan invalid\n");
+		printk("theia_chan invalid\n");
 }
 
 void theia_mprotect_ahg(u_long address, u_long len, uint16_t prot, long rc) {
@@ -13283,18 +13429,29 @@ struct mmap_ahgv {
 
 void packahgv_mmap (struct mmap_ahgv sys_args) {
 	//Yang
-	if(theia_rchan == NULL) {
-		theia_rchan = relay_open("theialog", NULL, SUBBUF_SIZE, N_SUBBUFS, &relay_callbacks, NULL);
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return; 
+		}
 	}
-	if(theia_rchan) {
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return; 
+		}
+	}
+	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%lu|%d|%lx|%lx|endahg\n", 
 				sys_args.pid, 192, sys_args.fd, sys_args.address, sys_args.length, sys_args.prot_type,
 				sys_args.flag, sys_args.offset);
-		relay_write(theia_rchan, buf, size);
+		relay_write(theia_chan, buf, size);
 	}
 	else
-		printk("theia_rchan invalid\n");
+		printk("theia_chan invalid\n");
 }
 
 void theia_mmap_ahg(int fd, u_long address, u_long len, uint16_t prot, u_long flags, u_long pgoff, long rc) {
@@ -16447,7 +16604,6 @@ static int __init replay_init(void)
 
 	/* Performance monitoring */
 	perftimer_init();
-
 
 	/* Read monitors */
 	//read_btwn_timer = perftimer_create("Between Reads", "Read");
