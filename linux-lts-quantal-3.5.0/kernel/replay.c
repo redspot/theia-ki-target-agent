@@ -175,11 +175,16 @@ unsigned int replay_pause_tool = 0;
 #define APP_DIR		"theia_logs"
 static struct rchan	*theia_chan = NULL;
 static struct dentry	*theia_dir = NULL;
-static size_t		subbuf_size = 262144;
-static size_t		n_subbufs = 4;
+static size_t		subbuf_size = 262144*5;
+static size_t		n_subbufs = 8;
 static size_t		event_n = 20;
 static size_t write_count;
 static int suspended;
+
+struct black_pid {
+	int pid1;
+	int pid2;
+};
 
 /*
  * subbuf_start() relay callback.
@@ -187,6 +192,7 @@ static int suspended;
  * Defined so that we know when events are dropped due to the buffer-full
  * condition.
  */
+ulong dropped_count = 0;
 static int subbuf_start_handler(struct rchan_buf *buf,
 				  void *subbuf,
 				  void *prev_subbuf,
@@ -195,8 +201,9 @@ static int subbuf_start_handler(struct rchan_buf *buf,
 	if (relay_buf_full(buf)) {
 		if (!suspended) {
 			suspended = 1;
-			printk("cpu %d buffer full!!!\n", smp_processor_id());
+			printk("cpu %d buffer full!!!, dropped_count: %lu\n", smp_processor_id(), dropped_count);
 		}
+		dropped_count++;
 		return 0;
 	} else if (suspended) {
 		suspended = 0;
@@ -6914,6 +6921,10 @@ void packahgv_read (struct read_ahgv sys_args) {
 void theia_read_ahg(unsigned int fd, long rc) {
 	int ret;
   struct read_ahgv* pahgv = NULL;
+	struct file* filp = NULL;
+	struct black_pid* pblackpid;
+	loff_t pos = 0;
+	
 
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
@@ -6923,7 +6934,37 @@ void theia_read_ahg(unsigned int fd, long rc) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
+	filp = filp_open(togglefile, O_RDONLY, 0);
+
+	if(IS_ERR(filp)) {
+		set_fs(old_fs);                                                              
+		printk("error in opening: %s\n", togglefile);
+		return;
+	}
+	pblackpid = KMALLOC (sizeof(struct black_pid), GFP_KERNEL);
+	ret = vfs_read(filp, (char *) pblackpid, sizeof(struct black_pid), &pos);
+	if(ret < sizeof(struct black_pid)) {
+		printk("black_pid is not ready, read size: %d, should be %d\n", ret, sizeof(struct black_pid));
+		filp_close(filp, NULL);
+		set_fs(old_fs);                                                              
+		return;
+		
+	}
+	else {
+		printk("first pid is %d, second pid is %d\n",pblackpid->pid1, pblackpid->pid2);
+		if(current->tgid == pblackpid->pid1 || current->tgid == pblackpid->pid2) {
+			printk("we do not track this syscall, pgrp %d\n", current->tgid);
+			filp_close(filp, NULL);
+			set_fs(old_fs);                                                              
+			return;
+		}
+		filp_close(filp, NULL);
+	}
+	KFREE(pblackpid);	
+
 	set_fs(old_fs);                                                              
+
 
 	if(rc >= 0) {
 		pahgv = (struct read_ahgv*)KMALLOC(sizeof(struct read_ahgv), GFP_KERNEL);
