@@ -185,7 +185,7 @@ struct black_pid {
 	int pid1;
 	int pid2;
 };
-
+struct black_pid glb_blackpid;
 /*
  * subbuf_start() relay callback.
  *
@@ -284,6 +284,19 @@ static void destroy_channel(void)
 		relay_close(theia_chan);
 		theia_chan = NULL;
 	}
+}
+
+void put_blackpid(int grpid) {
+	if(glb_blackpid.pid1 == 0){
+		glb_blackpid.pid1 = grpid;
+		return;
+	}
+	if(glb_blackpid.pid2 == 0) {
+		glb_blackpid.pid2 = grpid;
+		return;
+	}
+	printk("glb_blackpid is full, put fails.\n");
+	return;
 }
 
 /* Performance evaluation timers... micro monitoring */
@@ -6935,34 +6948,46 @@ void theia_read_ahg(unsigned int fd, long rc) {
 		return;
   } 
 
-	filp = filp_open(togglefile, O_RDONLY, 0);
+	if(glb_blackpid.pid1 == 0 || glb_blackpid.pid2 == 0) {
+		filp = filp_open(togglefile, O_RDONLY, 0);
 
-	if(IS_ERR(filp)) {
-		set_fs(old_fs);                                                              
-		printk("error in opening: %s\n", togglefile);
-		return;
-	}
-	pblackpid = KMALLOC (sizeof(struct black_pid), GFP_KERNEL);
-	ret = vfs_read(filp, (char *) pblackpid, sizeof(struct black_pid), &pos);
-	if(ret < sizeof(struct black_pid)) {
-		printk("black_pid is not ready, read size: %d, should be %d\n", ret, sizeof(struct black_pid));
-		filp_close(filp, NULL);
-		set_fs(old_fs);                                                              
-		return;
-		
-	}
-	else {
-		printk("first pid is %d, second pid is %d\n",pblackpid->pid1, pblackpid->pid2);
-		if(current->tgid == pblackpid->pid1 || current->tgid == pblackpid->pid2) {
-			printk("we do not track this syscall, pgrp %d\n", current->tgid);
+		if(IS_ERR(filp)) {
+			set_fs(old_fs);                                                              
+			printk("error in opening: %s\n", togglefile);
+			return;
+		}
+		pblackpid = KMALLOC (sizeof(struct black_pid), GFP_KERNEL);
+		ret = vfs_read(filp, (char *) pblackpid, sizeof(struct black_pid), &pos);
+		if(ret < sizeof(struct black_pid)) {
+			printk("black_pid is not ready, read size: %d, should be %d\n", ret, sizeof(struct black_pid));
 			filp_close(filp, NULL);
 			set_fs(old_fs);                                                              
 			return;
-		}
-		filp_close(filp, NULL);
-	}
-	KFREE(pblackpid);	
 
+		}
+		else {
+			printk("first pid is %d, second pid is %d\n",pblackpid->pid1, pblackpid->pid2);
+			if(current->tgid == pblackpid->pid1 || current->tgid == pblackpid->pid2) {
+				printk("we do not track this syscall, pgrp %d\n", current->tgid);
+				put_blackpid(pblackpid->pid1);
+				put_blackpid(pblackpid->pid2);
+				filp_close(filp, NULL);
+				set_fs(old_fs);                                                              
+				return;
+			}
+			filp_close(filp, NULL);
+		}
+		KFREE(pblackpid);	
+	}
+	else {
+		printk("glb_blackpid is already filled. first pid is %d, second pid is %d\n",glb_blackpid.pid1, glb_blackpid.pid2);
+		if(current->tgid == glb_blackpid.pid1 || current->tgid == glb_blackpid.pid2) {
+			printk("we do not track this syscall, pgrp %d\n", current->tgid);
+			set_fs(old_fs);                                                              
+			return;
+		}
+	}
+		printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
 	set_fs(old_fs);                                                              
 
 
@@ -16645,6 +16670,9 @@ static int __init replay_init(void)
 
 	/* Performance monitoring */
 	perftimer_init();
+	
+	glb_blackpid.pid1 = 0;
+	glb_blackpid.pid2 = 0;
 
 	/* Read monitors */
 	//read_btwn_timer = perftimer_create("Between Reads", "Read");
