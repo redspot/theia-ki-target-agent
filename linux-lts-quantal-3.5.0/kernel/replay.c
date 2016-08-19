@@ -182,10 +182,19 @@ static size_t write_count;
 static int suspended;
 
 struct black_pid {
-	int pid1;
-	int pid2;
+	int pid[3];
 };
 struct black_pid glb_blackpid;
+
+bool is_pid_match(pid_t pid, pid_t tgid) {
+	if(tgid == glb_blackpid.pid[0] || tgid == glb_blackpid.pid[1] || tgid == glb_blackpid.pid[2] 
+			||	pid == glb_blackpid.pid[0] || pid == glb_blackpid.pid[1] || pid == glb_blackpid.pid[2] ) {
+		return true;
+	}
+	return false;
+
+}
+
 /*
  * subbuf_start() relay callback.
  *
@@ -287,12 +296,16 @@ static void destroy_channel(void)
 }
 
 void put_blackpid(int grpid) {
-	if(glb_blackpid.pid1 == 0){
-		glb_blackpid.pid1 = grpid;
+	if(glb_blackpid.pid[0] == 0){
+		glb_blackpid.pid[0] = grpid;
 		return;
 	}
-	if(glb_blackpid.pid2 == 0) {
-		glb_blackpid.pid2 = grpid;
+	if(glb_blackpid.pid[1] == 0) {
+		glb_blackpid.pid[1] = grpid;
+		return;
+	}
+	if(glb_blackpid.pid[2] == 0) {
+		glb_blackpid.pid[2] = grpid;
 		return;
 	}
 	printk("glb_blackpid is full, put fails.\n");
@@ -6907,6 +6920,32 @@ struct read_ahgv {
 
 void packahgv_read (struct read_ahgv sys_args) {
 	//Yang
+	if(theia_chan) {
+		char buf[256];
+		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|endahg\n", 
+				sys_args.pid, 3, sys_args.fd, sys_args.bytes);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+void theia_read_ahg(unsigned int fd, long rc) {
+	int ret;
+  struct read_ahgv* pahgv = NULL;
+	struct black_pid* pblackpid;
+	loff_t pos = 0;
+	struct file* filp = NULL;
+	
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
 	if(theia_dir == NULL) {
 		theia_dir = debugfs_create_dir(APP_DIR, NULL);
 		if (!theia_dir) {
@@ -6921,34 +6960,8 @@ void packahgv_read (struct read_ahgv sys_args) {
 			return;
 		}
 	}
-	if(theia_chan) {
-		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|endahg\n", 
-				sys_args.pid, 3, sys_args.fd, sys_args.bytes);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
-}
 
-void theia_read_ahg(unsigned int fd, long rc) {
-	int ret;
-  struct read_ahgv* pahgv = NULL;
-	struct file* filp = NULL;
-	struct black_pid* pblackpid;
-	loff_t pos = 0;
-	
-
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-	if(glb_blackpid.pid1 == 0 || glb_blackpid.pid2 == 0) {
+	if(glb_blackpid.pid[0] == 0 || glb_blackpid.pid[1] == 0 || glb_blackpid.pid[2]) {
 		filp = filp_open(togglefile, O_RDONLY, 0);
 
 		if(IS_ERR(filp)) {
@@ -6966,11 +6979,12 @@ void theia_read_ahg(unsigned int fd, long rc) {
 
 		}
 		else {
-			printk("first pid is %d, second pid is %d\n",pblackpid->pid1, pblackpid->pid2);
-			if(current->tgid == pblackpid->pid1 || current->tgid == pblackpid->pid2) {
+			printk("first pid is %d, second pid is %d, third pid is %d\n",pblackpid->pid[0], pblackpid->pid[1], pblackpid->pid[2]);
+			put_blackpid(pblackpid->pid[0]);
+			put_blackpid(pblackpid->pid[1]);
+			put_blackpid(pblackpid->pid[2]);
+			if(is_pid_match(current->pid, current->tgid)) {
 				printk("we do not track this syscall, pgrp %d\n", current->tgid);
-				put_blackpid(pblackpid->pid1);
-				put_blackpid(pblackpid->pid2);
 				filp_close(filp, NULL);
 				set_fs(old_fs);                                                              
 				return;
@@ -6980,14 +6994,15 @@ void theia_read_ahg(unsigned int fd, long rc) {
 		KFREE(pblackpid);	
 	}
 	else {
-		printk("glb_blackpid is already filled. first pid is %d, second pid is %d\n",glb_blackpid.pid1, glb_blackpid.pid2);
-		if(current->tgid == glb_blackpid.pid1 || current->tgid == glb_blackpid.pid2) {
+		printk("glb_blackpid is already filled. first pid is %d, second pid is %d, third is %d\n",glb_blackpid.pid[0], glb_blackpid.pid[1],glb_blackpid.pid[2] );
+		if(is_pid_match(current->pid, current->tgid)) {
 			printk("we do not track this syscall, pgrp %d\n", current->tgid);
 			set_fs(old_fs);                                                              
 			return;
 		}
 	}
-		printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+
 	set_fs(old_fs);                                                              
 
 
@@ -7459,6 +7474,31 @@ struct write_ahgv {
 
 void packahgv_write (struct write_ahgv sys_args) {
 	//Yang
+	if(theia_chan) {
+		char buf[256];
+		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|endahg\n", 
+				sys_args.pid, 4, sys_args.fd, sys_args.bytes);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+void theia_write_ahg(unsigned int fd, long rc) {
+	int ret;
+  struct write_ahgv* pahgv = NULL;
+	struct black_pid* pblackpid;
+	loff_t pos = 0;
+	struct file* filp = NULL;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
 	if(theia_dir == NULL) {
 		theia_dir = debugfs_create_dir(APP_DIR, NULL);
 		if (!theia_dir) {
@@ -7473,28 +7513,51 @@ void packahgv_write (struct write_ahgv sys_args) {
 			return;
 		}
 	}
-	if(theia_chan) {
-		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|endahg\n", 
-				sys_args.pid, 4, sys_args.fd, sys_args.bytes);
-		relay_write(theia_chan, buf, size);
+
+
+	if(glb_blackpid.pid[0] == 0 || glb_blackpid.pid[1] == 0 || glb_blackpid.pid[2]) {
+		filp = filp_open(togglefile, O_RDONLY, 0);
+
+		if(IS_ERR(filp)) {
+			set_fs(old_fs);                                                              
+			printk("error in opening: %s\n", togglefile);
+			return;
+		}
+		pblackpid = KMALLOC (sizeof(struct black_pid), GFP_KERNEL);
+		ret = vfs_read(filp, (char *) pblackpid, sizeof(struct black_pid), &pos);
+		if(ret < sizeof(struct black_pid)) {
+			printk("black_pid is not ready, read size: %d, should be %d\n", ret, sizeof(struct black_pid));
+			filp_close(filp, NULL);
+			set_fs(old_fs);                                                              
+			return;
+
+		}
+		else {
+			printk("first pid is %d, second pid is %d, third pid is %d\n",pblackpid->pid[0], pblackpid->pid[1], pblackpid->pid[2]);
+			put_blackpid(pblackpid->pid[0]);
+			put_blackpid(pblackpid->pid[1]);
+			put_blackpid(pblackpid->pid[2]);
+			if(is_pid_match(current->pid, current->tgid)) {
+				printk("we do not track this syscall, pgrp %d\n", current->tgid);
+				filp_close(filp, NULL);
+				set_fs(old_fs);                                                              
+				return;
+			}
+			filp_close(filp, NULL);
+		}
+		KFREE(pblackpid);	
 	}
-	else
-		printk("theia_chan invalid\n");
-}
+	else {
+		printk("glb_blackpid is already filled. first pid is %d, second pid is %d, third is %d\n",glb_blackpid.pid[0], glb_blackpid.pid[1],glb_blackpid.pid[2] );
+		if(is_pid_match(current->pid, current->tgid)) {
+			printk("we do not track this syscall, pgrp %d\n", current->tgid);
+			set_fs(old_fs);                                                              
+			return;
+		}
+	}
+	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
 
-void theia_write_ahg(unsigned int fd, long rc) {
-	int ret;
-  struct write_ahgv* pahgv = NULL;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-    set_fs(old_fs);                                                              
-		return;
-  } 
 	set_fs(old_fs);                                                              
 
 	pahgv = (struct write_ahgv*)KMALLOC(sizeof(struct write_ahgv), GFP_KERNEL);
@@ -7839,20 +7902,7 @@ struct open_ahgv {
 
 void packahgv_open (struct open_ahgv sys_args) {
 	//Yang
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return;
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
+
 	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%lx|%lx|endahg\n", 
@@ -7871,6 +7921,9 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc)
 	struct inode* inode;
   struct open_ahgv* pahgv = NULL;
 	int copied_length = 0;
+	struct black_pid* pblackpid;
+	loff_t pos = 0;
+	struct file* filp = NULL;
 
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
@@ -7880,6 +7933,62 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc)
     set_fs(old_fs);                                                              
 		return;
   } 
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+
+	if(glb_blackpid.pid[0] == 0 || glb_blackpid.pid[1] == 0 || glb_blackpid.pid[2]) {
+		filp = filp_open(togglefile, O_RDONLY, 0);
+
+		if(IS_ERR(filp)) {
+			set_fs(old_fs);                                                              
+			printk("error in opening: %s\n", togglefile);
+			return;
+		}
+		pblackpid = KMALLOC (sizeof(struct black_pid), GFP_KERNEL);
+		ret = vfs_read(filp, (char *) pblackpid, sizeof(struct black_pid), &pos);
+		if(ret < sizeof(struct black_pid)) {
+			printk("black_pid is not ready, read size: %d, should be %d\n", ret, sizeof(struct black_pid));
+			filp_close(filp, NULL);
+			set_fs(old_fs);                                                              
+			return;
+
+		}
+		else {
+			printk("first pid is %d, second pid is %d, third pid is %d\n",pblackpid->pid[0], pblackpid->pid[1], pblackpid->pid[2]);
+			put_blackpid(pblackpid->pid[0]);
+			put_blackpid(pblackpid->pid[1]);
+			put_blackpid(pblackpid->pid[2]);
+			if(is_pid_match(current->pid, current->tgid)) {
+				printk("we do not track this syscall, pgrp %d\n", current->tgid);
+				filp_close(filp, NULL);
+				set_fs(old_fs);                                                              
+				return;
+			}
+			filp_close(filp, NULL);
+		}
+		KFREE(pblackpid);	
+	}
+	else {
+		printk("glb_blackpid is already filled. first pid is %d, second pid is %d, third is %d\n",glb_blackpid.pid[0], glb_blackpid.pid[1],glb_blackpid.pid[2] );
+		if(is_pid_match(current->pid, current->tgid)) {
+			printk("we do not track this syscall, pgrp %d\n", current->tgid);
+			set_fs(old_fs);                                                              
+			return;
+		}
+	}
+	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
 
 	set_fs(old_fs);                                                              
 
@@ -8016,6 +8125,31 @@ struct close_ahgv {
 
 void packahgv_close (struct close_ahgv sys_args) {
 	//Yang
+	if(theia_chan) {
+		char buf[256];
+		int size = sprintf(buf, "startahg|%d|%d|%d|endahg\n", sys_args.pid, 6, sys_args.fd);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+void theia_close_ahg(int fd) {
+	int ret;
+  struct close_ahgv* pahgv = NULL;
+	struct black_pid* pblackpid;
+	loff_t pos = 0;
+	struct file* filp = NULL;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
 	if(theia_dir == NULL) {
 		theia_dir = debugfs_create_dir(APP_DIR, NULL);
 		if (!theia_dir) {
@@ -8030,27 +8164,49 @@ void packahgv_close (struct close_ahgv sys_args) {
 			return;
 		}
 	}
-	if(theia_chan) {
-		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%d|endahg\n", sys_args.pid, 6, sys_args.fd);
-		relay_write(theia_chan, buf, size);
+
+	if(glb_blackpid.pid[0] == 0 || glb_blackpid.pid[1] == 0 || glb_blackpid.pid[2]) {
+		filp = filp_open(togglefile, O_RDONLY, 0);
+
+		if(IS_ERR(filp)) {
+			set_fs(old_fs);                                                              
+			printk("error in opening: %s\n", togglefile);
+			return;
+		}
+		pblackpid = KMALLOC (sizeof(struct black_pid), GFP_KERNEL);
+		ret = vfs_read(filp, (char *) pblackpid, sizeof(struct black_pid), &pos);
+		if(ret < sizeof(struct black_pid)) {
+			printk("black_pid is not ready, read size: %d, should be %d\n", ret, sizeof(struct black_pid));
+			filp_close(filp, NULL);
+			set_fs(old_fs);                                                              
+			return;
+
+		}
+		else {
+			printk("first pid is %d, second pid is %d, third pid is %d\n",pblackpid->pid[0], pblackpid->pid[1], pblackpid->pid[2]);
+			put_blackpid(pblackpid->pid[0]);
+			put_blackpid(pblackpid->pid[1]);
+			put_blackpid(pblackpid->pid[2]);
+			if(is_pid_match(current->pid, current->tgid)) {
+				printk("we do not track this syscall, pgrp %d\n", current->tgid);
+				filp_close(filp, NULL);
+				set_fs(old_fs);                                                              
+				return;
+			}
+			filp_close(filp, NULL);
+		}
+		KFREE(pblackpid);	
 	}
-	else
-		printk("theia_chan invalid\n");
-}
+	else {
+		printk("glb_blackpid is already filled. first pid is %d, second pid is %d, third is %d\n",glb_blackpid.pid[0], glb_blackpid.pid[1],glb_blackpid.pid[2] );
+		if(is_pid_match(current->pid, current->tgid)) {
+			printk("we do not track this syscall, pgrp %d\n", current->tgid);
+			set_fs(old_fs);                                                              
+			return;
+		}
+	}
+	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
 
-void theia_close_ahg(int fd) {
-	int ret;
-  struct close_ahgv* pahgv = NULL;
-
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-    set_fs(old_fs);                                                              
-		return;
-  } 
 	set_fs(old_fs);                                                              
 
 	pahgv = (struct close_ahgv*)KMALLOC(sizeof(struct close_ahgv), GFP_KERNEL);
@@ -8211,6 +8367,32 @@ struct execve_ahgv {
 
 void packahgv_execve (struct execve_ahgv sys_args) {
 	//Yang
+	if(theia_chan) {
+		char buf[256];
+		int size = sprintf(buf, "startahg|%d|%d|%s|endahg\n", 
+				sys_args.pid, 11, sys_args.filename);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+void theia_execve_ahg(const char *filename) {
+	int ret;
+  struct execve_ahgv* pahgv = NULL;
+	struct black_pid* pblackpid;
+	loff_t pos = 0;
+	struct file* filp = NULL;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
 	if(theia_dir == NULL) {
 		theia_dir = debugfs_create_dir(APP_DIR, NULL);
 		if (!theia_dir) {
@@ -8225,28 +8407,50 @@ void packahgv_execve (struct execve_ahgv sys_args) {
 			return; 
 		}
 	}
-	if(theia_chan) {
-		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%s|endahg\n", 
-				sys_args.pid, 11, sys_args.filename);
-		relay_write(theia_chan, buf, size);
+
+
+	if(glb_blackpid.pid[0] == 0 || glb_blackpid.pid[1] == 0 || glb_blackpid.pid[2]) {
+		filp = filp_open(togglefile, O_RDONLY, 0);
+
+		if(IS_ERR(filp)) {
+			set_fs(old_fs);                                                              
+			printk("error in opening: %s\n", togglefile);
+			return;
+		}
+		pblackpid = KMALLOC (sizeof(struct black_pid), GFP_KERNEL);
+		ret = vfs_read(filp, (char *) pblackpid, sizeof(struct black_pid), &pos);
+		if(ret < sizeof(struct black_pid)) {
+			printk("black_pid is not ready, read size: %d, should be %d\n", ret, sizeof(struct black_pid));
+			filp_close(filp, NULL);
+			set_fs(old_fs);                                                              
+			return;
+
+		}
+		else {
+			printk("first pid is %d, second pid is %d, third pid is %d\n",pblackpid->pid[0], pblackpid->pid[1], pblackpid->pid[2]);
+			put_blackpid(pblackpid->pid[0]);
+			put_blackpid(pblackpid->pid[1]);
+			put_blackpid(pblackpid->pid[2]);
+			if(is_pid_match(current->pid, current->tgid)) {
+				printk("we do not track this syscall, pgrp %d\n", current->tgid);
+				filp_close(filp, NULL);
+				set_fs(old_fs);                                                              
+				return;
+			}
+			filp_close(filp, NULL);
+		}
+		KFREE(pblackpid);	
 	}
-	else
-		printk("theia_chan invalid\n");
-}
+	else {
+		printk("glb_blackpid is already filled. first pid is %d, second pid is %d, third is %d\n",glb_blackpid.pid[0], glb_blackpid.pid[1],glb_blackpid.pid[2] );
+		if(is_pid_match(current->pid, current->tgid)) {
+			printk("we do not track this syscall, pgrp %d\n", current->tgid);
+			set_fs(old_fs);                                                              
+			return;
+		}
+	}
+	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
 
-void theia_execve_ahg(const char *filename) {
-	int ret;
-  struct execve_ahgv* pahgv = NULL;
-
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-    set_fs(old_fs);                                                              
-		return;
-  } 
 	set_fs(old_fs);                                                              
 
 	pahgv = (struct execve_ahgv*)KMALLOC(sizeof(struct execve_ahgv), GFP_KERNEL);
@@ -8732,20 +8936,6 @@ struct pipe_ahgv {
 
 void packahgv_pipe (struct pipe_ahgv sys_args) {
 	//Yang
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return; 
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return; 
-		}
-	}
 	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%lx|%d|%d|%lx|%lx|endahg\n", 
@@ -8760,6 +8950,9 @@ void packahgv_pipe (struct pipe_ahgv sys_args) {
 void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
 	int ret;
   struct pipe_ahgv* pahgv = NULL;
+	struct black_pid* pblackpid;
+	loff_t pos = 0;
+	struct file* filp = NULL;
 
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
@@ -8769,6 +8962,63 @@ void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return; 
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return; 
+		}
+	}
+
+	if(glb_blackpid.pid[0] == 0 || glb_blackpid.pid[1] == 0 || glb_blackpid.pid[2]) {
+		filp = filp_open(togglefile, O_RDONLY, 0);
+
+		if(IS_ERR(filp)) {
+			set_fs(old_fs);                                                              
+			printk("error in opening: %s\n", togglefile);
+			return;
+		}
+		pblackpid = KMALLOC (sizeof(struct black_pid), GFP_KERNEL);
+		ret = vfs_read(filp, (char *) pblackpid, sizeof(struct black_pid), &pos);
+		if(ret < sizeof(struct black_pid)) {
+			printk("black_pid is not ready, read size: %d, should be %d\n", ret, sizeof(struct black_pid));
+			filp_close(filp, NULL);
+			set_fs(old_fs);                                                              
+			return;
+
+		}
+		else {
+			printk("first pid is %d, second pid is %d, third pid is %d\n",pblackpid->pid[0], pblackpid->pid[1], pblackpid->pid[2]);
+			put_blackpid(pblackpid->pid[0]);
+			put_blackpid(pblackpid->pid[1]);
+			put_blackpid(pblackpid->pid[2]);
+			if(is_pid_match(current->pid, current->tgid)) {
+				printk("we do not track this syscall, pgrp %d\n", current->tgid);
+				filp_close(filp, NULL);
+				set_fs(old_fs);                                                              
+				return;
+			}
+			filp_close(filp, NULL);
+		}
+		KFREE(pblackpid);	
+	}
+	else {
+		printk("glb_blackpid is already filled. first pid is %d, second pid is %d, third is %d\n",glb_blackpid.pid[0], glb_blackpid.pid[1],glb_blackpid.pid[2] );
+		if(is_pid_match(current->pid, current->tgid)) {
+			printk("we do not track this syscall, pgrp %d\n", current->tgid);
+			set_fs(old_fs);                                                              
+			return;
+		}
+	}
+	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
 	set_fs(old_fs);                                                              
 
 	pahgv = (struct pipe_ahgv*)KMALLOC(sizeof(struct pipe_ahgv), GFP_KERNEL);
@@ -10404,20 +10654,6 @@ struct socketcall_ahgv {
 
 void packahgv_socketcall (struct socketcall_ahgv sys_args, int type) {
 	//Yang
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return; 
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return; 
-		}
-	}
 	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|endahg\n", 
@@ -11555,6 +11791,32 @@ struct mprotect_ahgv {
 
 void packahgv_mprotect (struct mprotect_ahgv sys_args) {
 	//Yang
+	if(theia_chan) {
+		char buf[256];
+		int size = sprintf(buf, "startahg|%d|%d|%lx|%lx|%lx|%d|endahg\n", 
+				sys_args.pid, 125, sys_args.retval, sys_args.address, sys_args.length, sys_args.protection);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+void theia_mprotect_ahg(u_long address, u_long len, uint16_t prot, long rc) {
+	int ret;
+  struct mprotect_ahgv* pahgv = NULL;
+	struct black_pid* pblackpid;
+	loff_t pos = 0;
+	struct file* filp = NULL;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
 	if(theia_dir == NULL) {
 		theia_dir = debugfs_create_dir(APP_DIR, NULL);
 		if (!theia_dir) {
@@ -11569,28 +11831,49 @@ void packahgv_mprotect (struct mprotect_ahgv sys_args) {
 			return;
 		}
 	}
-	if(theia_chan) {
-		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%lx|%lx|%lx|%d|endahg\n", 
-				sys_args.pid, 125, sys_args.retval, sys_args.address, sys_args.length, sys_args.protection);
-		relay_write(theia_chan, buf, size);
+
+	if(glb_blackpid.pid[0] == 0 || glb_blackpid.pid[1] == 0 || glb_blackpid.pid[2]) {
+		filp = filp_open(togglefile, O_RDONLY, 0);
+
+		if(IS_ERR(filp)) {
+			set_fs(old_fs);                                                              
+			printk("error in opening: %s\n", togglefile);
+			return;
+		}
+		pblackpid = KMALLOC (sizeof(struct black_pid), GFP_KERNEL);
+		ret = vfs_read(filp, (char *) pblackpid, sizeof(struct black_pid), &pos);
+		if(ret < sizeof(struct black_pid)) {
+			printk("black_pid is not ready, read size: %d, should be %d\n", ret, sizeof(struct black_pid));
+			filp_close(filp, NULL);
+			set_fs(old_fs);                                                              
+			return;
+
+		}
+		else {
+			printk("first pid is %d, second pid is %d, third pid is %d\n",pblackpid->pid[0], pblackpid->pid[1], pblackpid->pid[2]);
+			put_blackpid(pblackpid->pid[0]);
+			put_blackpid(pblackpid->pid[1]);
+			put_blackpid(pblackpid->pid[2]);
+			if(is_pid_match(current->pid, current->tgid)) {
+				printk("we do not track this syscall, pgrp %d\n", current->tgid);
+				filp_close(filp, NULL);
+				set_fs(old_fs);                                                              
+				return;
+			}
+			filp_close(filp, NULL);
+		}
+		KFREE(pblackpid);	
 	}
-	else
-		printk("theia_chan invalid\n");
-}
+	else {
+		printk("glb_blackpid is already filled. first pid is %d, second pid is %d, third is %d\n",glb_blackpid.pid[0], glb_blackpid.pid[1],glb_blackpid.pid[2] );
+		if(is_pid_match(current->pid, current->tgid)) {
+			printk("we do not track this syscall, pgrp %d\n", current->tgid);
+			set_fs(old_fs);                                                              
+			return;
+		}
+	}
+	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
 
-void theia_mprotect_ahg(u_long address, u_long len, uint16_t prot, long rc) {
-	int ret;
-  struct mprotect_ahgv* pahgv = NULL;
-
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-    set_fs(old_fs);                                                              
-		return;
-  } 
 	set_fs(old_fs);                                                              
 
 	pahgv = (struct mprotect_ahgv*)KMALLOC(sizeof(struct mprotect_ahgv), GFP_KERNEL);
@@ -13495,20 +13778,6 @@ struct mmap_ahgv {
 
 void packahgv_mmap (struct mmap_ahgv sys_args) {
 	//Yang
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return; 
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return; 
-		}
-	}
 	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%lu|%d|%lx|%lx|endahg\n", 
@@ -13523,6 +13792,9 @@ void packahgv_mmap (struct mmap_ahgv sys_args) {
 void theia_mmap_ahg(int fd, u_long address, u_long len, uint16_t prot, u_long flags, u_long pgoff, long rc) {
 	int ret;
   struct mmap_ahgv* pahgv = NULL;
+	struct black_pid* pblackpid;
+	loff_t pos = 0;
+	struct file* filp = NULL;
 
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
@@ -13532,6 +13804,63 @@ void theia_mmap_ahg(int fd, u_long address, u_long len, uint16_t prot, u_long fl
     set_fs(old_fs);                                                              
 		return;
   } 
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return; 
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return; 
+		}
+	}
+
+	if(glb_blackpid.pid[0] == 0 || glb_blackpid.pid[1] == 0 || glb_blackpid.pid[2]) {
+		filp = filp_open(togglefile, O_RDONLY, 0);
+
+		if(IS_ERR(filp)) {
+			set_fs(old_fs);                                                              
+			printk("error in opening: %s\n", togglefile);
+			return;
+		}
+		pblackpid = KMALLOC (sizeof(struct black_pid), GFP_KERNEL);
+		ret = vfs_read(filp, (char *) pblackpid, sizeof(struct black_pid), &pos);
+		if(ret < sizeof(struct black_pid)) {
+			printk("black_pid is not ready, read size: %d, should be %d\n", ret, sizeof(struct black_pid));
+			filp_close(filp, NULL);
+			set_fs(old_fs);                                                              
+			return;
+
+		}
+		else {
+			printk("first pid is %d, second pid is %d, third pid is %d\n",pblackpid->pid[0], pblackpid->pid[1], pblackpid->pid[2]);
+			put_blackpid(pblackpid->pid[0]);
+			put_blackpid(pblackpid->pid[1]);
+			put_blackpid(pblackpid->pid[2]);
+			if(is_pid_match(current->pid, current->tgid)) {
+				printk("we do not track this syscall, pgrp %d\n", current->tgid);
+				filp_close(filp, NULL);
+				set_fs(old_fs);                                                              
+				return;
+			}
+			filp_close(filp, NULL);
+		}
+		KFREE(pblackpid);	
+	}
+	else {
+		printk("glb_blackpid is already filled. first pid is %d, second pid is %d, third is %d\n",glb_blackpid.pid[0], glb_blackpid.pid[1],glb_blackpid.pid[2] );
+		if(is_pid_match(current->pid, current->tgid)) {
+			printk("we do not track this syscall, pgrp %d\n", current->tgid);
+			set_fs(old_fs);                                                              
+			return;
+		}
+	}
+	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
 	set_fs(old_fs);                                                              
 
 	pahgv = (struct mmap_ahgv*)KMALLOC(sizeof(struct mmap_ahgv), GFP_KERNEL);
@@ -16671,8 +17000,9 @@ static int __init replay_init(void)
 	/* Performance monitoring */
 	perftimer_init();
 	
-	glb_blackpid.pid1 = 0;
-	glb_blackpid.pid2 = 0;
+	glb_blackpid.pid[0] = 0;
+	glb_blackpid.pid[1] = 0;
+	glb_blackpid.pid[2] = 0;
 
 	/* Read monitors */
 	//read_btwn_timer = perftimer_create("Between Reads", "Read");
