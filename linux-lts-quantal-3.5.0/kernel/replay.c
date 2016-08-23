@@ -6970,7 +6970,7 @@ void packahgv_read (struct read_ahgv sys_args) {
 	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|endahg\n", 
-				sys_args.pid, 3, sys_args.fd, sys_args.bytes);
+				3, sys_args.pid, sys_args.fd, sys_args.bytes);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -7484,7 +7484,7 @@ void packahgv_write (struct write_ahgv sys_args) {
 	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|endahg\n", 
-				sys_args.pid, 4, sys_args.fd, sys_args.bytes);
+				4, sys_args.pid, sys_args.fd, sys_args.bytes);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -7874,7 +7874,7 @@ void packahgv_open (struct open_ahgv sys_args) {
 	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%lx|%lx|endahg\n", 
-				sys_args.pid, 5, sys_args.fd, sys_args.filename, sys_args.flags, sys_args.mode,
+				5, sys_args.pid, sys_args.fd, sys_args.filename, sys_args.flags, sys_args.mode,
 				sys_args.dev, sys_args.ino);
 		relay_write(theia_chan, buf, size);
 	}
@@ -7927,25 +7927,25 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc)
 		printk ("theia_open_ahg: failed to KMALLOC.\n");
 		return;
 	}
-//	pahgv->pid = current->pid;
-//	pahgv->fd = (int)rc;
-//	pahgv->flags = flags;
-//	pahgv->mode = mode;
-//	file = fget ((unsigned int)rc);
-//	inode = file->f_dentry->d_inode;
-////	printk("!!!!!!inode is %p, i_sb: %p,s_dev: %lu, i_ino %lu\n", inode, inode->i_sb, inode->i_sb->s_dev, inode->i_ino);
-//	pahgv->dev = inode->i_sb->s_dev;
-//	pahgv->ino = inode->i_ino;
-//
-////	if ((copied_length = strncpy_from_user(pahgv->filename, filename, sizeof(pahgv->filename))) != strlen(filename)) {
-////		printk ("theia_open_ahg: can't copy filename to ahgv, filename length %d, copied %d, filename:%s\n", strlen(filename), copied_length, filename); 
-////		KFREE(pahgv);	
-////	}
-////Yang: temp avoiding the "Text file busy" for spec cpu2006
+	pahgv->pid = current->pid;
+	pahgv->fd = (int)rc;
+	pahgv->flags = flags;
+	pahgv->mode = mode;
+	file = fget ((unsigned int)rc);
+	inode = file->f_dentry->d_inode;
+//	printk("!!!!!!inode is %p, i_sb: %p,s_dev: %lu, i_ino %lu\n", inode, inode->i_sb, inode->i_sb->s_dev, inode->i_ino);
+	pahgv->dev = inode->i_sb->s_dev;
+	pahgv->ino = inode->i_ino;
+
+	if ((copied_length = strncpy_from_user(pahgv->filename, filename, sizeof(pahgv->filename))) != strlen(filename)) {
+		printk ("theia_open_ahg: can't copy filename to ahgv, filename length %d, copied %d, filename:%s\n", strlen(filename), copied_length, filename); 
+		KFREE(pahgv);	
+	}
+//Yang: temp avoiding the "Text file busy" for spec cpu2006
 //	sprintf(pahgv->filename, "hellojacket");
-//
-//	//Reuse dmesg channel
-//	packahgv_open(*pahgv);
+
+	//Reuse dmesg channel
+	packahgv_open(*pahgv);
 	KFREE(pahgv);	
 }
 
@@ -8057,7 +8057,7 @@ void packahgv_close (struct close_ahgv sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%d|endahg\n", sys_args.pid, 6, sys_args.fd);
+		int size = sprintf(buf, "startahg|%d|%d|%d|endahg\n", 6, sys_args.pid, sys_args.fd);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -8262,7 +8262,7 @@ void packahgv_execve (struct execve_ahgv sys_args) {
 	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%s|endahg\n", 
-				sys_args.pid, 11, sys_args.filename);
+				11, sys_args.pid, sys_args.filename);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -8793,7 +8793,7 @@ void packahgv_pipe (struct pipe_ahgv sys_args) {
 	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%lx|%d|%d|%lx|%lx|endahg\n", 
-				sys_args.pid, 42, sys_args.retval, sys_args.pfd1, sys_args.pfd2, 
+				42, sys_args.pid, sys_args.retval, sys_args.pfd1, sys_args.pfd2, 
 				sys_args.inode1, sys_args.inode2);
 		relay_write(theia_chan, buf, size);
 	}
@@ -10473,7 +10473,7 @@ void packahgv_socketcall (struct socketcall_ahgv sys_args, int type) {
 	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|endahg\n", 
-				sys_args.pid, 102, type, sys_args.sockFd, sys_args.address);
+				102, type, sys_args.pid, sys_args.sockFd, sys_args.address);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -11610,7 +11610,7 @@ void packahgv_mprotect (struct mprotect_ahgv sys_args) {
 	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%lx|%lx|%lx|%d|endahg\n", 
-				sys_args.pid, 125, sys_args.retval, sys_args.address, sys_args.length, sys_args.protection);
+				125, sys_args.pid, sys_args.retval, sys_args.address, sys_args.length, sys_args.protection);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -13559,7 +13559,7 @@ void packahgv_mmap (struct mmap_ahgv sys_args) {
 	if(theia_chan) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%lu|%d|%lx|%lx|endahg\n", 
-				sys_args.pid, 192, sys_args.fd, sys_args.address, sys_args.length, sys_args.prot_type,
+				192, sys_args.pid, sys_args.fd, sys_args.address, sys_args.length, sys_args.prot_type,
 				sys_args.flag, sys_args.offset);
 		relay_write(theia_chan, buf, size);
 	}
