@@ -89,6 +89,7 @@ int debug_flag = 0;
 
 //Yang
 const char* togglefile = "/home/yang/theia-on.conf";
+const char* control_file = "/home/yang/theia-control.conf";
 
 //#define REPLAY_PARANOID
 
@@ -296,6 +297,8 @@ static void destroy_channel(void)
 }
 
 void put_blackpid(int grpid) {
+	if(grpid == 0)
+		return;
 	if(glb_blackpid.pid[0] == 0){
 		glb_blackpid.pid[0] = grpid;
 		return;
@@ -6919,17 +6922,17 @@ struct read_ahgv {
 };
 
 
-bool check_and_update_togglefile() {
+bool check_and_update_controlfile() {
 	int ret = 0, file_size = 0;
 	struct black_pid* pblackpid;
 	loff_t pos = 0;
 	struct file* filp = NULL;
 
 	if(glb_blackpid.pid[0] == 0 || glb_blackpid.pid[1] == 0 || glb_blackpid.pid[2] == 0) {
-		filp = filp_open(togglefile, O_RDONLY, 0);
+		filp = filp_open(control_file, O_RDONLY, 0);
 
 		if(IS_ERR(filp)) {
-			printk("error in opening: %s\n", togglefile);
+			printk("error in opening: %s\n", control_file);
 			return false;
 		}
 		pblackpid = KMALLOC (sizeof(struct black_pid), GFP_KERNEL);
@@ -6937,17 +6940,17 @@ bool check_and_update_togglefile() {
 		file_size = vfs_llseek(filp, 0, SEEK_END);
 		ret = vfs_read(filp, (char *) pblackpid, file_size, &pos);
 		if(ret < file_size) {
-			printk("read from theia-on.conf fails, read size: %d, should be %d\n", ret, file_size);
+			printk("read from theia-control.conf fails, read size: %d, should be %d\n", ret, file_size);
 			filp_close(filp, NULL);
 			return false;
 		}
 		else {
-			printk("first pid is %d, second pid is %d, third pid is %d\n", pblackpid->pid[0], pblackpid->pid[1], pblackpid->pid[2]);
+			printk("first pid is %d, second pid is %d, third pid is %d\n", glb_blackpid.pid[0], glb_blackpid.pid[1], glb_blackpid.pid[2]);
 			put_blackpid(pblackpid->pid[0]);
 			put_blackpid(pblackpid->pid[1]);
 			put_blackpid(pblackpid->pid[2]);
 			if(is_pid_match(current->pid, current->tgid)) {
-				printk("we do not track this syscall, pgrp %d\n", current->tgid);
+//				printk("we do not track this syscall, pgrp %d\n", current->tgid);
 				filp_close(filp, NULL);
 				return false;
 			}
@@ -6956,9 +6959,9 @@ bool check_and_update_togglefile() {
 		KFREE(pblackpid);	
 	}
 	else {
-		printk("glb_blackpid is already filled. first pid is %d, second pid is %d, third is %d\n",glb_blackpid.pid[0], glb_blackpid.pid[1],glb_blackpid.pid[2] );
+//		printk("glb_blackpid is already filled. first pid is %d, second pid is %d, third is %d\n",glb_blackpid.pid[0], glb_blackpid.pid[1],glb_blackpid.pid[2] );
 		if(is_pid_match(current->pid, current->tgid)) {
-			printk("we do not track this syscall, pgrp %d\n", current->tgid);
+//			printk("we do not track this syscall, pgrp %d\n", current->tgid);
 			return false;
 		}
 	}
@@ -6984,11 +6987,6 @@ void theia_read_ahg(unsigned int fd, long rc) {
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
 
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { 
-    set_fs(old_fs);                                                              
-		return;
-  } 
 	if(theia_dir == NULL) {
 		theia_dir = debugfs_create_dir(APP_DIR, NULL);
 		if (!theia_dir) {
@@ -7004,11 +7002,17 @@ void theia_read_ahg(unsigned int fd, long rc) {
 		}
 	}
 
-	if(!check_and_update_togglefile()) {
+	if(!check_and_update_controlfile()) {
 		set_fs(old_fs);                                                              
 		return;
 	}
-	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { 
+    set_fs(old_fs);                                                              
+		return;
+  } 
 
 	set_fs(old_fs);                                                              
 
@@ -7498,11 +7502,7 @@ void theia_write_ahg(unsigned int fd, long rc) {
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
 
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-    set_fs(old_fs);                                                              
-		return;
-  } 
+
 	if(theia_dir == NULL) {
 		theia_dir = debugfs_create_dir(APP_DIR, NULL);
 		if (!theia_dir) {
@@ -7518,13 +7518,17 @@ void theia_write_ahg(unsigned int fd, long rc) {
 		}
 	}
 
-	if(!check_and_update_togglefile()) {
+	if(!check_and_update_controlfile()) {
 		set_fs(old_fs);                                                              
 		return;
 	}
 
-	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
 
 	set_fs(old_fs);                                                              
 
@@ -7893,11 +7897,6 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc)
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
 
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-    set_fs(old_fs);                                                              
-		return;
-  } 
 	if(theia_dir == NULL) {
 		theia_dir = debugfs_create_dir(APP_DIR, NULL);
 		if (!theia_dir) {
@@ -7913,12 +7912,17 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc)
 		}
 	}
 
-	if(!check_and_update_togglefile()) {
+	if(!check_and_update_controlfile()) {
 		set_fs(old_fs);                                                              
 		return;
 	}
 
-	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
 
 	set_fs(old_fs);                                                              
 
@@ -8071,11 +8075,6 @@ void theia_close_ahg(int fd) {
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
 
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-    set_fs(old_fs);                                                              
-		return;
-  } 
 
 	if(theia_dir == NULL) {
 		theia_dir = debugfs_create_dir(APP_DIR, NULL);
@@ -8092,12 +8091,17 @@ void theia_close_ahg(int fd) {
 		}
 	}
 
-	if(!check_and_update_togglefile()) {
+	if(!check_and_update_controlfile()) {
 		set_fs(old_fs);                                                              
 		return;
 	}
 
-	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
 
 	set_fs(old_fs);                                                              
 
@@ -8276,11 +8280,6 @@ void theia_execve_ahg(const char *filename) {
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
 
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-    set_fs(old_fs);                                                              
-		return;
-  } 
 
 	if(theia_dir == NULL) {
 		theia_dir = debugfs_create_dir(APP_DIR, NULL);
@@ -8297,13 +8296,18 @@ void theia_execve_ahg(const char *filename) {
 		}
 	}
 
-	if(!check_and_update_togglefile()) {
+	if(!check_and_update_controlfile()) {
 		set_fs(old_fs);                                                              
 		return;
 	}
 
 
-	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
 
 	set_fs(old_fs);                                                              
 
@@ -8808,11 +8812,6 @@ void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
 
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-    set_fs(old_fs);                                                              
-		return;
-  } 
 
 	if(theia_dir == NULL) {
 		theia_dir = debugfs_create_dir(APP_DIR, NULL);
@@ -8829,12 +8828,18 @@ void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
 		}
 	}
 
-	if(!check_and_update_togglefile()) {
+	if(!check_and_update_controlfile()) {
 		set_fs(old_fs);                                                              
 		return;
 	}
 
-	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
 	set_fs(old_fs);                                                              
 
 	pahgv = (struct pipe_ahgv*)KMALLOC(sizeof(struct pipe_ahgv), GFP_KERNEL);
@@ -11624,12 +11629,6 @@ void theia_mprotect_ahg(u_long address, u_long len, uint16_t prot, long rc) {
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
 
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
 	if(theia_dir == NULL) {
 		theia_dir = debugfs_create_dir(APP_DIR, NULL);
 		if (!theia_dir) {
@@ -11645,12 +11644,18 @@ void theia_mprotect_ahg(u_long address, u_long len, uint16_t prot, long rc) {
 		}
 	}
 
-	if(!check_and_update_togglefile()) {
+	if(!check_and_update_controlfile()) {
 		set_fs(old_fs);                                                              
 		return;
 	}
 
-	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
 
 	set_fs(old_fs);                                                              
 
@@ -13574,12 +13579,6 @@ void theia_mmap_ahg(int fd, u_long address, u_long len, uint16_t prot, u_long fl
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
 
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
 	if(theia_dir == NULL) {
 		theia_dir = debugfs_create_dir(APP_DIR, NULL);
 		if (!theia_dir) {
@@ -13595,12 +13594,18 @@ void theia_mmap_ahg(int fd, u_long address, u_long len, uint16_t prot, u_long fl
 		}
 	}
 
-	if(!check_and_update_togglefile()) {
+	if(!check_and_update_controlfile()) {
 		set_fs(old_fs);                                                              
 		return;
 	}
 
-	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
 	set_fs(old_fs);                                                              
 
 	pahgv = (struct mmap_ahgv*)KMALLOC(sizeof(struct mmap_ahgv), GFP_KERNEL);
