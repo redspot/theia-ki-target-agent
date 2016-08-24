@@ -315,6 +315,9 @@ void put_blackpid(int grpid) {
 	return;
 }
 
+//Yang: bookkeeping the process info
+ds_list_t* glb_process_list = NULL;
+
 /* Performance evaluation timers... micro monitoring */
 //struct perftimer *write_btwn_timer;
 struct perftimer *write_in_timer;
@@ -6932,7 +6935,7 @@ bool check_and_update_controlfile() {
 		filp = filp_open(control_file, O_RDONLY, 0);
 
 		if(IS_ERR(filp)) {
-			printk("error in opening: %s\n", control_file);
+		//	printk("error in opening: %s\n", control_file);
 			return false;
 		}
 		pblackpid = KMALLOC (sizeof(struct black_pid), GFP_KERNEL);
@@ -6966,6 +6969,38 @@ bool check_and_update_controlfile() {
 		}
 	}
 	return true;
+}
+
+bool is_process_new(pid_t pid, char* comm) {
+	if(glb_process_list == NULL) {
+		return true;
+	}
+	ds_list_iter_t* i = ds_list_iter_create(glb_process_list);
+	char cur_proc[50];
+	sprintf(cur_proc, "%d_%s", pid, comm);
+	while(true) {
+		char* entry = ds_list_iter_next(i);
+		if(entry == NULL)
+			break;
+		printk("existing process: %s\n", entry);
+		if(strcmp(cur_proc, entry)) {
+			ds_list_iter_destroy(i);
+			return false;
+		}
+	}
+	ds_list_iter_destroy(i);
+	return true;
+}
+
+void packahgv_process() {
+	if(theia_chan) {
+		char buf[256];
+		int size = sprintf(buf, "startahg|%d|%d|%d|%s|endahg\n", 
+				399/*used for new process*/, current->pid, current->real_parent->pid, current->comm);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
 }
 
 void packahgv_read (struct read_ahgv sys_args) {
@@ -7007,15 +7042,26 @@ void theia_read_ahg(unsigned int fd, long rc) {
 		return;
 	}
 //	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-
   ret = sys_access(togglefile, 0/*F_OK*/);                                       
   if(ret < 0) { 
     set_fs(old_fs);                                                              
 		return;
   } 
 
-	set_fs(old_fs);                                                              
+  //check if the process is new; if so, send an entry of process                             
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		packahgv_process();
+  }
 
+
+	set_fs(old_fs);                                                              
 
 	if(rc >= 0) {
 		pahgv = (struct read_ahgv*)KMALLOC(sizeof(struct read_ahgv), GFP_KERNEL);
@@ -7530,6 +7576,18 @@ void theia_write_ahg(unsigned int fd, long rc) {
 		return;
   } 
 
+  //check if the process is new; if so, send an entry of process                             
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		packahgv_process();
+  }
+
 	set_fs(old_fs);                                                              
 
 	pahgv = (struct write_ahgv*)KMALLOC(sizeof(struct write_ahgv), GFP_KERNEL);
@@ -7924,6 +7982,18 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc)
 		return;
   } 
 
+  //check if the process is new; if so, send an entry of process                             
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		packahgv_process();
+  }
+
 	set_fs(old_fs);                                                              
 
 	pahgv = (struct open_ahgv*)KMALLOC(sizeof(struct open_ahgv), GFP_KERNEL);
@@ -8102,6 +8172,18 @@ void theia_close_ahg(int fd) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
+  //check if the process is new; if so, send an entry of process                             
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		packahgv_process();
+  }
 
 	set_fs(old_fs);                                                              
 
@@ -8308,6 +8390,18 @@ void theia_execve_ahg(const char *filename) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
+  //check if the process is new; if so, send an entry of process                             
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		packahgv_process();
+  }
 
 	set_fs(old_fs);                                                              
 
@@ -8839,6 +8933,18 @@ void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
+  //check if the process is new; if so, send an entry of process                             
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		packahgv_process();
+  }
 
 	set_fs(old_fs);                                                              
 
@@ -11656,6 +11762,18 @@ void theia_mprotect_ahg(u_long address, u_long len, uint16_t prot, long rc) {
 		return;
   } 
 
+  //check if the process is new; if so, send an entry of process                             
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		packahgv_process();
+  }
+
 
 	set_fs(old_fs);                                                              
 
@@ -13605,6 +13723,18 @@ void theia_mmap_ahg(int fd, u_long address, u_long len, uint16_t prot, u_long fl
     set_fs(old_fs);                                                              
 		return;
   } 
+
+  //check if the process is new; if so, send an entry of process                             
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		packahgv_process();
+  }
 
 	set_fs(old_fs);                                                              
 
@@ -16748,6 +16878,7 @@ static int __init replay_init(void)
 	glb_blackpid.pid[0] = 0;
 	glb_blackpid.pid[1] = 0;
 	glb_blackpid.pid[2] = 0;
+
 
 	/* Read monitors */
 	//read_btwn_timer = perftimer_create("Between Reads", "Read");
