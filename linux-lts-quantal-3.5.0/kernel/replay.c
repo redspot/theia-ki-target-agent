@@ -6978,7 +6978,7 @@ bool is_process_new(pid_t pid, char* comm) {
 	ds_list_iter_t* i = ds_list_iter_create(glb_process_list);
 	char cur_proc[50];
 	sprintf(cur_proc, "%d_%s", pid, comm);
-	printk("number of elements in list: %d\n", ds_list_count(glb_process_list));
+//	printk("number of elements in list: %d\n", ds_list_count(glb_process_list));
 	while(true) {
 		char* entry = ds_list_iter_next(i);
 		if(entry == NULL)
