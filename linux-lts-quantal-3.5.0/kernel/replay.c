@@ -10572,25 +10572,6 @@ extract_mmsghdr (char* retparams, struct mmsghdr __user *msg, long rc)
 	return 0;
 }
 
-//Yang
-struct socketcall_ahgv {
-  int             pid;                                                           
-	int							sockFd;
-	char						address[20];
-};
-
-void packahgv_socketcall (struct socketcall_ahgv sys_args, int type) {
-	//Yang
-	if(theia_chan) {
-		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|endahg\n", 
-				102, type, sys_args.pid, sys_args.sockFd, sys_args.address);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
-}
-
 static asmlinkage long 
 replay_socketcall (int call, unsigned long __user *args)
 {
@@ -10943,7 +10924,310 @@ replay_socketcall (int call, unsigned long __user *args)
 	return syscall_mismatch();
 }
 
-asmlinkage long shim_socketcall (int call, unsigned long __user *args) SHIM_CALL(socketcall, 102, call, args);
+void print_mem(u_long addr, int length) {                                  
+  unsigned char* cc = (unsigned char *)addr;                                     
+  int i;                                                                         
+  for (i=0;i<length;i++){                                                        
+    printk("%02x(%d),", cc[i], i);                                               
+  }                                                                              
+}  
+
+void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port) {
+	struct sockaddr* p_sockaddr;
+	unsigned char* cc;
+	p_sockaddr = (struct sockaddr*)KMALLOC(sizeof(struct sockaddr), GFP_KERNEL);
+
+	if (copy_from_user (p_sockaddr, sockaddr, sizeof(struct sockaddr))) {
+		printk("fails to copy sockaddr from userspace\n");
+		return;
+	}
+	
+	print_mem((u_long)p_sockaddr, sizeof(struct sockaddr));	
+
+	cc = (unsigned char *)p_sockaddr;
+	*port = cc[2]*0x100+cc[3];
+	sprintf(ip, "%u.%u.%u.%u",cc[4],cc[5],cc[6],cc[7]);
+	
+	KFREE(p_sockaddr);
+
+	return;
+}
+
+//Yang
+struct connect_ahgv {
+  int             pid;                                                           
+	int							sock_fd;
+	char						ip[16];
+	u_long					port;
+};
+
+void packahgv_connect(struct connect_ahgv sys_args) {
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|endahg\n", 
+				102, SYS_CONNECT, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port);
+		printk("[socketcall connect]: %s", buf);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+struct accept_ahgv {
+  int             pid;                                                           
+	int							sock_fd;
+	char						ip[16];
+	u_long					port;
+};
+
+void packahgv_accept(struct accept_ahgv sys_args) {
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|endahg\n", 
+				102, SYS_ACCEPT, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+struct sendto_ahgv {
+  int             pid;                                                           
+	int							sock_fd;
+	char						ip[16];
+	u_long					port;
+};
+
+void packahgv_sendto(struct sendto_ahgv sys_args) {
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|endahg\n", 
+				102, SYS_SENDTO, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+struct recvfrom_ahgv {
+  int             pid;                                                           
+	int							sock_fd;
+	char						ip[16];
+	u_long					port;
+};
+
+void packahgv_recvfrom(struct recvfrom_ahgv sys_args) {
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|endahg\n", 
+				102, SYS_RECVFROM, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+struct sendmsg_ahgv {
+  int             pid;                                                           
+	int							sock_fd;
+	char						ip[16];
+	u_long					port;
+};
+
+void packahgv_sendmsg(struct sendmsg_ahgv sys_args) {
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|endahg\n", 
+				102, SYS_SENDMSG, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+struct recvmsg_ahgv {
+  int             pid;                                                           
+	int							sock_fd;
+	char						ip[16];
+	u_long					port;
+};
+
+void packahgv_recvmsg(struct recvmsg_ahgv sys_args) {
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|endahg\n", 
+				102, SYS_RECVMSG, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+void theia_socketcall_ahg(long rc, int call, unsigned long __user *args) {
+	int ret;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+
+	if(!check_and_update_controlfile()) {
+		set_fs(old_fs);                                                              
+		return;
+	}
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { 
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
+  //check if the process is new; if so, send an entry of process                             
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		packahgv_process();
+  }
+
+	set_fs(old_fs);                                                              
+
+	unsigned long a[6];
+	unsigned int len;
+	struct connect_ahgv* pahgv_connect = NULL;
+	struct accept_ahgv* pahgv_accept = NULL;
+	struct sendto_ahgv* pahgv_sendto = NULL;
+	struct recvfrom_ahgv* pahgv_recvfrom = NULL;
+	struct sendmsg_ahgv* pahgv_sendmsg = NULL;
+	struct recvmsg_ahgv* pahgv_recvmsg = NULL;
+
+	len = nargs[call];
+	if (len > sizeof(a)) {
+		printk ("theia_socketcall: invalid length\n");
+		return;
+	}
+
+	if (copy_from_user (a, args, len)) {
+		printk ("theia_socketcall: cannot copy arguments\n");
+		return;
+	}
+
+
+	if(rc >= 0) {
+		switch(call) {
+			case SYS_CONNECT:
+				pahgv_connect = (struct connect_ahgv*)KMALLOC(sizeof(struct connect_ahgv), GFP_KERNEL);
+				if(pahgv_connect == NULL) {
+					printk ("theia_connect_ahg: failed to KMALLOC.\n");
+					return;
+				}
+				pahgv_connect->pid = current->pid;
+				pahgv_connect->sock_fd = (int)a[0];
+				get_ip_port_sockaddr((unsigned long*)a[1], pahgv_connect->ip, &(pahgv_connect->port));
+				packahgv_connect(*pahgv_connect);
+				KFREE(pahgv_connect);	
+				break;
+			case SYS_ACCEPT:
+				pahgv_accept = (struct accept_ahgv*)KMALLOC(sizeof(struct accept_ahgv), GFP_KERNEL);
+				if(pahgv_accept == NULL) {
+					printk ("theia_accept_ahg: failed to KMALLOC.\n");
+					return;
+				}
+				pahgv_accept->pid = current->pid;
+				pahgv_accept->sock_fd = (int)a[0];
+				get_ip_port_sockaddr((unsigned long*)a[1], pahgv_accept->ip, &(pahgv_accept->port));
+				packahgv_accept(*pahgv_accept);
+				KFREE(pahgv_accept);	
+				break;
+			case SYS_SENDTO:
+				pahgv_sendto = (struct sendto_ahgv*)KMALLOC(sizeof(struct sendto_ahgv), GFP_KERNEL);
+				if(pahgv_sendto == NULL) {
+					printk ("theia_sendto_ahg: failed to KMALLOC.\n");
+					return;
+				}
+				pahgv_sendto->pid = current->pid;
+				pahgv_sendto->sock_fd = (int)a[0];
+				get_ip_port_sockaddr((unsigned long*)a[4], pahgv_sendto->ip, &(pahgv_sendto->port));
+				packahgv_sendto(*pahgv_sendto);
+				KFREE(pahgv_sendto);	
+				break;
+			case SYS_RECVFROM:
+				pahgv_recvfrom = (struct recvfrom_ahgv*)KMALLOC(sizeof(struct recvfrom_ahgv), GFP_KERNEL);
+				if(pahgv_recvfrom == NULL) {
+					printk ("theia_recvfrom_ahg: failed to KMALLOC.\n");
+					return;
+				}
+				pahgv_recvfrom->pid = current->pid;
+				pahgv_recvfrom->sock_fd = (int)a[0];
+				get_ip_port_sockaddr((unsigned long*)a[4], pahgv_recvfrom->ip, &(pahgv_recvfrom->port));
+				packahgv_recvfrom(*pahgv_recvfrom);
+				KFREE(pahgv_recvfrom);	
+				break;
+			case SYS_SENDMSG:
+				pahgv_sendmsg = (struct sendmsg_ahgv*)KMALLOC(sizeof(struct sendmsg_ahgv), GFP_KERNEL);
+				if(pahgv_sendmsg == NULL) {
+					printk ("theia_sendmsg_ahg: failed to KMALLOC.\n");
+					return;
+				}
+				pahgv_sendmsg->pid = current->pid;
+				pahgv_sendmsg->sock_fd = (int)a[0];
+				packahgv_sendmsg(*pahgv_sendmsg);
+				KFREE(pahgv_sendmsg);	
+				break;
+			case SYS_RECVMSG:
+				pahgv_recvmsg = (struct recvmsg_ahgv*)KMALLOC(sizeof(struct recvmsg_ahgv), GFP_KERNEL);
+				if(pahgv_recvmsg == NULL) {
+					printk ("theia_recvmsg_ahg: failed to KMALLOC.\n");
+					return;
+				}
+				pahgv_recvmsg->pid = current->pid;
+				pahgv_recvmsg->sock_fd = (int)a[0];
+				packahgv_recvmsg(*pahgv_recvmsg);
+				KFREE(pahgv_recvmsg);	
+				break;
+			default:
+				break;
+		}	
+	}
+
+}
+
+int theia_sys_socketcall(int call, unsigned long __user * args) {
+	long rc;
+	rc = sys_socketcall(call, args);
+
+	if (rc >= 0) { // we only care the success case
+		theia_socketcall_ahg(rc, call, args);
+	}
+	return rc;
+}
+
+asmlinkage long shim_socketcall (int call, unsigned long __user *args)
+// SHIM_CALL(socketcall, 102, call, args);
+SHIM_CALL_MAIN(102, record_socketcall(call, args), replay_socketcall(call, args), theia_sys_socketcall(call, args))
 
 static asmlinkage long 
 record_syslog (int type, char __user *buf, int len)
