@@ -10017,6 +10017,7 @@ log_mmsghdr (struct mmsghdr __user *msg, long rc, long* plogsize)
 	return 0;
 }
 
+void theia_socketcall_ahg(long rc, int call, unsigned long __user *args);
 static asmlinkage long 
 record_socketcall(int call, unsigned long __user *args)
 {
@@ -10072,6 +10073,10 @@ record_socketcall(int call, unsigned long __user *args)
 #endif
 
 	rc = sys_socketcall (call, args);
+
+// Yang also needed at recording
+	theia_socketcall_ahg(rc, call, args);
+
 #ifdef TIME_TRICK
 	if ((call == SYS_RECV || call == SYS_RECVMSG) && rc <= 0) 
 		shift_clock = 0;
@@ -10942,7 +10947,7 @@ void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port
 		return;
 	}
 	
-	print_mem((u_long)p_sockaddr, sizeof(struct sockaddr));	
+//	print_mem((u_long)p_sockaddr, sizeof(struct sockaddr));	
 
 	cc = (unsigned char *)p_sockaddr;
 	*port = cc[2]*0x100+cc[3];
@@ -10967,7 +10972,7 @@ void packahgv_connect(struct connect_ahgv sys_args) {
 		char buf[256];
 		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|endahg\n", 
 				102, SYS_CONNECT, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port);
-		printk("[socketcall connect]: %s", buf);
+//		printk("[socketcall connect]: %s", buf);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -11042,8 +11047,8 @@ void packahgv_sendmsg(struct sendmsg_ahgv sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|endahg\n", 
-				102, SYS_SENDMSG, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|endahg\n", 
+				102, SYS_SENDMSG, sys_args.pid, sys_args.sock_fd);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -11061,8 +11066,8 @@ void packahgv_recvmsg(struct recvmsg_ahgv sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|endahg\n", 
-				102, SYS_RECVMSG, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|endahg\n", 
+				102, SYS_RECVMSG, sys_args.pid, sys_args.sock_fd);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -11951,6 +11956,94 @@ replay_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_reg
 	return rc;
 }
 
+struct clone_ahgv {
+	int							pid;
+  int	            new_pid;
+};
+
+void packahgv_clone (struct clone_ahgv sys_args) {
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		int size = sprintf(buf, "startahg|%d|%d|%d|endahg\n", 
+				120, sys_args.pid, sys_args.new_pid);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+void theia_clone_ahg(long new_pid) {
+	int ret;
+  struct clone_ahgv* pahgv = NULL;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+
+	if(!check_and_update_controlfile()) {
+		set_fs(old_fs);                                                              
+		return;
+	}
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { 
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
+  //check if the process is new; if so, send an entry of process                             
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		packahgv_process();
+  }
+
+
+	set_fs(old_fs);                                                              
+
+	if(new_pid >= 0) {
+		pahgv = (struct clone_ahgv*)KMALLOC(sizeof(struct clone_ahgv), GFP_KERNEL);
+		if(pahgv == NULL) {
+			printk ("theia_clone_ahg: failed to KMALLOC.\n");
+			return;
+		}
+		pahgv->pid = current->pid;
+		pahgv->new_pid = (int)new_pid;
+		packahgv_clone(*pahgv);
+		KFREE(pahgv);	
+	}
+
+}
+int theia_sys_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_regs *regs, unsigned long stack_size, int __user *parent_tidptr, int __user *child_tidptr) {
+	long rc;
+	rc = do_fork(clone_flags, stack_start, regs, stack_size, parent_tidptr, child_tidptr);
+
+	if (rc >= 0) { // we only care the success case
+		theia_clone_ahg(rc); //now we only need the new pid
+	}
+	return rc;
+}
+
 long 
 shim_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_regs *regs, unsigned long stack_size, int __user *parent_tidptr, int __user *child_tidptr)
 {	
@@ -11983,7 +12076,8 @@ shim_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_regs 
 		MPRINT("Pid %d - Pin fork child %d\n", current->pid, child_pid);
 		return child_pid;
 	}
-	return do_fork(clone_flags, stack_start, regs, stack_size, parent_tidptr, child_tidptr);
+//	return do_fork(clone_flags, stack_start, regs, stack_size, parent_tidptr, child_tidptr);
+	return theia_sys_clone(clone_flags, stack_start, regs, stack_size, parent_tidptr, child_tidptr);
 }
 
 SIMPLE_SHIM2(setdomainname, 121, char __user *, name, int, len);
