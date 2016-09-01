@@ -191,7 +191,7 @@ void get_curr_time(long *sec, long *nsec) {
 	struct timespec ts;
 	getnstimeofday(&ts);
 	*sec = ts.tv_sec;
-	*nsec = ts.tv_nsec;
+	*nsec = ts.tv_nsec / 1000000; //granuality is millisec
 	return;
 }
 
