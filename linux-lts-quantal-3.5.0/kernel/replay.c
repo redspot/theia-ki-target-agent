@@ -67,6 +67,7 @@
 #include <linux/module.h>
 #include <linux/random.h>
 #include <linux/delay.h>
+#include <linux/time.h>
 
 
 //xdou
@@ -185,6 +186,14 @@ static int suspended;
 struct black_pid {
 	int pid[3];
 };
+
+void get_curr_time(long *sec, long *nsec) {
+	struct timespec ts;
+	getnstimeofday(&ts);
+	*sec = ts.tv_sec;
+	*nsec = ts.tv_nsec / 1000000; //granuality is millisec
+	return;
+}
 
 struct black_pid glb_blackpid;
 
@@ -6994,9 +7003,12 @@ bool is_process_new(pid_t pid, char* comm) {
 
 void packahgv_process() {
 	if(theia_chan) {
+		long sec, nsec;
 		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%d|%s|endahg\n", 
-				399/*used for new process*/, current->pid, current->real_parent->pid, current->comm);
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%ld%ld|endahg\n", 
+				399/*used for new process*/, current->pid, current->real_parent->pid, 
+				current->comm, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -7007,8 +7019,10 @@ void packahgv_read (struct read_ahgv sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|endahg\n", 
-				3, sys_args.pid, sys_args.fd, sys_args.bytes);
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%ld%ld|endahg\n", 
+				3, sys_args.pid, sys_args.fd, sys_args.bytes, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -7533,8 +7547,10 @@ void packahgv_write (struct write_ahgv sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|endahg\n", 
-				4, sys_args.pid, sys_args.fd, sys_args.bytes);
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%ld%ld|endahg\n", 
+				4, sys_args.pid, sys_args.fd, sys_args.bytes, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -7935,9 +7951,11 @@ void packahgv_open (struct open_ahgv sys_args) {
 
 	if(theia_chan) {
 		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%lx|%lx|endahg\n", 
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%lx|%lx|%ld%ld|endahg\n", 
 				5, sys_args.pid, sys_args.fd, sys_args.filename, sys_args.flags, sys_args.mode,
-				sys_args.dev, sys_args.ino);
+				sys_args.dev, sys_args.ino, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -8131,7 +8149,9 @@ void packahgv_close (struct close_ahgv sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%d|endahg\n", 6, sys_args.pid, sys_args.fd);
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%ld%ld|endahg\n", 6, sys_args.pid, sys_args.fd, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -8347,8 +8367,10 @@ void packahgv_execve (struct execve_ahgv sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%s|endahg\n", 
-				11, sys_args.pid, sys_args.filename);
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%s|%ld%ld|endahg\n", 
+				11, sys_args.pid, sys_args.filename, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -8890,9 +8912,11 @@ void packahgv_pipe (struct pipe_ahgv sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%lx|%d|%d|%lx|%lx|endahg\n", 
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%lx|%d|%d|%lx|%lx|%ld%ld|endahg\n", 
 				42, sys_args.pid, sys_args.retval, sys_args.pfd1, sys_args.pfd2, 
-				sys_args.inode1, sys_args.inode2);
+				sys_args.inode1, sys_args.inode2, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -10970,8 +10994,10 @@ void packahgv_connect(struct connect_ahgv sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|endahg\n", 
-				102, SYS_CONNECT, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port);
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|%ld%ld|endahg\n", 
+				102, SYS_CONNECT, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port, sec, nsec);
 //		printk("[socketcall connect]: %s", buf);
 		relay_write(theia_chan, buf, size);
 	}
@@ -10990,8 +11016,10 @@ void packahgv_accept(struct accept_ahgv sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|endahg\n", 
-				102, SYS_ACCEPT, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port);
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|%ld%ld|endahg\n", 
+				102, SYS_ACCEPT, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -11009,8 +11037,10 @@ void packahgv_sendto(struct sendto_ahgv sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|endahg\n", 
-				102, SYS_SENDTO, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port);
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|%ld%ld|endahg\n", 
+				102, SYS_SENDTO, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -11028,8 +11058,10 @@ void packahgv_recvfrom(struct recvfrom_ahgv sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|endahg\n", 
-				102, SYS_RECVFROM, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port);
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|%ld%ld|endahg\n", 
+				102, SYS_RECVFROM, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -11047,8 +11079,10 @@ void packahgv_sendmsg(struct sendmsg_ahgv sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|endahg\n", 
-				102, SYS_SENDMSG, sys_args.pid, sys_args.sock_fd);
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%ld%ld|endahg\n", 
+				102, SYS_SENDMSG, sys_args.pid, sys_args.sock_fd, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -11066,8 +11100,10 @@ void packahgv_recvmsg(struct recvmsg_ahgv sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|endahg\n", 
-				102, SYS_RECVMSG, sys_args.pid, sys_args.sock_fd);
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%ld%ld|endahg\n", 
+				102, SYS_RECVMSG, sys_args.pid, sys_args.sock_fd, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -11965,8 +12001,10 @@ void packahgv_clone (struct clone_ahgv sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%d|endahg\n", 
-				120, sys_args.pid, sys_args.new_pid);
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%ld%ld|endahg\n", 
+				120, sys_args.pid, sys_args.new_pid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -12098,8 +12136,10 @@ void packahgv_mprotect (struct mprotect_ahgv sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%lx|%lx|%lx|%d|endahg\n", 
-				125, sys_args.pid, sys_args.retval, sys_args.address, sys_args.length, sys_args.protection);
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%lx|%lx|%lx|%d|%ld%ld|endahg\n", 
+				125, sys_args.pid, sys_args.retval, sys_args.address, sys_args.length, sys_args.protection, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -14059,9 +14099,11 @@ void packahgv_mmap (struct mmap_ahgv sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
-		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%lu|%d|%lx|%lx|endahg\n", 
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%lu|%d|%lx|%lx|%ld%ld|endahg\n", 
 				192, sys_args.pid, sys_args.fd, sys_args.address, sys_args.length, sys_args.prot_type,
-				sys_args.flag, sys_args.offset);
+				sys_args.flag, sys_args.offset, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
