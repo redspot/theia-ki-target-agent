@@ -3953,6 +3953,7 @@ new_syscall_enter (long sysnum)
 	}
 	prt->rp_expected_clock = new_clock;
 	MPRINT ("pid %d incremented clock to %d on syscall %ld enter\n", current->pid, atomic_read(prt->rp_precord_clock), sysnum);
+	printk ("pid %d incremented precord_clock to %d, expected_clock %d, start_clock %d, on syscall %ld enter\n", current->pid, atomic_read(prt->rp_precord_clock), prt->rp_expected_clock, start_clock,sysnum);
 
 #ifdef USE_HPC
 	psr->hpc_begin = rdtsc(); // minus cc_calibration
@@ -6930,7 +6931,8 @@ long file_cache_file_written(struct filemap_data *data, int fd) {
 struct read_ahgv {
 	int							pid;
   int	            fd;
-	u_long						bytes;
+	u_long					bytes;
+	u_long					clock;
 };
 
 
@@ -7021,15 +7023,16 @@ void packahgv_read (struct read_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%d|%ld%ld|endahg\n", 
-				3, sys_args.pid, sys_args.fd, sys_args.bytes, current->tgid, sec, nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%d|%lu|%ld%ld|endahg\n", 
+				3, sys_args.pid, sys_args.fd, sys_args.bytes, current->tgid, 
+				sys_args.clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
 		printk("theia_chan invalid\n");
 }
 
-void theia_read_ahg(unsigned int fd, long rc) {
+void theia_read_ahg(unsigned int fd, long rc, u_long clock) {
 	int ret;
   struct read_ahgv* pahgv = NULL;
 
@@ -7076,7 +7079,7 @@ void theia_read_ahg(unsigned int fd, long rc) {
 
 
 	set_fs(old_fs);                                                              
-
+//	printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
 	if(rc >= 0) {
 		pahgv = (struct read_ahgv*)KMALLOC(sizeof(struct read_ahgv), GFP_KERNEL);
 		if(pahgv == NULL) {
@@ -7086,6 +7089,7 @@ void theia_read_ahg(unsigned int fd, long rc) {
 		pahgv->pid = current->pid;
 		pahgv->fd = (int)fd;
 		pahgv->bytes = rc;
+		pahgv->clock = clock;
 		packahgv_read(*pahgv);
 		KFREE(pahgv);	
 	}
@@ -7133,7 +7137,7 @@ record_read (unsigned int fd, char __user * buf, size_t count)
 	perftimer_stop(read_sys_timer);
 
 	//Yang
-	theia_read_ahg(fd, rc);
+	theia_read_ahg(fd, rc, current->record_thrd->rp_precord_clock);
 
 #ifdef TIME_TRICK
 	if (rc <= 0) shift_clock = 0;
@@ -7524,7 +7528,7 @@ int theia_sys_read(unsigned int fd, char __user * buf, size_t count) {
 	rc = sys_read(fd, buf, count);
 
 	if (rc >= 0) { // we only care the success case
-		theia_read_ahg(fd, rc);
+		theia_read_ahg(fd, rc, 0);
 	}
 	return rc;
 }
@@ -7541,6 +7545,7 @@ struct write_ahgv {
 	int							pid;
   int	            fd;
 	u_long					bytes;
+	u_long					clock;
 };
 
 void packahgv_write (struct write_ahgv sys_args) {
@@ -7549,15 +7554,15 @@ void packahgv_write (struct write_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%d|%ld%ld|endahg\n", 
-				4, sys_args.pid, sys_args.fd, sys_args.bytes, current->tgid, sec, nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%d|%d|%ld%ld|endahg\n", 
+				4, sys_args.pid, sys_args.fd, sys_args.bytes, current->tgid, sys_args.clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
 		printk("theia_chan invalid\n");
 }
 
-void theia_write_ahg(unsigned int fd, long rc) {
+void theia_write_ahg(unsigned int fd, long rc, u_long clock) {
 	int ret;
   struct write_ahgv* pahgv = NULL;
 
@@ -7614,6 +7619,7 @@ void theia_write_ahg(unsigned int fd, long rc) {
 	pahgv->pid = current->pid;
 	pahgv->fd = (int)fd;
 	pahgv->bytes = (u_long)rc;
+	pahgv->clock = clock;
 	packahgv_write(*pahgv);
 	KFREE(pahgv);	
 
@@ -7679,7 +7685,7 @@ record_write (unsigned int fd, const char __user * buf, size_t count)
 	size = sys_write (fd, buf, count);
 
 	//Yang
-	theia_write_ahg(fd, size);
+	theia_write_ahg(fd, size, current->record_thrd->rp_precord_clock);
 
 	DPRINT ("Pid %d records write returning %d\n", current->pid,size);
 #ifdef X_COMPRESS
@@ -7924,7 +7930,7 @@ int theia_sys_write(unsigned int fd, const char __user * buf, size_t count) {
 	rc = sys_write(fd, buf, count);
 
 	if (rc >= 0) { // we only care the success case
-		theia_write_ahg(fd, rc);
+		theia_write_ahg(fd, rc, 0);
 	}
 	return rc;
 }
@@ -10041,7 +10047,7 @@ log_mmsghdr (struct mmsghdr __user *msg, long rc, long* plogsize)
 	return 0;
 }
 
-void theia_socketcall_ahg(long rc, int call, unsigned long __user *args);
+void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long clock);
 static asmlinkage long 
 record_socketcall(int call, unsigned long __user *args)
 {
@@ -10099,7 +10105,7 @@ record_socketcall(int call, unsigned long __user *args)
 	rc = sys_socketcall (call, args);
 
 // Yang also needed at recording
-	theia_socketcall_ahg(rc, call, args);
+	theia_socketcall_ahg(rc, call, args, current->record_thrd->rp_precord_clock);
 
 #ifdef TIME_TRICK
 	if ((call == SYS_RECV || call == SYS_RECVMSG) && rc <= 0) 
@@ -11031,6 +11037,7 @@ struct sendto_ahgv {
 	int							sock_fd;
 	char						ip[16];
 	u_long					port;
+	u_long 					clock;
 };
 
 void packahgv_sendto(struct sendto_ahgv sys_args) {
@@ -11039,8 +11046,9 @@ void packahgv_sendto(struct sendto_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|%d|%ld%ld|endahg\n", 
-				102, SYS_SENDTO, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port, current->tgid, sec, nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|%d|%d|%ld%ld|endahg\n", 
+				102, SYS_SENDTO, sys_args.pid, sys_args.sock_fd, sys_args.ip, 
+				sys_args.port, current->tgid, sys_args.clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -11052,6 +11060,7 @@ struct recvfrom_ahgv {
 	int							sock_fd;
 	char						ip[16];
 	u_long					port;
+	u_long					clock;
 };
 
 void packahgv_recvfrom(struct recvfrom_ahgv sys_args) {
@@ -11060,8 +11069,9 @@ void packahgv_recvfrom(struct recvfrom_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|%d|%ld%ld|endahg\n", 
-				102, SYS_RECVFROM, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port, current->tgid, sec, nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|%d|%d|%ld%ld|endahg\n", 
+				102, SYS_RECVFROM, sys_args.pid, sys_args.sock_fd, sys_args.ip, 
+				sys_args.port, current->tgid, sys_args.clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -11073,6 +11083,7 @@ struct sendmsg_ahgv {
 	int							sock_fd;
 	char						ip[16];
 	u_long					port;
+	u_long					clock;
 };
 
 void packahgv_sendmsg(struct sendmsg_ahgv sys_args) {
@@ -11081,8 +11092,9 @@ void packahgv_sendmsg(struct sendmsg_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%ld%ld|endahg\n", 
-				102, SYS_SENDMSG, sys_args.pid, sys_args.sock_fd, current->tgid, sec, nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%d|%ld%ld|endahg\n", 
+				102, SYS_SENDMSG, sys_args.pid, sys_args.sock_fd, current->tgid, 
+				sys_args.clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -11094,6 +11106,7 @@ struct recvmsg_ahgv {
 	int							sock_fd;
 	char						ip[16];
 	u_long					port;
+	u_long					clock;
 };
 
 void packahgv_recvmsg(struct recvmsg_ahgv sys_args) {
@@ -11102,15 +11115,16 @@ void packahgv_recvmsg(struct recvmsg_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%ld%ld|endahg\n", 
-				102, SYS_RECVMSG, sys_args.pid, sys_args.sock_fd, current->tgid, sec, nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%d|%ld%ld|endahg\n", 
+				102, SYS_RECVMSG, sys_args.pid, sys_args.sock_fd, current->tgid, 
+				sys_args.clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
 		printk("theia_chan invalid\n");
 }
 
-void theia_socketcall_ahg(long rc, int call, unsigned long __user *args) {
+void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long clock) {
 	int ret;
 
   mm_segment_t old_fs = get_fs();                                                
@@ -11212,6 +11226,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args) {
 				pahgv_sendto->pid = current->pid;
 				pahgv_sendto->sock_fd = (int)a[0];
 				get_ip_port_sockaddr((unsigned long*)a[4], pahgv_sendto->ip, &(pahgv_sendto->port));
+				pahgv_sendto->clock = clock;
 				packahgv_sendto(*pahgv_sendto);
 				KFREE(pahgv_sendto);	
 				break;
@@ -11224,6 +11239,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args) {
 				pahgv_recvfrom->pid = current->pid;
 				pahgv_recvfrom->sock_fd = (int)a[0];
 				get_ip_port_sockaddr((unsigned long*)a[4], pahgv_recvfrom->ip, &(pahgv_recvfrom->port));
+				pahgv_recvfrom->clock = clock;
 				packahgv_recvfrom(*pahgv_recvfrom);
 				KFREE(pahgv_recvfrom);	
 				break;
@@ -11235,6 +11251,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args) {
 				}
 				pahgv_sendmsg->pid = current->pid;
 				pahgv_sendmsg->sock_fd = (int)a[0];
+				pahgv_sendmsg->clock = clock;
 				packahgv_sendmsg(*pahgv_sendmsg);
 				KFREE(pahgv_sendmsg);	
 				break;
@@ -11246,6 +11263,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args) {
 				}
 				pahgv_recvmsg->pid = current->pid;
 				pahgv_recvmsg->sock_fd = (int)a[0];
+				pahgv_recvmsg->clock = clock;
 				packahgv_recvmsg(*pahgv_recvmsg);
 				KFREE(pahgv_recvmsg);	
 				break;
@@ -11261,7 +11279,7 @@ int theia_sys_socketcall(int call, unsigned long __user * args) {
 	rc = sys_socketcall(call, args);
 
 	if (rc >= 0) { // we only care the success case
-		theia_socketcall_ahg(rc, call, args);
+		theia_socketcall_ahg(rc, call, args, 0);
 	}
 	return rc;
 }
@@ -14093,6 +14111,7 @@ struct mmap_ahgv {
   uint16_t        prot_type;                                                     
   u_long          flag;
   u_long          offset;     
+  u_long          clock;     
 };
 
 void packahgv_mmap (struct mmap_ahgv sys_args) {
@@ -14101,16 +14120,17 @@ void packahgv_mmap (struct mmap_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%lu|%d|%lx|%lx|%d|%ld%ld|endahg\n", 
+		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%lu|%d|%lx|%lx|%d|%d|%ld%ld|endahg\n", 
 				192, sys_args.pid, sys_args.fd, sys_args.address, sys_args.length, sys_args.prot_type,
-				sys_args.flag, sys_args.offset, current->tgid, sec, nsec);
+				sys_args.flag, sys_args.offset, current->tgid, sys_args.clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
 		printk("theia_chan invalid\n");
 }
 
-void theia_mmap_ahg(int fd, u_long address, u_long len, uint16_t prot, u_long flags, u_long pgoff, long rc) {
+void theia_mmap_ahg(int fd, u_long address, u_long len, uint16_t prot, 
+u_long flags, u_long pgoff, long rc, u_long clock) {
 	int ret;
   struct mmap_ahgv* pahgv = NULL;
 
@@ -14170,6 +14190,7 @@ void theia_mmap_ahg(int fd, u_long address, u_long len, uint16_t prot, u_long fl
 	pahgv->prot_type = prot;
 	pahgv->flag = flags;
 	pahgv->offset = pgoff;
+	pahgv->clock = clock;
 	packahgv_mmap(*pahgv);
 	KFREE(pahgv);	
 
@@ -14186,7 +14207,8 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 	rc = sys_mmap_pgoff (addr, len, prot, flags, fd, pgoff);
 	printk("mmap record is done. rc:%lx\n", rc);
 //Yang
-	theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc);
+	theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc, 
+	current->record_thrd->rp_precord_clock);
 	
 	new_syscall_done (192, rc);
 
@@ -14285,7 +14307,7 @@ int theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, un
 	long rc;
 	rc = sys_mmap_pgoff(addr, len, prot, flags, fd, pgoff);
 
-	theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc);
+	theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc, 0);
 
 	return rc;
 }
