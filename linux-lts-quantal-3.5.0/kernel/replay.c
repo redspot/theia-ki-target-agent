@@ -700,7 +700,7 @@ atomic_t vmalloc_cnt = ATOMIC_INIT(0);
 
 /* Variables configurable via /proc file system */
 unsigned int syslog_recs = 20000;
-unsigned int replay_debug = 0;
+unsigned int replay_debug = 1;
 unsigned int replay_min_debug = 0;
 unsigned long argsalloc_size = (512*1024);
 // If the replay clock is greater than this value, MPRINT out the syscalls made by pin
@@ -7434,6 +7434,7 @@ replay_read (unsigned int fd, char __user * buf, size_t count)
 #endif
 	int cache_fd;
 
+	DPRINT ("[READ] Pid %d replays read returning %d, fd %u, clock %ld, log_clock %ld\n", current->pid,rc,fd, *(current->replay_thrd->rp_preplay_clock),current->replay_thrd->rp_expected_clock);
 	if (retparams) {
 		u_int is_cache_file = *((u_int *)retparams);
 		int consume_size = 0;
@@ -7888,7 +7889,7 @@ replay_write (unsigned int fd, const char __user * buf, size_t count)
 		if (copy_from_user (kbuf, buf, count < 80 ? count : 79)) printk ("replay_write: cannot copy kstring\n");
 		printk ("Pid %d (recpid %d) clock %ld log_clock %ld replays: %s", current->pid, current->replay_thrd->rp_record_thread->rp_record_pid, *(current->replay_thrd->rp_preplay_clock), current->replay_thrd->rp_expected_clock - 1, kbuf);
 	}
-	DPRINT ("Pid %d replays write returning %d\n", current->pid,rc);
+	DPRINT ("[WRITE] Pid %d replays write returning %d, fd %u, clock %ld, log_clock %ld\n", current->pid,rc,fd, *(current->replay_thrd->rp_preplay_clock),current->replay_thrd->rp_expected_clock);
 #ifdef REPLAY_COMPRESS_READS
 	if (pretparams != NULL) {
 		struct replayfs_syscache_id id;
