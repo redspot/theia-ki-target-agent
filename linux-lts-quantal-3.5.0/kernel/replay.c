@@ -11033,6 +11033,29 @@ void packahgv_accept(struct accept_ahgv sys_args) {
 		printk("theia_chan invalid\n");
 }
 
+struct send_ahgv {
+  int             pid;                                                           
+	int							sock_fd;
+	char						ip[16];
+	u_long					port;
+	u_long 					clock;
+};
+
+void packahgv_send(struct send_ahgv sys_args) {
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|%d|%d|%ld%ld|endahg\n", 
+				102, SYS_SEND, sys_args.pid, sys_args.sock_fd, sys_args.ip, 
+				sys_args.port, current->tgid, sys_args.clock, sec, nsec);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
 struct sendto_ahgv {
   int             pid;                                                           
 	int							sock_fd;
@@ -11049,6 +11072,29 @@ void packahgv_sendto(struct sendto_ahgv sys_args) {
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|%d|%d|%ld%ld|endahg\n", 
 				102, SYS_SENDTO, sys_args.pid, sys_args.sock_fd, sys_args.ip, 
+				sys_args.port, current->tgid, sys_args.clock, sec, nsec);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+struct recv_ahgv {
+  int             pid;                                                           
+	int							sock_fd;
+	char						ip[16];
+	u_long					port;
+	u_long					clock;
+};
+
+void packahgv_recv(struct recv_ahgv sys_args) {
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|%d|%d|%ld%ld|endahg\n", 
+				102, SYS_RECV, sys_args.pid, sys_args.sock_fd, sys_args.ip, 
 				sys_args.port, current->tgid, sys_args.clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
@@ -11175,7 +11221,9 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 	unsigned int len;
 	struct connect_ahgv* pahgv_connect = NULL;
 	struct accept_ahgv* pahgv_accept = NULL;
+	struct send_ahgv* pahgv_send = NULL;
 	struct sendto_ahgv* pahgv_sendto = NULL;
+	struct recv_ahgv* pahgv_recv = NULL;
 	struct recvfrom_ahgv* pahgv_recvfrom = NULL;
 	struct sendmsg_ahgv* pahgv_sendmsg = NULL;
 	struct recvmsg_ahgv* pahgv_recvmsg = NULL;
@@ -11218,6 +11266,19 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 				packahgv_accept(*pahgv_accept);
 				KFREE(pahgv_accept);	
 				break;
+			case SYS_SEND:
+				pahgv_send = (struct send_ahgv*)KMALLOC(sizeof(struct send_ahgv), GFP_KERNEL);
+				if(pahgv_send == NULL) {
+					printk ("theia_send_ahg: failed to KMALLOC.\n");
+					return;
+				}
+				pahgv_send->pid = current->pid;
+				pahgv_send->sock_fd = (int)a[0];
+				get_ip_port_sockaddr((unsigned long*)a[4], pahgv_send->ip, &(pahgv_send->port));
+				pahgv_send->clock = clock;
+				packahgv_send(*pahgv_send);
+				KFREE(pahgv_send);	
+				break;
 			case SYS_SENDTO:
 				pahgv_sendto = (struct sendto_ahgv*)KMALLOC(sizeof(struct sendto_ahgv), GFP_KERNEL);
 				if(pahgv_sendto == NULL) {
@@ -11230,6 +11291,19 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 				pahgv_sendto->clock = clock;
 				packahgv_sendto(*pahgv_sendto);
 				KFREE(pahgv_sendto);	
+				break;
+			case SYS_RECV:
+				pahgv_recv = (struct recv_ahgv*)KMALLOC(sizeof(struct recv_ahgv), GFP_KERNEL);
+				if(pahgv_recv == NULL) {
+					printk ("theia_recv_ahg: failed to KMALLOC.\n");
+					return;
+				}
+				pahgv_recv->pid = current->pid;
+				pahgv_recv->sock_fd = (int)a[0];
+				get_ip_port_sockaddr((unsigned long*)a[4], pahgv_recv->ip, &(pahgv_recv->port));
+				pahgv_recv->clock = clock;
+				packahgv_recv(*pahgv_recv);
+				KFREE(pahgv_recv);	
 				break;
 			case SYS_RECVFROM:
 				pahgv_recvfrom = (struct recvfrom_ahgv*)KMALLOC(sizeof(struct recvfrom_ahgv), GFP_KERNEL);
