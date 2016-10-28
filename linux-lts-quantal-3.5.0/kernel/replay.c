@@ -9192,6 +9192,97 @@ SIMPLE_SHIM0(getegid16, 50);
 SIMPLE_SHIM1(acct, 51, char __user *, name)
 SIMPLE_SHIM2(umount, 52, char __user *, name, int, flags);
 
+struct ioctl_ahgv {
+	int							pid;
+  int	            fd;
+	unsigned int		cmd;
+	unsigned long		arg;
+	long						rc;
+	u_long					clock;
+};
+
+void packahgv_ioctl (struct ioctl_ahgv sys_args) {
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%u|%lu|%ld|%d|%lu|%ld|%ld|endahg\n", 
+				54, sys_args.pid, sys_args.fd, sys_args.cmd, sys_args.arg, sys_args.rc, current->tgid, 
+				sys_args.clock, sec, nsec);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+void theia_ioctl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long rc, u_long clock) {
+	int ret;
+  struct ioctl_ahgv* pahgv = NULL;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+
+	if(!check_and_update_controlfile()) {
+		set_fs(old_fs);                                                              
+		return;
+	}
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { 
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
+  //check if the process is new; if so, send an entry of process                             
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		packahgv_process();
+  }
+
+
+	set_fs(old_fs);                                                              
+//	printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
+	if(rc >= 0) {
+		pahgv = (struct ioctl_ahgv*)KMALLOC(sizeof(struct ioctl_ahgv), GFP_KERNEL);
+		if(pahgv == NULL) {
+			printk ("theia_ioctl_ahg: failed to KMALLOC.\n");
+			return;
+		}
+		pahgv->pid = current->pid;
+		pahgv->fd = (int)fd;
+		pahgv->cmd = cmd;
+		pahgv->arg = arg;
+		pahgv->rc = rc;
+		pahgv->clock = clock;
+		packahgv_ioctl(*pahgv);
+		KFREE(pahgv);	
+	}
+
+}
+
+
 static asmlinkage long 
 record_ioctl (unsigned int fd, unsigned int cmd, unsigned long arg)
 {
@@ -9343,6 +9434,7 @@ record_ioctl (unsigned int fd, unsigned int cmd, unsigned long arg)
 
 	new_syscall_enter (54);
 	if (rc == 0) rc = sys_ioctl (fd, cmd, arg);
+	theia_ioctl_ahg(fd, cmd, arg, rc, current->record_thrd->rp_precord_clock);
 	new_syscall_done (54, rc);
 
 	DPRINT ("Pid %d records ioctl fd %d cmd 0x%x arg 0x%lx returning %ld\n", current->pid, fd, cmd, arg, rc);
@@ -9385,7 +9477,19 @@ replay_ioctl (unsigned int fd, unsigned int cmd, unsigned long arg)
 	return rc;
 }
 
-asmlinkage long shim_ioctl (unsigned int fd, unsigned int cmd, unsigned long arg) SHIM_CALL(ioctl, 54, fd, cmd, arg);
+int theia_sys_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg) {
+	long rc;
+	rc = sys_ioctl(fd, cmd, arg);
+
+	if (rc >= 0) { // we only care the success case
+		theia_ioctl_ahg(fd, cmd, arg, rc, 0);
+	}
+	return rc;
+}
+
+asmlinkage long shim_ioctl (unsigned int fd, unsigned int cmd, unsigned long arg) 
+//SHIM_CALL(ioctl, 54, fd, cmd, arg);
+SHIM_CALL_MAIN(54, record_ioctl(fd, cmd, arg), replay_ioctl(fd, cmd, arg), theia_sys_ioctl(fd, cmd, arg));
 
 static asmlinkage long 
 record_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg)
