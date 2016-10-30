@@ -11151,9 +11151,9 @@ void packahgv_send(struct send_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|%d|%d|%ld|%ld|endahg\n", 
-				102, SYS_SEND, sys_args.pid, sys_args.sock_fd, sys_args.ip, 
-				sys_args.port, current->tgid, sys_args.clock, sec, nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|NA|NA|%d|%d|%ld|%ld|endahg\n", 
+				102, SYS_SEND, sys_args.pid, sys_args.sock_fd,  
+				current->tgid, sys_args.clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -11197,9 +11197,9 @@ void packahgv_recv(struct recv_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|%d|%d|%ld|%ld|endahg\n", 
-				102, SYS_RECV, sys_args.pid, sys_args.sock_fd, sys_args.ip, 
-				sys_args.port, current->tgid, sys_args.clock, sec, nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|NA|NA|%d|%d|%ld|%ld|endahg\n", 
+				102, SYS_RECV, sys_args.pid, sys_args.sock_fd,  
+				current->tgid, sys_args.clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -11378,7 +11378,6 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 				}
 				pahgv_send->pid = current->pid;
 				pahgv_send->sock_fd = (int)a[0];
-				get_ip_port_sockaddr((unsigned long*)a[4], pahgv_send->ip, &(pahgv_send->port));
 				pahgv_send->clock = clock;
 				packahgv_send(*pahgv_send);
 				KFREE(pahgv_send);	
@@ -11404,7 +11403,6 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 				}
 				pahgv_recv->pid = current->pid;
 				pahgv_recv->sock_fd = (int)a[0];
-				get_ip_port_sockaddr((unsigned long*)a[4], pahgv_recv->ip, &(pahgv_recv->port));
 				pahgv_recv->clock = clock;
 				packahgv_recv(*pahgv_recv);
 				KFREE(pahgv_recv);	
