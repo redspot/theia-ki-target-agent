@@ -231,27 +231,6 @@
 .endm
 
 .macro RESTORE_REGS pop=0
-	/*Yang: push ret_addr to stack, then call print*/
-	pushl_cfi 48(%esp)
-	pushl_cfi 44(%esp)
-	pushl_cfi 28(%esp)
-	pushl_cfi 24(%esp)
-	pushl_cfi 20(%esp)
-	pushl_cfi 16(%esp)
-	pushl_cfi 12(%esp)
-	pushl_cfi 8(%esp)
-	pushl_cfi 4(%esp)
-	call print_userspace_retaddr
-	popl_cfi %ebx
-	popl_cfi %ebx
-	popl_cfi %ebx
-	popl_cfi %ebx
-	popl_cfi %ebx
-	popl_cfi %ebx
-	popl_cfi %ebx
-	popl_cfi %ebx
-	popl_cfi %ebx
-	/*Yang: end*/
 	RESTORE_INT_REGS
 1:	popl_cfi %ds
 	/*CFI_RESTORE ds;*/
