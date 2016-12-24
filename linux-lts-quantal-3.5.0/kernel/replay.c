@@ -2599,6 +2599,12 @@ void ret_from_fork_replay (void)
 	MPRINT ("Pid %d done with ret_from_fork_replay\n", current->pid);
 }
 
+void print_userspace_retaddr (void* addr1,void* addr2,void* addr3,void* addr4,void* addr5,void* addr6,void* addr7,void* addr8,void* addr9) {
+	if (current->record_thrd) {
+		printk("The registers from userspace: 4(esp)-ecx: %lx, 8(esp)-edx: %lx, C(esp)-esi: %lx, 10(esp)-edi: %lx, 14(esp)-ebp: %lx, 18(esp)-eax: %lx, 1C(esp)-ds: %lx, 2C(esp)-orig_eax: %lx, 30(esp)-eip: %lx, pid: %d\n", (u_long)addr1, (u_long)addr2, (u_long)addr3, (u_long)addr4, (u_long)addr5, (u_long)addr6, (u_long)addr7, (u_long)addr8, (u_long)addr9,current->pid);
+	}
+}
+
 long
 get_used_addresses (struct used_address __user * plist, int listsize)
 {
@@ -3905,6 +3911,10 @@ new_syscall_enter (long sysnum)
 	struct record_thread* prt = current->record_thrd;
 	u_long new_clock, start_clock;
 	u_long* p;
+
+//Yang: get userspace return address
+printk("Userspace return address is %lx, pid: %d\n",current->thread.ip, current->pid);
+printk("current_text_addr is %lx\n",(u_long)(current_text_addr()));
 
 #ifdef MCPRINT
 	if (replay_min_debug || replay_debug) {
@@ -7080,7 +7090,9 @@ void theia_read_ahg(unsigned int fd, long rc, u_long clock) {
 
 	set_fs(old_fs);                                                              
 //	printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
-	if(rc >= 0) {
+// Yang: regardless of the return value, passes the failed syscall also
+//	if(rc >= 0) 
+	{
 		pahgv = (struct read_ahgv*)KMALLOC(sizeof(struct read_ahgv), GFP_KERNEL);
 		if(pahgv == NULL) {
 			printk ("theia_read_ahg: failed to KMALLOC.\n");
@@ -7528,7 +7540,9 @@ int theia_sys_read(unsigned int fd, char __user * buf, size_t count) {
 	long rc;
 	rc = sys_read(fd, buf, count);
 
-	if (rc >= 0) { // we only care the success case
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+	{ 
 		theia_read_ahg(fd, rc, 0);
 	}
 	return rc;
@@ -7930,7 +7944,9 @@ int theia_sys_write(unsigned int fd, const char __user * buf, size_t count) {
 	long rc;
 	rc = sys_write(fd, buf, count);
 
-	if (rc >= 0) { // we only care the success case
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+	{ 
 		theia_write_ahg(fd, rc, 0);
 	}
 	return rc;
@@ -8133,7 +8149,9 @@ int theia_sys_open(const char __user * filename, int flags, int mode) {
 	long rc;
 	rc = sys_open(filename, flags, mode);
 
-	if (rc >= 0) { // we only care the success case
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+	{ 
 		theia_open_ahg(filename, flags, mode, rc);
 	}
 	return rc;
@@ -8298,7 +8316,9 @@ int theia_sys_close(int fd) {
 	long rc;
 	rc = sys_close(fd);
 
-	if (rc >= 0) { // we only care the success case
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+	{ 
 		theia_close_ahg(fd);
 	}
 	return rc;
@@ -8778,7 +8798,9 @@ int theia_sys_execve(const char *filename, const char __user *const __user *__ar
 	long rc;
 	rc = do_execve(filename, __argv, __envp, regs);
 
-	if (rc >= 0) { // we only care the success case
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+	{ 
 		theia_execve_ahg(filename);
 	}
 	return rc;
@@ -9069,9 +9091,11 @@ int theia_sys_pipe(int __user *fildes) {
 			return -EFAULT;
 		}
 
-	if (rc >= 0) { // we only care the success case
-		theia_pipe_ahg((u_long)rc, *pretval, *(pretval+sizeof(int)));
-	}
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+		{ 
+			theia_pipe_ahg((u_long)rc, *pretval, *(pretval+sizeof(int)));
+		}
 	return rc;
 }
 
@@ -9264,7 +9288,9 @@ void theia_ioctl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long 
 
 	set_fs(old_fs);                                                              
 //	printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
-	if(rc >= 0) {
+// Yang: regardless of the return value, passes the failed syscall also
+//	if(rc >= 0) 
+	{
 		pahgv = (struct ioctl_ahgv*)KMALLOC(sizeof(struct ioctl_ahgv), GFP_KERNEL);
 		if(pahgv == NULL) {
 			printk ("theia_ioctl_ahg: failed to KMALLOC.\n");
@@ -9481,7 +9507,9 @@ int theia_sys_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg) {
 	long rc;
 	rc = sys_ioctl(fd, cmd, arg);
 
-	if (rc >= 0) { // we only care the success case
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+	{ 
 		theia_ioctl_ahg(fd, cmd, arg, rc, 0);
 	}
 	return rc;
@@ -11099,6 +11127,7 @@ struct connect_ahgv {
 	int							sock_fd;
 	char						ip[16];
 	u_long					port;
+	int							rc;
 };
 
 void packahgv_connect(struct connect_ahgv sys_args) {
@@ -11107,8 +11136,8 @@ void packahgv_connect(struct connect_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
-				102, SYS_CONNECT, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port, current->tgid, sec, nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
+				102, SYS_CONNECT, sys_args.pid, sys_args.rc, sys_args.sock_fd, sys_args.ip, sys_args.port, current->tgid, sec, nsec);
 //		printk("[socketcall connect]: %s", buf);
 		relay_write(theia_chan, buf, size);
 	}
@@ -11121,6 +11150,7 @@ struct accept_ahgv {
 	int							sock_fd;
 	char						ip[16];
 	u_long					port;
+  int             rc;                                                           
 };
 
 void packahgv_accept(struct accept_ahgv sys_args) {
@@ -11129,7 +11159,7 @@ void packahgv_accept(struct accept_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
 				102, SYS_ACCEPT, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
@@ -11344,7 +11374,9 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 	}
 
 
-	if(rc >= 0) {
+	// Yang: regardless of the return value, passes the failed syscall also
+	//	if(rc >= 0) 
+	{
 		switch(call) {
 			case SYS_CONNECT:
 				pahgv_connect = (struct connect_ahgv*)KMALLOC(sizeof(struct connect_ahgv), GFP_KERNEL);
@@ -11353,6 +11385,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 					return;
 				}
 				pahgv_connect->pid = current->pid;
+				pahgv_connect->rc = rc;
 				pahgv_connect->sock_fd = (int)a[0];
 				get_ip_port_sockaddr((unsigned long*)a[1], pahgv_connect->ip, &(pahgv_connect->port));
 				packahgv_connect(*pahgv_connect);
@@ -11365,6 +11398,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 					return;
 				}
 				pahgv_accept->pid = current->pid;
+				pahgv_accept->rc = rc;
 				pahgv_accept->sock_fd = (int)a[0];
 				get_ip_port_sockaddr((unsigned long*)a[1], pahgv_accept->ip, &(pahgv_accept->port));
 				packahgv_accept(*pahgv_accept);
@@ -11455,7 +11489,9 @@ int theia_sys_socketcall(int call, unsigned long __user * args) {
 	long rc;
 	rc = sys_socketcall(call, args);
 
-	if (rc >= 0) { // we only care the success case
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+	{ 
 		theia_socketcall_ahg(rc, call, args, 0);
 	}
 	return rc;
@@ -12271,7 +12307,9 @@ int theia_sys_clone(unsigned long clone_flags, unsigned long stack_start, struct
 	long rc;
 	rc = do_fork(clone_flags, stack_start, regs, stack_size, parent_tidptr, child_tidptr);
 
-	if (rc >= 0) { // we only care the success case
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+	{ 
 		theia_clone_ahg(rc); //now we only need the new pid
 	}
 	return rc;
@@ -12451,7 +12489,9 @@ int theia_sys_mprotect(unsigned long start, size_t len, unsigned long prot) {
 	long rc;
 	rc = sys_mprotect (start, len, prot);
 
-	if (rc >= 0) { // we only care the success case
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+	{ 
 		theia_mprotect_ahg(start, (u_long)len, (uint16_t)prot, rc);
 	}
 	return rc;
