@@ -7033,7 +7033,7 @@ void packahgv_read (struct read_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%d|%lu|%ld|%ld|endahg\n", 
+		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%lu|%ld|%ld|endahg\n", 
 				3, sys_args.pid, sys_args.fd, sys_args.bytes, current->tgid, 
 				sys_args.clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
@@ -7569,7 +7569,7 @@ void packahgv_write (struct write_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%d|%d|%ld|%ld|endahg\n", 
+		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%d|%ld|%ld|endahg\n", 
 				4, sys_args.pid, sys_args.fd, sys_args.bytes, current->tgid, sys_args.clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
@@ -8943,7 +8943,7 @@ void packahgv_pipe (struct pipe_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%lx|%d|%d|%lx|%lx|%d|%ld|%ld|endahg\n", 
+		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%d|%lx|%lx|%d|%ld|%ld|endahg\n", 
 				42, sys_args.pid, sys_args.retval, sys_args.pfd1, sys_args.pfd2, 
 				sys_args.inode1, sys_args.inode2, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
@@ -11181,7 +11181,7 @@ void packahgv_send(struct send_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|NA|NA|%d|%d|%ld|%ld|endahg\n", 
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|NA|0|%d|%d|%ld|%ld|endahg\n", 
 				102, SYS_SEND, sys_args.pid, sys_args.sock_fd,  
 				current->tgid, sys_args.clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
@@ -11227,7 +11227,7 @@ void packahgv_recv(struct recv_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|NA|NA|%d|%d|%ld|%ld|endahg\n", 
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|NA|0|%d|%d|%ld|%ld|endahg\n", 
 				102, SYS_RECV, sys_args.pid, sys_args.sock_fd,  
 				current->tgid, sys_args.clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
