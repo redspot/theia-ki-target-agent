@@ -8046,11 +8046,18 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc)
 	pahgv->fd = (int)rc;
 	pahgv->flags = flags;
 	pahgv->mode = mode;
-	file = fget ((unsigned int)rc);
-	inode = file->f_dentry->d_inode;
-//	printk("!!!!!!inode is %p, i_sb: %p,s_dev: %lu, i_ino %lu\n", inode, inode->i_sb, inode->i_sb->s_dev, inode->i_ino);
-	pahgv->dev = inode->i_sb->s_dev;
-	pahgv->ino = inode->i_ino;
+
+	if (rc < 0) {
+		pahgv->dev = 0;
+		pahgv->ino = 0; 
+	}
+	else {
+		file = fget ((unsigned int)rc);
+		inode = file->f_dentry->d_inode;
+		//	printk("!!!!!!inode is %p, i_sb: %p,s_dev: %lu, i_ino %lu\n", inode, inode->i_sb, inode->i_sb->s_dev, inode->i_ino);
+		pahgv->dev = inode->i_sb->s_dev;
+		pahgv->ino = inode->i_ino;
+	}
 
 	if ((copied_length = strncpy_from_user(pahgv->filename, filename, sizeof(pahgv->filename))) != strlen(filename)) {
 		printk ("theia_open_ahg: can't copy filename to ahgv, filename length %d, copied %d, filename:%s\n", strlen(filename), copied_length, filename); 
@@ -11110,7 +11117,7 @@ void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port
 		return;
 	}
 	
-//	print_mem((u_long)p_sockaddr, sizeof(struct sockaddr));	
+	print_mem((u_long)p_sockaddr, sizeof(struct sockaddr));	
 
 	cc = (unsigned char *)p_sockaddr;
 	*port = cc[2]*0x100+cc[3];
@@ -14790,7 +14797,132 @@ replay_getresgid (gid_t __user *rgid, gid_t __user *egid, gid_t __user *sgid)
 asmlinkage long shim_getresgid (gid_t __user *rgid, gid_t __user *egid, gid_t __user *sgid) SHIM_CALL(getresgid, 211, rgid, egid, sgid);
 
 SIMPLE_SHIM3(chown, 212, const char __user *, filename, uid_t, user, gid_t, group);
-SIMPLE_SHIM1(setuid, 213, uid_t, uid);
+
+//Yang
+struct setuid_ahgv {
+	int							pid;
+  int	            newuid;
+	int							rc;
+	u_long					clock;
+};
+
+
+void packahgv_setuid (struct setuid_ahgv sys_args) {
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%lu|%ld|%ld|endahg\n", 
+				213, sys_args.pid, sys_args.newuid, sys_args.rc, current->tgid, 
+				sys_args.clock, sec, nsec);
+		printk("setuid is captured! %s", buf);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+void theia_setuid_ahg(uid_t uid, int rc, u_long clock) {
+	int ret;
+  struct setuid_ahgv* pahgv = NULL;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+
+	if(!check_and_update_controlfile()) {
+		set_fs(old_fs);                                                              
+		return;
+	}
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { 
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
+  //check if the process is new; if so, send an entry of process                             
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		packahgv_process();
+  }
+
+
+	set_fs(old_fs);                                                              
+//	printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
+// Yang: regardless of the return value, passes the failed syscall also
+//	if(rc >= 0) 
+	{
+		pahgv = (struct setuid_ahgv*)KMALLOC(sizeof(struct setuid_ahgv), GFP_KERNEL);
+		if(pahgv == NULL) {
+			printk ("theia_setuid_ahg: failed to KMALLOC.\n");
+			return;
+		}
+		pahgv->pid = current->pid;
+		pahgv->newuid = (int)uid;
+		pahgv->clock = clock;
+		pahgv->rc = rc;
+		packahgv_setuid(*pahgv);
+		KFREE(pahgv);	
+	}
+
+}
+
+int theia_sys_setuid(uid_t uid) {
+	printk("setuid is called!\n");
+	int rc;
+	rc = sys_setuid(uid);
+
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+	{ 
+		theia_setuid_ahg(uid, rc, 0);
+	}
+	return rc;
+}
+
+//SIMPLE_SHIM1(setuid, 213, uid_t, uid);
+//SIMPLE_RECORD1(setuid, 213, uid_t, uid);
+
+static asmlinkage long
+record_setuid (uid_t uid)
+{
+		long rc;
+		new_syscall_enter (213);
+		rc = sys_setuid(uid);
+		theia_setuid_ahg(uid, (int)rc, current->record_thrd->rp_precord_clock);
+		new_syscall_done (213, rc);
+		new_syscall_exit (213, NULL);
+		return rc;
+
+}
+
+SIMPLE_REPLAY(setuid, 213, uid_t uid);
+
+asmlinkage long shim_setuid (uid_t uid) 
+SHIM_CALL_MAIN(213, record_setuid(uid), replay_setuid(uid), theia_sys_setuid(uid))
+
 SIMPLE_SHIM1(setgid, 214, gid_t, gid);
 SIMPLE_SHIM1(setfsuid, 215, uid_t, uid);
 SIMPLE_SHIM1(setfsgid, 216, gid_t, gid);
