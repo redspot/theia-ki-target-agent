@@ -8855,7 +8855,154 @@ SIMPLE_SHIM3(lchown16, 16, const char __user *, filename, old_uid_t, user, old_g
 RET1_SHIM2(stat, 18, struct __old_kernel_stat, statbuf, char __user *, filename, struct __old_kernel_stat __user *, statbuf);
 SIMPLE_SHIM3(lseek, 19, unsigned int, fd, off_t, offset, unsigned int, origin);
 SIMPLE_SHIM0(getpid, 20);
-SIMPLE_SHIM5(mount, 21, char __user *, dev_name, char __user *, dir_name, char __user *, type, unsigned long, flags, void __user *, data);
+
+//Yang
+struct mount_ahgv {
+	int							pid;
+	char						devname[50];
+	char						dirname[50];
+	char						type[30];
+	unsigned long		flags;
+	int							rc;
+	u_long					clock;
+};
+
+
+void packahgv_mount (struct mount_ahgv sys_args) {
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%s|%s|%s|%lu|%d|%d|%lu|%ld|%ld|endahg\n", 
+				21, sys_args.pid, sys_args.devname, sys_args.dirname, sys_args.type, 
+				sys_args.flags, sys_args.rc, current->tgid, sys_args.clock, sec, nsec);
+		printk("mount is captured! %s", buf);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+void theia_mount_ahg(char __user *dev_name, char __user *dir_name, char __user *type, unsigned long flags, int rc, u_long clock) {
+	int ret;
+  struct mount_ahgv* pahgv = NULL;
+	int copied_length = 0;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+
+	if(!check_and_update_controlfile()) {
+		set_fs(old_fs);                                                              
+		return;
+	}
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { 
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
+  //check if the process is new; if so, send an entry of process                             
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		packahgv_process();
+  }
+
+
+	set_fs(old_fs);                                                              
+//	printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
+// Yang: regardless of the return value, passes the failed syscall also
+//	if(rc >= 0) 
+	{
+		pahgv = (struct mount_ahgv*)KMALLOC(sizeof(struct mount_ahgv), GFP_KERNEL);
+		if(pahgv == NULL) {
+			printk ("theia_mount_ahg: failed to KMALLOC.\n");
+			return;
+		}
+		
+		pahgv->pid = current->pid;
+
+		if ((copied_length = strncpy_from_user(pahgv->devname, dev_name, sizeof(pahgv->devname))) != strlen(dev_name)) {
+			printk ("theia_mount_ahg: can't copy devname to ahgv, devname length %d, copied %d, devname:%s\n", strlen(dev_name), copied_length, dev_name); 
+			KFREE(pahgv);	
+		}
+
+		if ((copied_length = strncpy_from_user(pahgv->dirname, dir_name, sizeof(pahgv->dirname))) != strlen(dir_name)) {
+			printk ("theia_mount_ahg: can't copy dir_name to ahgv, dir_name length %d, copied %d, dir_name:%s\n", strlen(dir_name), copied_length, dir_name); 
+			KFREE(pahgv);	
+		}
+
+		if ((copied_length = strncpy_from_user(pahgv->type, type, sizeof(pahgv->type))) != strlen(type)) {
+			printk ("theia_mount_ahg: can't copy type to ahgv, type length %d, copied %d, type:%s\n", strlen(type), copied_length, type); 
+			KFREE(pahgv);	
+		}
+
+		pahgv->flags = flags;
+		pahgv->clock = clock;
+		pahgv->rc = rc;
+		packahgv_mount(*pahgv);
+		KFREE(pahgv);	
+	}
+
+}
+
+int theia_sys_mount(char __user *dev_name, char __user *dir_name, char __user * type, unsigned long flags, void __user *data) {
+	printk("mount is called!\n");
+	int rc;
+	rc = sys_mount(dev_name, dir_name, type, flags, data);
+
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+	{ 
+		theia_mount_ahg(dev_name, dir_name, type, flags, rc, 0);
+	}
+	return rc;
+}
+
+static asmlinkage long
+record_mount (char __user *dev_name, char __user *dir_name, char __user * type, unsigned long flags, void __user *data)
+{
+		long rc;
+		new_syscall_enter (21);
+		rc = sys_mount(dev_name, dir_name, type, flags, data);
+		theia_mount_ahg(dev_name, dir_name, type, flags, (int)rc, current->record_thrd->rp_precord_clock);
+		new_syscall_done (21, rc);
+		new_syscall_exit (21, NULL);
+		return rc;
+
+}
+
+SIMPLE_REPLAY(mount, 21, char __user *dev_name, char __user *dir_name, char __user * type, unsigned long flags, void __user *data);
+
+asmlinkage long shim_mount (char __user *dev_name, char __user *dir_name, char __user * type, unsigned long flags, void __user *data) 
+SHIM_CALL_MAIN(21, record_mount(dev_name, dir_name, type, flags, data), replay_mount(dev_name, dir_name, type, flags, data), theia_sys_mount(dev_name, dir_name, type, flags, data))
+
+
+
+
+//SIMPLE_SHIM5(mount, 21, char __user *, dev_name, char __user *, dir_name, char __user *, type, unsigned long, flags, void __user *, data);
 SIMPLE_SHIM1(oldumount, 22, char __user *, name);
 SIMPLE_SHIM1(setuid16, 23, uid_t, uid);
 SIMPLE_SHIM0(getuid16, 24);
