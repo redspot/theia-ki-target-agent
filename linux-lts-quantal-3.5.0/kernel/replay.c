@@ -7967,6 +7967,7 @@ struct open_ahgv {
   int             mode;
 	u_long          dev;
 	u_long          ino;
+	bool						is_new;
 };
 
 void packahgv_open (struct open_ahgv sys_args) {
@@ -7976,16 +7977,16 @@ void packahgv_open (struct open_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%lx|%lx|%d|%ld|%ld|endahg\n", 
+		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
 				5, sys_args.pid, sys_args.fd, sys_args.filename, sys_args.flags, sys_args.mode,
-				sys_args.dev, sys_args.ino, current->tgid, sec, nsec);
+				sys_args.dev, sys_args.ino, sys_args.is_new, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
 		printk("theia_chan invalid\n");
 }
 
-void theia_open_ahg(const char __user * filename, int flags, int mode, long rc)
+void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, bool is_new)
 {
 	int ret;
 	struct file* file;
@@ -8046,6 +8047,7 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc)
 	pahgv->fd = (int)rc;
 	pahgv->flags = flags;
 	pahgv->mode = mode;
+	pahgv->is_new = is_new;
 
 	if (rc < 0) {
 		pahgv->dev = 0;
@@ -8082,6 +8084,13 @@ record_open (const char __user * filename, int flags, int mode)
 
 	new_syscall_enter (5);	      
 	perftimer_start(open_sys_timer);
+
+	//Yang: check whether the file is new
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+  int ret_access = sys_access(filename, 0/*F_OK*/);                                       
+	set_fs(old_fs);                                                              
+
 	rc = sys_open (filename, flags, mode);
 	perftimer_stop(open_sys_timer);
 	new_syscall_done (5, rc);
@@ -8100,7 +8109,10 @@ record_open (const char __user * filename, int flags, int mode)
 		MPRINT ("record_open of name %s with flags %x returns fd %ld, sizeof open_ahgv %d\n", filename, flags, rc, sizeof(struct open_ahgv));
     
 //Yang
-		theia_open_ahg(filename, flags, mode, rc);
+	if (ret_access != 0) //the file is new
+		theia_open_ahg(filename, flags, mode, rc, true);
+	else
+		theia_open_ahg(filename, flags, mode, rc, false);
 
     
 
@@ -8154,13 +8166,21 @@ replay_open (const char __user * filename, int flags, int mode)
 
 int theia_sys_open(const char __user * filename, int flags, int mode) {
 	long rc;
+	//Yang: check whether the file is new
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+  int ret_access = sys_access(filename, 0/*F_OK*/);                                       
+	set_fs(old_fs);                                                              
+
 	rc = sys_open(filename, flags, mode);
 
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
-	{ 
-		theia_open_ahg(filename, flags, mode, rc);
-	}
+	if (ret_access != 0) //it's a new file
+		theia_open_ahg(filename, flags, mode, rc, true);
+	else
+		theia_open_ahg(filename, flags, mode, rc, false);
+		
 	return rc;
 }
 
