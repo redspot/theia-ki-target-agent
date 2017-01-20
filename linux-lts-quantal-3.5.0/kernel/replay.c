@@ -8432,8 +8432,10 @@ void packahgv_execve (struct execve_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%s|%d|%ld|%ld|endahg\n", 
-				11, sys_args.pid, sys_args.filename, current->tgid, sec, nsec);
+		char ids[50];
+		get_ids(ids);
+		int size = sprintf(buf, "startahg|%d|%d|%s|%s|%d|%ld|%ld|endahg\n", 
+				11, sys_args.pid, ids, sys_args.filename, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -12416,9 +12418,11 @@ void packahgv_clone (struct clone_ahgv sys_args) {
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
+		char ids[50];
+		get_ids(ids);
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%ld|%ld|endahg\n", 
-				120, sys_args.pid, sys_args.new_pid, current->tgid, sec, nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
+				120, sys_args.pid, ids, sys_args.new_pid, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
