@@ -6937,6 +6937,13 @@ long file_cache_file_written(struct filemap_data *data, int fd) {
 	return 0;
 }
 
+void get_ids(char* ids) {
+	const struct cred *cred = current_cred();
+	sprintf(ids, "%d/%d/%d/%d/%d/%d/%d/%d", 
+		cred->uid, cred->euid, cred->suid, cred->fsuid, 
+		cred->gid, cred->egid, cred->sgid, cred->fsgid);
+}
+
 //Yang
 struct read_ahgv {
 	int							pid;
@@ -7017,9 +7024,11 @@ void packahgv_process() {
 	if(theia_chan) {
 		long sec, nsec;
 		char buf[256];
+		char ids[50];
+		get_ids(ids);
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%ld|%ld|endahg\n", 
-				399/*used for new process*/, current->pid, current->real_parent->pid, 
+		int size = sprintf(buf, "startahg|%d|%d|%s|%d|%s|%d|%ld|%ld|endahg\n", 
+				399/*used for new process*/, current->pid, ids, current->real_parent->pid, 
 				current->comm, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
