@@ -9,6 +9,8 @@
 #include "util.h"
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <stdbool.h>
+#include <paths.h>
 
 extern char** environ;
 
@@ -16,6 +18,26 @@ void format ()
 {
 	fprintf (stderr, "format: launcher [--logdir logdir] [--pthread libdir] [-o |--outfile stdoutput_redirect] [-m] program [args]\n");
 	exit(EXIT_FAILURE);
+}
+
+static void
+scripts_argv (const char *file, char *const argv[], int argc, char **new_argv)
+{
+  /* Construct an argument list for the shell.  */
+  new_argv[0] = (char *) _PATH_BSHELL;
+  new_argv[1] = (char *) file;
+  while (argc > 1)
+    {
+      new_argv[argc] = argv[argc - 1];
+      --argc;
+    }
+}
+
+static inline char *strchrnul(const char *s, int c)
+{
+	while (*s && *s != c)
+		s++;
+	return (char *)s;
 }
 
 int main (int argc, char* argv[])
@@ -42,6 +64,8 @@ int main (int argc, char* argv[])
 		{"outfile", required_argument, 0, 0},
 		{0, 0, 0, 0}
 	};
+
+	printf("hello\n");
 
 	/*
 	for (i = 0; i < argc; i++) {
@@ -180,9 +204,99 @@ int main (int argc, char* argv[])
 	//printf("linkpath: %s, ldpath: %s\n", linkpath, ldpath);
 	if (pid == 0) {
 		close(pipe_fds[0]);
-		rc = replay_fork(fd, (const char**) &argv[base], (const char **) environ,
-				linkpath, logdir, save_mmap, pipe_fds[1]);
 
+		if (strchr (argv[base], '/') != NULL)
+		{
+			/* Don't search when it contains a slash.  */
+			rc = replay_fork(fd, (const char**) &argv[base], (const char **) environ,
+					linkpath, logdir, save_mmap, pipe_fds[1]);
+		}
+		else
+		{
+			size_t pathlen;
+			size_t alloclen = 0;
+			char *path = getenv ("PATH");
+			if (path == NULL)
+			{
+				pathlen = confstr (_CS_PATH, (char *) NULL, 0);
+				alloclen = pathlen + 1;
+			}
+			else
+				pathlen = strlen (path);
+
+			size_t len = strlen (argv[base]) + 1;
+			alloclen += pathlen + len + 1;
+
+			char *name;
+			char *path_malloc = NULL;
+			{
+				path_malloc = name = malloc (alloclen);
+				if (name == NULL)
+					return -1;
+			}
+
+			if (path == NULL)
+			{
+				/* There is no `PATH' in the environment.
+					 The default search path is the current directory
+					 followed by the path `confstr' returns for `_CS_PATH'.  */
+				path = name + pathlen + len + 1;
+				path[0] = ':';
+				(void) confstr (_CS_PATH, path + 1, pathlen);
+			}
+
+			/* Copy the file name at the top.  */
+			name = (char *) memcpy (name + pathlen + 1, argv[base], len);
+			/* And add the slash.  */
+			*--name = '/';
+
+			char **script_argv = NULL;
+			void *script_argv_malloc = NULL;
+			bool got_eacces = false;
+			char *p = path;
+			do
+			{
+				char *startp;
+
+				path = p;
+				p = strchrnul (path, ':');
+
+				if (p == path)
+					/* Two adjacent colons, or a colon at the beginning or the end
+						 of `PATH' means to search the current directory.  */
+					startp = name + 1;
+				else
+					startp = (char *) memcpy (name - (p - path), path, p - path);
+
+
+				/* Count the arguments.  */
+				int argc = 0;
+				while (argv[base+argc++])
+					;
+				printf("argc is %d\n",argc);
+				size_t arglen = (argc + 1) * sizeof (char *);
+				script_argv = script_argv_malloc = malloc (arglen);
+				if (script_argv == NULL)
+				{
+					/* A possible EACCES error is not as important as
+						 the ENOMEM.  */
+					got_eacces = false;
+					break;
+				}
+				scripts_argv (startp, &argv[base], argc, script_argv);
+
+				//				printf("script_argv[0]: %s, script_argv[1]: %s, script_argv[2]: %s\n", script_argv[0], script_argv[1], script_argv[2]);
+
+				int access_rslt = access(script_argv[1], F_OK);
+				if(access_rslt == 0) {
+					printf("%s is taken\n", script_argv[1]);
+					rc = replay_fork(fd, (const char**) &script_argv[1], (const char **) environ,
+							linkpath, logdir, save_mmap, pipe_fds[1]);
+				}
+
+			}
+			while (*p++ != '\0');
+		}
 		fprintf(stderr, "replay_fork failed, rc = %d\n", rc);
 		exit(EXIT_FAILURE);
 	}
