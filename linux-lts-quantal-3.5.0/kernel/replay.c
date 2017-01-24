@@ -183,6 +183,10 @@ static size_t		event_n = 20;
 static size_t write_count;
 static int suspended;
 
+//SL
+void dump_user_stack(void);
+void dump_user_return_addresses(void);
+
 struct black_pid {
 	int pid[3];
 };
@@ -2457,8 +2461,44 @@ get_pt_regs(struct task_struct* tsk)
 	return (struct pt_regs *) regs;
 }
 
-void
-dump_user_stack (void)
+// SL: to dump return addresses
+void dump_user_return_addresses(void) {
+        u_long __user * p;
+        u_long a, v;
+        u_long bp, ret, arg;
+
+        struct pt_regs* regs = get_pt_regs (NULL);
+     
+        printk ("ip: 0x%08lx\n", regs->ip);
+
+        p = (u_long __user *) regs->bp;
+        get_user(bp, p); // old BP
+        get_user(ret, p+1); // return addr
+        printk ("bp: 0x%08lx, old-bp: 0x%08lx, ret: 0x%08lx\n", p, bp, ret);
+
+        if (bp == 0) { // initial BP
+            p = NULL;
+        }
+        else {
+            p = (u_long __user *) bp; // retrieve old BP
+        }
+
+        while(p) {
+            get_user(bp, p); // old BP
+            get_user(ret, p+1); // return addr
+            printk ("bp: 0x%08lx, old-bp: 0x%08lx, ret: 0x%08lx\n", p, bp, ret);
+
+            if (bp == 0) { 
+                p = NULL;
+            } 
+            else {
+                p = (u_long __user *) bp;
+            }
+        }
+}
+
+void 
+dump_user_stack (void) 
 {
 	u_long __user * p;
 	u_long a, v;
@@ -3913,8 +3953,11 @@ new_syscall_enter (long sysnum)
 	u_long* p;
 
 //Yang: get userspace return address
-printk("Userspace return address is %lx, pid: %d\n",current->thread.ip, current->pid);
-printk("current_text_addr is %lx\n",(u_long)(current_text_addr()));
+//printk("Userspace return address is %lx, pid: %d\n",current->thread.ip, current->pid);
+//printk("current_text_addr is %lx\n",(u_long)(current_text_addr()));
+
+//SL: dump userspace return addresses
+dump_user_return_addresses();
 
 #ifdef MCPRINT
 	if (replay_min_debug || replay_debug) {
