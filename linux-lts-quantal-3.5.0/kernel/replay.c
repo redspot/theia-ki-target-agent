@@ -9030,7 +9030,6 @@ void packahgv_mount (struct mount_ahgv sys_args) {
 		int size = sprintf(buf, "startahg|%d|%d|%s|%s|%s|%lu|%d|%d|%lu|%ld|%ld|endahg\n", 
 				21, sys_args.pid, sys_args.devname, sys_args.dirname, sys_args.type, 
 				sys_args.flags, sys_args.rc, current->tgid, sys_args.clock, sec, nsec);
-		printk("mount is captured! %s", buf);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -9122,7 +9121,6 @@ void theia_mount_ahg(char __user *dev_name, char __user *dir_name, char __user *
 }
 
 int theia_sys_mount(char __user *dev_name, char __user *dir_name, char __user * type, unsigned long flags, void __user *data) {
-	printk("mount is called!\n");
 	int rc;
 	rc = sys_mount(dev_name, dir_name, type, flags, data);
 
@@ -15118,7 +15116,6 @@ void packahgv_setuid (struct setuid_ahgv sys_args) {
 		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%lu|%ld|%ld|endahg\n", 
 				213, sys_args.pid, sys_args.newuid, sys_args.rc, current->tgid, 
 				sys_args.clock, sec, nsec);
-		printk("setuid is captured! %s", buf);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -15192,7 +15189,6 @@ void theia_setuid_ahg(uid_t uid, int rc, u_long clock) {
 }
 
 int theia_sys_setuid(uid_t uid) {
-	printk("setuid is called!\n");
 	int rc;
 	rc = sys_setuid(uid);
 

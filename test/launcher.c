@@ -65,8 +65,6 @@ int main (int argc, char* argv[])
 		{0, 0, 0, 0}
 	};
 
-	printf("hello\n");
-
 	/*
 	for (i = 0; i < argc; i++) {
 		printf("Got input arg of %s\n", argv[i]);
@@ -273,7 +271,6 @@ int main (int argc, char* argv[])
 				int argc = 0;
 				while (argv[base+argc++])
 					;
-				printf("argc is %d\n",argc);
 				size_t arglen = (argc + 1) * sizeof (char *);
 				script_argv = script_argv_malloc = malloc (arglen);
 				if (script_argv == NULL)
