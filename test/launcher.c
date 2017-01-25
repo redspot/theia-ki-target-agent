@@ -227,10 +227,10 @@ int main (int argc, char* argv[])
 			size_t len = strlen (argv[base]) + 1;
 			alloclen += pathlen + len + 1;
 
-			char *name;
-			char *path_malloc = NULL;
+			char *name = NULL;
+//			char *path_malloc = NULL;
 			{
-				path_malloc = name = malloc (alloclen);
+				name = malloc (alloclen);
 				if (name == NULL)
 					return -1;
 			}
@@ -252,7 +252,7 @@ int main (int argc, char* argv[])
 
 			char **script_argv = NULL;
 			void *script_argv_malloc = NULL;
-			bool got_eacces = false;
+//			bool got_eacces = false;
 			char *p = path;
 			do
 			{
@@ -280,7 +280,7 @@ int main (int argc, char* argv[])
 				{
 					/* A possible EACCES error is not as important as
 						 the ENOMEM.  */
-					got_eacces = false;
+//					got_eacces = false;
 					break;
 				}
 				scripts_argv (startp, &argv[base], argc, script_argv);

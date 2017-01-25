@@ -2475,7 +2475,7 @@ void dump_user_return_addresses(void) {
 
         printk ("ip: 0x%08lx, sp: 0x%08lx, bp: 0x%08lx\n", ip, sp, bp);
 
-        if (bp < sp) { // why does this happen?
+        if (bp < sp) { // frame pointer omission (FPO) makes problems.
             printk("bp: 0x%08lx is lower than sp: 0x%08lx\n", bp, sp);
             return;
         }
@@ -2511,8 +2511,9 @@ void dump_user_return_addresses(void) {
             }
         }
 
-        // TODO: cannot trace back from shared library to user program
-        // perhaps due to PLT/GOT. We need to figure out the reason.
+        // TODO: Can we handle FPO? We can't know the stack size of each function due to 
+        //       a lack of frame pointers. We could use the content of stack to infer
+        //       where return addresses are, but it may return wrong results.
 }
 
 void 
