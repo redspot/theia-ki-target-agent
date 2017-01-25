@@ -201,13 +201,16 @@ void get_curr_time(long *sec, long *nsec) {
 
 struct black_pid glb_blackpid;
 
-bool is_pid_match(pid_t pid, pid_t tgid) {
-	if(tgid == glb_blackpid.pid[0] || tgid == glb_blackpid.pid[1] || tgid == glb_blackpid.pid[2] 
-			||	pid == glb_blackpid.pid[0] || pid == glb_blackpid.pid[1] || pid == glb_blackpid.pid[2] ) {
-		return true;
+bool is_pid_match(int taskid_to_avoid[], int length) {
+	int i = 0;
+	for (i=0; i<length; i++) {
+		if(taskid_to_avoid[i] == glb_blackpid.pid[0] || 
+			 taskid_to_avoid[i] == glb_blackpid.pid[1] || 
+			 taskid_to_avoid[i] == glb_blackpid.pid[2] )
+			return true;
 	}
-	return false;
 
+	return false;
 }
 /*
  * subbuf_start() relay callback.
@@ -7019,7 +7022,21 @@ bool check_and_update_controlfile() {
 	struct black_pid* pblackpid;
 	loff_t pos = 0;
 	struct file* filp = NULL;
-
+	int taskid_to_avoid[12];
+	
+	taskid_to_avoid[0] = current->pid;
+	taskid_to_avoid[1] = current->tgid;
+	taskid_to_avoid[2] = current->parent->pid;
+	taskid_to_avoid[3] = current->parent->tgid;
+	taskid_to_avoid[4] = current->parent->parent->pid;
+	taskid_to_avoid[5] = current->parent->parent->tgid;
+	taskid_to_avoid[6] = current->parent->parent->parent->pid;
+	taskid_to_avoid[7] = current->parent->parent->parent->tgid;
+	taskid_to_avoid[8] = current->parent->parent->parent->parent->pid;
+	taskid_to_avoid[9] = current->parent->parent->parent->parent->tgid;
+	taskid_to_avoid[10] = current->parent->parent->parent->parent->parent->pid;
+	taskid_to_avoid[11] = current->parent->parent->parent->parent->parent->tgid;
+	
 	if(glb_blackpid.pid[0] == 0 || glb_blackpid.pid[1] == 0 || glb_blackpid.pid[2] == 0) {
 		filp = filp_open(control_file, O_RDONLY, 0);
 
@@ -7041,7 +7058,8 @@ bool check_and_update_controlfile() {
 			put_blackpid(pblackpid->pid[0]);
 			put_blackpid(pblackpid->pid[1]);
 			put_blackpid(pblackpid->pid[2]);
-			if(is_pid_match(current->pid, current->tgid)) {
+
+			if(is_pid_match(taskid_to_avoid, 12)) {
 //				printk("we do not track this syscall, pgrp %d\n", current->tgid);
 				filp_close(filp, NULL);
 				return false;
@@ -7052,7 +7070,7 @@ bool check_and_update_controlfile() {
 	}
 	else {
 //		printk("glb_blackpid is already filled. first pid is %d, second pid is %d, third is %d\n",glb_blackpid.pid[0], glb_blackpid.pid[1],glb_blackpid.pid[2] );
-		if(is_pid_match(current->pid, current->tgid)) {
+		if(is_pid_match(taskid_to_avoid, 12)) {
 //			printk("we do not track this syscall, pgrp %d\n", current->tgid);
 			return false;
 		}
@@ -7144,6 +7162,14 @@ void theia_read_ahg(unsigned int fd, long rc, u_long clock) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
+	printk("from read: pid %d (%d), ppid 1: %d (%d), ppid 2: %d (%d), ppid 3: %d (%d), ppid 4: %d (%d), ppid 5: %d (%d)\n", 
+		current->pid, current->tgid,
+		current->parent->pid, current->parent->tgid,
+		current->parent->parent->pid,current->parent->parent->tgid,
+		current->parent->parent->parent->pid, current->parent->parent->parent->tgid,
+		current->parent->parent->parent->parent->pid, current->parent->parent->parent->parent->tgid,
+		current->parent->parent->parent->parent->parent->pid, current->parent->parent->parent->parent->parent->tgid);
 
   //check if the process is new; if so, send an entry of process                             
   if(is_process_new(current->pid, current->comm)) {                              
@@ -11406,7 +11432,7 @@ void packahgv_accept(struct accept_ahgv sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
-				102, SYS_ACCEPT, sys_args.pid, sys_args.sock_fd, sys_args.ip, sys_args.port, current->tgid, sec, nsec);
+				102, SYS_ACCEPT, sys_args.pid, sys_args.rc, sys_args.sock_fd, sys_args.ip, sys_args.port, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
