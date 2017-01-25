@@ -2464,37 +2464,55 @@ get_pt_regs(struct task_struct* tsk)
 // SL: to dump return addresses
 void dump_user_return_addresses(void) {
         u_long __user * p;
-        u_long a, v;
-        u_long bp, ret, arg;
+        u_long bp, old_bp, ret, sp0, sp, spp, ip;
+        int i; 
 
-        struct pt_regs* regs = get_pt_regs (NULL);
-     
-        printk ("ip: 0x%08lx\n", regs->ip);
+        sp0 = current->thread.sp0; // stored user registers
+        ip  = *((u_long*)(sp0 - 4*5));  // eip
+        sp  = *((u_long*)(sp0 - 4*2));  // oldesp 
+        bp  = *((u_long*)(sp0 - 4*12)); // ebp
+        // can retrieve other registers...
 
-        p = (u_long __user *) regs->bp;
-        get_user(bp, p); // old BP
+        printk ("ip: 0x%08lx, sp: 0x%08lx, bp: 0x%08lx\n", ip, sp, bp);
+
+        if (bp < sp) { // why does this happen?
+            printk("bp: 0x%08lx is lower than sp: 0x%08lx\n", bp, sp);
+            return;
+        }
+
+        p  = (u_long __user *) bp;
+
+        get_user(old_bp, p); // old BP
         get_user(ret, p+1); // return addr
-        printk ("bp: 0x%08lx, old-bp: 0x%08lx, ret: 0x%08lx\n", p, bp, ret);
+        printk ("bp: 0x%08lx, old-bp: 0x%08lx, ret: 0x%08lx\n", bp, old_bp, ret);
 
-        if (bp == 0) { // initial BP
-            p = NULL;
+        if (old_bp == 0) { // initial BP
+            bp = old_bp;
+            p  = NULL;
         }
         else {
-            p = (u_long __user *) bp; // retrieve old BP
+            bp = old_bp;
+            p  = (u_long __user *) bp; // retrieve old BP
         }
 
-        while(p) {
-            get_user(bp, p); // old BP
+        while (p) {
+            get_user(old_bp, p); // old BP
             get_user(ret, p+1); // return addr
-            printk ("bp: 0x%08lx, old-bp: 0x%08lx, ret: 0x%08lx\n", p, bp, ret);
 
-            if (bp == 0) { 
-                p = NULL;
+            printk ("bp: 0x%08lx, old-bp: 0x%08lx, ret: 0x%08lx\n", bp, old_bp, ret);
+
+            if (old_bp < bp) { 
+                bp = old_bp;
+                p  = NULL;
             } 
             else {
-                p = (u_long __user *) bp;
+                bp = old_bp;
+                p  = (u_long __user *) bp;
             }
         }
+
+        // TODO: cannot trace back from shared library to user program
+        // perhaps due to PLT/GOT. We need to figure out the reason.
 }
 
 void 
