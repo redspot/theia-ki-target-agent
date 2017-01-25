@@ -2461,20 +2461,53 @@ get_pt_regs(struct task_struct* tsk)
 	return (struct pt_regs *) regs;
 }
 
+// #define STACK_INSPECT_SIZE 250
+#define STACK_INSPECT_SIZE 500
+
 // SL: to dump return addresses
 void dump_user_return_addresses(void) {
         u_long __user * p;
-        u_long bp, old_bp, ret, sp0, sp, spp, ip;
-        int i; 
+        // u_long bp, old_bp, ret, sp0, sp, spp, ip;
+        u_long ip, sp, sp0, bp, addr;
+        int i, res; 
+
+        struct vm_area_struct *vma = NULL;
+        u_long vpage;
 
         sp0 = current->thread.sp0; // stored user registers
         ip  = *((u_long*)(sp0 - 4*5));  // eip
         sp  = *((u_long*)(sp0 - 4*2));  // oldesp 
-        bp  = *((u_long*)(sp0 - 4*12)); // ebp
+        // bp  = *((u_long*)(sp0 - 4*12)); // ebp (not that meaningful due to FPO)
         // can retrieve other registers...
 
-        printk ("ip: 0x%08lx, sp: 0x%08lx, bp: 0x%08lx\n", ip, sp, bp);
+        printk ("ip: 0x%08lx, sp: 0x%08lx\n", ip, sp);
 
+        // SL: Let's analyze stack to find possible return addresses 
+        //      (values pointing to executable vm area)
+        p  = (u_long __user *) sp;
+	for (i = 0; i < STACK_INSPECT_SIZE; i++) {
+		get_user (addr, p);
+
+                if (addr <= 0x08000000 || addr >= 0xc0000000) { 
+                    // invalid address (below main, above kernel)
+                    p++;
+                    continue;
+                }
+
+                for (vma = current->mm->mmap; vma; vma = vma->vm_next) {
+                    if (vma->vm_flags & VM_EXEC) { // for every executable vm area
+                        if (addr >= vma->vm_start && addr < vma->vm_end) {
+                            printk("Possible return addr: 0x%08lx (at 0x%08lx)\n", addr, p);
+                            break;
+                        }
+                    }
+                }
+		p++;
+	}
+
+        return;
+
+#if 0
         if (bp < sp) { // frame pointer omission (FPO) makes problems.
             printk("bp: 0x%08lx is lower than sp: 0x%08lx\n", bp, sp);
             return;
@@ -2510,6 +2543,7 @@ void dump_user_return_addresses(void) {
                 p  = (u_long __user *) bp;
             }
         }
+#endif
 
         // TODO: Can we handle FPO? We can't know the stack size of each function due to 
         //       a lack of frame pointers. We could use the content of stack to infer
