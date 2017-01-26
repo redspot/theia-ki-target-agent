@@ -2500,7 +2500,18 @@ void dump_user_return_addresses(void) {
                 for (vma = current->mm->mmap; vma; vma = vma->vm_next) {
                     if (vma->vm_flags & VM_EXEC) { // for every executable vm area
                         if (addr >= vma->vm_start && addr < vma->vm_end) {
-                            printk("Possible return addr: 0x%08lx (at 0x%08lx)\n", addr, p);
+                            if (vma->vm_file) {
+                                printk("Possible return addr: 0x%08lx (at 0x%08lx) [%s]\n", 
+                                       addr, p, vma->vm_file->f_path.dentry->d_iname);
+                                // or d_inode if we want
+
+                                // dentry_path_raw(filp->f_path.dentry,buf,buflen)
+                                // SL: we could use the full path, but it takes long
+                            }
+                            else {
+                                printk("Possible return addr: 0x%08lx (at 0x%08lx) [NO_MAPPED_FILE]\n", 
+                                       addr, p);
+                            }
                             break;
                         }
                     }
