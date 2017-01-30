@@ -11957,6 +11957,7 @@ struct shmat_ahgv {
 	int							shmid;
 	void __user			*shmaddr;
 	int 						shmflg;
+	u_long					raddr;
 	u_long					clock;
 };
 
@@ -11966,9 +11967,9 @@ void packahgv_shmat(struct shmat_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%lu|%d|%d|%lu|%ld|%ld|endahg\n", 
+		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%d|%lu|%d|%lx|%d|%lu|%ld|%ld|endahg\n", 
 				117, SHMAT, sys_args.pid, sys_args.rc, sys_args.shmid, sys_args.shmaddr, sys_args.shmflg,
-				current->tgid, sys_args.clock, sec, nsec);
+				sys_args.raddr, current->tgid, sys_args.clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -12053,7 +12054,8 @@ void theia_ipc_ahg(long rc, uint call, int first, u_long second,
 					return;
 				}
 				pahgv_shmat->pid = current->pid;
-				pahgv_shmat->rc = third;
+				pahgv_shmat->rc = rc;
+				pahgv_shmat->raddr = third;
 				pahgv_shmat->shmid = first;
 				pahgv_shmat->shmaddr = ptr;
 				pahgv_shmat->shmflg = second;
@@ -12070,12 +12072,21 @@ void theia_ipc_ahg(long rc, uint call, int first, u_long second,
 int theia_sys_ipc(uint call, int first, u_long second, 
 	u_long third, void __user *ptr, long fifth) {
 	long rc;
+
 	rc = sys_ipc (call, first, second, third, ptr, fifth);
+
+	if(call == SHMAT) {
+		unsigned long raddr = 0;
+		get_user(raddr, (unsigned long __user *) third);
+		theia_ipc_ahg(rc, call, first, second, raddr, ptr, fifth, 0);
+	}
+	else if(call == SHMGET) {
+		theia_ipc_ahg(rc, call, first, second, third, ptr, fifth, 0);
+	}
 
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
 	{ 
-		theia_ipc_ahg(rc, call, first, second, third, ptr, fifth, 0);
 	}
 	return rc;
 }
@@ -12092,8 +12103,14 @@ record_ipc (uint call, int first, u_long second, u_long third, void __user *ptr,
 	rc = sys_ipc (call, first, second, third, ptr, fifth);
 
 //Yang
-
-	theia_ipc_ahg(rc, call, first, second, third, ptr, fifth, 0);
+	if(call == SHMAT) {
+		unsigned long raddr = 0;
+		get_user(raddr, (unsigned long __user *) third);
+		theia_ipc_ahg(rc, call, first, second, raddr, ptr, fifth, 0);
+	}
+	else if(call == SHMGET) {
+		theia_ipc_ahg(rc, call, first, second, third, ptr, fifth, 0);
+	}
 
 	new_syscall_done (117, rc);
 	if (rc >= 0) {
