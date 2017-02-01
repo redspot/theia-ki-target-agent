@@ -11931,6 +11931,171 @@ asmlinkage long shim_wait4 (pid_t upid, int __user *stat_addr, int options, stru
 SIMPLE_SHIM1(swapoff, 115, const char __user *, specialfile);
 RET1_SHIM1(sysinfo, 116, struct sysinfo, info, struct sysinfo __user *, info);
 
+struct shmget_ahgv {
+  int             pid;                                                           
+	long						rc;
+	int							key;
+	u_long					size;
+	int 						shmflg;
+	u_long					clock;
+};
+
+void packahgv_shmget(struct shmget_ahgv sys_args) {
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%lu|%d|%d|%lu|%ld|%ld|endahg\n", 
+				117, SHMGET, sys_args.pid, sys_args.rc, sys_args.key, sys_args.size, sys_args.shmflg,
+				current->tgid, sys_args.clock, sec, nsec);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+
+struct shmat_ahgv {
+  int             pid;                                                           
+	long						rc;
+	int							shmid;
+	void __user			*shmaddr;
+	int 						shmflg;
+	u_long					raddr;
+	u_long					clock;
+};
+
+void packahgv_shmat(struct shmat_ahgv sys_args) {
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%d|%lu|%d|%lx|%d|%lu|%ld|%ld|endahg\n", 
+				117, SHMAT, sys_args.pid, sys_args.rc, sys_args.shmid, sys_args.shmaddr, sys_args.shmflg,
+				sys_args.raddr, current->tgid, sys_args.clock, sec, nsec);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+//Yang: for now, we only handle shmget, shmat
+void theia_ipc_ahg(long rc, uint call, int first, u_long second, 
+	u_long third, void __user *ptr, long fifth, u_long clock) {
+
+	int ret;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+
+	if(!check_and_update_controlfile()) {
+		set_fs(old_fs);                                                              
+		return;
+	}
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { 
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
+  //check if the process is new; if so, send an entry of process                             
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		packahgv_process();
+  }
+
+	set_fs(old_fs);                                                              
+
+	struct shmget_ahgv* pahgv_shmget = NULL;
+	struct shmat_ahgv* pahgv_shmat = NULL;
+
+
+	// Yang: regardless of the return value, passes the failed syscall also
+	//	if(rc >= 0) 
+	{
+		switch(call) {
+			case SHMGET:
+				pahgv_shmget = (struct shmget_ahgv*)KMALLOC(sizeof(struct shmget_ahgv), GFP_KERNEL);
+				if(pahgv_shmget == NULL) {
+					printk ("theia_shmget_ahg: failed to KMALLOC.\n");
+					return;
+				}
+				pahgv_shmget->pid = current->pid;
+				pahgv_shmget->rc = rc;
+				pahgv_shmget->key = first;
+				pahgv_shmget->size = second;
+				pahgv_shmget->shmflg = third;
+				packahgv_shmget(*pahgv_shmget);
+				KFREE(pahgv_shmget);	
+				break;
+			case SHMAT:
+				pahgv_shmat = (struct shmat_ahgv*)KMALLOC(sizeof(struct shmat_ahgv), GFP_KERNEL);
+				if(pahgv_shmat == NULL) {
+					printk ("theia_shmat_ahg: failed to KMALLOC.\n");
+					return;
+				}
+				pahgv_shmat->pid = current->pid;
+				pahgv_shmat->rc = rc;
+				pahgv_shmat->raddr = third;
+				pahgv_shmat->shmid = first;
+				pahgv_shmat->shmaddr = ptr;
+				pahgv_shmat->shmflg = second;
+				packahgv_shmat(*pahgv_shmat);
+				KFREE(pahgv_shmat);	
+				break;
+			default:
+				break;
+		}	
+	}
+
+}
+
+int theia_sys_ipc(uint call, int first, u_long second, 
+	u_long third, void __user *ptr, long fifth) {
+	long rc;
+
+	rc = sys_ipc (call, first, second, third, ptr, fifth);
+
+	if(call == SHMAT) {
+		unsigned long raddr = 0;
+		get_user(raddr, (unsigned long __user *) third);
+		theia_ipc_ahg(rc, call, first, second, raddr, ptr, fifth, 0);
+	}
+	else if(call == SHMGET) {
+		theia_ipc_ahg(rc, call, first, second, third, ptr, fifth, 0);
+	}
+
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+	{ 
+	}
+	return rc;
+}
+
 static asmlinkage long 
 record_ipc (uint call, int first, u_long second, u_long third, void __user *ptr, long fifth)
 {
@@ -11941,6 +12106,17 @@ record_ipc (uint call, int first, u_long second, u_long third, void __user *ptr,
 
 	new_syscall_enter (117);
 	rc = sys_ipc (call, first, second, third, ptr, fifth);
+
+//Yang
+	if(call == SHMAT) {
+		unsigned long raddr = 0;
+		get_user(raddr, (unsigned long __user *) third);
+		theia_ipc_ahg(rc, call, first, second, raddr, ptr, fifth, 0);
+	}
+	else if(call == SHMGET) {
+		theia_ipc_ahg(rc, call, first, second, third, ptr, fifth, 0);
+	}
+
 	new_syscall_done (117, rc);
 	if (rc >= 0) {
 		switch (call) {
@@ -12231,7 +12407,13 @@ replay_ipc (uint call, int first, u_long second, u_long third, void __user *ptr,
 	return rc;
 }
 
-asmlinkage long shim_ipc (uint call, int first, u_long second, u_long third, void __user *ptr, long fifth) SHIM_CALL (ipc, 117, call, first, second, third, ptr, fifth);
+
+
+asmlinkage long shim_ipc (uint call, int first, u_long second, u_long third, void __user *ptr, long fifth) 
+//SHIM_CALL (ipc, 117, call, first, second, third, ptr, fifth);
+SHIM_CALL_MAIN(117, record_ipc(call, first, second, third, ptr, fifth), 
+replay_ipc(call, first, second, third, ptr, fifth), 
+theia_sys_ipc(call, first, second, third, ptr, fifth))
 
 SIMPLE_SHIM1(fsync, 118, unsigned int, fd);
 
