@@ -31,6 +31,9 @@
 
 #include <kernel-features.h>
 
+#include <execinfo.h> 
+#define BT_BUF_SIZE 100
+
 
 /* Mount point of the shared memory filesystem.  */
 static struct
@@ -138,6 +141,18 @@ shm_open (const char *name, int oflag, mode_t mode)
   size_t namelen;
   char *fname;
   int fd;
+
+//SL: TODO: define a MACRO?
+  int j,nptrs;
+  void *buffer[BT_BUF_SIZE];
+  char **strings;
+
+  nptrs = backtrace(buffer, BT_BUF_SIZE);
+  strings = backtrace_symbols(buffer, nptrs);
+  for (j = 0; j < nptrs; ++j)
+    printf("THEIA-BACKTRACE: %s\n", strings[j]);
+  free(strings);
+//**********************************************
 
   /* Determine where the shmfs is mounted.  */
   __libc_once (once, where_is_shmfs);
