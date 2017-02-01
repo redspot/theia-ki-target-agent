@@ -2466,6 +2466,7 @@ get_pt_regs(struct task_struct* tsk)
 
 // #define STACK_INSPECT_SIZE 250
 #define STACK_INSPECT_SIZE 500
+#define NO_VMA_REPORT      100
 
 // SL: to dump return addresses
 void dump_user_return_addresses(void) {
@@ -2474,6 +2475,7 @@ void dump_user_return_addresses(void) {
         u_long ip, sp, sp0, bp, addr;
         int i, res; 
 
+        struct mm_struct *mm = current->mm;
         struct vm_area_struct *vma = NULL;
         u_long vpage;
 
@@ -2483,16 +2485,19 @@ void dump_user_return_addresses(void) {
         // bp  = *((u_long*)(sp0 - 4*12)); // ebp (not that meaningful due to FPO)
         // can retrieve other registers...
 
-        printk ("ip: 0x%08lx, sp: 0x%08lx\n", ip, sp);
+        printk ("ip: 0x%08lx, sp: 0x%08lx, start_stack: 0x%08lx\n", ip, sp, mm->start_stack);
 
         // SL: Let's analyze stack to find possible return addresses 
         //      (values pointing to executable vm area)
         p  = (u_long __user *) sp;
-	for (i = 0; i < STACK_INSPECT_SIZE; i++) {
+
+	for (i = 0; i < STACK_INSPECT_SIZE && p < mm->start_stack; i++) {
 		get_user (addr, p);
 
-                if (addr <= 0x08000000 || addr >= 0xc0000000) { 
-                    // invalid address (below main, above kernel)
+                if (addr < mm->start_code || 
+                    (addr >= mm->start_data && addr < mm->end_data) || 
+                    addr > mm->start_stack) { 
+                    // addr would be either a value or a pointer to data
                     p++;
                     continue;
                 }
@@ -2509,7 +2514,7 @@ void dump_user_return_addresses(void) {
                                 // SL: we could use the full path, but it takes long
                             }
                             else {
-                                printk("Possible return addr: 0x%08lx (at 0x%08lx) [NO_MAPPED_FILE]\n", 
+                                printk("Possible return addr: 0x%08lx (at 0x%08lx) [ANONYMOUS]\n", 
                                        addr, p);
                             }
                             break;
