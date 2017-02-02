@@ -2465,19 +2465,21 @@ get_pt_regs(struct task_struct* tsk)
 }
 
 // #define STACK_INSPECT_SIZE 250
-#define STACK_INSPECT_SIZE 500
-#define NO_VMA_REPORT      100
+#define STACK_INSPECT_SIZE 1000
+#define NO_VMA_REPORT       10
 
 // SL: to dump return addresses
 void dump_user_return_addresses(void) {
         u_long __user * p;
         // u_long bp, old_bp, ret, sp0, sp, spp, ip;
         u_long ip, sp, sp0, bp, addr;
-        int i, res; 
+        int i, j, res; 
 
         struct mm_struct *mm = current->mm;
         struct vm_area_struct *vma = NULL;
-        u_long vpage;
+
+        struct vm_area_struct *vma_reports[NO_VMA_REPORT];
+        int vma_idx = 0;
 
         sp0 = current->thread.sp0; // stored user registers
         ip  = *((u_long*)(sp0 - 4*5));  // eip
@@ -2485,7 +2487,25 @@ void dump_user_return_addresses(void) {
         // bp  = *((u_long*)(sp0 - 4*12)); // ebp (not that meaningful due to FPO)
         // can retrieve other registers...
 
-        printk ("ip: 0x%08lx, sp: 0x%08lx, start_stack: 0x%08lx\n", ip, sp, mm->start_stack);
+//        printk ("ip: 0x%08lx, sp: 0x%08lx, start_stack: 0x%08lx\n", ip, sp, mm->start_stack);
+
+        // check ip
+        for (vma = current->mm->mmap; vma; vma = vma->vm_next) {
+            if (vma->vm_flags & VM_EXEC) { // for every executable vm area
+                if (ip >= vma->vm_start && ip < vma->vm_end) {
+                    /*
+                    if (vma->vm_file) {
+                        printk("ip is at [%s]\n", vma->vm_file->f_path.dentry->d_iname);
+                    }
+                    else {
+                        printk("ip is at [ANONYMOUS]\n");
+                    }
+                    */
+                    vma_reports[vma_idx++] = vma;
+                    break;
+                }
+            }
+        }
 
         // SL: Let's analyze stack to find possible return addresses 
         //      (values pointing to executable vm area)
@@ -2502,9 +2522,15 @@ void dump_user_return_addresses(void) {
                     continue;
                 }
 
+                if (vma_idx && addr >= vma_reports[vma_idx-1]->vm_start && addr < vma_reports[vma_idx-1]->vm_end) {
+                    p++;
+                    continue;
+                }
+
                 for (vma = current->mm->mmap; vma; vma = vma->vm_next) {
                     if (vma->vm_flags & VM_EXEC) { // for every executable vm area
                         if (addr >= vma->vm_start && addr < vma->vm_end) {
+                            /*
                             if (vma->vm_file) {
                                 printk("Possible return addr: 0x%08lx (at 0x%08lx) [%s]\n", 
                                        addr, p, vma->vm_file->f_path.dentry->d_iname);
@@ -2517,12 +2543,28 @@ void dump_user_return_addresses(void) {
                                 printk("Possible return addr: 0x%08lx (at 0x%08lx) [ANONYMOUS]\n", 
                                        addr, p);
                             }
+                            */
+
+                            vma_reports[vma_idx++] = vma;
                             break;
                         }
                     }
                 }
 		p++;
+
+                if (vma_idx == NO_VMA_REPORT)
+                    break;
 	}
+
+        printk("Executable VMA Trace:\n");
+        for (i = 0; i < vma_idx; ++i) {
+            if (vma_reports[i]->vm_file) {
+                printk("0x%08lx [%s]\n", vma_reports[i]->vm_start, vma_reports[i]->vm_file->f_path.dentry->d_iname);
+            }
+            else {
+                printk("0x%08lx [ANONYMOUS]\n", vma_reports[i]->vm_start); 
+            }
+        }
 
         return;
 
