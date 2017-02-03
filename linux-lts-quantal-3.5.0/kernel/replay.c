@@ -85,6 +85,7 @@
 #include "../kernel/replay_graph/replayfs_syscall_cache.h"
 #include "../kernel/replay_graph/replayfs_perftimer.h"
 
+
 /* For debugging failing fs operations */
 int debug_flag = 0;
 
@@ -2465,8 +2466,9 @@ get_pt_regs(struct task_struct* tsk)
 }
 
 // #define STACK_INSPECT_SIZE 250
-#define STACK_INSPECT_SIZE 1000
-#define NO_VMA_REPORT       10
+#define STACK_INSPECT_SIZE 10000
+//#define NO_VMA_REPORT       10
+#define NO_VMA_REPORT       50
 
 // SL: to dump return addresses
 void dump_user_return_addresses(void) {
@@ -2493,14 +2495,6 @@ void dump_user_return_addresses(void) {
         for (vma = current->mm->mmap; vma; vma = vma->vm_next) {
             if (vma->vm_flags & VM_EXEC) { // for every executable vm area
                 if (ip >= vma->vm_start && ip < vma->vm_end) {
-                    /*
-                    if (vma->vm_file) {
-                        printk("ip is at [%s]\n", vma->vm_file->f_path.dentry->d_iname);
-                    }
-                    else {
-                        printk("ip is at [ANONYMOUS]\n");
-                    }
-                    */
                     vma_reports[vma_idx++] = vma;
                     break;
                 }
@@ -2522,7 +2516,17 @@ void dump_user_return_addresses(void) {
                     continue;
                 }
 
+                /*
                 if (vma_idx && addr >= vma_reports[vma_idx-1]->vm_start && addr < vma_reports[vma_idx-1]->vm_end) {
+                    p++;
+                    continue;
+                }
+                */
+                for (j = 0; j < vma_idx; ++j) {
+                    if (addr >= vma_reports[j]->vm_start && addr < vma_reports[j]->vm_end)
+                        break;
+                }
+                if (j != vma_idx) {
                     p++;
                     continue;
                 }
@@ -2530,21 +2534,6 @@ void dump_user_return_addresses(void) {
                 for (vma = current->mm->mmap; vma; vma = vma->vm_next) {
                     if (vma->vm_flags & VM_EXEC) { // for every executable vm area
                         if (addr >= vma->vm_start && addr < vma->vm_end) {
-                            /*
-                            if (vma->vm_file) {
-                                printk("Possible return addr: 0x%08lx (at 0x%08lx) [%s]\n", 
-                                       addr, p, vma->vm_file->f_path.dentry->d_iname);
-                                // or d_inode if we want
-
-                                // dentry_path_raw(filp->f_path.dentry,buf,buflen)
-                                // SL: we could use the full path, but it takes long
-                            }
-                            else {
-                                printk("Possible return addr: 0x%08lx (at 0x%08lx) [ANONYMOUS]\n", 
-                                       addr, p);
-                            }
-                            */
-
                             vma_reports[vma_idx++] = vma;
                             break;
                         }
@@ -2552,63 +2541,23 @@ void dump_user_return_addresses(void) {
                 }
 		p++;
 
-                if (vma_idx == NO_VMA_REPORT)
+                if (vma_idx == NO_VMA_REPORT || vma_reports[vma_idx-1]->vm_start == mm->start_code)
                     break;
 	}
 
         printk("Executable VMA Trace:\n");
         for (i = 0; i < vma_idx; ++i) {
             if (vma_reports[i]->vm_file) {
-                printk("0x%08lx [%s]\n", vma_reports[i]->vm_start, vma_reports[i]->vm_file->f_path.dentry->d_iname);
+                printk("0x%08lx [0x%08lx] [%s]\n", vma_reports[i]->vm_start, 
+                       vma_reports[i]->vm_file->f_path.dentry->d_inode,
+                       vma_reports[i]->vm_file->f_path.dentry->d_iname);
             }
             else {
-                printk("0x%08lx [ANONYMOUS]\n", vma_reports[i]->vm_start); 
+                printk("0x%08lx [0x00000000] [ANONYMOUS]\n", vma_reports[i]->vm_start); 
             }
         }
 
         return;
-
-#if 0
-        if (bp < sp) { // frame pointer omission (FPO) makes problems.
-            printk("bp: 0x%08lx is lower than sp: 0x%08lx\n", bp, sp);
-            return;
-        }
-
-        p  = (u_long __user *) bp;
-
-        get_user(old_bp, p); // old BP
-        get_user(ret, p+1); // return addr
-        printk ("bp: 0x%08lx, old-bp: 0x%08lx, ret: 0x%08lx\n", bp, old_bp, ret);
-
-        if (old_bp == 0) { // initial BP
-            bp = old_bp;
-            p  = NULL;
-        }
-        else {
-            bp = old_bp;
-            p  = (u_long __user *) bp; // retrieve old BP
-        }
-
-        while (p) {
-            get_user(old_bp, p); // old BP
-            get_user(ret, p+1); // return addr
-
-            printk ("bp: 0x%08lx, old-bp: 0x%08lx, ret: 0x%08lx\n", bp, old_bp, ret);
-
-            if (old_bp < bp) { 
-                bp = old_bp;
-                p  = NULL;
-            } 
-            else {
-                bp = old_bp;
-                p  = (u_long __user *) bp;
-            }
-        }
-#endif
-
-        // TODO: Can we handle FPO? We can't know the stack size of each function due to 
-        //       a lack of frame pointers. We could use the content of stack to infer
-        //       where return addresses are, but it may return wrong results.
 }
 
 void 
