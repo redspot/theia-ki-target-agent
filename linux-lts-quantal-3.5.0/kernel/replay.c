@@ -3832,7 +3832,11 @@ int fork_replay (char __user* logdir, const char __user *const __user *args,
 
 
 	sprintf (ckpt, "%s/ckpt", prg->rg_logdir);
-	argbuf = copy_args (args, env, &argbuflen);
+	char* libpath_contents = "LD_LIBRARY_PATH=/home/yang/omniplay/eglibc-2.15/prefix/lib:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib";	
+	char* libpath = KMALLOC (strlen(libpath_contents), GFP_KERNEL);
+	strcpy(libpath, libpath_contents);
+	argbuf = copy_args (args, env, &argbuflen, libpath_contents, strlen(libpath_contents));
+
 	if (argbuf == NULL) {
 		printk ("replay_checkpoint_to_disk: copy_args failed\n");
 		return -EFAULT;
@@ -3841,6 +3845,7 @@ int fork_replay (char __user* logdir, const char __user *const __user *args,
 	// Finally do exec from which we should not return
 	get_user (pc, args);
 	filename = getname(pc);
+	printk("fork_replay: filename is %s\n", filename);
 	if (IS_ERR(filename)) {
 		printk ("fork_replay: unable to copy exec filname\n");
 		return -EINVAL;
@@ -3863,7 +3868,10 @@ int fork_replay (char __user* logdir, const char __user *const __user *args,
 	prg->rg_libpath = get_libpath (env);
 	if (prg->rg_libpath == NULL) {
 		printk ("fork_replay: libpath not found\n");
-		return -EINVAL;
+	
+		prg->rg_libpath = libpath;
+		printk("hardcoded libpath is (%s)", prg->rg_libpath);
+//		return -EINVAL;
 	}
 
 	retval = record_execve (filename, args, env, get_pt_regs (NULL));
@@ -8669,7 +8677,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 	write_user_extra_log (prt);
 #endif
 	// Have to copy arguments out before address space goes away - we will likely need them later
-	argbuf = copy_args (__argv, __envp, &argbuflen);
+	argbuf = copy_args (__argv, __envp, &argbuflen, NULL, 0);
 
 	// Hack to support multiple glibcs - make sure that LD_LIBRARY_PATH is in there
 	present = is_libpath_present (current->record_thrd->rp_group, argbuf);
@@ -8973,8 +8981,89 @@ int theia_sys_execve(const char *filename, const char __user *const __user *__ar
 	return rc;
 }
 
+int theia_start_record(const char *filename, const char __user *const __user *__argv, const char __user *const __user *__envp, struct pt_regs *regs) {
+  // white list according to the filename
+  int ret;
+  int fd;
+	long rc;
+
+  const char *whitelist1;                                                             
+  whitelist1 = "/home/yang/tests/hello";                                              
+
+  if(strcmp(filename, whitelist1) != 0) { //we only record the whitelisted processes
+    printk("theia_start_record, execve filename: %s, not in whitelist\n", filename);
+    rc = do_execve(filename, __argv, __envp, regs);                                 
+		theia_execve_ahg(filename);
+		return rc;
+  }                                                                                   
+  printk("theia_start_record, execve filename: %s, in whitelist !\n", filename); 
+
+	mm_segment_t old_fs = get_fs();
+  set_fs(KERNEL_DS);
+
+  const char *devfile;
+  devfile = "/dev/spec0";
+  ret = sys_access(devfile, 0/*F_OK*/);
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.
+    printk("/dev/spec0 not ready yet. ret %d\n", ret);
+    set_fs(old_fs);
+    rc = do_execve(filename, __argv, __envp, regs);                                 
+		theia_execve_ahg(filename);
+		return rc;
+  }
+
+//  fd = sys_open ("/tmp/test.txt", O_RDWR, 0664 /*mode should be ignored anyway*/);
+//  printk("[theia_start_record]open /tmp/test.txt fd %d\n", fd);
+//  sys_close(fd);
+  
+  else {
+//    long rc;
+    char* linker;
+    printk("/dev/spec0 ready ! filename: %s\n", filename);
+    //should be ready to add the process to record_group
+
+    linker = "/home/yang/omniplay/eglibc-2.15/prefix/lib/ld-linux.so.2";
+
+    int save_mmap;
+    save_mmap = 1; 
+
+    int fd = sys_open ("/dev/spec0", O_RDWR, 0777 /*mode should be ignored anyway*/);
+    if (fd < 0) {
+      printk("[theia_start_record]open /dev/spec0 failed\n");
+      set_fs(old_fs);
+			rc = do_execve(filename, __argv, __envp, regs);                                 
+			theia_execve_ahg(filename);
+			return rc;
+    }
+
+//Yang: i think pipe is not needed here as we dont have parent process to send to..
+//    int pipe_fds[2];
+//    rc = pipe(pipe_fds);                                                             
+//    if (rc) {                                                                        
+//      printk("[theia_start_record]pipe_fds fails, %ld\n", rc);
+//      return do_execve(filename, __argv, __envp, regs);
+//    } 
+//    rc = sys_fcntl(pipe_fds[0], 4, 1 /*F_SETFL, FD_CLOEXEC*/);                                  
+//    if (rc) {                                                                        
+//      printk("[theia_start_record]fcntl pipe_fds[0] fails, %ld\n", rc);
+//      return do_execve(filename, __argv, __envp, regs);
+//    }                                                                                
+//
+//    rc = sys_fcntl(pipe_fds[1], 4, 1 /*F_SETFL, FD_CLOEXEC*/);                                  
+//    if (rc) {                                                                        
+//      printk("[theia_start_record]fcntl pipe_fds[1] fails, %ld\n", rc);
+//      return do_execve(filename, __argv, __envp, regs);
+//    }                                                                                
+    set_fs(old_fs);
+    fork_replay (NULL /*logdir*/, __argv, __envp, linker, save_mmap, fd, -1 /*pipe_fd*/);
+  }
+
+}
+
 int shim_execve(const char *filename, const char __user *const __user *__argv, const char __user *const __user *__envp, struct pt_regs *regs) 
-SHIM_CALL_MAIN(11, record_execve(filename, __argv, __envp, regs), replay_execve(filename, __argv, __envp, regs), theia_sys_execve(filename, __argv, __envp, regs))
+//SHIM_CALL_MAIN(11, record_execve(filename, __argv, __envp, regs), replay_execve(filename, __argv, __envp, regs), theia_sys_execve(filename, __argv, __envp, regs))
+
+SHIM_CALL_MAIN(11, record_execve(filename, __argv, __envp, regs), replay_execve(filename, __argv, __envp, regs), theia_start_record(filename, __argv, __envp, regs))
 
 SIMPLE_SHIM1(chdir, 12, const char __user *, filename);
 

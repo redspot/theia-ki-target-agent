@@ -39,7 +39,7 @@ extern int replay_debug, replay_min_debug;
 
 // Allocate buffer and populate it with arguments and environment data from user level
 char*
-copy_args (const char __user* const __user* args, const char __user* const __user* env, int* buflen)
+copy_args (const char __user* const __user* args, const char __user* const __user* env, int* buflen, char* hc_libpath, int hc_libpath_len)
 {
 	int args_cnt, args_len, env_cnt, env_len, len, i;
 	const char __user *const __user *up;
@@ -76,7 +76,12 @@ copy_args (const char __user* const __user* args, const char __user* const __use
 	} while (1);
 	
 	// Now allocate buffer
-	*buflen = 2*sizeof(int) + args_len + env_len;
+	printk("lipath_len:%d, contents: %s\n", hc_libpath_len, hc_libpath);
+	if(hc_libpath>0)
+		*buflen = 2*sizeof(int) + args_len + env_len + hc_libpath_len+1 + sizeof(int);
+	else
+		*buflen = 2*sizeof(int) + args_len + env_len;
+		
 	buf = KMALLOC(*buflen, GFP_KERNEL);
 	if (buf == NULL) {
 		printk ("copy_args: unable to allocate buffer\n");
@@ -107,7 +112,11 @@ copy_args (const char __user* const __user* args, const char __user* const __use
 		up++;
 	}
 
-	*((int *) p) = env_cnt;
+//Yang: add one for libpath
+	if(hc_libpath_len > 0)
+		*((int *) p) = env_cnt+1;
+	else
+		*((int *) p) = env_cnt;
 	p += sizeof(int);
 
 	up = env;
@@ -127,6 +136,16 @@ copy_args (const char __user* const __user* args, const char __user* const __use
 		}
 		p += len;
 		up++;
+	}
+
+//Yang
+	if(hc_libpath_len > 0){
+		*((int *) p) = hc_libpath_len + 1;
+		p += sizeof(int);
+	//	strcpy(p, hc_libpath);
+		memcpy(p, hc_libpath, hc_libpath_len);
+		p += hc_libpath_len;
+		*p = '\0';
 	}
 
 	return buf;
