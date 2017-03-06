@@ -40,6 +40,7 @@
 #include <asm/siginfo.h>
 #include <asm/cacheflush.h>
 #include "audit.h"	/* audit_signal_info() */
+#include <asm-generic/mman-common.h>
 
 //#define REP_SIG_DEBUG
 
@@ -1229,6 +1230,16 @@ int do_send_sig_info(int sig, struct siginfo *info, struct task_struct *p,
 	return ret;
 }
 
+//Yang
+/* It seems inside kernel, we cannot rely on the sigaction change as 
+ * it is userspace function pointer. our solution is 1) identify the 
+ * targeted program; 2) change the protection of this memory do the 
+ * dump if necessary; 3) change sa_handler to SIG_IGN
+ */
+
+
+
+
 /*
  * Force a signal that the process can't ignore: if necessary
  * we unblock the signal and change any SIG_IGN to SIG_DFL.
@@ -1253,11 +1264,26 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	blocked = sigismember(&t->blocked, sig);
 	if (blocked || ignored) {
 		action->sa.sa_handler = SIG_DFL;
+
 		if (blocked) {
 			sigdelset(&t->blocked, sig);
 			recalc_sigpending_and_wake(t);
 		}
 	}
+	//Yang
+	if(t->record_thrd && strcmp(t->comm, "p2") == 0) {
+		action->sa.sa_handler = SIG_IGN;
+		ret = sys_mprotect(info->si_addr-4, 1, PROT_READ);
+		printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", info->si_addr-4, ret);
+		//copy from user of this one page
+		char buf_theia[4097];
+		if (ret = copy_from_user (buf_theia, info->si_addr-4, 4096)) {
+			printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
+		}
+		buf_theia[4096] = '\0';
+		printk("buf_theia: %s\n", buf_theia);
+	}
+
 	if (action->sa.sa_handler == SIG_DFL)
 		t->signal->flags &= ~SIGNAL_UNKILLABLE;
 	ret = specific_send_sig_info(sig, info, t);
