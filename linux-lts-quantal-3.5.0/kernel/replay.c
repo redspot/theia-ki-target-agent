@@ -7213,13 +7213,13 @@ void theia_read_ahg(unsigned int fd, long rc, u_long clock) {
 		return;
   } 
 
-	printk("from read: pid %d (%d), ppid 1: %d (%d), ppid 2: %d (%d), ppid 3: %d (%d), ppid 4: %d (%d), ppid 5: %d (%d)\n", 
-		current->pid, current->tgid,
-		current->parent->pid, current->parent->tgid,
-		current->parent->parent->pid,current->parent->parent->tgid,
-		current->parent->parent->parent->pid, current->parent->parent->parent->tgid,
-		current->parent->parent->parent->parent->pid, current->parent->parent->parent->parent->tgid,
-		current->parent->parent->parent->parent->parent->pid, current->parent->parent->parent->parent->parent->tgid);
+//	printk("from read: pid %d (%d), ppid 1: %d (%d), ppid 2: %d (%d), ppid 3: %d (%d), ppid 4: %d (%d), ppid 5: %d (%d)\n", 
+//		current->pid, current->tgid,
+//		current->parent->pid, current->parent->tgid,
+//		current->parent->parent->pid,current->parent->parent->tgid,
+//		current->parent->parent->parent->pid, current->parent->parent->parent->tgid,
+//		current->parent->parent->parent->parent->pid, current->parent->parent->parent->parent->tgid,
+//		current->parent->parent->parent->parent->parent->pid, current->parent->parent->parent->parent->parent->tgid);
 
   //check if the process is new; if so, send an entry of process                             
   if(is_process_new(current->pid, current->comm)) {                              
@@ -8988,7 +8988,8 @@ int theia_start_record(const char *filename, const char __user *const __user *__
 	long rc;
 
   const char *whitelist1;                                                             
-  whitelist1 = "/home/yang/tests/hello";                                              
+  //whitelist1 = "/home/yang/tests/hello";                                              
+  whitelist1 = "./write";                                              
 
   if(strcmp(filename, whitelist1) != 0) { //we only record the whitelisted processes
     printk("theia_start_record, execve filename: %s, not in whitelist\n", filename);
@@ -15003,6 +15004,8 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 {
 	long rc;
 	struct mmap_pgoff_retvals* recbuf = NULL;
+
+	char vm_file_path[30];
 	
 	rg_lock(current->record_thrd->rp_group);
 	new_syscall_enter (192);
@@ -15027,8 +15030,15 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 		if (vma && rc >= vma->vm_start && vma->vm_file) {
 			recbuf = ARGSKMALLOC(sizeof(struct mmap_pgoff_retvals), GFP_KERNEL);
 			add_file_to_cache (vma->vm_file, &recbuf->dev, &recbuf->ino, &recbuf->mtime);
+			printk("record_mmap_pgoff: rc: %lx, vm_file->fdentry->d_iname: %s, prot: %lu.\n", rc, vma->vm_file->f_dentry->d_iname, prot);
+			sprintf(vm_file_path, "%s", vma->vm_file->f_dentry->d_iname);
 		}
 		up_read(&mm->mmap_sem);
+	}
+
+	if(strcmp(vm_file_path, "myregion1") == 0) {
+		printk("protection about myregion1 will be changed\n");
+		sys_mprotect(rc, len, PROT_NONE);
 	}
 
 	DPRINT ("Pid %d records mmap_pgoff with addr %lx len %lx prot %lx flags %lx fd %ld ret %lx\n", current->pid, addr, len, prot, flags, fd, rc);
