@@ -15104,6 +15104,36 @@ replay_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 
 	if (recbuf && given_fd > 0 && !is_cache_file) sys_close(given_fd);
 
+//Yang
+	char vm_file_path[30];
+	struct vm_area_struct *vma;
+	struct mm_struct *mm = current->mm;
+	down_read(&mm->mmap_sem);
+	vma = find_vma(mm, rc);
+//	if (vma && rc >= vma->vm_start && vma->vm_file) {
+		if(vma){
+			printk("vma ok\n");
+			if(vma->vm_file){
+				printk("vm_file ok\n");
+				if(rc>=vma->vm_start){
+					printk("rc>=vm_start ok\n");
+					printk("replay_mmap_pgoff: rc: %lx, vm_file->fdentry->d_iname: %s, prot: %lu.\n", rc, vma->vm_file->f_dentry->d_iname, prot);
+					sprintf(vm_file_path, "%s", vma->vm_file->f_dentry->d_iname);
+
+				}
+				else
+					printk("vm_start: %lx\n",vma->vm_start);
+			}
+		}
+		else
+			printk("vma is %p\n",vma);
+	up_read(&mm->mmap_sem);
+
+	if(given_fd == 5) { // only for this test
+		printk("replay: protection about myregion1 will be changed\n");
+		sys_mprotect(rc, len, PROT_NONE);
+	}
+
 	// Save the regions for preallocation for replay+pin
 	if (prt->rp_record_thread->rp_group->rg_save_mmap_flag) {
 		if (rc != -1) {

@@ -1282,6 +1282,22 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 		}
 		buf_theia[4096] = '\0';
 		printk("buf_theia: %s\n", buf_theia);
+		int i=0;
+		for(i=0;i<4096;i++){
+			printk("%02x", buf_theia[i]);
+		}
+		printk("\n");
+	}
+	else if(t->replay_thrd) {
+		action->sa.sa_handler = SIG_IGN;
+		ret = sys_mprotect(info->si_addr-4, 1, PROT_READ);
+		printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", info->si_addr-4, ret);
+		char buf_theia[4097];
+		// fill buf_theia
+		// then copy to the shared memory address 
+		if (ret = copy_to_user (info->si_addr-4, buf_theia, 4096)) {
+			printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
+		}
 	}
 
 	if (action->sa.sa_handler == SIG_DFL)
