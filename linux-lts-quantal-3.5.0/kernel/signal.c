@@ -1251,6 +1251,8 @@ int do_send_sig_info(int sig, struct siginfo *info, struct task_struct *p,
  * We don't want to have recursive SIGSEGV's etc, for example,
  * that is why we also clear SIGNAL_UNKILLABLE.
  */
+
+char buf_theia[4097];
 int
 force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 {
@@ -1271,12 +1273,12 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 		}
 	}
 	//Yang
+	printk("t->comm: %s\n", t->comm);
 	if(t->record_thrd && strcmp(t->comm, "p2") == 0) {
 		action->sa.sa_handler = SIG_IGN;
 		ret = sys_mprotect(info->si_addr-4, 1, PROT_READ);
 		printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", info->si_addr-4, ret);
 		//copy from user of this one page
-		char buf_theia[4097];
 		if (ret = copy_from_user (buf_theia, info->si_addr-4, 4096)) {
 			printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 		}
@@ -1288,16 +1290,21 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 		}
 		printk("\n");
 	}
-	else if(t->replay_thrd) {
+	else if(t->replay_thrd && strcmp(t->comm, "800001_673ce")==0) { // this is indeed p2, but with a hashed name
 		action->sa.sa_handler = SIG_IGN;
-		ret = sys_mprotect(info->si_addr-4, 1, PROT_READ);
-		printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", info->si_addr-4, ret);
-		char buf_theia[4097];
+		int i=0;
+		for(i=0;i<4096;i++){
+			printk("%02x", buf_theia[i]);
+		}
 		// fill buf_theia
 		// then copy to the shared memory address 
+		ret = sys_mprotect(info->si_addr-4, 1, PROT_WRITE);
+		printk("inside force_sig_info, address %p is set to prot_write, ret: %d\n", info->si_addr-4, ret);
 		if (ret = copy_to_user (info->si_addr-4, buf_theia, 4096)) {
 			printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 		}
+		ret = sys_mprotect(info->si_addr-4, 1, PROT_READ);
+		printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", info->si_addr-4, ret);
 	}
 
 	if (action->sa.sa_handler == SIG_DFL)
