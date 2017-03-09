@@ -40,7 +40,22 @@
 #include <asm/siginfo.h>
 #include <asm/cacheflush.h>
 #include "audit.h"	/* audit_signal_info() */
+
+//Yang
+#include <asm/page.h>
 #include <asm-generic/mman-common.h>
+#include <linux/mm.h>
+#include <asm/pgtable.h>
+#include <linux/highmem.h>
+// copy from fault.c
+enum x86_pf_error_code {
+
+	PF_PROT		=		1 << 0,
+	PF_WRITE	=		1 << 1,
+	PF_USER		=		1 << 2,
+	PF_RSVD		=		1 << 3,
+	PF_INSTR	=		1 << 4,
+};
 
 //#define REP_SIG_DEBUG
 
@@ -1260,6 +1275,12 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	int ret, blocked, ignored;
 	struct k_sigaction *action;
 
+//Yang
+	struct mm_struct *mm = t->mm;
+	void __user *address = info->si_addr-4;
+	unsigned long error_code = t->thread.error_code;
+
+	printk("error code: %lu\n", error_code);
 	spin_lock_irqsave(&t->sighand->siglock, flags);
 	action = &t->sighand->action[sig-1];
 	ignored = action->sa.sa_handler == SIG_IGN;
@@ -1272,140 +1293,147 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 			recalc_sigpending_and_wake(t);
 		}
 	}
-	//Yang
-	struct mm_struct = t->mm;
-	unsigned long address = info->si_addr-4;
-	pgd_t *pgd;
-	pud_t *pud;
-	pmd_t *pmd;
-	pte_t *ptep, pte;
 
-	pgd = pgd_offset(mm, address);
-	if (pgd_none(*pgd) || unlikely(pgd_bad(*pgd)))
-		goto out;
+	if(t->record_thrd || t->replay_thrd) {
+printk("in signal.c\n");
+		//Yang
+//		pgd_t *pgd;
+//		pud_t *pud;
+//		pmd_t *pmd;
+//		pte_t *ptep, pte;
+//
+//		unsigned long address_ul = (unsigned long)address;
+//		pgd = pgd_offset(mm, address_ul);
+//		if (pgd_none(*pgd) || unlikely(pgd_bad(*pgd)))
+//			goto out;
+//printk("pgd ok\n");
+//		pud = pud_offset(pgd, address_ul);
+//		if (pud_none(*pud) || unlikely(pud_bad(*pud)))
+//			goto out;
+//
+//printk("pud ok\n");
+//		pmd = pmd_offset(pud, address_ul);
+//		VM_BUG_ON(pmd_trans_huge(*pmd));
+//		if (pmd_none(*pmd) || unlikely(pmd_bad(*pmd)))
+//			goto out;
+//
+//printk("pmd ok\n");
+//		ptep = pte_offset_map(pmd, address_ul);
+//		if (!ptep)
+//			goto out;
+//		pte = *ptep;
 
-	pud = pud_offset(pgd, address);
-	if (pud_none(*pud) || unlikely(pud_bad(*pud)))
-		goto out;
 
-	pmd = pmd_offset(pud, address);
-	VM_BUG_ON(pmd_trans_huge(*pmd));
-	if (pmd_none(*pmd) || unlikely(pmd_bad(*pmd)))
-		goto out;
-	ptep = pte_offset_map(pmd, address);
-	if (!ptep)
-		goto out;
-	pte = *ptep;
+		printk("t->comm: %s\n", t->comm);
+		//RECORD
+		if(t->record_thrd && strcmp(t->comm, "p2") == 0) {
+			action->sa.sa_handler = SIG_IGN;
 
-
-	printk("t->comm: %s\n", t->comm);
-	if(t->record_thrd && strcmp(t->comm, "p2") == 0) {
-		action->sa.sa_handler = SIG_IGN;
-
-		unsigned long error_code = t->thread.error_code;
-		printk("error code: %lu\n", error_code);
-		
-		if(pte_flags(pte) & _PAGE_PROTNONE) {
-			if(error_code & PF_USER && error_code & PF_WRITE) {
-				//we expect segfault happens again
-				ret = sys_mprotect(address, 1, PROT_READ);
-				printk("inside force_sig_info, first from none; address %p is set to prot_READ, ret: %d\n", address, ret);
+			//This should be the very first mem access
+//			printk("pte flag is %lu\n", (unsigned long) (pte_flags(pte)));
+//			if(pte_flags(pte) & _PAGE_PROTNONE) {
+			if(false) {
+				if(error_code & PF_USER && error_code & PF_WRITE) {
+					//we expect segfault happens again
+					ret = sys_mprotect(address, 1, PROT_READ);
+					printk("inside force_sig_info, first from none; address %p is set to prot_READ, ret: %d\n", address, ret);
+				}
+				else if(error_code & PF_USER && !(error_code & PF_WRITE)) {
+					ret = sys_mprotect(address, 1, PROT_READ);
+					printk("inside force_sig_info, first from none; address %p is set to prot_read, ret: %d\n", address, ret);
+					//copy from user of this one page
+					if ((ret = copy_from_user (buf_theia, address, 4096))) {
+						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
+					}
+					buf_theia[4096] = '\0';
+					printk("buf_theia: %s\n", buf_theia);
+					int i=0;
+					for(i=0;i<4096;i++){
+						printk("%02x", buf_theia[i]);
+					}
+					printk("\n");
+				}
 			}
-			else if(error_code & PF_USER && !(error_code & PF_WRITE)) {
-				ret = sys_mprotect(address, 1, PROT_READ);
-				printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", address, ret);
-				//copy from user of this one page
-				if (ret = copy_from_user (buf_theia, address, 4096)) {
-					printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
+
+			//This is the following mem access
+			else {
+				// if it is write attempt, we change protection to prot_write
+				if(error_code & PF_USER && error_code & PF_WRITE) {
+					ret = sys_mprotect(address, 1, PROT_WRITE);
+					printk("inside force_sig_info, address %p is set to prot_write, ret: %d\n", address, ret);
 				}
-				buf_theia[4096] = '\0';
-				printk("buf_theia: %s\n", buf_theia);
-				int i=0;
-				for(i=0;i<4096;i++){
-					printk("%02x", buf_theia[i]);
+				// if it is read attempt, we change protection to prot_read
+				else if(error_code & PF_USER && !(error_code & PF_WRITE)) {
+					ret = sys_mprotect(address, 1, PROT_READ);
+					printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", address, ret);
+					//copy from user of this one page
+					if ((ret = copy_from_user (buf_theia, address, 4096))) {
+						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
+					}
+					buf_theia[4096] = '\0';
+					printk("buf_theia: %s\n", buf_theia);
+					int i=0;
+					for(i=0;i<4096;i++){
+						printk("%02x", buf_theia[i]);
+					}
+					printk("\n");
 				}
-				printk("\n");
 			}
 		}
-
-		else {
-			// if it is write attempt, we change protection to prot_write
-			if(error_code & PF_WRITE && error_code & PF_USER) {
-				ret = sys_mprotect(address, 1, PROT_WRITE);
-				printk("inside force_sig_info, address %p is set to prot_write, ret: %d\n", address, ret);
+		//REPLAY
+		else if(t->replay_thrd && strcmp(t->comm, "800001_673ce")==0) { // this is indeed p2, but with a hashed name
+			action->sa.sa_handler = SIG_IGN;
+			int i=0;
+			for(i=0;i<4096;i++){
+				printk("%02x", buf_theia[i]);
 			}
-			// if it is read attempt, we change protection to prot_read
-			else if(error_code & PF_USER && !(error_code & PF_WRITE)) {
-				ret = sys_mprotect(address, 1, PROT_READ);
-				printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", address, ret);
-				//copy from user of this one page
-				if (ret = copy_from_user (buf_theia, address, 4096)) {
-					printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
+//			if(pte_flags(pte) & _PAGE_PROTNONE) {
+			if(false) {
+				if(error_code & PF_USER && error_code & PF_WRITE) {
+					//we expect segfault happens again
+					ret = sys_mprotect(address, 1, PROT_READ);
+					printk("inside force_sig_info, first from none; address %p is set to prot_READ, ret: %d\n", address, ret);
 				}
-				buf_theia[4096] = '\0';
-				printk("buf_theia: %s\n", buf_theia);
-				int i=0;
-				for(i=0;i<4096;i++){
-					printk("%02x", buf_theia[i]);
+				else if(error_code & PF_USER && !(error_code & PF_WRITE)) {
+					//in order to dump the read page, we change protection to prot_write temporarily
+					ret = sys_mprotect(address, 1, PROT_WRITE);
+					printk("inside force_sig_info, address %p is set to prot_write temp, ret: %d\n", address, ret);
+					if ((ret = copy_to_user (address, buf_theia, 4096))) {
+						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
+					}
+					ret = sys_mprotect(address, 1, PROT_READ);
+					printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", address, ret);
+
+					buf_theia[4096] = '\0';
+					printk("buf_theia: %s\n", buf_theia);
+					int i=0;
+					for(i=0;i<4096;i++){
+						printk("%02x", buf_theia[i]);
+					}
+					printk("\n");
 				}
-				printk("\n");
+			}
+
+			else {
+				// if it is write attempt, we change protection to prot_write
+				if(error_code & PF_USER && error_code & PF_WRITE) {
+					ret = sys_mprotect(address, 1, PROT_WRITE);
+					printk("inside force_sig_info, address %p is set to prot_write, ret: %d\n", address, ret);
+				}
+				// if it is read attempt, we change protection to prot_read
+				else if(error_code & PF_USER && !(error_code & PF_WRITE)) {
+					//in order to dump the read page, we change protection to prot_write temporarily
+					ret = sys_mprotect(address, 1, PROT_WRITE);
+					printk("inside force_sig_info, address %p is set to prot_write temp, ret: %d\n", address, ret);
+					if ((ret = copy_to_user (address, buf_theia, 4096))) {
+						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
+					}
+					ret = sys_mprotect(address, 1, PROT_READ);
+					printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", address, ret);
+				}
 			}
 		}
 	}
-	else if(t->replay_thrd && strcmp(t->comm, "800001_673ce")==0) { // this is indeed p2, but with a hashed name
-		action->sa.sa_handler = SIG_IGN;
-		int i=0;
-		for(i=0;i<4096;i++){
-			printk("%02x", buf_theia[i]);
-		}
-		// fill buf_theia
-		// then copy to the shared memory address 
-		if(pte_flags(pte) & _PAGE_PROTNONE) {
-			if(error_code & PF_USER && error_code & PF_WRITE) {
-				//we expect segfault happens again
-				ret = sys_mprotect(address, 1, PROT_READ);
-				printk("inside force_sig_info, first from none; address %p is set to prot_READ, ret: %d\n", address, ret);
-			}
-			else if(error_code & PF_USER && !(error_code & PF_WRITE)) {
-				//in order to dump the read page, we change protection to prot_write temporarily
-				ret = sys_mprotect(address, 1, PROT_WRITE);
-				printk("inside force_sig_info, address %p is set to prot_write temp, ret: %d\n", address, ret);
-				if (ret = copy_to_user (address, buf_theia, 4096)) {
-					printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
-				}
-				ret = sys_mprotect(address, 1, PROT_READ);
-				printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", address, ret);
-
-				buf_theia[4096] = '\0';
-				printk("buf_theia: %s\n", buf_theia);
-				int i=0;
-				for(i=0;i<4096;i++){
-					printk("%02x", buf_theia[i]);
-				}
-				printk("\n");
-			}
-		}
-
-		else {
-			// if it is write attempt, we change protection to prot_write
-			if(error_code & PF_USER && error_code & PF_WRITE) {
-				ret = sys_mprotect(address, 1, PROT_WRITE);
-				printk("inside force_sig_info, address %p is set to prot_write, ret: %d\n", address, ret);
-			}
-			// if it is read attempt, we change protection to prot_read
-			else if(error_code & PF_USER && !(error_code & PF_WRITE)) {
-				//in order to dump the read page, we change protection to prot_write temporarily
-				ret = sys_mprotect(address, 1, PROT_WRITE);
-				printk("inside force_sig_info, address %p is set to prot_write temp, ret: %d\n", address, ret);
-				if (ret = copy_to_user (info->si_addr-4, buf_theia, 4096)) {
-					printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
-				}
-				ret = sys_mprotect(address, 1, PROT_READ);
-				printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", address, ret);
-			}
-		}
-	}
-
 
 	if (action->sa.sa_handler == SIG_DFL)
 		t->signal->flags &= ~SIGNAL_UNKILLABLE;

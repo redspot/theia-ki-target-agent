@@ -15003,6 +15003,7 @@ static asmlinkage long
 record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff)
 {
 	long rc;
+	int ret;
 	struct mmap_pgoff_retvals* recbuf = NULL;
 
 	char vm_file_path[30];
@@ -15037,8 +15038,8 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 	}
 
 	if(strcmp(vm_file_path, "myregion1") == 0) {
-		printk("protection about myregion1 will be changed\n");
-		sys_mprotect(rc, len, PROT_NONE);
+		ret = sys_mprotect(rc, len, PROT_NONE);
+		printk("protection about myregion1 will be changed, ret %d\n", ret);
 	}
 
 	DPRINT ("Pid %d records mmap_pgoff with addr %lx len %lx prot %lx flags %lx fd %ld ret %lx\n", current->pid, addr, len, prot, flags, fd, rc);
