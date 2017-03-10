@@ -1277,8 +1277,10 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 
 //Yang
 	struct mm_struct *mm = t->mm;
+	struct vm_area_struct *vma;
 	void __user *address = info->si_addr-4;
 	unsigned long error_code = t->thread.error_code;
+	unsigned long protection;
 
 	printk("error code: %lu\n", error_code);
 	spin_lock_irqsave(&t->sighand->siglock, flags);
@@ -1296,33 +1298,13 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 
 	if(t->record_thrd || t->replay_thrd) {
 printk("in signal.c\n");
-		//Yang
-//		pgd_t *pgd;
-//		pud_t *pud;
-//		pmd_t *pmd;
-//		pte_t *ptep, pte;
-//
-//		unsigned long address_ul = (unsigned long)address;
-//		pgd = pgd_offset(mm, address_ul);
-//		if (pgd_none(*pgd) || unlikely(pgd_bad(*pgd)))
-//			goto out;
-//printk("pgd ok\n");
-//		pud = pud_offset(pgd, address_ul);
-//		if (pud_none(*pud) || unlikely(pud_bad(*pud)))
-//			goto out;
-//
-//printk("pud ok\n");
-//		pmd = pmd_offset(pud, address_ul);
-//		VM_BUG_ON(pmd_trans_huge(*pmd));
-//		if (pmd_none(*pmd) || unlikely(pmd_bad(*pmd)))
-//			goto out;
-//
-//printk("pmd ok\n");
-//		ptep = pte_offset_map(pmd, address_ul);
-//		if (!ptep)
-//			goto out;
-//		pte = *ptep;
 
+		down_read(&mm->mmap_sem);
+		unsigned long address_ul = (unsigned long)address;
+		vma = find_vma(mm, address_ul);
+		protection = pgprot_val(vma->vm_page_prot);
+		printk("vma->start: %lu, end: %lu, current page prot: %lu, vm_flags: %lu\n", vma->vm_start,vma->vm_end,pgprot_val(vma->vm_page_prot), vma->vm_flags);
+		up_read(&mm->mmap_sem);
 
 		printk("t->comm: %s\n", t->comm);
 		//RECORD
@@ -1330,9 +1312,7 @@ printk("in signal.c\n");
 			action->sa.sa_handler = SIG_IGN;
 
 			//This should be the very first mem access
-//			printk("pte flag is %lu\n", (unsigned long) (pte_flags(pte)));
-//			if(pte_flags(pte) & _PAGE_PROTNONE) {
-			if(false) {
+			if(!(protection & (PROT_READ | PROT_WRITE))) {
 				if(error_code & PF_USER && error_code & PF_WRITE) {
 					//we expect segfault happens again
 					ret = sys_mprotect(address, 1, PROT_READ);
@@ -1341,6 +1321,12 @@ printk("in signal.c\n");
 				else if(error_code & PF_USER && !(error_code & PF_WRITE)) {
 					ret = sys_mprotect(address, 1, PROT_READ);
 					printk("inside force_sig_info, first from none; address %p is set to prot_read, ret: %d\n", address, ret);
+//		down_read(&mm->mmap_sem);
+//		vma = find_vma(mm, address_ul);
+//		pgprot_t upd_prot = vma->vm_page_prot;
+//		printk("vma->start: %lu, end: %lu, update page prot: %lu, vm_flags: %lu\n", vma->vm_start,vma->vm_end,pgprot_val(vma->vm_page_prot), vma->vm_flags);
+//		printk("updated page prot: %lu, flags: %lu\n", upd_prot, vma->vm_flags);
+//		up_read(&mm->mmap_sem);
 					//copy from user of this one page
 					if ((ret = copy_from_user (buf_theia, address, 4096))) {
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
@@ -1387,8 +1373,7 @@ printk("in signal.c\n");
 			for(i=0;i<4096;i++){
 				printk("%02x", buf_theia[i]);
 			}
-//			if(pte_flags(pte) & _PAGE_PROTNONE) {
-			if(false) {
+			if(!(protection & (PROT_READ | PROT_WRITE))) {
 				if(error_code & PF_USER && error_code & PF_WRITE) {
 					//we expect segfault happens again
 					ret = sys_mprotect(address, 1, PROT_READ);
