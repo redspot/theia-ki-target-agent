@@ -1308,7 +1308,7 @@ printk("in signal.c\n");
 
 		printk("t->comm: %s\n", t->comm);
 		//RECORD
-		if(t->record_thrd && strcmp(t->comm, "p2") == 0) {
+		if(t->record_thrd && (strcmp(t->comm, "p2") == 0 || strcmp(t->comm, "p1") == 0) ) {
 			action->sa.sa_handler = SIG_IGN;
 
 			//This should be the very first mem access
@@ -1367,12 +1367,10 @@ printk("in signal.c\n");
 			}
 		}
 		//REPLAY
-		else if(t->replay_thrd && strcmp(t->comm, "800001_673ce")==0) { // this is indeed p2, but with a hashed name
+		else if(t->replay_thrd) { // this is indeed p2, but with a hashed name
 			action->sa.sa_handler = SIG_IGN;
-			int i=0;
-			for(i=0;i<4096;i++){
-				printk("%02x", buf_theia[i]);
-			}
+
+			//PROT_NONE case, first access
 			if(!(protection & (PROT_READ | PROT_WRITE))) {
 				if(error_code & PF_USER && error_code & PF_WRITE) {
 					//we expect segfault happens again
