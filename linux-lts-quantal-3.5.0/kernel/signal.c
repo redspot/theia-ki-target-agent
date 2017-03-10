@@ -47,6 +47,7 @@
 #include <linux/mm.h>
 #include <asm/pgtable.h>
 #include <linux/highmem.h>
+#include <linux/file.h>
 // copy from fault.c
 enum x86_pf_error_code {
 
@@ -1267,7 +1268,70 @@ int do_send_sig_info(int sig, struct siginfo *info, struct task_struct *p,
  * that is why we also clear SIGNAL_UNKILLABLE.
  */
 
+struct replay_thread;
+struct record_thread;
+struct record_group;
+
 char buf_theia[4097];
+unsigned long shared_page_count = 0;
+void save_to_cache_file(char* buf) {
+	int fd;
+	struct file* file;
+	loff_t pos = 0;
+	int written = 0;
+	char filename[50];
+
+	sprintf (filename, "/replay_cache/shr_cache_%lld_%lu", current->rg_id, shared_page_count);
+
+//	mm_segment_t old_fs = get_fs();
+//	set_fs(KERNEL_DS);
+
+	printk("shr_cache filename: %s\n", filename);
+//	fd = sys_open(filename, O_RDWR|O_CREAT|O_TRUNC|O_LARGEFILE, 0666);
+	fd = sys_open("/replay_cache/shr_cache_xxxx", O_RDWR|O_CREAT|O_TRUNC|O_LARGEFILE, 0666);
+	file = fget(fd);
+	if (file == NULL) {
+		printk ("write_shr_cache: invalid file, fd: %d\n", fd);
+		return;
+	}
+	written = vfs_write(file, buf, PAGE_SIZE, &pos);
+
+//	set_fs(old_fs);
+	if(written != PAGE_SIZE) {
+		printk ("write_shr_cache: tried to write %d, got %ld\n", PAGE_SIZE, written);
+		return;
+	}
+	fput(file);
+	sys_close(fd);
+	
+	return 0;
+}
+
+void load_from_cache_file(char* buf) {
+	int fd;
+	struct file* file;
+	loff_t pos = 0;
+	int read = 0;
+	char filename[50];
+
+	sprintf (filename, "/replay_cache/shr_cache_%lld_%lu", current->rg_id, shared_page_count);
+	fd = sys_open(filename, O_RDWR, 0666);
+	file = fget(fd);
+	if (file == NULL) {
+		printk ("read_shr_cache: invalid file\n");
+		return;
+	}
+	read = vfs_read(file, buf, PAGE_SIZE, &pos);
+	if(read != PAGE_SIZE) {
+		printk ("read_shr_cache: tried to read %d, got %ld\n", PAGE_SIZE, read);
+		return;
+	}
+	fput(file);
+	sys_close(fd);
+	
+	return 0;
+}
+
 int
 force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 {
@@ -1297,7 +1361,6 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	}
 
 	if(t->record_thrd || t->replay_thrd) {
-printk("in signal.c\n");
 
 		down_read(&mm->mmap_sem);
 		unsigned long address_ul = (unsigned long)address;
@@ -1309,6 +1372,7 @@ printk("in signal.c\n");
 		printk("t->comm: %s\n", t->comm);
 		//RECORD
 		if(t->record_thrd && (strcmp(t->comm, "p2") == 0 || strcmp(t->comm, "p1") == 0) ) {
+			printk("in signal.c record, id: %lld\n", t->rg_id);
 			action->sa.sa_handler = SIG_IGN;
 
 			//This should be the very first mem access
@@ -1331,6 +1395,8 @@ printk("in signal.c\n");
 					if ((ret = copy_from_user (buf_theia, address, 4096))) {
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 					}
+					//write to cache file
+					save_to_cache_file(buf_theia);
 					buf_theia[4096] = '\0';
 					printk("buf_theia: %s\n", buf_theia);
 					int i=0;
@@ -1356,6 +1422,7 @@ printk("in signal.c\n");
 					if ((ret = copy_from_user (buf_theia, address, 4096))) {
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 					}
+					save_to_cache_file(buf_theia);
 					buf_theia[4096] = '\0';
 					printk("buf_theia: %s\n", buf_theia);
 					int i=0;
@@ -1368,6 +1435,7 @@ printk("in signal.c\n");
 		}
 		//REPLAY
 		else if(t->replay_thrd) { // this is indeed p2, but with a hashed name
+			printk("in signal.c replay, id: %lld\n", t->rg_id);
 			action->sa.sa_handler = SIG_IGN;
 
 			//PROT_NONE case, first access
@@ -1381,6 +1449,7 @@ printk("in signal.c\n");
 					//in order to dump the read page, we change protection to prot_write temporarily
 					ret = sys_mprotect(address, 1, PROT_WRITE);
 					printk("inside force_sig_info, address %p is set to prot_write temp, ret: %d\n", address, ret);
+					load_from_cache_file(buf_theia);
 					if ((ret = copy_to_user (address, buf_theia, 4096))) {
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 					}
@@ -1408,6 +1477,7 @@ printk("in signal.c\n");
 					//in order to dump the read page, we change protection to prot_write temporarily
 					ret = sys_mprotect(address, 1, PROT_WRITE);
 					printk("inside force_sig_info, address %p is set to prot_write temp, ret: %d\n", address, ret);
+					load_from_cache_file(buf_theia);
 					if ((ret = copy_to_user (address, buf_theia, 4096))) {
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 					}

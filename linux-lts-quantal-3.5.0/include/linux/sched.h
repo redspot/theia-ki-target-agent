@@ -1591,6 +1591,8 @@ struct task_struct {
 #endif
 	struct replay_thread*        replay_thrd; /* REPLAY */
 	struct record_thread*        record_thrd; /* REPLAY */
+
+	__u64 rg_id;
 };
 
 /* Future-safe accessor for struct task_struct's cpus_allowed. */

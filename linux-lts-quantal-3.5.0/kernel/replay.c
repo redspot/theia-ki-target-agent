@@ -2064,6 +2064,7 @@ new_record_group (char* logdir)
 
 	if (logdir == NULL) {
 		prg->rg_id = get_replay_id();
+
 		if (prg->rg_id == 0) {
 			printk ("Cannot get replay id\n");
 			goto err_free;
@@ -2099,6 +2100,9 @@ new_record_group (char* logdir)
 	prg->rg_prev_brk = 0;
 
 	MPRINT ("Pid %d new_record_group %lld: exited\n", current->pid, prg->rg_id);
+	//Yang: fill rg_id in task, so we can refer to this from signal.c
+	current->rg_id = prg->rg_id;
+
 	return prg;
 
 err_free:
@@ -3959,6 +3963,7 @@ replay_ckpt_wakeup (int attach_pin, char* logdir, char* linker, int fd, int foll
 #else
 	record_pid = replay_resume_from_disk(ckpt, &execname, &args, &env, &rg_id);
 #endif
+	current->rg_id = rg_id;
 	if (record_pid < 0) return record_pid;
 
 	// Read in the log records 
@@ -8992,7 +8997,7 @@ int theia_start_record(const char *filename, const char __user *const __user *__
   whitelist1 = "./write";                                              
 
   if(strcmp(filename, whitelist1) != 0) { //we only record the whitelisted processes
-    printk("theia_start_record, execve filename: %s, not in whitelist\n", filename);
+    //printk("theia_start_record, execve filename: %s, not in whitelist\n", filename);
     rc = do_execve(filename, __argv, __envp, regs);                                 
 		theia_execve_ahg(filename);
 		return rc;
