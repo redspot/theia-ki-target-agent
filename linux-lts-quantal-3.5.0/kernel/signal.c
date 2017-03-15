@@ -48,6 +48,8 @@
 #include <asm/pgtable.h>
 #include <linux/highmem.h>
 #include <linux/file.h>
+#include <linux/namei.h>
+#include <linux/replay.h>
 // copy from fault.c
 enum x86_pf_error_code {
 
@@ -1274,6 +1276,7 @@ struct record_group;
 
 char buf_theia[4097];
 unsigned long shared_page_count = 0;
+
 void save_to_cache_file(char* buf) {
 	int fd;
 	struct file* file;
@@ -1283,26 +1286,28 @@ void save_to_cache_file(char* buf) {
 
 	sprintf (filename, "/replay_cache/shr_cache_%lld_%lu", current->rg_id, shared_page_count);
 
-//	mm_segment_t old_fs = get_fs();
-//	set_fs(KERNEL_DS);
+	mm_segment_t old_fs = get_fs();
+	set_fs(KERNEL_DS);
+	set_fs(get_ds());
 
-	printk("shr_cache filename: %s\n", filename);
-//	fd = sys_open(filename, O_RDWR|O_CREAT|O_TRUNC|O_LARGEFILE, 0666);
-	fd = sys_open("/replay_cache/shr_cache_xxxx", O_RDWR|O_CREAT|O_TRUNC|O_LARGEFILE, 0666);
+	fd = sys_open(filename, O_RDWR|O_CREAT|O_TRUNC|O_LARGEFILE, 0777);
+	printk("shr_cache filename: %s, fd %d\n", filename, fd);
 	file = fget(fd);
 	if (file == NULL) {
 		printk ("write_shr_cache: invalid file, fd: %d\n", fd);
 		return;
 	}
+	printk("2 shr_cache filename: %s, fd %d\n", filename, fd);
 	written = vfs_write(file, buf, PAGE_SIZE, &pos);
 
-//	set_fs(old_fs);
+	set_fs(old_fs);
 	if(written != PAGE_SIZE) {
 		printk ("write_shr_cache: tried to write %d, got %ld\n", PAGE_SIZE, written);
 		return;
 	}
 	fput(file);
 	sys_close(fd);
+//	filp_close(file, NULL);
 	
 	return 0;
 }
@@ -1314,14 +1319,21 @@ void load_from_cache_file(char* buf) {
 	int read = 0;
 	char filename[50];
 
+	mm_segment_t old_fs = get_fs();
+	set_fs(KERNEL_DS);
+	set_fs(get_ds());
+
 	sprintf (filename, "/replay_cache/shr_cache_%lld_%lu", current->rg_id, shared_page_count);
-	fd = sys_open(filename, O_RDWR, 0666);
+	fd = sys_open(filename, O_RDWR, 0);
 	file = fget(fd);
 	if (file == NULL) {
 		printk ("read_shr_cache: invalid file\n");
 		return;
 	}
+
 	read = vfs_read(file, buf, PAGE_SIZE, &pos);
+	set_fs(old_fs);
+
 	if(read != PAGE_SIZE) {
 		printk ("read_shr_cache: tried to read %d, got %ld\n", PAGE_SIZE, read);
 		return;
@@ -1345,8 +1357,15 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	void __user *address = info->si_addr-4;
 	unsigned long error_code = t->thread.error_code;
 	unsigned long protection;
+	bool save_flag = false;
+	bool load_flag = false;
 
 	printk("error code: %lu\n", error_code);
+
+//Yang: we pre-load before the spin lock
+//	load_from_cache_file(buf_theia);
+
+
 	spin_lock_irqsave(&t->sighand->siglock, flags);
 	action = &t->sighand->action[sig-1];
 	ignored = action->sa.sa_handler == SIG_IGN;
@@ -1362,12 +1381,12 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 
 	if(t->record_thrd || t->replay_thrd) {
 
-		down_read(&mm->mmap_sem);
+	//	down_read(&mm->mmap_sem);
 		unsigned long address_ul = (unsigned long)address;
 		vma = find_vma(mm, address_ul);
 		protection = pgprot_val(vma->vm_page_prot);
 		printk("vma->start: %lu, end: %lu, current page prot: %lu, vm_flags: %lu\n", vma->vm_start,vma->vm_end,pgprot_val(vma->vm_page_prot), vma->vm_flags);
-		up_read(&mm->mmap_sem);
+	//	up_read(&mm->mmap_sem);
 
 		printk("t->comm: %s\n", t->comm);
 		//RECORD
@@ -1395,15 +1414,15 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 					if ((ret = copy_from_user (buf_theia, address, 4096))) {
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 					}
-					//write to cache file
-					save_to_cache_file(buf_theia);
-					buf_theia[4096] = '\0';
-					printk("buf_theia: %s\n", buf_theia);
-					int i=0;
-					for(i=0;i<4096;i++){
-						printk("%02x", buf_theia[i]);
-					}
-					printk("\n");
+					save_flag = true;
+//					save_to_cache_file(buf_theia);
+//					buf_theia[4096] = '\0';
+//					printk("buf_theia: %s\n", buf_theia);
+//					int i=0;
+//					for(i=0;i<4096;i++){
+//						printk("%02x", buf_theia[i]);
+//					}
+//					printk("\n");
 				}
 			}
 
@@ -1422,14 +1441,15 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 					if ((ret = copy_from_user (buf_theia, address, 4096))) {
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 					}
-					save_to_cache_file(buf_theia);
-					buf_theia[4096] = '\0';
-					printk("buf_theia: %s\n", buf_theia);
-					int i=0;
-					for(i=0;i<4096;i++){
-						printk("%02x", buf_theia[i]);
-					}
-					printk("\n");
+					save_flag = true;
+//					save_to_cache_file(buf_theia);
+//					buf_theia[4096] = '\0';
+//					printk("buf_theia: %s\n", buf_theia);
+//					int i=0;
+//					for(i=0;i<4096;i++){
+//						printk("%02x", buf_theia[i]);
+//					}
+//					printk("\n");
 				}
 			}
 		}
@@ -1449,7 +1469,9 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 					//in order to dump the read page, we change protection to prot_write temporarily
 					ret = sys_mprotect(address, 1, PROT_WRITE);
 					printk("inside force_sig_info, address %p is set to prot_write temp, ret: %d\n", address, ret);
-					load_from_cache_file(buf_theia);
+//					load_from_cache_file(buf_theia);
+					load_flag =  true;
+
 					if ((ret = copy_to_user (address, buf_theia, 4096))) {
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 					}
@@ -1477,7 +1499,9 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 					//in order to dump the read page, we change protection to prot_write temporarily
 					ret = sys_mprotect(address, 1, PROT_WRITE);
 					printk("inside force_sig_info, address %p is set to prot_write temp, ret: %d\n", address, ret);
-					load_from_cache_file(buf_theia);
+//					load_from_cache_file(buf_theia);
+					load_flag =  true;
+
 					if ((ret = copy_to_user (address, buf_theia, 4096))) {
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 					}
@@ -1492,6 +1516,23 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 		t->signal->flags &= ~SIGNAL_UNKILLABLE;
 	ret = specific_send_sig_info(sig, info, t);
 	spin_unlock_irqrestore(&t->sighand->siglock, flags);
+
+	if(save_flag) {	
+		//write to cache file
+		save_to_cache_file(buf_theia);
+		//					write_shr_cache(buf_theia, 4096);
+		buf_theia[4096] = '\0';
+		printk("buf_theia: %s\n", buf_theia);
+		int i=0;
+		for(i=0;i<4096;i++){
+			printk("%02x", buf_theia[i]);
+		}
+		printk("\n");
+	}
+
+	if(load_flag) {
+		//need to increment counter for the buffered file
+	}
 
 	return ret;
 out:
