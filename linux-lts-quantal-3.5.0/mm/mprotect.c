@@ -229,6 +229,9 @@ fail:
 	return error;
 }
 
+// extended the below system call to provide mprotect for shared pages
+// vma?
+
 SYSCALL_DEFINE3(mprotect, unsigned long, start, size_t, len,
 		unsigned long, prot)
 {
@@ -328,3 +331,94 @@ out:
 	up_write(&current->mm->mmap_sem);
 	return error;
 }
+
+// THEIA: change the permission of shared pages across all processes
+// TODO: it would not work. modification is needed
+// obtain mm through parameter or use current->mm
+#if 0
+int theia_mprotect_shared(struct mm_struct *mm, unsigned long start, 
+                          size_t len, unsigned long prot) {
+	unsigned long vm_flags, nstart, end, tmp, reqprot;
+	struct vm_area_struct *vma, *prev;
+
+	pgd_t *pgd;
+	pud_t *pud;
+	pmd_t *pmd;
+	pte_t *ptep, pte;
+	struct page *page;
+	pgoff_t pgoff;
+	struct address_space *mapping;
+        struct prio_tree_iter iter;
+
+	int error = -EINVAL;
+	const int grows = prot & (PROT_GROWSDOWN|PROT_GROWSUP);
+	prot &= ~(PROT_GROWSDOWN|PROT_GROWSUP);
+	if (grows == (PROT_GROWSDOWN|PROT_GROWSUP)) /* can't be both */
+		return -EINVAL;
+
+	if (start & ~PAGE_MASK)
+		return -EINVAL;
+	if (!len)
+		return 0;
+	len = PAGE_ALIGN(len);
+	end = start + len;
+	if (end <= start)
+		return -ENOMEM;
+	if (!arch_validate_prot(prot))
+		return -EINVAL;
+
+	reqprot = prot;
+	/*
+	 * Does the application expect PROT_READ to imply PROT_EXEC:
+	 */
+	if ((prot & PROT_READ) && (current->personality & READ_IMPLIES_EXEC))
+		prot |= PROT_EXEC;
+
+	vm_flags = calc_vm_prot_bits(prot);
+
+	pgd  = pgd_offset(mm, address);
+	pmd  = pmd_offset(pgd, address);
+	ptep = pte_offset_map(pmd, address);
+	pte  = *ptep;
+	page = pte_page(pte);
+
+	pgoff = page->index << compound_order(page); // SL: this is unclear
+	mapping = page->mapping;
+
+	mutex_lock(&mapping->i_mmap_mutex);
+        // take a look at reverse mapping implementation
+	vma_prio_tree_foreach(vma, &iter, &mapping->i_mmap, pgoff, pgoff) {
+            unsigned long newflags, oldflags;
+            newflags = vm_flags | (vma->vm_flags & ~(VM_READ | VM_WRITE | VM_EXEC));
+            oldflags = vma->vm_flags;
+
+            if (newflags != oldflags) {
+                vma->vm_flags     = newflags;
+                vma->vm_page_prot = pgprot_modify(vma->vm_page_prot,
+                                                  vm_get_page_prot(newflags));
+
+                // SL: related with shared memory?
+                if (vma_wants_writenotify(vma)) {
+                    vma->vm_page_prot = vm_get_page_prot(newflags & ~VM_SHARED);
+                    // dirty_accountable = 1;
+                }
+
+                /* TLB flush
+                mmu_notifier_invalidate_range_start(mm, start, end);
+                if (is_vm_hugetlb_page(vma))
+                    hugetlb_change_protection(vma, start, end, vma->vm_page_prot);
+                else
+                    change_protection(vma, start, end, vma->vm_page_prot, dirty_accountable);
+                mmu_notifier_invalidate_range_end(mm, start, end);
+                vm_stat_account(mm, oldflags, vma->vm_file, -nrpages);
+                vm_stat_account(mm, newflags, vma->vm_file, nrpages);
+                perf_event_mmap(vma);
+                */
+            }
+}
+
+out:
+        mutex_unlock(&mapping->i_mmap_mutex);
+        return error;
+}
+#endif

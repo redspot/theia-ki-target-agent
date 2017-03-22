@@ -1050,6 +1050,11 @@ extern int mprotect_fixup(struct vm_area_struct *vma,
 			  struct vm_area_struct **pprev, unsigned long start,
 			  unsigned long end, unsigned long newflags);
 
+// THEIA
+extern int theia_mprotect_shared(struct mm_struct *mm, 
+                                 unsigned long start, 
+				 size_t len, unsigned long prot);
+
 /*
  * doesn't attempt to fault and will return short.
  */
