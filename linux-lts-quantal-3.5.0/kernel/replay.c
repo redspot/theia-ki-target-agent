@@ -68,6 +68,7 @@
 #include <linux/random.h>
 #include <linux/delay.h>
 #include <linux/time.h>
+#include <linux/theia_channel.h>
 
 
 //xdou
@@ -175,14 +176,14 @@ unsigned int replay_pause_tool = 0;
 #define SUBBUF_SIZE 262144
 #define N_SUBBUFS 4
 
-#define APP_DIR		"theia_logs"
-static struct rchan	*theia_chan = NULL;
-static struct dentry	*theia_dir = NULL;
-static size_t		subbuf_size = 262144*5;
-static size_t		n_subbufs = 8;
-static size_t		event_n = 20;
-static size_t write_count;
-static int suspended;
+//#define APP_DIR		"theia_logs"
+//static struct rchan	*theia_chan = NULL;
+//static struct dentry	*theia_dir = NULL;
+//static size_t		subbuf_size = 262144*5;
+//static size_t		n_subbufs = 8;
+//static size_t		event_n = 20;
+//static size_t write_count;
+//static int suspended;
 
 //SL
 void dump_user_stack(void);
@@ -285,7 +286,7 @@ static struct rchan_callbacks relay_callbacks =
  *
  *	Returns channel on success, NULL otherwise
  */
-static struct rchan *create_channel(unsigned size,
+struct rchan *create_channel(unsigned size,
 				    unsigned n)
 {
 	struct rchan *channel;
@@ -334,7 +335,6 @@ void put_blackpid(int grpid) {
 
 //Yang: bookkeeping the process info
 ds_list_t* glb_process_list = NULL;
-
 /* Performance evaluation timers... micro monitoring */
 //struct perftimer *write_btwn_timer;
 struct perftimer *write_in_timer;

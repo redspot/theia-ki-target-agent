@@ -28,6 +28,8 @@
 #include <asm/cacheflush.h>
 #include <asm/tlbflush.h>
 
+#include <linux/ksm.h>
+
 #ifndef pgprot_modify
 static inline pgprot_t pgprot_modify(pgprot_t oldprot, pgprot_t newprot)
 {
@@ -335,7 +337,6 @@ out:
 // THEIA: change the permission of shared pages across all processes
 // TODO: it would not work. modification is needed
 // obtain mm through parameter or use current->mm
-#if 0
 int theia_mprotect_shared(struct mm_struct *mm, unsigned long start, 
                           size_t len, unsigned long prot) {
 	unsigned long vm_flags, nstart, end, tmp, reqprot;
@@ -348,7 +349,9 @@ int theia_mprotect_shared(struct mm_struct *mm, unsigned long start,
 	struct page *page;
 	pgoff_t pgoff;
 	struct address_space *mapping;
-        struct prio_tree_iter iter;
+	struct prio_tree_iter iter;
+
+	int we_locked = 0;
 
 	int error = -EINVAL;
 	const int grows = prot & (PROT_GROWSDOWN|PROT_GROWSUP);
@@ -376,49 +379,64 @@ int theia_mprotect_shared(struct mm_struct *mm, unsigned long start,
 
 	vm_flags = calc_vm_prot_bits(prot);
 
-	pgd  = pgd_offset(mm, address);
-	pmd  = pmd_offset(pgd, address);
-	ptep = pte_offset_map(pmd, address);
+	pgd  = pgd_offset(mm, start);
+	pmd  = pmd_offset(pgd, start);
+	ptep = pte_offset_map(pmd, start);
 	pte  = *ptep;
 	page = pte_page(pte);
 
 	pgoff = page->index << compound_order(page); // SL: this is unclear
 	mapping = page->mapping;
+	printk("page address: %p, mapping address is %p,  pgoff %lu\n", page, mapping, pgoff);
 
-	mutex_lock(&mapping->i_mmap_mutex);
+//	down_write(mm->mmap_sem);
+//	if (!PageAnon(page) || PageKsm(page)) {
+//		we_locked = trylock_page(page);
+//		if (!we_locked) {
+//			error = -ENOLCK;
+//			goto out;
+//		}
+//	}
+//
+//	mutex_lock(&mapping->i_mmap_mutex);
         // take a look at reverse mapping implementation
 	vma_prio_tree_foreach(vma, &iter, &mapping->i_mmap, pgoff, pgoff) {
-            unsigned long newflags, oldflags;
-            newflags = vm_flags | (vma->vm_flags & ~(VM_READ | VM_WRITE | VM_EXEC));
-            oldflags = vma->vm_flags;
+		unsigned long newflags, oldflags;
+		newflags = vm_flags | (vma->vm_flags & ~(VM_READ | VM_WRITE | VM_EXEC));
+		oldflags = vma->vm_flags;
 
-            if (newflags != oldflags) {
-                vma->vm_flags     = newflags;
-                vma->vm_page_prot = pgprot_modify(vma->vm_page_prot,
-                                                  vm_get_page_prot(newflags));
+		if (newflags != oldflags) {
+			vma->vm_flags     = newflags;
+			vma->vm_page_prot = pgprot_modify(vma->vm_page_prot,
+					vm_get_page_prot(newflags));
 
-                // SL: related with shared memory?
-                if (vma_wants_writenotify(vma)) {
-                    vma->vm_page_prot = vm_get_page_prot(newflags & ~VM_SHARED);
-                    // dirty_accountable = 1;
-                }
+			// SL: related with shared memory?
+			if (vma_wants_writenotify(vma)) {
+				vma->vm_page_prot = vm_get_page_prot(newflags & ~VM_SHARED);
+				// dirty_accountable = 1;
+			}
 
-                /* TLB flush
-                mmu_notifier_invalidate_range_start(mm, start, end);
-                if (is_vm_hugetlb_page(vma))
-                    hugetlb_change_protection(vma, start, end, vma->vm_page_prot);
-                else
-                    change_protection(vma, start, end, vma->vm_page_prot, dirty_accountable);
-                mmu_notifier_invalidate_range_end(mm, start, end);
-                vm_stat_account(mm, oldflags, vma->vm_file, -nrpages);
-                vm_stat_account(mm, newflags, vma->vm_file, nrpages);
-                perf_event_mmap(vma);
-                */
-            }
-}
+			/* TLB flush
+				 mmu_notifier_invalidate_range_start(mm, start, end);
+				 if (is_vm_hugetlb_page(vma))
+				 hugetlb_change_protection(vma, start, end, vma->vm_page_prot);
+				 else
+				 change_protection(vma, start, end, vma->vm_page_prot, dirty_accountable);
+				 mmu_notifier_invalidate_range_end(mm, start, end);
+				 vm_stat_account(mm, oldflags, vma->vm_file, -nrpages);
+				 vm_stat_account(mm, newflags, vma->vm_file, nrpages);
+				 perf_event_mmap(vma);
+			 */
+		}
+	}
+
+//	if (we_locked)
+//		unlock_page(page);
+//
+//	up_write(mm->mmap_sem);
+	error = 0;
 
 out:
-        mutex_unlock(&mapping->i_mmap_mutex);
-        return error;
+	mutex_unlock(&mapping->i_mmap_mutex);
+	return error;
 }
-#endif

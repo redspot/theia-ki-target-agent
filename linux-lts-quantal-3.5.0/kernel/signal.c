@@ -50,6 +50,18 @@
 #include <linux/file.h>
 #include <linux/namei.h>
 #include <linux/replay.h>
+#include <linux/theia_channel.h>
+#include <linux/relay.h>
+#include <linux/debugfs.h>
+#include <linux/module.h>
+#include <linux/random.h>
+#include <linux/delay.h>
+#include <linux/time.h>
+
+extern ds_list_t* glb_process_list;
+extern const char* togglefile;
+extern const char* control_file;
+
 // copy from fault.c
 enum x86_pf_error_code {
 
@@ -1277,6 +1289,90 @@ struct record_group;
 char buf_theia[4097];
 unsigned long shared_page_count = 0;
 
+
+//Yang
+struct shr_write_ahgv {
+	int							pid;
+  u_long          address;
+	u_long					clock;
+};
+
+void packahgv_shrwrite (struct shr_write_ahgv sys_args) {
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%lx|%d|%d|%ld|%ld|endahg\n", 
+				501, sys_args.pid, sys_args.address, current->tgid, sys_args.clock, sec, nsec);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+void theia_shrwrite_ahg(unsigned int address, long rc, u_long clock) {
+	int ret;
+  struct shr_write_ahgv* pahgv = NULL;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+
+	if(!check_and_update_controlfile()) {
+		set_fs(old_fs);                                                              
+		return;
+	}
+
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
+  //check if the process is new; if so, send an entry of process                             
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		packahgv_process();
+  }
+
+	set_fs(old_fs);                                                              
+
+	pahgv = (struct shr_write_ahgv*)kmalloc(sizeof(struct shr_write_ahgv), GFP_KERNEL);
+	if(pahgv == NULL) {
+		printk ("theia_shrwrite_ahg: failed to KMALLOC.\n");
+		return;
+	}
+	pahgv->pid = current->pid;
+	pahgv->address = address;
+	pahgv->clock = clock;
+	packahgv_shrwrite(*pahgv);
+	kfree(pahgv);	
+
+}
+
 void save_to_cache_file(char* buf) {
 	int fd;
 	struct file* file;
@@ -1359,6 +1455,8 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	unsigned long protection;
 	bool save_flag = false;
 	bool load_flag = false;
+	bool broadcast_flag = false;
+	int ahg_mem_access = 0; //0:no need; 1:read; 2:write;
 
 	printk("error code: %lu\n", error_code);
 
@@ -1390,18 +1488,22 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 
 		printk("t->comm: %s\n", t->comm);
 		//RECORD
-		if(t->record_thrd && (strcmp(t->comm, "p2") == 0 || strcmp(t->comm, "p1") == 0) ) {
+		if(t->record_thrd && (strcmp(t->comm, "p3") == 0 || strcmp(t->comm, "p4") == 0) ) {
 			printk("in signal.c record, id: %lld\n", t->rg_id);
 			action->sa.sa_handler = SIG_IGN;
 
 			//This should be the very first mem access
 			if(!(protection & (PROT_READ | PROT_WRITE))) {
-				if(error_code & PF_USER && error_code & PF_WRITE) {
+				if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
 					//we expect segfault happens again
 					ret = sys_mprotect(address, 1, PROT_READ);
 					printk("inside force_sig_info, first from none; address %p is set to prot_READ, ret: %d\n", address, ret);
+					
+					//Notify this is a mem_write to the shared memory
+					ahg_mem_access = 2;
+
 				}
-				else if(error_code & PF_USER && !(error_code & PF_WRITE)) {
+				else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
 					ret = sys_mprotect(address, 1, PROT_READ);
 					printk("inside force_sig_info, first from none; address %p is set to prot_read, ret: %d\n", address, ret);
 //		down_read(&mm->mmap_sem);
@@ -1424,17 +1526,23 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 //					}
 //					printk("\n");
 				}
+
+				//Notify this is a mem_read to the shared memory
+				ahg_mem_access = 1;
 			}
 
 			//This is the following mem access
 			else {
 				// if it is write attempt, we change protection to prot_write
-				if(error_code & PF_USER && error_code & PF_WRITE) {
+				if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
 					ret = sys_mprotect(address, 1, PROT_WRITE);
-					printk("inside force_sig_info, address %p is set to prot_write, ret: %d\n", address, ret);
+					// change the prot of its own process and other processes to prot_write
+			//		ret = theia_mprotect_shared(mm, address, 1, PROT_WRITE);
+					broadcast_flag = true;
+					printk("broadcast_flag is set true\n");
 				}
 				// if it is read attempt, we change protection to prot_read
-				else if(error_code & PF_USER && !(error_code & PF_WRITE)) {
+				else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
 					ret = sys_mprotect(address, 1, PROT_READ);
 					printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", address, ret);
 					//copy from user of this one page
@@ -1532,6 +1640,19 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 
 	if(load_flag) {
 		//need to increment counter for the buffered file
+	}
+
+	if(broadcast_flag) {
+		ret = theia_mprotect_shared(mm, address, 1, PROT_WRITE);
+		printk("inside force_sig_info, address %p and other processes are set to prot_write, ret: %d\n", address, ret);
+	}
+
+	//handle ahg transmission
+	if(ahg_mem_access == 1) {
+		
+	}
+	else if(ahg_mem_access == 2) {
+
 	}
 
 	return ret;
