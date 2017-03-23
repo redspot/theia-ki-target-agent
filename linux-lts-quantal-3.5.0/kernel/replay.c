@@ -177,8 +177,8 @@ unsigned int replay_pause_tool = 0;
 #define N_SUBBUFS 4
 
 //#define APP_DIR		"theia_logs"
-//static struct rchan	*theia_chan = NULL;
-//static struct dentry	*theia_dir = NULL;
+struct rchan	*theia_chan = NULL;
+struct dentry	*theia_dir = NULL;
 //static size_t		subbuf_size = 262144*5;
 //static size_t		n_subbufs = 8;
 //static size_t		event_n = 20;
@@ -15167,21 +15167,33 @@ int theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, un
 
 	rc = sys_mmap_pgoff(addr, len, prot, flags, fd, pgoff);
 
-	if ((rc > 0 || rc < -1024) && ((long) fd) >= 0 ) {
-		struct vm_area_struct *vma;
-		struct mm_struct *mm = current->mm;
-		down_read(&mm->mmap_sem);
-		vma = find_vma(mm, rc);
-		if (vma) {
-			if(vma->vm_file) {
-	//			printk("theia_sys_mmap: rc: %lx, vm_file->fdentry->d_iname: %s, prot: %lu.\n", rc, vma->vm_file->f_dentry->d_iname, prot);
-				sprintf(vm_file_path, "%s", vma->vm_file->f_dentry->d_iname);
-			}
-			up_read(&mm->mmap_sem);
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+	ret = sys_access(togglefile, 0/*F_OK*/); //only trace shr access at logging status
+	set_fs(old_fs);
 
-			if(strcmp(vm_file_path, "myregion1") == 0) {
-				ret = sys_mprotect(rc, len, PROT_NONE);
-				printk("protection about myregion1 will be changed, ret %d\n", ret);
+	//printk("toggle access is %d, %s\n", ret, current->comm);
+	if(ret >= 0) {
+		printk("togglefile is ok\n");
+		if ((rc > 0 || rc < -1024) && ((long) fd) >= 0 ) {
+			printk("2 ok\n");
+			struct vm_area_struct *vma;
+			struct mm_struct *mm = current->mm;
+			down_read(&mm->mmap_sem);
+			vma = find_vma(mm, rc);
+			if (vma) {
+			printk("3 ok\n");
+				if(vma->vm_file) {
+			printk("4 ok\n");
+					sprintf(vm_file_path, "%s", vma->vm_file->f_dentry->d_iname);
+				}
+				up_read(&mm->mmap_sem);
+
+				if(strcmp(vm_file_path, "myregion1") == 0) {
+			printk("5 ok\n");
+					ret = sys_mprotect(rc, len, PROT_NONE);
+					printk("protection bit is changed to none at mmap, ret %d\n", ret);
+				}
 			}
 		}
 	}
