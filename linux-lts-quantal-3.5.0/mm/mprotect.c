@@ -380,10 +380,26 @@ int theia_mprotect_shared(struct mm_struct *mm, unsigned long start,
 	vm_flags = calc_vm_prot_bits(prot);
 
 	pgd  = pgd_offset(mm, start);
-	pmd  = pmd_offset(pgd, start);
+	if (pgd_none(*pgd) || pgd_bad(*pgd))
+		goto out;
+
+	pud  = pud_offset(pgd, start);
+	if (pud_none(*pud) || pud_bad(*pud))
+		goto out;
+	
+	pmd  = pmd_offset(pud, start);
+	if (pmd_none(*pmd) | pmd_bad(*pmd))
+		goto out;
+	
 	ptep = pte_offset_map(pmd, start);
+	if (!ptep)
+		goto out;
+	
 	pte  = *ptep;
+	
 	page = pte_page(pte);
+	if (!page)
+		goto out;
 
 	pgoff = page->index << compound_order(page); // SL: this is unclear
 	mapping = page->mapping;
@@ -435,6 +451,8 @@ int theia_mprotect_shared(struct mm_struct *mm, unsigned long start,
 //
 //	up_write(mm->mmap_sem);
 	error = 0;
+
+	pte_unmap(ptep);
 
 out:
 	mutex_unlock(&mapping->i_mmap_mutex);
