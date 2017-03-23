@@ -16,9 +16,6 @@ static size_t		event_n = 20;
 static size_t write_count;
 static int suspended;
 
-void* KMALLOC(size_t size, gfp_t flags);
-void KFREE (const void* ptr);
-
 struct rchan *create_channel(unsigned size, unsigned n);
 
 static void destroy_channel(void);

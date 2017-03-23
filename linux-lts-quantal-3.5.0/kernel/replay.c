@@ -8327,6 +8327,15 @@ int theia_sys_open(const char __user * filename, int flags, int mode) {
 
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
+
+	//handle shm_open
+//	char filename_knl[50] = "";
+//	strncpy_from_user(filename_knl, filename, 50);
+//	if(strstr(filename_knl, "/dev/shm") != NULL) {
+//		//bookkeep the fd
+//		shr_fds
+//	}
+
 	if (ret_access != 0) //it's a new file
 		theia_open_ahg(filename, flags, mode, rc, true);
 	else
@@ -15153,8 +15162,29 @@ replay_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 
 int theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff) {
 	long rc;
+	int ret;
+	char vm_file_path[100];
+
 	rc = sys_mmap_pgoff(addr, len, prot, flags, fd, pgoff);
 
+	if ((rc > 0 || rc < -1024) && ((long) fd) >= 0 ) {
+		struct vm_area_struct *vma;
+		struct mm_struct *mm = current->mm;
+		down_read(&mm->mmap_sem);
+		vma = find_vma(mm, rc);
+		if (vma) {
+			if(vma->vm_file) {
+	//			printk("theia_sys_mmap: rc: %lx, vm_file->fdentry->d_iname: %s, prot: %lu.\n", rc, vma->vm_file->f_dentry->d_iname, prot);
+				sprintf(vm_file_path, "%s", vma->vm_file->f_dentry->d_iname);
+			}
+			up_read(&mm->mmap_sem);
+
+			if(strcmp(vm_file_path, "myregion1") == 0) {
+				ret = sys_mprotect(rc, len, PROT_NONE);
+				printk("protection about myregion1 will be changed, ret %d\n", ret);
+			}
+		}
+	}
 	theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc, 0);
 
 	return rc;

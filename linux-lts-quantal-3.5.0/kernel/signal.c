@@ -1291,6 +1291,90 @@ unsigned long shared_page_count = 0;
 
 
 //Yang
+
+struct shr_read_ahgv {
+	int							pid;
+  u_long          address;
+	u_long					clock;
+};
+
+void packahgv_shrread (struct shr_read_ahgv sys_args) {
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%lx|%d|%d|%ld|%ld|endahg\n", 
+				500, sys_args.pid, sys_args.address, current->tgid, sys_args.clock, sec, nsec);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+void theia_shrread_ahg(unsigned int address, u_long clock) {
+	int ret;
+  struct shr_read_ahgv* pahgv = NULL;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+
+	if(!check_and_update_controlfile()) {
+		set_fs(old_fs);                                                              
+		return;
+	}
+
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
+  //check if the process is new; if so, send an entry of process                             
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		packahgv_process();
+  }
+
+	set_fs(old_fs);                                                              
+
+	pahgv = (struct shr_read_ahgv*)kmalloc(sizeof(struct shr_read_ahgv), GFP_KERNEL);
+	if(pahgv == NULL) {
+		printk ("theia_shrread_ahg: failed to KMALLOC.\n");
+		return;
+	}
+	pahgv->pid = current->pid;
+	pahgv->address = address;
+	pahgv->clock = clock;
+	packahgv_shrread(*pahgv);
+	kfree(pahgv);	
+
+}
+
+
 struct shr_write_ahgv {
 	int							pid;
   u_long          address;
@@ -1311,7 +1395,7 @@ void packahgv_shrwrite (struct shr_write_ahgv sys_args) {
 		printk("theia_chan invalid\n");
 }
 
-void theia_shrwrite_ahg(unsigned int address, long rc, u_long clock) {
+void theia_shrwrite_ahg(unsigned int address, u_long clock) {
 	int ret;
   struct shr_write_ahgv* pahgv = NULL;
 
@@ -1477,14 +1561,26 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 		}
 	}
 
-	if(t->record_thrd || t->replay_thrd) {
+	//For Theia Logging
+	unsigned long address_ul = (unsigned long)address;
+	vma = find_vma(mm, address_ul);
+	protection = pgprot_val(vma->vm_page_prot);
+	printk("vma->start: %lu, end: %lu, current page prot: %lu, vm_flags: %lu\n", 
+		vma->vm_start,vma->vm_end,pgprot_val(vma->vm_page_prot), vma->vm_flags);
+	//This should be the very first mem access
+	if(!(protection & (PROT_READ | PROT_WRITE))) {
+		if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
+			//Notify this is a mem_write to the shared memory
+			ahg_mem_access = 2;
+		}
+		else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
+			//Notify this is a mem_read to the shared memory
+			ahg_mem_access = 1;
+		}
+	}
 
-	//	down_read(&mm->mmap_sem);
-		unsigned long address_ul = (unsigned long)address;
-		vma = find_vma(mm, address_ul);
-		protection = pgprot_val(vma->vm_page_prot);
-		printk("vma->start: %lu, end: %lu, current page prot: %lu, vm_flags: %lu\n", vma->vm_start,vma->vm_end,pgprot_val(vma->vm_page_prot), vma->vm_flags);
-	//	up_read(&mm->mmap_sem);
+
+	if(t->record_thrd || t->replay_thrd) {
 
 		printk("t->comm: %s\n", t->comm);
 		//RECORD
@@ -1649,10 +1745,10 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 
 	//handle ahg transmission
 	if(ahg_mem_access == 1) {
-		
+		theia_shrread_ahg(address, 0);	
 	}
 	else if(ahg_mem_access == 2) {
-
+		theia_shrwrite_ahg(address, 0);	
 	}
 
 	return ret;
