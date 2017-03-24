@@ -10455,7 +10455,108 @@ replay_munmap (unsigned long addr, size_t len)
 	return rc;
 }
 
-asmlinkage long shim_munmap (unsigned long addr, size_t len) SHIM_CALL(munmap, 91, addr, len);
+struct munmap_ahgv {
+	int							pid;
+	u_long					addr;
+	size_t					len;
+	long						rc;
+	u_long					clock;
+};
+
+void packahgv_munmap (struct munmap_ahgv sys_args) {
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%ld|%lx|%ld|%d|%ld|%ld|%ld|endahg\n", 
+				91, sys_args.pid, sys_args.rc, sys_args.addr, sys_args.len, 
+				current->tgid, sys_args.clock, sec, nsec);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+void theia_munmap_ahg(unsigned long addr, size_t len, long rc, u_long clock) {
+	int ret;
+  struct munmap_ahgv* pahgv = NULL;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
+	}
+
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+
+	if(!check_and_update_controlfile()) {
+		set_fs(old_fs);                                                              
+		return;
+	}
+
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
+  //check if the process is new; if so, send an entry of process                             
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		packahgv_process();
+  }
+
+	set_fs(old_fs);                                                              
+
+	pahgv = (struct munmap_ahgv*)KMALLOC(sizeof(struct munmap_ahgv), GFP_KERNEL);
+	if(pahgv == NULL) {
+		printk ("theia_munmap_ahg: failed to KMALLOC.\n");
+		return;
+	}
+	pahgv->pid = current->pid;
+	pahgv->addr = addr;
+	pahgv->len = len;
+	pahgv->rc = rc;
+	pahgv->clock = clock;
+	packahgv_munmap(*pahgv);
+	KFREE(pahgv);	
+}
+
+int theia_sys_munmap(unsigned long addr, size_t len) {
+	long rc;
+	rc = sys_munmap(addr, len);
+
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+	{ 
+		theia_munmap_ahg(addr, len, rc, 0);
+	}
+	return rc;
+}
+
+asmlinkage long shim_munmap (unsigned long addr, size_t len) 
+//SHIM_CALL(munmap, 91, addr, len);
+SHIM_CALL_MAIN(91, record_munmap(addr, len), replay_munmap(addr, len), theia_sys_munmap(addr, len))
 
 SIMPLE_SHIM2(truncate, 92, const char __user *, path, unsigned long, length);
 SIMPLE_SHIM2(ftruncate, 93, unsigned int, fd, unsigned long, length);
@@ -14937,7 +15038,7 @@ void packahgv_mmap (struct mmap_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%lu|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
+		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%lu|%d|%lx|%lx|%d|%ld|%ld|%ld|endahg\n", 
 				192, sys_args.pid, sys_args.fd, sys_args.address, sys_args.length, sys_args.prot_type,
 				sys_args.flag, sys_args.offset, current->tgid, sys_args.clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
