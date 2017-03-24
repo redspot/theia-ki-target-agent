@@ -1618,7 +1618,7 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 
 				}
 				else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
-					ret = sys_mprotect(address, 1, PROT_READ);
+					ret = theia_mprotect_shared(mm, address, 1, PROT_READ);
 					printk("inside force_sig_info, first from none; address %p is set to prot_read, ret: %d\n", address, ret);
 
 					//copy from user of this one page
