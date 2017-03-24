@@ -1569,6 +1569,7 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	}
 
 	if( ret >= 0 && !(t->record_thrd || t->replay_thrd)) { 
+		action->sa.sa_handler = SIG_IGN;
 		unsigned long address_ul = (unsigned long)address;
 		vma = find_vma(mm, address_ul);
 		protection = pgprot_val(vma->vm_page_prot);
