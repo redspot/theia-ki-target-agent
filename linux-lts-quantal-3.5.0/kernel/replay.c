@@ -15052,6 +15052,10 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 	}
 
 	if(strcmp(vm_file_path, "myregion1") == 0) {
+		// enforce page allocation
+		int __user *address = rc;
+		address[0] = 0;
+		
 		ret = sys_mprotect(rc, len, PROT_NONE);
 		printk("protection about myregion1 will be changed, ret %d\n", ret);
 	}
