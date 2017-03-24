@@ -61,6 +61,8 @@
 extern ds_list_t* glb_process_list;
 extern const char* togglefile;
 extern const char* control_file;
+extern struct dentry	*theia_dir;
+extern struct rchan	*theia_chan;
 
 // copy from fault.c
 enum x86_pf_error_code {
@@ -1547,6 +1549,11 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 //Yang: we pre-load before the spin lock
 //	load_from_cache_file(buf_theia);
 
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+	//For Theia Logging
+	ret = sys_access(togglefile, 0/*F_OK*/);                                       
+	set_fs(old_fs);
 
 	spin_lock_irqsave(&t->sighand->siglock, flags);
 	action = &t->sighand->action[sig-1];
@@ -1561,21 +1568,35 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 		}
 	}
 
-	//For Theia Logging
-	unsigned long address_ul = (unsigned long)address;
-	vma = find_vma(mm, address_ul);
-	protection = pgprot_val(vma->vm_page_prot);
-	printk("vma->start: %lu, end: %lu, current page prot: %lu, vm_flags: %lu\n", 
-		vma->vm_start,vma->vm_end,pgprot_val(vma->vm_page_prot), vma->vm_flags);
-	//This should be the very first mem access
-	if(!(protection & (PROT_READ | PROT_WRITE))) {
-		if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
-			//Notify this is a mem_write to the shared memory
-			ahg_mem_access = 2;
+	if( ret >= 0 && !(t->record_thrd || t->replay_thrd)) { 
+		action->sa.sa_handler = SIG_IGN;
+		unsigned long address_ul = (unsigned long)address;
+		vma = find_vma(mm, address_ul);
+		protection = pgprot_val(vma->vm_page_prot);
+		printk("vma->start: %p, end: %p, current page prot: %lu, vm_flags: %lu\n", 
+				vma->vm_start,vma->vm_end,pgprot_val(vma->vm_page_prot), vma->vm_flags);
+		//This should be the very first mem access
+		if(!(protection & (PROT_READ | PROT_WRITE))) {
+			if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
+				ret = sys_mprotect(address, 1, PROT_READ|PROT_WRITE);
+				//Notify this is a mem_write to the shared memory
+				ahg_mem_access = 2;
+			}
+			else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
+				//Notify this is a mem_read to the shared memory
+				ret = sys_mprotect(address, 1, PROT_READ|PROT_WRITE);
+				ahg_mem_access = 1;
+			}
 		}
-		else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
-			//Notify this is a mem_read to the shared memory
-			ahg_mem_access = 1;
+		else { //following 
+			// if it is write attempt, we change protection to prot_write
+			if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
+				ret = sys_mprotect(address, 1, PROT_WRITE);
+			}
+			// if it is read attempt, we change protection to prot_read
+			else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
+				ret = sys_mprotect(address, 1, PROT_READ);
+			}
 		}
 	}
 

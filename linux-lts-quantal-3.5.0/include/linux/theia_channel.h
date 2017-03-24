@@ -8,8 +8,8 @@
 //const char* control_file = "/home/yang/theia-control.conf";
 
 #define APP_DIR		"theia_logs"
-static struct rchan	*theia_chan = NULL;
-static struct dentry	*theia_dir = NULL;
+//static struct rchan	*theia_chan = NULL;
+//static struct dentry	*theia_dir = NULL;
 static size_t		subbuf_size = 262144*5;
 static size_t		n_subbufs = 8;
 static size_t		event_n = 20;
