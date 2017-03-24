@@ -1568,13 +1568,15 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 		}
 	}
 
+	unsigned long address_ul = (unsigned long)address;
+	vma = find_vma(mm, address_ul);
+	protection = pgprot_val(vma->vm_page_prot);
+	printk("vma->start: %p, end: %p, current page prot: %lu, vm_flags: %lu\n", 
+				vma->vm_start,vma->vm_end,pgprot_val(vma->vm_page_prot), vma->vm_flags);
+
+	// none recorded process. not so sure.
 	if( ret >= 0 && !(t->record_thrd || t->replay_thrd)) { 
 		action->sa.sa_handler = SIG_IGN;
-		unsigned long address_ul = (unsigned long)address;
-		vma = find_vma(mm, address_ul);
-		protection = pgprot_val(vma->vm_page_prot);
-		printk("vma->start: %p, end: %p, current page prot: %lu, vm_flags: %lu\n", 
-				vma->vm_start,vma->vm_end,pgprot_val(vma->vm_page_prot), vma->vm_flags);
 		//This should be the very first mem access
 		if(!(protection & (PROT_READ | PROT_WRITE))) {
 			if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
@@ -1612,73 +1614,43 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 			//This should be the very first mem access
 			if(!(protection & (PROT_READ | PROT_WRITE))) {
 				if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
-					//we expect segfault happens again
-					ret = sys_mprotect(address, 1, PROT_READ);
-					printk("inside force_sig_info, first from none; address %p is set to prot_READ, ret: %d\n", address, ret);
-					
+					ret = theia_mprotect_shared(mm, address, 1, PROT_WRITE); // own -> WRITE, others -> NONE
+					printk("1inside force_sig_info, first from none; address %p is set to prot_write, ret: %d\n", address, ret);
+
 					//Notify this is a mem_write to the shared memory
 					ahg_mem_access = 2;
 
 				}
 				else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
-					ret = sys_mprotect(address, 1, PROT_READ);
-					printk("inside force_sig_info, first from none; address %p is set to prot_read, ret: %d\n", address, ret);
-//		down_read(&mm->mmap_sem);
-//		vma = find_vma(mm, address_ul);
-//		pgprot_t upd_prot = vma->vm_page_prot;
-//		printk("vma->start: %lu, end: %lu, update page prot: %lu, vm_flags: %lu\n", vma->vm_start,vma->vm_end,pgprot_val(vma->vm_page_prot), vma->vm_flags);
-//		printk("updated page prot: %lu, flags: %lu\n", upd_prot, vma->vm_flags);
-//		up_read(&mm->mmap_sem);
+					ret = theia_mprotect_shared(mm, address, 1, PROT_READ); // own -> READ, WRITE -> NONE, READ -> READ, NONE -> NONE
+					// a process that keeps writing data may not have a chance to cache data such that make it NONE
+					printk("2inside force_sig_info, first from none; address %p is set to prot_read, ret: %d\n", address, ret);
+
 					//copy from user of this one page
 					if ((ret = copy_from_user (buf_theia, address, 4096))) {
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 					}
 					save_flag = true;
-//					save_to_cache_file(buf_theia);
-//					buf_theia[4096] = '\0';
-//					printk("buf_theia: %s\n", buf_theia);
-//					int i=0;
-//					for(i=0;i<4096;i++){
-//						printk("%02x", buf_theia[i]);
-//					}
-//					printk("\n");
 				}
 
 				//Notify this is a mem_read to the shared memory
 				ahg_mem_access = 1;
 			}
-
 			//This is the following mem access
 			else {
-				// if it is write attempt, we change protection to prot_write
-				if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
-					ret = sys_mprotect(address, 1, PROT_WRITE);
-					// change the prot of its own process and other processes to prot_write
-			//		ret = theia_mprotect_shared(mm, address, 1, PROT_WRITE);
-					broadcast_flag = true;
-					printk("broadcast_flag is set true\n");
-				}
-				// if it is read attempt, we change protection to prot_read
-				else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
-					ret = sys_mprotect(address, 1, PROT_READ);
-					printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", address, ret);
+                                if (error_code & PF_USER) {
+					//read attempt
+					ret = theia_mprotect_shared(mm, address, 1, PROT_READ);
+					printk("9inside force_sig_info, address %p is set to prot_read, ret: %d\n", address, ret);
 					//copy from user of this one page
 					if ((ret = copy_from_user (buf_theia, address, 4096))) {
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 					}
 					save_flag = true;
-//					save_to_cache_file(buf_theia);
-//					buf_theia[4096] = '\0';
-//					printk("buf_theia: %s\n", buf_theia);
-//					int i=0;
-//					for(i=0;i<4096;i++){
-//						printk("%02x", buf_theia[i]);
-//					}
-//					printk("\n");
 				}
 			}
 		}
-		//REPLAY
+		//REPLAY (theia_mprotect_shared may not be needed)
 		else if(t->replay_thrd) { // this is indeed p2, but with a hashed name
 			printk("in signal.c replay, id: %lld\n", t->rg_id);
 			action->sa.sa_handler = SIG_IGN;
@@ -1688,12 +1660,12 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 				if(error_code & PF_USER && error_code & PF_WRITE) {
 					//we expect segfault happens again
 					ret = sys_mprotect(address, 1, PROT_READ);
-					printk("inside force_sig_info, first from none; address %p is set to prot_READ, ret: %d\n", address, ret);
+					printk("3inside force_sig_info, first from none; address %p is set to prot_READ, ret: %d\n", address, ret);
 				}
 				else if(error_code & PF_USER && !(error_code & PF_WRITE)) {
 					//in order to dump the read page, we change protection to prot_write temporarily
 					ret = sys_mprotect(address, 1, PROT_WRITE);
-					printk("inside force_sig_info, address %p is set to prot_write temp, ret: %d\n", address, ret);
+					printk("4inside force_sig_info, address %p is set to prot_write temp, ret: %d\n", address, ret);
 //					load_from_cache_file(buf_theia);
 					load_flag =  true;
 
@@ -1701,7 +1673,7 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 					}
 					ret = sys_mprotect(address, 1, PROT_READ);
-					printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", address, ret);
+					printk("5inside force_sig_info, address %p is set to prot_read, ret: %d\n", address, ret);
 
 					buf_theia[4096] = '\0';
 					printk("buf_theia: %s\n", buf_theia);
@@ -1712,18 +1684,17 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 					printk("\n");
 				}
 			}
-
 			else {
 				// if it is write attempt, we change protection to prot_write
 				if(error_code & PF_USER && error_code & PF_WRITE) {
 					ret = sys_mprotect(address, 1, PROT_WRITE);
-					printk("inside force_sig_info, address %p is set to prot_write, ret: %d\n", address, ret);
+					printk("6inside force_sig_info, address %p is set to prot_write, ret: %d\n", address, ret);
 				}
 				// if it is read attempt, we change protection to prot_read
 				else if(error_code & PF_USER && !(error_code & PF_WRITE)) {
 					//in order to dump the read page, we change protection to prot_write temporarily
 					ret = sys_mprotect(address, 1, PROT_WRITE);
-					printk("inside force_sig_info, address %p is set to prot_write temp, ret: %d\n", address, ret);
+					printk("7inside force_sig_info, address %p is set to prot_write temp, ret: %d\n", address, ret);
 //					load_from_cache_file(buf_theia);
 					load_flag =  true;
 
@@ -1731,7 +1702,7 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 					}
 					ret = sys_mprotect(address, 1, PROT_READ);
-					printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", address, ret);
+					printk("8inside force_sig_info, address %p is set to prot_read, ret: %d\n", address, ret);
 				}
 			}
 		}
@@ -1759,10 +1730,12 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 		//need to increment counter for the buffered file
 	}
 
+/*
 	if(broadcast_flag) {
 		ret = theia_mprotect_shared(mm, address, 1, PROT_WRITE);
 		printk("inside force_sig_info, address %p and other processes are set to prot_write, ret: %d\n", address, ret);
 	}
+*/
 
 	//handle ahg transmission
 	if(ahg_mem_access == 1) {
