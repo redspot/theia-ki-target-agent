@@ -339,8 +339,9 @@ out:
 // obtain mm through parameter or use current->mm
 int theia_mprotect_shared(struct mm_struct *mm, unsigned long start, 
                           size_t len, unsigned long prot) {
-	unsigned long vm_flags, nstart, end, tmp, reqprot;
-	struct vm_area_struct *vma, *prev;
+
+	unsigned long vm_flags, vm_flags_none, nstart, end, tmp, reqprot;
+	struct vm_area_struct *vma, *cur_vma;
 
 	pgd_t *pgd;
 	pud_t *pud;
@@ -377,7 +378,8 @@ int theia_mprotect_shared(struct mm_struct *mm, unsigned long start,
 	if ((prot & PROT_READ) && (current->personality & READ_IMPLIES_EXEC))
 		prot |= PROT_EXEC;
 
-	vm_flags = calc_vm_prot_bits(prot);
+	vm_flags      = calc_vm_prot_bits(prot);
+	vm_flags_none = calc_vm_prot_bits(PROT_NONE);
 
 	pgd  = pgd_offset(mm, start);
 	if (pgd_none(*pgd) || pgd_bad(*pgd))
@@ -401,7 +403,7 @@ int theia_mprotect_shared(struct mm_struct *mm, unsigned long start,
 	if (!page)
 		goto out;
 
-	pgoff = page->index << compound_order(page); // SL: this is unclear
+	pgoff = page->index;
 	mapping = page->mapping;
 	printk("page address: %p, mapping address is %p,  pgoff %lu\n", page, mapping, pgoff);
 
@@ -414,35 +416,55 @@ int theia_mprotect_shared(struct mm_struct *mm, unsigned long start,
 //		}
 //	}
 //
-//	mutex_lock(&mapping->i_mmap_mutex);
-        // take a look at reverse mapping implementation
+
+	cur_vma = find_vma(mm, start);
+
+	mutex_lock(&mapping->i_mmap_mutex);
+
 	vma_prio_tree_foreach(vma, &iter, &mapping->i_mmap, pgoff, pgoff) {
-		unsigned long newflags, oldflags;
-		newflags = vm_flags | (vma->vm_flags & ~(VM_READ | VM_WRITE | VM_EXEC));
+                unsigned long other_start = vma->vm_start + ((pgoff - vma->vm_pgoff) >> PAGE_SHIFT);
+                unsigned long other_end   = other_start + PAGE_ALIGN(len);
+                printk("other process's address: %lx\n", other_start);
+
+		unsigned long oldflags, newflags;
 		oldflags = vma->vm_flags;
 
+		if (vma == cur_vma) { /* own permission */
+			newflags = vm_flags | (vma->vm_flags & ~(VM_READ | VM_WRITE | VM_EXEC));
+		}
+		else { /* other processes' permission */
+			if (prot == PROT_WRITE) { /* (WRITE, NONE): to cache this written data */
+				newflags = vm_flags_none | (vma->vm_flags & ~(VM_READ | VM_WRITE | VM_EXEC));
+			}
+			else { /* PROT_READ */
+				if (oldflags & VM_WRITE) { /* WRITE -> NONE, READ -> READ, NONE -> NONE */
+					newflags = vm_flags_none | (vma->vm_flags & ~(VM_READ | VM_WRITE | VM_EXEC));
+				}
+				else {
+					newflags = oldflags;
+				}
+			}
+		}
+
 		if (newflags != oldflags) {
+		        down_write(&(vma->vm_mm->mmap_sem));
+
 			vma->vm_flags     = newflags;
 			vma->vm_page_prot = pgprot_modify(vma->vm_page_prot,
 					vm_get_page_prot(newflags));
 
-			// SL: related with shared memory?
-			if (vma_wants_writenotify(vma)) {
-				vma->vm_page_prot = vm_get_page_prot(newflags & ~VM_SHARED);
-				// dirty_accountable = 1;
-			}
-
-			/* TLB flush
-				 mmu_notifier_invalidate_range_start(mm, start, end);
-				 if (is_vm_hugetlb_page(vma))
-				 hugetlb_change_protection(vma, start, end, vma->vm_page_prot);
-				 else
-				 change_protection(vma, start, end, vma->vm_page_prot, dirty_accountable);
-				 mmu_notifier_invalidate_range_end(mm, start, end);
-				 vm_stat_account(mm, oldflags, vma->vm_file, -nrpages);
-				 vm_stat_account(mm, newflags, vma->vm_file, nrpages);
-				 perf_event_mmap(vma);
-			 */
+			mmu_notifier_invalidate_range_start(vma->vm_mm, other_start, other_end);
+			if (is_vm_hugetlb_page(vma))
+				hugetlb_change_protection(vma, other_start, other_end, vma->vm_page_prot);
+			else
+				change_protection(vma, other_start, other_end, vma->vm_page_prot, 0);
+			mmu_notifier_invalidate_range_end(vma->vm_mm, other_start, other_end);
+			up_write(&(vma->vm_mm->mmap_sem));
+			printk("2vma->start: %p, end: %p, current page prot: %lu, vm_flags: %lu\n", 
+				vma->vm_start,vma->vm_end,pgprot_val(vma->vm_page_prot), vma->vm_flags);
+//			vm_stat_account(mm, oldflags, vma->vm_file, -nrpages);
+//			vm_stat_account(mm, newflags, vma->vm_file, nrpages);
+//			perf_event_mmap(vma);
 		}
 	}
 
