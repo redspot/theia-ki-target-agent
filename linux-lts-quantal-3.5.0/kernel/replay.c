@@ -7294,10 +7294,23 @@ record_read (unsigned int fd, char __user * buf, size_t count)
 	perftimer_start(read_cache_timer);
 	is_cache_file |= is_record_cache_file_lock(current->record_thrd->rp_cache_files, fd);
 
+	// TODO: corner case: kernel writes data into shared memory (TA5's test case)
+	// what else? recvmsg, ...
+	struct vm_area_struct *vma = find_vma(current->mm, buf);
+	bool shared_none = false;
+	if (vma->vm_flags & VM_SHARED && !(vma->vm_flags & VM_WRITE)) {
+		err = sys_mprotect(buf, count, PROT_WRITE);
+		shared_none = true;
+		printk("record_read: a buffer for read() is a shared memory (%p)\n", buf);
+        }
+
 	perftimer_stop(read_cache_timer);
 	perftimer_start(read_sys_timer);
 	rc = sys_read (fd, buf, count);
 	perftimer_stop(read_sys_timer);
+
+	if (shared_none)
+		err = sys_mprotect(buf, count, PROT_NONE);
 
 	//Yang
 	theia_read_ahg(fd, rc, current->record_thrd->rp_precord_clock);
