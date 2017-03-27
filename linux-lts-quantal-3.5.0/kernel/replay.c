@@ -15127,6 +15127,8 @@ u_long flags, u_long pgoff, long rc, u_long clock) {
 
 }
 
+#define VM_FILE_PATH_LEN 30
+
 static asmlinkage long 
 record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff)
 {
@@ -15134,7 +15136,8 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 	int ret;
 	struct mmap_pgoff_retvals* recbuf = NULL;
 
-	char vm_file_path[30];
+	char vm_file_path[VM_FILE_PATH_LEN];
+	memset(vm_file_path, NULL, VM_FILE_PATH_LEN);
 	
 	rg_lock(current->record_thrd->rp_group);
 	new_syscall_enter (192);
@@ -15160,18 +15163,30 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 			recbuf = ARGSKMALLOC(sizeof(struct mmap_pgoff_retvals), GFP_KERNEL);
 			add_file_to_cache (vma->vm_file, &recbuf->dev, &recbuf->ino, &recbuf->mtime);
 			printk("record_mmap_pgoff: rc: %lx, vm_file->fdentry->d_iname: %s, prot: %lu.\n", rc, vma->vm_file->f_dentry->d_iname, prot);
-			sprintf(vm_file_path, "%s", vma->vm_file->f_dentry->d_iname);
+			//			sprintf(vm_file_path, "%s", vma->vm_file->f_dentry->d_iname);
+			
+			dentry_path_raw(vma->vm_file->f_dentry, vm_file_path, VM_FILE_PATH_LEN);
+			printk("dentry_path_raw: %s\n", vm_file_path); // this will be NULL if vm_file is under /dev/shm
+			if (vm_file_path[0] == '\0') {
+				sprintf(vm_file_path, "%s", vma->vm_file->f_dentry->d_iname);				
+			}
 		}
 		up_read(&mm->mmap_sem);
 	}
 
+	//	if (flags & MAP_SHARED && vm_file_path[0] != '/') { /* uncomment it after doing enough tests */
 	if(strcmp(vm_file_path, "myregion1") == 0) {
 		// enforce page allocation
 		int __user *address = rc;
-		address[0] = 0;
-		
-		ret = sys_mprotect(rc, len, PROT_NONE);
-		printk("protection about myregion1 will be changed, ret %d\n", ret);
+
+		// TODO: bookeeping vma and prot (read only, read and write, exec)
+
+		ret = sys_mprotect(rc, len, PROT_WRITE);
+		if (!ret) {
+			address[0] = 0;
+			ret = sys_mprotect(rc, len, PROT_NONE);
+			printk("protection about myregion1 will be changed, ret %d\n", ret);			
+		}
 	}
 
 	DPRINT ("Pid %d records mmap_pgoff with addr %lx len %lx prot %lx flags %lx fd %ld ret %lx\n", current->pid, addr, len, prot, flags, fd, rc);

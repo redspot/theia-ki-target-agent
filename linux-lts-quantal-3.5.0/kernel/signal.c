@@ -1603,6 +1603,7 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	if(t->record_thrd || t->replay_thrd) {
 		printk("t->comm: %s\n", t->comm);
 		//RECORD
+		//		if (t->record_thrd) { /* uncomment it after doing enough tests */		
 		if(t->record_thrd && (strcmp(t->comm, "p3") == 0 || strcmp(t->comm, "p4") == 0) ) {
 			printk("in signal.c record, id: %lld\n", t->rg_id);
 			action->sa.sa_handler = SIG_IGN;
