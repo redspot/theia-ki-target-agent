@@ -1603,8 +1603,8 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	if(t->record_thrd || t->replay_thrd) {
 		printk("t->comm: %s\n", t->comm);
 		//RECORD
-		//		if (t->record_thrd) { /* uncomment it after doing enough tests */		
-		if(t->record_thrd && (strcmp(t->comm, "p3") == 0 || strcmp(t->comm, "p4") == 0) ) {
+		if (t->record_thrd) { /* uncomment it after doing enough tests */		
+			//		if(t->record_thrd && (strcmp(t->comm, "p3") == 0 || strcmp(t->comm, "p4") == 0) ) {
 			printk("in signal.c record, id: %lld\n", t->rg_id);
 			action->sa.sa_handler = SIG_IGN;
 
@@ -1641,8 +1641,9 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 				}
 				// if it is read attempt, we change protection to prot_read
 				else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
-					ret = theia_mprotect_shared(mm, address, 1, PROT_READ);
-					printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", address, ret);
+					//					ret = theia_mprotect_shared(mm, address, 1, PROT_READ);
+					ret = theia_mprotect_shared(mm, address, 1, PROT_READ|PROT_EXEC);					
+					printk("inside force_sig_info, address %p is set to prot_read|exec, ret: %d\n", address, ret);
 					//copy from user of this one page
 					if ((ret = copy_from_user (buf_theia, address, 4096))) {
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);

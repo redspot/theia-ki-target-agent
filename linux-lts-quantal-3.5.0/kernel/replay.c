@@ -4288,7 +4288,12 @@ record_signal_delivery (int signr, siginfo_t* info, struct k_sigaction* ka)
 	struct repsignal_context* pcontext;
 	struct pthread_log_head* phead = (struct pthread_log_head __user *) prt->rp_user_log_addr;
 	int ignore_flag, need_fake_calls = 1;
+
+	printk("SLSL: 0\n");
+	
 	int sysnum = syscall_get_nr(current, get_pt_regs(NULL));
+
+	printk("SLSL: 1\n");
 
 	if (prt->rp_ignore_flag_addr) {
 		get_user (ignore_flag, prt->rp_ignore_flag_addr);
@@ -4296,9 +4301,13 @@ record_signal_delivery (int signr, siginfo_t* info, struct k_sigaction* ka)
 		ignore_flag = 0;
 	}
 
+	printk("SLSL: 2\n");	
+
         MPRINT ("Pid %d recording signal delivery signr %d fatal %d - clock is currently %d ignore flag %d sysnum %d psr->sysnum %d handler %p\n", 
 		current->pid, signr, sig_fatal(current, signr), atomic_read(prt->rp_precord_clock), ignore_flag, sysnum, psr->sysnum, ka->sa.sa_handler);
 
+	printk("SLSL: 3\n");	
+	
 	// Note that a negative sysnum means we entered kernel via trap, interrupt, etc.  It is not safe to deliver a signal here, even in the ignore region because
 	// We might be in a user-level critical section where we are adding to the log.  Instead, defer and deliver later if possible.
 	if (ignore_flag && sysnum >= 0) {
@@ -15127,8 +15136,6 @@ u_long flags, u_long pgoff, long rc, u_long clock) {
 
 }
 
-#define VM_FILE_PATH_LEN 30
-
 static asmlinkage long 
 record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff)
 {
@@ -15136,8 +15143,10 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 	int ret;
 	struct mmap_pgoff_retvals* recbuf = NULL;
 
-	char vm_file_path[VM_FILE_PATH_LEN];
-	memset(vm_file_path, NULL, VM_FILE_PATH_LEN);
+	char vm_file_path[PATH_MAX];
+	char *path = NULL;
+	bool is_shmem = false;
+	memset(vm_file_path, '\0', PATH_MAX);
 	
 	rg_lock(current->record_thrd->rp_group);
 	new_syscall_enter (192);
@@ -15165,17 +15174,25 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 			printk("record_mmap_pgoff: rc: %lx, vm_file->fdentry->d_iname: %s, prot: %lu.\n", rc, vma->vm_file->f_dentry->d_iname, prot);
 			//			sprintf(vm_file_path, "%s", vma->vm_file->f_dentry->d_iname);
 			
-			dentry_path_raw(vma->vm_file->f_dentry, vm_file_path, VM_FILE_PATH_LEN);
-			printk("dentry_path_raw: %s\n", vm_file_path); // this will be NULL if vm_file is under /dev/shm
-			if (vm_file_path[0] == '\0') {
-				sprintf(vm_file_path, "%s", vma->vm_file->f_dentry->d_iname);				
+			path = dentry_path(vma->vm_file->f_dentry, vm_file_path, PATH_MAX-1);
+			if (!IS_ERR(path)) {
+				printk("dentry_path: %s, %p\n", path, vma->vm_file->f_dentry->d_parent);
+			}
+			else {
+				printk("dentry_path returned an error!\n");
+			}
+
+			if (!strcmp(path+1, vma->vm_file->f_dentry->d_iname)) {
+				// a share memory looks like /myregion1
+				// TODO: detect whether it belogns to tmpfs
+				is_shmem = true;
 			}
 		}
 		up_read(&mm->mmap_sem);
 	}
 
-	//	if (flags & MAP_SHARED && vm_file_path[0] != '/') { /* uncomment it after doing enough tests */
-	if(strcmp(vm_file_path, "myregion1") == 0) {
+	if (strcmp(path, "/myregion1") == 0) {
+		//	if (flags & MAP_SHARED && is_shmem) { /* works with firefox, but still has a problem with gnome-terminal
 		// enforce page allocation
 		int __user *address = rc;
 
@@ -15185,7 +15202,7 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 		if (!ret) {
 			address[0] = 0;
 			ret = sys_mprotect(rc, len, PROT_NONE);
-			printk("protection about myregion1 will be changed, ret %d\n", ret);			
+			printk("protection of a shared page (%p) will be changed, ret %d\n", address, ret);			
 		}
 	}
 
