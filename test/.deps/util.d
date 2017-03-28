@@ -15,7 +15,7 @@ util.o: util.c /usr/include/i386-linux-gnu/sys/ioctl.h \
  /usr/include/i386-linux-gnu/bits/typesizes.h /usr/include/time.h \
  /usr/include/i386-linux-gnu/bits/stat.h \
  /usr/include/i386-linux-gnu/sys/types.h \
- /usr/lib/gcc/i686-linux-gnu/4.6/include/stddef.h /usr/include/endian.h \
+ /usr/lib/gcc/i686-linux-gnu/4.9/include/stddef.h /usr/include/endian.h \
  /usr/include/i386-linux-gnu/bits/endian.h \
  /usr/include/i386-linux-gnu/bits/byteswap.h \
  /usr/include/i386-linux-gnu/sys/select.h \
@@ -45,7 +45,7 @@ util.o: util.c /usr/include/i386-linux-gnu/sys/ioctl.h \
  /usr/include/i386-linux-gnu/bits/waitflags.h \
  /usr/include/i386-linux-gnu/bits/waitstatus.h /usr/include/xlocale.h \
  /usr/include/stdio.h /usr/include/libio.h /usr/include/_G_config.h \
- /usr/include/wchar.h /usr/lib/gcc/i686-linux-gnu/4.6/include/stdarg.h \
+ /usr/include/wchar.h /usr/lib/gcc/i686-linux-gnu/4.9/include/stdarg.h \
  /usr/include/i386-linux-gnu/bits/stdio_lim.h \
  /usr/include/i386-linux-gnu/bits/sys_errlist.h /usr/include/stdlib.h \
  /usr/include/alloca.h /usr/include/string.h /usr/include/errno.h \
@@ -56,5 +56,5 @@ util.o: util.c /usr/include/i386-linux-gnu/sys/ioctl.h \
  /usr/include/i386-linux-gnu/bits/posix_opt.h \
  /usr/include/i386-linux-gnu/bits/environments.h \
  /usr/include/i386-linux-gnu/bits/confname.h /usr/include/getopt.h util.h \
- /usr/lib/gcc/i686-linux-gnu/4.6/include/stdint.h /usr/include/stdint.h \
+ /usr/lib/gcc/i686-linux-gnu/4.9/include/stdint.h /usr/include/stdint.h \
  /usr/include/i386-linux-gnu/bits/wchar.h dev/devspec.h

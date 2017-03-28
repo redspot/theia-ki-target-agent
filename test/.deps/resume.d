@@ -8,9 +8,9 @@ resume.o: resume.c /usr/include/getopt.h /usr/include/ctype.h \
  /usr/include/i386-linux-gnu/bits/typesizes.h /usr/include/endian.h \
  /usr/include/i386-linux-gnu/bits/endian.h \
  /usr/include/i386-linux-gnu/bits/byteswap.h /usr/include/xlocale.h \
- /usr/include/stdio.h /usr/lib/gcc/i686-linux-gnu/4.6/include/stddef.h \
+ /usr/include/stdio.h /usr/lib/gcc/i686-linux-gnu/4.9/include/stddef.h \
  /usr/include/libio.h /usr/include/_G_config.h /usr/include/wchar.h \
- /usr/lib/gcc/i686-linux-gnu/4.6/include/stdarg.h \
+ /usr/lib/gcc/i686-linux-gnu/4.9/include/stdarg.h \
  /usr/include/i386-linux-gnu/bits/stdio_lim.h \
  /usr/include/i386-linux-gnu/bits/sys_errlist.h /usr/include/fcntl.h \
  /usr/include/i386-linux-gnu/bits/fcntl.h \
@@ -28,5 +28,5 @@ resume.o: resume.c /usr/include/getopt.h /usr/include/ctype.h \
  /usr/include/i386-linux-gnu/bits/waitflags.h \
  /usr/include/i386-linux-gnu/bits/waitstatus.h /usr/include/alloca.h \
  /usr/include/string.h util.h \
- /usr/lib/gcc/i686-linux-gnu/4.6/include/stdint.h /usr/include/stdint.h \
+ /usr/lib/gcc/i686-linux-gnu/4.9/include/stdint.h /usr/include/stdint.h \
  /usr/include/i386-linux-gnu/bits/wchar.h /usr/include/assert.h
