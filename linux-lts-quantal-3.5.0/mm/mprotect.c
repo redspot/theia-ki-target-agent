@@ -432,6 +432,10 @@ int theia_mprotect_shared(struct mm_struct *mm, unsigned long start,
 		if (vma == cur_vma) { /* own permission */
 			newflags = vm_flags | (vma->vm_flags & ~(VM_READ | VM_WRITE | VM_EXEC));
 		}
+		else if (vma->vm_mm->owner->record_thrd == 0 && vma->vm_mm->owner->replay_thrd == 0) {
+			// don't try to change the VMAs of unmonitored processes
+			continue;
+		}
 		else { /* other processes' permission */
 			if (prot == PROT_WRITE) { /* (WRITE, NONE): to cache this written data */
 				newflags = vm_flags_none | (vma->vm_flags & ~(VM_READ | VM_WRITE | VM_EXEC));
