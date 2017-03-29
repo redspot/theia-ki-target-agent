@@ -15174,25 +15174,24 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 			printk("record_mmap_pgoff: rc: %lx, vm_file->fdentry->d_iname: %s, prot: %lu.\n", rc, vma->vm_file->f_dentry->d_iname, prot);
 			//			sprintf(vm_file_path, "%s", vma->vm_file->f_dentry->d_iname);
 			
-			path = dentry_path(vma->vm_file->f_dentry, vm_file_path, PATH_MAX-1);
+			path = d_path(&(vma->vm_file->f_path), vm_file_path, PATH_MAX);
 			if (!IS_ERR(path)) {
-				printk("dentry_path: %s, %p\n", path, vma->vm_file->f_dentry->d_parent);
+				printk("d_path: %s\n", path);
 			}
 			else {
-				printk("dentry_path returned an error!\n");
+				printk("d_path returned an error!\n");
 			}
 
-			if (!strcmp(path+1, vma->vm_file->f_dentry->d_iname)) {
-				// a share memory looks like /myregion1
-				// TODO: detect whether it belogns to tmpfs
+			if (!strncmp(path, "/run/shm/", 9)) {
+				// shared memory under /dev/shm
 				is_shmem = true;
 			}
 		}
 		up_read(&mm->mmap_sem);
 	}
 
-	if (strcmp(path, "/myregion1") == 0) {
-		//	if (flags & MAP_SHARED && is_shmem) { /* works with firefox, but still has a problem with gnome-terminal
+	//	if (strcmp(path, "/myregion1") == 0) {
+	if (flags & MAP_SHARED && is_shmem) {
 		// enforce page allocation
 		int __user *address = rc;
 
