@@ -422,8 +422,12 @@ int theia_mprotect_shared(struct mm_struct *mm, unsigned long start,
 	mutex_lock(&mapping->i_mmap_mutex);
 
 	vma_prio_tree_foreach(vma, &iter, &mapping->i_mmap, pgoff, pgoff) {
+		/*
                 unsigned long other_start = vma->vm_start + ((pgoff - vma->vm_pgoff) >> PAGE_SHIFT);
                 unsigned long other_end   = other_start + PAGE_ALIGN(len);
+		*/
+                unsigned long other_start = vma->vm_start;
+                unsigned long other_end   = vma->vm_end;
                 printk("other process's address: %lx\n", other_start);
 
 		unsigned long oldflags, newflags;
@@ -466,9 +470,6 @@ int theia_mprotect_shared(struct mm_struct *mm, unsigned long start,
 			up_write(&(vma->vm_mm->mmap_sem));
 			printk("2vma->start: %p, end: %p, current page prot: %lu, vm_flags: %lu\n", 
 				vma->vm_start,vma->vm_end,pgprot_val(vma->vm_page_prot), vma->vm_flags);
-//			vm_stat_account(mm, oldflags, vma->vm_file, -nrpages);
-//			vm_stat_account(mm, newflags, vma->vm_file, nrpages);
-//			perf_event_mmap(vma);
 		}
 	}
 

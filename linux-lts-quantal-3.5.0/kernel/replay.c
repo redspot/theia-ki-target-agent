@@ -15150,6 +15150,11 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 	
 	rg_lock(current->record_thrd->rp_group);
 	new_syscall_enter (192);
+
+	if (flags & MAP_SHARED) {
+		flags = flags | MAP_POPULATE;
+	}
+
 	rc = sys_mmap_pgoff (addr, len, prot, flags, fd, pgoff);
 	printk("mmap record is done. rc:%lx\n", rc);
 //Yang
@@ -15190,18 +15195,26 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 		up_read(&mm->mmap_sem);
 	}
 
-	//	if (strcmp(path, "/myregion1") == 0) {
 	if (flags & MAP_SHARED && is_shmem) {
 		// enforce page allocation
-		int __user *address = rc;
+		int __user *address = NULL;
 
 		// TODO: bookeeping vma and prot (read only, read and write, exec)
 
+		int np = len / 0x1000;
+		if (len % 0x1000)
+			++np;
+
 		ret = sys_mprotect(rc, len, PROT_WRITE);
 		if (!ret) {
-			address[0] = 0;
+			int i;
+			for (i = 0; i < np; ++i) {
+				address = (int __user *)(rc + i*0x1000);
+				*address = *address;
+			}
+			
 			ret = sys_mprotect(rc, len, PROT_NONE);
-			printk("protection of a shared page (%p) will be changed, ret %d\n", address, ret);			
+			printk("protection of a shared page will be changed, ret %d\n", ret);			
 		}
 	}
 

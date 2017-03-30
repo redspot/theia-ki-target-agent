@@ -1567,6 +1567,18 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 		}
 	}
 
+/*
+	if (!(error_code & PF_USER)) {
+//	if (error_code & PF_PROT == 0 || error_code & PF_USER == 0) {
+		if (action->sa.sa_handler == SIG_DFL)
+			t->signal->flags &= ~SIGNAL_UNKILLABLE;
+		ret = specific_send_sig_info(sig, info, t);
+		spin_unlock_irqrestore(&t->sighand->siglock, flags);
+
+		return ret;
+	}
+*/
+
 	unsigned long address_ul = (unsigned long)address;
 	vma = find_vma(mm, address_ul);
 	protection = pgprot_val(vma->vm_page_prot);
