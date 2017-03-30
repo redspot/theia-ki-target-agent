@@ -8597,6 +8597,8 @@ struct execve_retvals {
 struct execve_ahgv {
 	int							pid;
   char            filename[204];
+  char            envp[3000];
+	int							is_user_remote;
 };
 
 void packahgv_execve (struct execve_ahgv sys_args) {
@@ -8607,15 +8609,15 @@ void packahgv_execve (struct execve_ahgv sys_args) {
 		get_curr_time(&sec, &nsec);
 		char ids[50];
 		get_ids(ids);
-		int size = sprintf(buf, "startahg|%d|%d|%s|%s|%d|%ld|%ld|endahg\n", 
-				11, sys_args.pid, ids, sys_args.filename, current->tgid, sec, nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%s|%s|%d|%d|%ld|%ld|endahg\n", 
+				11, sys_args.pid, ids, sys_args.filename, sys_args.is_user_remote, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
 		printk("theia_chan invalid\n");
 }
 
-void theia_execve_ahg(const char *filename) {
+void theia_execve_ahg(const char *filename, const char __user *const __user *envp) {
 	int ret;
   struct execve_ahgv* pahgv = NULL;
 
@@ -8664,6 +8666,17 @@ void theia_execve_ahg(const char *filename) {
   }
 
 	set_fs(old_fs);                                                              
+	int copied_length = 0;
+	if ((copied_length = strncpy_from_user(pahgv->envp, envp, sizeof(pahgv->envp))) != strlen(envp)) {
+		printk ("theia_execve_ahg: can't copy envp to ahgv, envp length %d, copied %d, envp:%s\n", strlen(envp), copied_length, envp); 
+		KFREE(pahgv);	
+	}
+	if (strstr(pahgv->envp, "SSH_CONNECTION") != NULL) {
+		pahgv->is_user_remote = 1;
+	}
+	else
+		pahgv->is_user_remote = 0;
+		
 
 	pahgv = (struct execve_ahgv*)KMALLOC(sizeof(struct execve_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {
@@ -8737,7 +8750,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 	}
 
 	//Yang
-	theia_execve_ahg(filename);
+	theia_execve_ahg(filename, __envp);
 
 	new_syscall_done (11, rc);
 	if (rc >= 0) {
@@ -9012,7 +9025,7 @@ int theia_sys_execve(const char *filename, const char __user *const __user *__ar
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
 	{ 
-		theia_execve_ahg(filename);
+		theia_execve_ahg(filename, __envp);
 	}
 	return rc;
 }
@@ -9030,7 +9043,7 @@ int theia_start_record(const char *filename, const char __user *const __user *__
   if(strcmp(filename, whitelist1) != 0) { //we only record the whitelisted processes
     //printk("theia_start_record, execve filename: %s, not in whitelist\n", filename);
     rc = do_execve(filename, __argv, __envp, regs);                                 
-		theia_execve_ahg(filename);
+		theia_execve_ahg(filename,__envp);
 		return rc;
   }                                                                                   
   printk("theia_start_record, execve filename: %s, in whitelist !\n", filename); 
@@ -9045,7 +9058,7 @@ int theia_start_record(const char *filename, const char __user *const __user *__
     printk("/dev/spec0 not ready yet. ret %d\n", ret);
     set_fs(old_fs);
     rc = do_execve(filename, __argv, __envp, regs);                                 
-		theia_execve_ahg(filename);
+		theia_execve_ahg(filename, __envp);
 		return rc;
   }
 
@@ -9069,7 +9082,7 @@ int theia_start_record(const char *filename, const char __user *const __user *__
       printk("[theia_start_record]open /dev/spec0 failed\n");
       set_fs(old_fs);
 			rc = do_execve(filename, __argv, __envp, regs);                                 
-			theia_execve_ahg(filename);
+			theia_execve_ahg(filename, __envp);
 			return rc;
     }
 
@@ -15641,8 +15654,10 @@ void packahgv_setuid (struct setuid_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%lu|%ld|%ld|endahg\n", 
-				213, sys_args.pid, sys_args.newuid, sys_args.rc, current->tgid, 
+		char ids[50];
+		get_ids(ids);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%lu|%ld|%ld|endahg\n", 
+				213, sys_args.pid, sys_args.newuid, ids, sys_args.rc, current->tgid, 
 				sys_args.clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
