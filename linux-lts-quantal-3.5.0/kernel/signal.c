@@ -1288,10 +1288,6 @@ struct replay_thread;
 struct record_thread;
 struct record_group;
 
-char buf_theia[4097];
-unsigned long shared_page_count = 0;
-
-
 //Yang
 
 struct shr_read_ahgv {
@@ -1459,14 +1455,16 @@ void theia_shrwrite_ahg(unsigned int address, u_long clock) {
 
 }
 
-void save_to_cache_file(char* buf) {
+void save_to_cache_file(char* buf, size_t buf_len, unsigned long start) {
 	int fd;
 	struct file* file;
 	loff_t pos = 0;
 	int written = 0;
 	char filename[50];
 
-	sprintf (filename, "/replay_cache/shr_cache_%lld_%lu", current->rg_id, shared_page_count);
+	sprintf (filename, "/replay_cache/shr_cache_%lld_%lu", current->rg_id, current->rg_shm_count);
+
+	++(current->rg_shm_count);
 
 	mm_segment_t old_fs = get_fs();
 	set_fs(KERNEL_DS);
@@ -1480,10 +1478,13 @@ void save_to_cache_file(char* buf) {
 		return;
 	}
 	printk("2 shr_cache filename: %s, fd %d\n", filename, fd);
-	written = vfs_write(file, buf, PAGE_SIZE, &pos);
+	//written = vfs_write(file, buf, PAGE_SIZE, &pos);
+	pos = vfs_write(file, &start, sizeof(unsigned long), &pos);
+	written = vfs_write(file, buf, buf_len, &pos);
 
 	set_fs(old_fs);
-	if(written != PAGE_SIZE) {
+//	if(written != PAGE_SIZE) {
+	if(written != buf_len) {
 		printk ("write_shr_cache: tried to write %d, got %ld\n", PAGE_SIZE, written);
 		return;
 	}
@@ -1505,7 +1506,9 @@ void load_from_cache_file(char* buf) {
 	set_fs(KERNEL_DS);
 	set_fs(get_ds());
 
-	sprintf (filename, "/replay_cache/shr_cache_%lld_%lu", current->rg_id, shared_page_count);
+	sprintf (filename, "/replay_cache/shr_cache_%lld_%lu", current->rg_id, current->rg_shm_count);
+	++(current->rg_shm_count);
+
 	fd = sys_open(filename, O_RDWR, 0);
 	file = fget(fd);
 	if (file == NULL) {
@@ -1542,6 +1545,9 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	bool save_flag = false;
 //	bool load_flag = false;
 	int ahg_mem_access = 0; //0:no need; 1:read; 2:write;
+	
+	char *buf_theia = NULL;
+	size_t buf_theia_len = 0;
 
 	printk("error code: %lu\n", error_code);
 
@@ -1567,11 +1573,29 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 		}
 	}
 
+/*
+	if (!(error_code & PF_USER)) {
+//	if (error_code & PF_PROT == 0 || error_code & PF_USER == 0) {
+		if (action->sa.sa_handler == SIG_DFL)
+			t->signal->flags &= ~SIGNAL_UNKILLABLE;
+		ret = specific_send_sig_info(sig, info, t);
+		spin_unlock_irqrestore(&t->sighand->siglock, flags);
+
+		return ret;
+	}
+*/
+
 	unsigned long address_ul = (unsigned long)address;
 	vma = find_vma(mm, address_ul);
 	protection = pgprot_val(vma->vm_page_prot);
 	printk("vma->start: %p, end: %p, current page prot: %lu, vm_flags: %lu\n", 
 				vma->vm_start,vma->vm_end,pgprot_val(vma->vm_page_prot), vma->vm_flags);
+
+	buf_theia_len = vma->vm_end - vma->vm_start;
+	printk("buf_theia_len: %u\n", buf_theia_len);
+	buf_theia = (char*)vmalloc(buf_theia_len+1);
+
+	void __user *vma_address = (void __user*)vma->vm_start;
 
 	if( ret >= 0 && !(t->record_thrd || t->replay_thrd)) { 
 		action->sa.sa_handler = SIG_IGN;
@@ -1623,7 +1647,8 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 					printk("inside force_sig_info, first from none; address %p is set to prot_read, ret: %d\n", address, ret);
 
 					//copy from user of this one page
-					if ((ret = copy_from_user (buf_theia, address, 4096))) {
+//					if ((ret = copy_from_user (buf_theia, address, 4096))) {
+					if ((ret = copy_from_user (buf_theia, vma_address, buf_theia_len))) {
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 					}
 					save_flag = true;
@@ -1645,7 +1670,8 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 					ret = theia_mprotect_shared(mm, address, 1, PROT_READ|PROT_EXEC);					
 					printk("inside force_sig_info, address %p is set to prot_read|exec, ret: %d\n", address, ret);
 					//copy from user of this one page
-					if ((ret = copy_from_user (buf_theia, address, 4096))) {
+//					if ((ret = copy_from_user (buf_theia, address, 4096))) {
+					if ((ret = copy_from_user (buf_theia, vma_address, buf_theia_len))) {
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 					}
 					save_flag = true;
@@ -1718,8 +1744,10 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 
 	if(save_flag) {	
 		//write to cache file
-		save_to_cache_file(buf_theia);
+		save_to_cache_file(buf_theia, buf_theia_len, vma->vm_start);
 		//					write_shr_cache(buf_theia, 4096);
+
+		/*
 		buf_theia[4096] = '\0';
 		printk("buf_theia: %s\n", buf_theia);
 		int i=0;
@@ -1727,6 +1755,7 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 			printk("%02x", buf_theia[i]);
 		}
 		printk("\n");
+		*/
 	}
 
 /*
@@ -1742,6 +1771,8 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	else if(ahg_mem_access == 2) {
 		theia_shrwrite_ahg(address, 0);	
 	}
+
+	vfree(buf_theia);
 
 	return ret;
 out:
