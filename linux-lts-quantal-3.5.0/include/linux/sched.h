@@ -1592,6 +1592,8 @@ struct task_struct {
 	struct replay_thread*        replay_thrd; /* REPLAY */
 	struct record_thread*        record_thrd; /* REPLAY */
 
+	__u64 rg_shm_count; /* count shared vma reads */
+
 	__u64 rg_id;
 };
 
