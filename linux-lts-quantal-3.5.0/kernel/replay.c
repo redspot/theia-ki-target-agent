@@ -3578,6 +3578,50 @@ get_libpath (const char __user* const __user* env)
 	return NULL;
 }
 
+static char* 
+get_ssh_conn(const char __user* const __user* env)
+{
+	const char __user *const __user *up;
+	const char __user * pc;
+	char tokbuf[15];
+	char* retbuf;
+	u_long len;
+
+	up = env;
+	do {
+		if (get_user (pc, up)) {
+			printk ("copy_args: invalid env value\n");
+			return NULL;
+		}
+		if (pc == 0) break; // No more args
+		if (strncpy_from_user (tokbuf, pc, sizeof(tokbuf)) != sizeof(tokbuf)) {
+			up++;
+			continue;
+		}
+		if (memcmp(tokbuf,"SSH_CONNECTION=", sizeof(tokbuf))) {
+			up++;
+			continue;
+		}
+		len = strnlen_user(pc, 4096);
+		if (len > 4096) {
+			printk ("get_ssh_conn: path too long\n");
+			return NULL;
+		}
+		retbuf = KMALLOC (len, GFP_KERNEL);
+		if (retbuf == NULL) {
+			printk ("get_ssh_conn cannot allocate buffer\n");
+			return NULL;
+		}
+		if (copy_from_user (retbuf, pc, len)) {
+			printk ("get_ssh_conn cannot copy path from user\n");
+			return NULL;
+		}
+		return retbuf;
+	} while (1);
+
+	return NULL;
+}
+
 // Checks to see if matching libpath is present in arg/env buffer - returns 0 if true, index if no match, -1 if not present
 static int
 is_libpath_present (struct record_group* prg, char* p)
@@ -8616,7 +8660,8 @@ void packahgv_execve (struct execve_ahgv sys_args) {
 		printk("theia_chan invalid\n");
 }
 
-void theia_execve_ahg(const char *filename, const char __user *const __user *envp) {
+// void theia_execve_ahg(const char *filename, const char __user *const __user *envp) {
+void theia_execve_ahg(const char *filename, char *ssh_conn) {
 	int ret;
   struct execve_ahgv* pahgv = NULL;
 
@@ -8678,6 +8723,14 @@ void theia_execve_ahg(const char *filename, const char __user *const __user *env
 //	}
 //	else
 //		pahgv->is_user_remote = 0;
+
+	if (ssh_conn) {
+		printk("%s\n", ssh_conn);
+		pahgv->is_user_remote = 1;
+	}
+	else {
+		pahgv->is_user_remote = 0;
+	}
 		
 
 	pahgv = (struct execve_ahgv*)KMALLOC(sizeof(struct execve_ahgv), GFP_KERNEL);
@@ -8709,6 +8762,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 	char* argbuf, *newbuf;
 	int argbuflen, present;
 	char** env;
+	char *ssh_conn;
 	mm_segment_t old_fs;
 #ifdef TIME_TRICK
 	struct timeval tv;
@@ -8730,6 +8784,8 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 #endif
 	// Have to copy arguments out before address space goes away - we will likely need them later
 	argbuf = copy_args (__argv, __envp, &argbuflen, NULL, 0);
+
+	ssh_conn = get_ssh_conn(__envp);
 
 	// Hack to support multiple glibcs - make sure that LD_LIBRARY_PATH is in there
 	present = is_libpath_present (current->record_thrd->rp_group, argbuf);
@@ -8753,7 +8809,9 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 	}
 
 	//Yang
-	theia_execve_ahg(filename, __envp);
+//	theia_execve_ahg(filename, __envp);
+	theia_execve_ahg(filename, ssh_conn);
+	KFREE(ssh_conn);
 
 	new_syscall_done (11, rc);
 	if (rc >= 0) {
@@ -9023,12 +9081,17 @@ replay_execve(const char *filename, const char __user *const __user *__argv, con
 
 int theia_sys_execve(const char *filename, const char __user *const __user *__argv, const char __user *const __user *__envp, struct pt_regs *regs) {
 	long rc;
+
+	char *ssh_conn = NULL;
+	ssh_conn = get_ssh_conn(__envp);
+
 	rc = do_execve(filename, __argv, __envp, regs);
 
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
 	{ 
-		theia_execve_ahg(filename, __envp);
+		theia_execve_ahg(filename, ssh_conn);
+		KFREE(ssh_conn);
 	}
 	return rc;
 }
@@ -9037,7 +9100,10 @@ int theia_start_record(const char *filename, const char __user *const __user *__
   // white list according to the filename
   int ret;
   int fd;
-	long rc;
+  long rc;
+
+  char *ssh_conn = NULL;
+  ssh_conn = get_ssh_conn(__envp);
 
   const char *whitelist1;                                                             
   //whitelist1 = "/home/yang/tests/hello";                                              
@@ -9046,8 +9112,9 @@ int theia_start_record(const char *filename, const char __user *const __user *__
   if(strcmp(filename, whitelist1) != 0) { //we only record the whitelisted processes
     //printk("theia_start_record, execve filename: %s, not in whitelist\n", filename);
     rc = do_execve(filename, __argv, __envp, regs);                                 
-		theia_execve_ahg(filename,__envp);
-		return rc;
+    theia_execve_ahg(filename, ssh_conn);
+    KFREE(ssh_conn);
+    return rc;
   }                                                                                   
   printk("theia_start_record, execve filename: %s, in whitelist !\n", filename); 
 
@@ -9061,7 +9128,8 @@ int theia_start_record(const char *filename, const char __user *const __user *__
     printk("/dev/spec0 not ready yet. ret %d\n", ret);
     set_fs(old_fs);
     rc = do_execve(filename, __argv, __envp, regs);                                 
-		theia_execve_ahg(filename, __envp);
+		theia_execve_ahg(filename, ssh_conn);
+		KFREE(ssh_conn);
 		return rc;
   }
 
@@ -9085,7 +9153,8 @@ int theia_start_record(const char *filename, const char __user *const __user *__
       printk("[theia_start_record]open /dev/spec0 failed\n");
       set_fs(old_fs);
 			rc = do_execve(filename, __argv, __envp, regs);                                 
-			theia_execve_ahg(filename, __envp);
+			theia_execve_ahg(filename, ssh_conn);
+			KFREE(ssh_conn);
 			return rc;
     }
 
