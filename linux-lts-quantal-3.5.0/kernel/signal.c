@@ -1539,7 +1539,6 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 //Yang
 	struct mm_struct *mm = t->mm;
 	struct vm_area_struct *vma;
-	void __user *address = info->si_addr-4;
 	unsigned long error_code = t->thread.error_code;
 	unsigned long protection;
 	bool save_flag = false;
@@ -1585,6 +1584,7 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	}
 */
 
+	void __user *address = (void __user *)((unsigned long)info->si_addr & ~0xfff); // page
 	unsigned long address_ul = (unsigned long)address;
 	vma = find_vma(mm, address_ul);
 	protection = pgprot_val(vma->vm_page_prot);

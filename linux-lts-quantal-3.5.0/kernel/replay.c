@@ -12472,6 +12472,22 @@ record_ipc (uint call, int first, u_long second, u_long third, void __user *ptr,
 			patretval->size = size;
 			patretval->raddr = raddr;
 
+			int ret = 0;
+			ret = sys_mprotect(raddr, size, PROT_NONE);
+			int __user *address = NULL;		
+			int np = size / 0x1000;
+			if (size % 0x1000) ++np;
+			if (!ret) {
+				int i;
+				for (i = 0; i < np; ++i) {
+					address = (int __user *)(raddr + i*0x1000);
+					*address = *address;
+				}
+			
+				ret = sys_mprotect(rc, len, PROT_NONE);
+				printk("protection of a shared page will be changed, ret %d, %d\n", ret, np);			
+			}
+
 			if (current->record_thrd->rp_group->rg_save_mmap_flag) {
 				MPRINT("Pid %d, shmat reserve memory %lx len %lx\n",
 						current->pid,
