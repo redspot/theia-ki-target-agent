@@ -8597,19 +8597,19 @@ struct execve_retvals {
 struct execve_ahgv {
 	int							pid;
   char            filename[204];
-	int							is_user_remote;
+//	int							is_user_remote;
 };
 
 void packahgv_execve (struct execve_ahgv sys_args) {
 	//Yang
 	if(theia_chan) {
-		char buf[256];
+		char buf[1024];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		char ids[50];
 		get_ids(ids);
-		int size = sprintf(buf, "startahg|%d|%d|%s|%s|%d|%d|%ld|%ld|endahg\n", 
-				11, sys_args.pid, ids, sys_args.filename, sys_args.is_user_remote, current->tgid, sec, nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%s|%s|%d|%ld|%ld|endahg\n", 
+				11, sys_args.pid, ids, sys_args.filename, /*sys_args.is_user_remote,*/ current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -8665,19 +8665,19 @@ void theia_execve_ahg(const char *filename, const char __user *const __user *env
   }
 
 	set_fs(old_fs);                                                              
-	int copied_length = 0;
-	char *dumped_envp = VMALLOC(3000);
-	dumped_envp[2999] = '\0';
-	if ((copied_length = strncpy_from_user(dumped_envp, envp, 3000)) != strlen(envp)) {
-		printk ("theia_execve_ahg: can't copy envp to ahgv, envp length %d, copied %d, envp:%s\n", strlen(envp), copied_length, envp); 
-		KFREE(pahgv);	
-		KFREE(dumped_envp);	
-	}
-	if (strstr(dumped_envp, "SSH_CONNECTION") != NULL) {
-		pahgv->is_user_remote = 1;
-	}
-	else
-		pahgv->is_user_remote = 0;
+//	int copied_length = 0;
+//	char *dumped_envp = VMALLOC(3000);
+//	dumped_envp[2999] = '\0';
+//	if ((copied_length = strncpy_from_user(dumped_envp, envp, 3000)) != strlen(envp)) {
+//		printk ("theia_execve_ahg: can't copy envp to ahgv, envp length %d, copied %d, envp:%s\n", strlen(envp), copied_length, envp); 
+//		KFREE(pahgv);	
+//		KFREE(dumped_envp);	
+//	}
+//	if (strstr(dumped_envp, "SSH_CONNECTION") != NULL) {
+//		pahgv->is_user_remote = 1;
+//	}
+//	else
+//		pahgv->is_user_remote = 0;
 		
 
 	pahgv = (struct execve_ahgv*)KMALLOC(sizeof(struct execve_ahgv), GFP_KERNEL);
@@ -8689,7 +8689,7 @@ void theia_execve_ahg(const char *filename, const char __user *const __user *env
 	strncpy(pahgv->filename, filename, sizeof(pahgv->filename));
 	packahgv_execve(*pahgv);
 	KFREE(pahgv);	
-	KFREE(dumped_envp);	
+//	KFREE(dumped_envp);	
 }
 
 // Simply recording the fact that an execve takes place, we won't replay it
