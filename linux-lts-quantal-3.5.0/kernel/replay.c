@@ -8652,7 +8652,7 @@ void packahgv_execve (struct execve_ahgv sys_args) {
 		get_curr_time(&sec, &nsec);
 		char ids[50];
 		get_ids(ids);
-		int size = sprintf(buf, "startahg|%d|%d|%s|%s|%d|%ld|%ld|endahg\n", 
+		int size = sprintf(buf, "startahg|%d|%d|%s|%s|%d|%d|%ld|%ld|endahg\n", 
 //				11, sys_args.pid, ids, sys_args.filename, /*sys_args.is_user_remote,*/ current->tgid, sec, nsec);
 				11, sys_args.pid, ids, sys_args.filename, sys_args.is_user_remote, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
