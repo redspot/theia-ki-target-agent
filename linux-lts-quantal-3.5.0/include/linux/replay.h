@@ -119,4 +119,5 @@ long get_filemap(int fd, loff_t offset, int size, void __user * entries, int num
 
 long reset_replay_ndx(void);
 
+void write_shr_cache(char *buf, long len);
 #endif

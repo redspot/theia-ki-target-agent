@@ -3790,6 +3790,137 @@ libpath_env_free (char** env)
 }
 
 /* This function forks off a separate process which replays the foreground task.*/
+int fork_replay_theia (char __user* logdir, const char* filename, const char __user *const __user *args,
+		const char __user *const __user *env, char* linker, int save_mmap, int fd,
+		int pipe_fd)
+{
+	mm_segment_t old_fs;
+	struct record_group* prg;
+	long retval;
+	char ckpt[MAX_LOGDIR_STRLEN+10];
+	const char __user * pc;
+	char* argbuf;
+	int argbuflen;
+	void* slab;
+#ifdef TIME_TRICK
+	struct timeval tv;
+	struct timespec tp;
+#endif
+
+	MPRINT ("in fork_replay for pid %d\n", current->pid);
+	if (current->record_thrd || current->replay_thrd) {
+		printk ("fork_replay: pid %d cannot start a new recording while already recording or replaying\n", current->pid);
+		return -EINVAL;
+	}
+
+	if (atomic_read (&current->mm->mm_users) > 1) {
+		printk ("fork with multiple threads is not currently supported\n");
+		return -EINVAL;
+	}
+
+	// Create a record_group structure for this task
+	prg = new_record_group (NULL);
+	if (prg == NULL) return -ENOMEM;
+
+	current->record_thrd = new_record_thread(prg, current->pid, NULL);
+	if (current->record_thrd == NULL) {
+		destroy_record_group(prg);
+		return -ENOMEM;
+	}
+	prg->rg_save_mmap_flag = save_mmap;
+
+	// allocate a slab for retparams
+	slab = VMALLOC (argsalloc_size);
+	if (slab == NULL) return -ENOMEM;
+	if (add_argsalloc_node(current->record_thrd, slab, argsalloc_size)) {
+		VFREE (slab);
+		destroy_record_group(prg);
+		current->record_thrd = NULL;
+		printk ("Pid %d fork_replay: error adding argsalloc_node\n", current->pid);
+		return -ENOMEM;
+	}
+	MPRINT ("fork_replay added new slab %p to record_thread %p\n", slab, current->record_thrd);
+#ifdef LOG_COMPRESS_1
+	slab = VMALLOC (argsalloc_size);
+	if (slab == NULL) return -ENOMEM;
+	if (add_clog_node(current->record_thrd, slab, argsalloc_size)) {
+		VFREE (slab);
+		destroy_record_group(prg);
+		current->record_thrd = NULL;
+		printk ("Pid %d fork_replay: error adding clog_node\n", current->pid);
+		return -ENOMEM;
+	}
+	MPRINT ("fork_replay added new slab %p to record_thread %p (clog)\n", slab, current->record_thrd);
+#endif
+#ifdef LOG_COMPRESS
+	init_evs ();
+#endif
+
+	current->replay_thrd = NULL;
+	MPRINT ("Record-Pid %d, tsk %p, prp %p\n", current->pid, current, current->record_thrd);
+
+	if (linker) {
+		strncpy (current->record_thrd->rp_group->rg_linker, linker, MAX_LOGDIR_STRLEN);
+		MPRINT ("Set linker for record process to %s\n", linker);
+	}
+
+	if (fd >= 0) {
+		retval = sys_close (fd);
+		if (retval < 0) printk ("fork_replay: unable to close fd %d, rc=%ld\n", fd, retval);
+	}
+
+	if (pipe_fd >= 0) {
+		char str[40];
+		old_fs = get_fs();
+		set_fs(KERNEL_DS);
+
+		sprintf(str, "%s\n", prg->rg_logdir);
+
+		sys_write(pipe_fd, str, strlen(str));
+
+		set_fs(old_fs);
+	}
+
+
+	sprintf (ckpt, "%s/ckpt", prg->rg_logdir);
+	char* libpath_contents = "LD_LIBRARY_PATH=/home/yang/omniplay/eglibc-2.15/prefix/lib:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib";	
+	char* libpath = KMALLOC (strlen(libpath_contents), GFP_KERNEL);
+	strcpy(libpath, libpath_contents);
+	argbuf = copy_args (args, env, &argbuflen, libpath_contents, strlen(libpath_contents));
+
+	if (argbuf == NULL) {
+		printk ("replay_checkpoint_to_disk: copy_args failed\n");
+		return -EFAULT;
+	}
+
+#ifdef TIME_TRICK
+	retval = replay_checkpoint_to_disk (ckpt, filename, argbuf, argbuflen, 0, &tv, &tp);
+	init_det_time (&prg->rg_det_time, &tv, &tp);
+#else
+	// Save reduced-size checkpoint with info needed for exec
+	retval = replay_checkpoint_to_disk (ckpt, filename, argbuf, argbuflen, 0);
+#endif
+	DPRINT ("replay_checkpoint_to_disk returns %ld\n", retval);
+	if (retval) {
+		printk ("replay_checkpoint_to_disk returns %ld\n", retval);
+		return retval;
+	}
+
+	// Hack to support multiple glibcs - record and LD_LIBRARY_PATH info
+	prg->rg_libpath = get_libpath (env);
+	if (prg->rg_libpath == NULL) {
+		printk ("fork_replay: libpath not found\n");
+	
+		prg->rg_libpath = libpath;
+		printk("hardcoded libpath is (%s)", prg->rg_libpath);
+//		return -EINVAL;
+	}
+
+	retval = record_execve (filename, args, env, get_pt_regs (NULL));
+	if (retval) printk ("fork_replay: execve returns %ld\n", retval);
+	return retval;
+}
+/* This function forks off a separate process which replays the foreground task.*/
 int fork_replay (char __user* logdir, const char __user *const __user *args,
 		const char __user *const __user *env, char* linker, int save_mmap, int fd,
 		int pipe_fd)
@@ -9214,7 +9345,7 @@ int theia_start_record(const char *filename, const char __user *const __user *__
 //      return do_execve(filename, __argv, __envp, regs);
 //    }                                                                                
     set_fs(old_fs);
-    fork_replay (NULL /*logdir*/, __argv, __envp, linker, save_mmap, fd, -1 /*pipe_fd*/);
+    fork_replay_theia (NULL /*logdir*/, filename, __argv, __envp, linker, save_mmap, fd, -1 /*pipe_fd*/);
   }
 
 }
