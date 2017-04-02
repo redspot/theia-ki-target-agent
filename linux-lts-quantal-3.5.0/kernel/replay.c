@@ -8641,7 +8641,7 @@ struct execve_retvals {
 struct execve_ahgv {
 	int							pid;
   char            filename[204];
-//	int							is_user_remote;
+	int							is_user_remote;
 };
 
 void packahgv_execve (struct execve_ahgv sys_args) {
@@ -8653,7 +8653,8 @@ void packahgv_execve (struct execve_ahgv sys_args) {
 		char ids[50];
 		get_ids(ids);
 		int size = sprintf(buf, "startahg|%d|%d|%s|%s|%d|%ld|%ld|endahg\n", 
-				11, sys_args.pid, ids, sys_args.filename, /*sys_args.is_user_remote,*/ current->tgid, sec, nsec);
+//				11, sys_args.pid, ids, sys_args.filename, /*sys_args.is_user_remote,*/ current->tgid, sec, nsec);
+				11, sys_args.pid, ids, sys_args.filename, sys_args.is_user_remote, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -8724,13 +8725,6 @@ void theia_execve_ahg(const char *filename, char *ssh_conn) {
 //	else
 //		pahgv->is_user_remote = 0;
 
-	if (ssh_conn) {
-		printk("%s\n", ssh_conn);
-		pahgv->is_user_remote = 1;
-	}
-	else {
-		pahgv->is_user_remote = 0;
-	}
 		
 
 	pahgv = (struct execve_ahgv*)KMALLOC(sizeof(struct execve_ahgv), GFP_KERNEL);
@@ -8740,6 +8734,13 @@ void theia_execve_ahg(const char *filename, char *ssh_conn) {
 	}
 	pahgv->pid = current->pid;
 	strncpy(pahgv->filename, filename, sizeof(pahgv->filename));
+	if (ssh_conn) {
+		printk("%s\n", ssh_conn);
+		pahgv->is_user_remote = 1;
+	}
+	else {
+		pahgv->is_user_remote = 0;
+	}
 	packahgv_execve(*pahgv);
 	KFREE(pahgv);	
 //	KFREE(dumped_envp);	
@@ -8769,6 +8770,8 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 	struct timespec tp;
 #endif
 
+	char __user * cptr;
+
 	MPRINT ("Record pid %d performing execve of %s\n", current->pid, filename);
 	new_syscall_enter (11);
 
@@ -8784,6 +8787,22 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 #endif
 	// Have to copy arguments out before address space goes away - we will likely need them later
 	argbuf = copy_args (__argv, __envp, &argbuflen, NULL, 0);
+
+        // why not fullpath? (up to PATH_MAX)
+	get_user(cptr, __argv);
+	if (cptr) {
+		printk("fullpath: %s\n", cptr);
+	}
+
+	// perhaps arguments are helpful
+	int i;
+	for (i = 1;;++i) {
+		get_user(cptr, __argv+i);
+		if (cptr)
+			printk("arg %d: %s\n", i, cptr);
+		else
+			break;
+	}
 
 	ssh_conn = get_ssh_conn(__envp);
 
