@@ -93,6 +93,7 @@ int debug_flag = 0;
 //Yang
 const char* togglefile = "/home/yang/theia-on.conf";
 const char* control_file = "/home/yang/theia-control.conf";
+const char* toggle_record_file = "/home/yang/theia-record-on.conf";
 
 #define THEIA_TRACK_SHM_OPEN 1
 #define THEIA_TRACK_SHMAT 1
@@ -9129,21 +9130,33 @@ int theia_start_record(const char *filename, const char __user *const __user *__
   char *ssh_conn = NULL;
   ssh_conn = get_ssh_conn(__envp);
 
-  const char *whitelist1;                                                             
-  //whitelist1 = "/home/yang/tests/hello";                                              
-  whitelist1 = "./write";                                              
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
 
-  if(strcmp(filename, whitelist1) != 0) { //we only record the whitelisted processes
-    //printk("theia_start_record, execve filename: %s, not in whitelist\n", filename);
+	const struct cred *cred = current_cred();
+  printk("theia_start_record, execve filename: %s (uid:%d), in whitelist !\n", filename, cred->uid); 
+
+	//record toggle
+	ret = sys_access(toggle_record_file, 0/*F_OK*/);                                       
+	if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+		set_fs(old_fs);                                                              
     rc = do_execve(filename, __argv, __envp, regs);                                 
     theia_execve_ahg(filename, ssh_conn);
     KFREE(ssh_conn);
     return rc;
-  }                                                                                   
-  printk("theia_start_record, execve filename: %s, in whitelist !\n", filename); 
+	} 
 
-	mm_segment_t old_fs = get_fs();
-  set_fs(KERNEL_DS);
+  const char *whitelist1;                                                             
+  whitelist1 = "/home/yang/tests/hello";                                              
+//  whitelist1 = "./abcd";                                              
+
+//  if(strcmp(filename, whitelist1) != 0) { //we only record the whitelisted processes
+//    printk("theia_start_record, execve filename: %s, not in whitelist\n", filename);
+//    rc = do_execve(filename, __argv, __envp, regs);                                 
+//    theia_execve_ahg(filename, ssh_conn);
+//    KFREE(ssh_conn);
+//    return rc;
+//  }                                                                                   
 
   const char *devfile;
   devfile = "/dev/spec0";
