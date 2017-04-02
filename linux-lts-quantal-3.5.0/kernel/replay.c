@@ -94,6 +94,9 @@ int debug_flag = 0;
 const char* togglefile = "/home/yang/theia-on.conf";
 const char* control_file = "/home/yang/theia-control.conf";
 
+#define THEIA_TRACK_SHM_OPEN 1
+#define THEIA_TRACK_SHMAT 1
+
 //#define REPLAY_PARANOID
 
 // If defined, use file cache for reads of read-only files
@@ -8788,6 +8791,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 	// Have to copy arguments out before address space goes away - we will likely need them later
 	argbuf = copy_args (__argv, __envp, &argbuflen, NULL, 0);
 
+/*
         // why not fullpath? (up to PATH_MAX)
 	get_user(cptr, __argv);
 	if (cptr) {
@@ -8803,6 +8807,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 		else
 			break;
 	}
+*/
 
 	ssh_conn = get_ssh_conn(__envp);
 
@@ -12560,6 +12565,7 @@ record_ipc (uint call, int first, u_long second, u_long third, void __user *ptr,
 			patretval->size = size;
 			patretval->raddr = raddr;
 
+#ifdef THEIA_TRACK_SHMAT
 			int ret = 0;
 			ret = sys_mprotect(raddr, size, PROT_NONE);
 			int __user *address = NULL;		
@@ -12575,6 +12581,7 @@ record_ipc (uint call, int first, u_long second, u_long third, void __user *ptr,
 				ret = sys_mprotect(rc, len, PROT_NONE);
 				printk("protection of a shared page will be changed, ret %d, %d\n", ret, np);			
 			}
+#endif
 
 			if (current->record_thrd->rp_group->rg_save_mmap_flag) {
 				MPRINT("Pid %d, shmat reserve memory %lx len %lx\n",
@@ -15327,6 +15334,7 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 		up_read(&mm->mmap_sem);
 	}
 
+#ifdef THEIA_TRACK_SHM_OPEN
 	if (flags & MAP_SHARED && is_shmem) {
 		// enforce page allocation
 		int __user *address = NULL;
@@ -15349,6 +15357,7 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 			printk("protection of a shared page will be changed, ret %d\n", ret);			
 		}
 	}
+#endif
 
 	DPRINT ("Pid %d records mmap_pgoff with addr %lx len %lx prot %lx flags %lx fd %ld ret %lx\n", current->pid, addr, len, prot, flags, fd, rc);
 
