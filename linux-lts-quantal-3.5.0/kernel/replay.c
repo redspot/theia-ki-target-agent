@@ -7345,12 +7345,14 @@ bool is_process_new(pid_t pid, char* comm) {
 void packahgv_process() {
 	if(theia_chan) {
 		long sec, nsec;
-		char buf[256];
+		char buf[512];
 		char ids[50];
 		get_ids(ids);
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%s|%d|%s|%d|%ld|%ld|endahg\n", 
-				399/*used for new process*/, current->pid, ids, current->real_parent->pid, 
+		int size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%d|%ld|%ld|endahg\n", 
+				399/*used for new process*/, current->pid, current->start_time.tv_nsec, 
+				ids, current->real_parent->pid, 
+				(pid_task(find_vpid(current->real_parent->pid), PIDTYPE_PID))->start_time.tv_nsec,
 				current->comm, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
@@ -7364,8 +7366,8 @@ void packahgv_read (struct read_ahgv sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%lu|%ld|%ld|endahg\n", 
-				3, sys_args.pid, sys_args.fd, sys_args.bytes, current->tgid, 
+		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%lu|%ld|%ld|endahg\n", 
+				3, sys_args.pid, current->start_time.tv_nsec, sys_args.fd, sys_args.bytes, current->tgid, 
 				sys_args.clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
