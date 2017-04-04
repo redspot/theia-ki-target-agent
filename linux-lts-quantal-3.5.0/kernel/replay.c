@@ -7358,15 +7358,15 @@ void packahgv_process() {
 		printk("theia_chan invalid\n");
 }
 
-void packahgv_read (struct read_ahgv sys_args) {
+void packahgv_read (struct read_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%lu|%ld|%ld|endahg\n", 
-				3, sys_args.pid, sys_args.fd, sys_args.bytes, current->tgid, 
-				sys_args.clock, sec, nsec);
+				3, sys_args->pid, sys_args->fd, sys_args->bytes, current->tgid, 
+				sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -7441,7 +7441,7 @@ void theia_read_ahg(unsigned int fd, long rc, u_long clock) {
 		pahgv->fd = (int)fd;
 		pahgv->bytes = rc;
 		pahgv->clock = clock;
-		packahgv_read(*pahgv);
+		packahgv_read(pahgv);
 		KFREE(pahgv);	
 	}
 
@@ -7915,14 +7915,14 @@ struct write_ahgv {
 	u_long					clock;
 };
 
-void packahgv_write (struct write_ahgv sys_args) {
+void packahgv_write (struct write_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%d|%ld|%ld|endahg\n", 
-				4, sys_args.pid, sys_args.fd, sys_args.bytes, current->tgid, sys_args.clock, sec, nsec);
+				4, sys_args->pid, sys_args->fd, sys_args->bytes, current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -7987,7 +7987,7 @@ void theia_write_ahg(unsigned int fd, long rc, u_long clock) {
 	pahgv->fd = (int)fd;
 	pahgv->bytes = (u_long)rc;
 	pahgv->clock = clock;
-	packahgv_write(*pahgv);
+	packahgv_write(pahgv);
 	KFREE(pahgv);	
 
 }
@@ -8322,7 +8322,7 @@ struct open_ahgv {
 	bool						is_new;
 };
 
-void packahgv_open (struct open_ahgv sys_args) {
+void packahgv_open (struct open_ahgv *sys_args) {
 	//Yang
 
 	if(theia_chan) {
@@ -8330,8 +8330,8 @@ void packahgv_open (struct open_ahgv sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
-				5, sys_args.pid, sys_args.fd, sys_args.filename, sys_args.flags, sys_args.mode,
-				sys_args.dev, sys_args.ino, sys_args.is_new, current->tgid, sec, nsec);
+				5, sys_args->pid, sys_args->fd, sys_args->filename, sys_args->flags, sys_args->mode,
+				sys_args->dev, sys_args->ino, sys_args->is_new, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -8421,7 +8421,7 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, 
 //	sprintf(pahgv->filename, "hellojacket");
 
 	//Reuse dmesg channel
-	packahgv_open(*pahgv);
+	packahgv_open(pahgv);
 	KFREE(pahgv);	
 }
 
@@ -8558,13 +8558,13 @@ struct close_ahgv {
   int	            fd;
 };
 
-void packahgv_close (struct close_ahgv sys_args) {
+void packahgv_close (struct close_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%ld|%ld|endahg\n", 6, sys_args.pid, sys_args.fd, current->tgid, sec, nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%ld|%ld|endahg\n", 6, sys_args->pid, sys_args->fd, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -8627,7 +8627,7 @@ void theia_close_ahg(int fd) {
 	}
 	pahgv->pid = current->pid;
 	pahgv->fd = fd;
-	packahgv_close(*pahgv);
+	packahgv_close(pahgv);
 	KFREE(pahgv);	
 
 }
@@ -8779,7 +8779,7 @@ struct execve_ahgv {
 	int							is_user_remote;
 };
 
-void packahgv_execve (struct execve_ahgv sys_args) {
+void packahgv_execve (struct execve_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[1024];
@@ -8788,8 +8788,7 @@ void packahgv_execve (struct execve_ahgv sys_args) {
 		char ids[50];
 		get_ids(ids);
 		int size = sprintf(buf, "startahg|%d|%d|%s|%s|%d|%d|%ld|%ld|endahg\n", 
-//				11, sys_args.pid, ids, sys_args.filename, /*sys_args.is_user_remote,*/ current->tgid, sec, nsec);
-				11, sys_args.pid, ids, sys_args.filename, sys_args.is_user_remote, current->tgid, sec, nsec);
+				11, sys_args->pid, ids, sys_args->filename, sys_args->is_user_remote, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -8876,7 +8875,7 @@ void theia_execve_ahg(const char *filename, char *ssh_conn) {
 	else {
 		pahgv->is_user_remote = 0;
 	}
-	packahgv_execve(*pahgv);
+	packahgv_execve(pahgv);
 	KFREE(pahgv);	
 //	KFREE(dumped_envp);	
 }
@@ -9407,15 +9406,15 @@ struct mount_ahgv {
 };
 
 
-void packahgv_mount (struct mount_ahgv sys_args) {
+void packahgv_mount (struct mount_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%s|%s|%s|%lu|%d|%d|%lu|%ld|%ld|endahg\n", 
-				21, sys_args.pid, sys_args.devname, sys_args.dirname, sys_args.type, 
-				sys_args.flags, sys_args.rc, current->tgid, sys_args.clock, sec, nsec);
+				21, sys_args->pid, sys_args->devname, sys_args->dirname, sys_args->type, 
+				sys_args->flags, sys_args->rc, current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -9500,7 +9499,7 @@ void theia_mount_ahg(char __user *dev_name, char __user *dir_name, char __user *
 		pahgv->flags = flags;
 		pahgv->clock = clock;
 		pahgv->rc = rc;
-		packahgv_mount(*pahgv);
+		packahgv_mount(pahgv);
 		KFREE(pahgv);	
 	}
 
@@ -9628,15 +9627,15 @@ struct pipe_ahgv {
 	u_long					inode2;
 };
 
-void packahgv_pipe (struct pipe_ahgv sys_args) {
+void packahgv_pipe (struct pipe_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%d|%lx|%lx|%d|%ld|%ld|endahg\n", 
-				42, sys_args.pid, sys_args.retval, sys_args.pfd1, sys_args.pfd2, 
-				sys_args.inode1, sys_args.inode2, current->tgid, sec, nsec);
+				42, sys_args->pid, sys_args->retval, sys_args->pfd1, sys_args->pfd2, 
+				sys_args->inode1, sys_args->inode2, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -9703,7 +9702,7 @@ void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
 	pahgv->pfd2 = pfd2;
 	pahgv->inode1 = 0; //TODO:need to handle
 	pahgv->inode2 = 0;
-	packahgv_pipe(*pahgv);
+	packahgv_pipe(pahgv);
 	KFREE(pahgv);
 }
 
@@ -9916,15 +9915,15 @@ struct ioctl_ahgv {
 	u_long					clock;
 };
 
-void packahgv_ioctl (struct ioctl_ahgv sys_args) {
+void packahgv_ioctl (struct ioctl_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%u|%lu|%ld|%d|%lu|%ld|%ld|endahg\n", 
-				54, sys_args.pid, sys_args.fd, sys_args.cmd, sys_args.arg, sys_args.rc, current->tgid, 
-				sys_args.clock, sec, nsec);
+				54, sys_args->pid, sys_args->fd, sys_args->cmd, sys_args->arg, sys_args->rc, current->tgid, 
+				sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -9993,7 +9992,7 @@ void theia_ioctl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long 
 		pahgv->arg = arg;
 		pahgv->rc = rc;
 		pahgv->clock = clock;
-		packahgv_ioctl(*pahgv);
+		packahgv_ioctl(pahgv);
 		KFREE(pahgv);	
 	}
 
@@ -10738,15 +10737,15 @@ struct munmap_ahgv {
 	u_long					clock;
 };
 
-void packahgv_munmap (struct munmap_ahgv sys_args) {
+void packahgv_munmap (struct munmap_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%lx|%ld|%d|%ld|%ld|%ld|endahg\n", 
-				91, sys_args.pid, sys_args.rc, sys_args.addr, sys_args.len, 
-				current->tgid, sys_args.clock, sec, nsec);
+				91, sys_args->pid, sys_args->rc, sys_args->addr, sys_args->len, 
+				current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -10813,7 +10812,7 @@ void theia_munmap_ahg(unsigned long addr, size_t len, long rc, u_long clock) {
 	pahgv->len = len;
 	pahgv->rc = rc;
 	pahgv->clock = clock;
-	packahgv_munmap(*pahgv);
+	packahgv_munmap(pahgv);
 	KFREE(pahgv);	
 }
 
@@ -11922,14 +11921,14 @@ struct connect_ahgv {
 	int							rc;
 };
 
-void packahgv_connect(struct connect_ahgv sys_args) {
+void packahgv_connect(struct connect_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
-				102, SYS_CONNECT, sys_args.pid, sys_args.rc, sys_args.sock_fd, sys_args.ip, sys_args.port, current->tgid, sec, nsec);
+				102, SYS_CONNECT, sys_args->pid, sys_args->rc, sys_args->sock_fd, sys_args->ip, sys_args->port, current->tgid, sec, nsec);
 //		printk("[socketcall connect]: %s", buf);
 		relay_write(theia_chan, buf, size);
 	}
@@ -11945,14 +11944,14 @@ struct accept_ahgv {
   int             rc;                                                           
 };
 
-void packahgv_accept(struct accept_ahgv sys_args) {
+void packahgv_accept(struct accept_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
-				102, SYS_ACCEPT, sys_args.pid, sys_args.rc, sys_args.sock_fd, sys_args.ip, sys_args.port, current->tgid, sec, nsec);
+				102, SYS_ACCEPT, sys_args->pid, sys_args->rc, sys_args->sock_fd, sys_args->ip, sys_args->port, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -11968,15 +11967,15 @@ struct send_ahgv {
 	u_long 					clock;
 };
 
-void packahgv_send(struct send_ahgv sys_args) {
+void packahgv_send(struct send_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%ld|NA|0|%d|%d|%ld|%ld|endahg\n", 
-				102, SYS_SEND, sys_args.pid, sys_args.sock_fd, sys_args.rc,
-				current->tgid, sys_args.clock, sec, nsec);
+				102, SYS_SEND, sys_args->pid, sys_args->sock_fd, sys_args->rc,
+				current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -11992,15 +11991,15 @@ struct sendto_ahgv {
 	u_long 					clock;
 };
 
-void packahgv_sendto(struct sendto_ahgv sys_args) {
+void packahgv_sendto(struct sendto_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%ld|%s|%lu|%d|%d|%ld|%ld|endahg\n", 
-				102, SYS_SENDTO, sys_args.pid, sys_args.sock_fd, sys_args.rc, sys_args.ip, 
-				sys_args.port, current->tgid, sys_args.clock, sec, nsec);
+				102, SYS_SENDTO, sys_args->pid, sys_args->sock_fd, sys_args->rc, sys_args->ip, 
+				sys_args->port, current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -12016,15 +12015,15 @@ struct recv_ahgv {
 	u_long					clock;
 };
 
-void packahgv_recv(struct recv_ahgv sys_args) {
+void packahgv_recv(struct recv_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%ld|NA|0|%d|%d|%ld|%ld|endahg\n", 
-				102, SYS_RECV, sys_args.pid, sys_args.sock_fd, sys_args.rc,
-				current->tgid, sys_args.clock, sec, nsec);
+				102, SYS_RECV, sys_args->pid, sys_args->sock_fd, sys_args->rc,
+				current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -12040,15 +12039,15 @@ struct recvfrom_ahgv {
 	u_long					clock;
 };
 
-void packahgv_recvfrom(struct recvfrom_ahgv sys_args) {
+void packahgv_recvfrom(struct recvfrom_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%ld|%s|%lu|%d|%d|%ld|%ld|endahg\n", 
-				102, SYS_RECVFROM, sys_args.pid, sys_args.sock_fd, sys_args.rc, sys_args.ip, 
-				sys_args.port, current->tgid, sys_args.clock, sec, nsec);
+				102, SYS_RECVFROM, sys_args->pid, sys_args->sock_fd, sys_args->rc, sys_args->ip, 
+				sys_args->port, current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -12064,15 +12063,15 @@ struct sendmsg_ahgv {
 	u_long					clock;
 };
 
-void packahgv_sendmsg(struct sendmsg_ahgv sys_args) {
+void packahgv_sendmsg(struct sendmsg_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%ld|%d|%d|%ld|%ld|endahg\n", 
-				102, SYS_SENDMSG, sys_args.pid, sys_args.sock_fd, sys_args.rc, current->tgid, 
-				sys_args.clock, sec, nsec);
+				102, SYS_SENDMSG, sys_args->pid, sys_args->sock_fd, sys_args->rc, current->tgid, 
+				sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -12088,15 +12087,15 @@ struct recvmsg_ahgv {
 	u_long					clock;
 };
 
-void packahgv_recvmsg(struct recvmsg_ahgv sys_args) {
+void packahgv_recvmsg(struct recvmsg_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%ld|%d|%d|%ld|%ld|endahg\n", 
-				102, SYS_RECVMSG, sys_args.pid, sys_args.sock_fd, sys_args.rc, current->tgid, 
-				sys_args.clock, sec, nsec);
+				102, SYS_RECVMSG, sys_args->pid, sys_args->sock_fd, sys_args->rc, current->tgid, 
+				sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -12186,7 +12185,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 				pahgv_connect->rc = rc;
 				pahgv_connect->sock_fd = (int)a[0];
 				get_ip_port_sockaddr((unsigned long*)a[1], pahgv_connect->ip, &(pahgv_connect->port));
-				packahgv_connect(*pahgv_connect);
+				packahgv_connect(pahgv_connect);
 				KFREE(pahgv_connect);	
 				break;
 			case SYS_ACCEPT:
@@ -12199,7 +12198,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 				pahgv_accept->rc = rc;
 				pahgv_accept->sock_fd = (int)a[0];
 				get_ip_port_sockaddr((unsigned long*)a[1], pahgv_accept->ip, &(pahgv_accept->port));
-				packahgv_accept(*pahgv_accept);
+				packahgv_accept(pahgv_accept);
 				KFREE(pahgv_accept);	
 				break;
 			case SYS_SEND:
@@ -12212,7 +12211,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 				pahgv_send->sock_fd = (int)a[0];
 				pahgv_send->rc = rc;
 				pahgv_send->clock = clock;
-				packahgv_send(*pahgv_send);
+				packahgv_send(pahgv_send);
 				KFREE(pahgv_send);	
 				break;
 			case SYS_SENDTO:
@@ -12226,7 +12225,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 				pahgv_sendto->rc = rc;
 				get_ip_port_sockaddr((unsigned long*)a[4], pahgv_sendto->ip, &(pahgv_sendto->port));
 				pahgv_sendto->clock = clock;
-				packahgv_sendto(*pahgv_sendto);
+				packahgv_sendto(pahgv_sendto);
 				KFREE(pahgv_sendto);	
 				break;
 			case SYS_RECV:
@@ -12239,7 +12238,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 				pahgv_recv->sock_fd = (int)a[0];
 				pahgv_recv->rc = rc;
 				pahgv_recv->clock = clock;
-				packahgv_recv(*pahgv_recv);
+				packahgv_recv(pahgv_recv);
 				KFREE(pahgv_recv);	
 				break;
 			case SYS_RECVFROM:
@@ -12253,7 +12252,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 				get_ip_port_sockaddr((unsigned long*)a[4], pahgv_recvfrom->ip, &(pahgv_recvfrom->port));
 				pahgv_recvfrom->rc = rc;
 				pahgv_recvfrom->clock = clock;
-				packahgv_recvfrom(*pahgv_recvfrom);
+				packahgv_recvfrom(pahgv_recvfrom);
 				KFREE(pahgv_recvfrom);	
 				break;
 			case SYS_SENDMSG:
@@ -12266,7 +12265,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 				pahgv_sendmsg->sock_fd = (int)a[0];
 				pahgv_sendmsg->rc = rc;
 				pahgv_sendmsg->clock = clock;
-				packahgv_sendmsg(*pahgv_sendmsg);
+				packahgv_sendmsg(pahgv_sendmsg);
 				KFREE(pahgv_sendmsg);	
 				break;
 			case SYS_RECVMSG:
@@ -12279,7 +12278,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 				pahgv_recvmsg->sock_fd = (int)a[0];
 				pahgv_recvmsg->rc = rc;
 				pahgv_recvmsg->clock = clock;
-				packahgv_recvmsg(*pahgv_recvmsg);
+				packahgv_recvmsg(pahgv_recvmsg);
 				KFREE(pahgv_recvmsg);	
 				break;
 			default:
@@ -12423,15 +12422,15 @@ struct shmget_ahgv {
 	u_long					clock;
 };
 
-void packahgv_shmget(struct shmget_ahgv sys_args) {
+void packahgv_shmget(struct shmget_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%lu|%d|%d|%lu|%ld|%ld|endahg\n", 
-				117, SHMGET, sys_args.pid, sys_args.rc, sys_args.key, sys_args.size, sys_args.shmflg,
-				current->tgid, sys_args.clock, sec, nsec);
+				117, SHMGET, sys_args->pid, sys_args->rc, sys_args->key, sys_args->size, sys_args->shmflg,
+				current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -12449,15 +12448,15 @@ struct shmat_ahgv {
 	u_long					clock;
 };
 
-void packahgv_shmat(struct shmat_ahgv sys_args) {
+void packahgv_shmat(struct shmat_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%d|%lu|%d|%lx|%d|%lu|%ld|%ld|endahg\n", 
-				117, SHMAT, sys_args.pid, sys_args.rc, sys_args.shmid, sys_args.shmaddr, sys_args.shmflg,
-				sys_args.raddr, current->tgid, sys_args.clock, sec, nsec);
+				117, SHMAT, sys_args->pid, sys_args->rc, sys_args->shmid, sys_args->shmaddr, sys_args->shmflg,
+				sys_args->raddr, current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -12532,7 +12531,7 @@ void theia_ipc_ahg(long rc, uint call, int first, u_long second,
 				pahgv_shmget->key = first;
 				pahgv_shmget->size = second;
 				pahgv_shmget->shmflg = third;
-				packahgv_shmget(*pahgv_shmget);
+				packahgv_shmget(pahgv_shmget);
 				KFREE(pahgv_shmget);	
 				break;
 			case SHMAT:
@@ -12547,7 +12546,7 @@ void theia_ipc_ahg(long rc, uint call, int first, u_long second,
 				pahgv_shmat->shmid = first;
 				pahgv_shmat->shmaddr = ptr;
 				pahgv_shmat->shmflg = second;
-				packahgv_shmat(*pahgv_shmat);
+				packahgv_shmat(pahgv_shmat);
 				KFREE(pahgv_shmat);	
 				break;
 			default:
@@ -13232,7 +13231,7 @@ struct clone_ahgv {
   int	            new_pid;
 };
 
-void packahgv_clone (struct clone_ahgv sys_args) {
+void packahgv_clone (struct clone_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
@@ -13241,7 +13240,7 @@ void packahgv_clone (struct clone_ahgv sys_args) {
 		get_ids(ids);
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
-				120, sys_args.pid, ids, sys_args.new_pid, current->tgid, sec, nsec);
+				120, sys_args->pid, ids, sys_args->new_pid, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -13304,7 +13303,7 @@ void theia_clone_ahg(long new_pid) {
 		}
 		pahgv->pid = current->pid;
 		pahgv->new_pid = (int)new_pid;
-		packahgv_clone(*pahgv);
+		packahgv_clone(pahgv);
 		KFREE(pahgv);	
 	}
 
@@ -13371,14 +13370,14 @@ struct mprotect_ahgv {
   uint16_t        protection;                                                     
 };
 
-void packahgv_mprotect (struct mprotect_ahgv sys_args) {
+void packahgv_mprotect (struct mprotect_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%lx|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
-				125, sys_args.pid, sys_args.retval, sys_args.address, sys_args.length, sys_args.protection, current->tgid, sec, nsec);
+				125, sys_args->pid, sys_args->retval, sys_args->address, sys_args->length, sys_args->protection, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -13444,7 +13443,7 @@ void theia_mprotect_ahg(u_long address, u_long len, uint16_t prot, long rc) {
 	pahgv->address = address;
 	pahgv->length = len;
 	pahgv->protection = prot;
-	packahgv_mprotect(*pahgv);
+	packahgv_mprotect(pahgv);
 	KFREE(pahgv);	
 }
 
@@ -15337,15 +15336,15 @@ struct mmap_ahgv {
   u_long          clock;     
 };
 
-void packahgv_mmap (struct mmap_ahgv sys_args) {
+void packahgv_mmap (struct mmap_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%lu|%d|%lx|%lx|%d|%ld|%ld|%ld|endahg\n", 
-				192, sys_args.pid, sys_args.fd, sys_args.address, sys_args.length, sys_args.prot_type,
-				sys_args.flag, sys_args.offset, current->tgid, sys_args.clock, sec, nsec);
+				192, sys_args->pid, sys_args->fd, sys_args->address, sys_args->length, sys_args->prot_type,
+				sys_args->flag, sys_args->offset, current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -15414,7 +15413,7 @@ u_long flags, u_long pgoff, long rc, u_long clock) {
 	pahgv->flag = flags;
 	pahgv->offset = pgoff;
 	pahgv->clock = clock;
-	packahgv_mmap(*pahgv);
+	packahgv_mmap(pahgv);
 	KFREE(pahgv);	
 
 }
@@ -15920,7 +15919,7 @@ struct setuid_ahgv {
 };
 
 
-void packahgv_setuid (struct setuid_ahgv sys_args) {
+void packahgv_setuid (struct setuid_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
@@ -15929,8 +15928,8 @@ void packahgv_setuid (struct setuid_ahgv sys_args) {
 		char ids[50];
 		get_ids(ids);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%lu|%ld|%ld|endahg\n", 
-				213, sys_args.pid, sys_args.newuid, ids, sys_args.rc, current->tgid, 
-				sys_args.clock, sec, nsec);
+				213, sys_args->pid, sys_args->newuid, ids, sys_args->rc, current->tgid, 
+				sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -15997,7 +15996,7 @@ void theia_setuid_ahg(uid_t uid, int rc, u_long clock) {
 		pahgv->newuid = (int)uid;
 		pahgv->clock = clock;
 		pahgv->rc = rc;
-		packahgv_setuid(*pahgv);
+		packahgv_setuid(pahgv);
 		KFREE(pahgv);	
 	}
 
