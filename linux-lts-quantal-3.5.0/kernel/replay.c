@@ -7367,8 +7367,8 @@ void packahgv_read (struct read_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%lu|%ld|%ld|endahg\n", 
-				3, sys_args.pid, current->start_time.tv_nsec, sys_args.fd, sys_args.bytes, current->tgid, 
-				sys_args.clock, sec, nsec);
+				3, sys_args->pid, current->start_time.tv_nsec, sys_args->fd, sys_args->bytes, current->tgid, 
+				sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
