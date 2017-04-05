@@ -7349,11 +7349,20 @@ void packahgv_process() {
 		char ids[50];
 		get_ids(ids);
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%d|%ld|%ld|endahg\n", 
+		int size = 0;
+		struct task_struct *tsk = pid_task(find_vpid(current->real_parent->pid), PIDTYPE_PID);	
+		if(tsk) {
+			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%d|%ld|%ld|endahg\n", 
 				399/*used for new process*/, current->pid, current->start_time.tv_nsec, 
 				ids, current->real_parent->pid, 
-				(pid_task(find_vpid(current->real_parent->pid), PIDTYPE_PID))->start_time.tv_nsec,
-				current->comm, current->tgid, sec, nsec);
+				tsk->start_time.tv_nsec, current->comm, current->tgid, sec, nsec);
+		}
+		else {
+			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%d|%ld|%ld|endahg\n", 
+					399/*used for new process*/, current->pid, current->start_time.tv_nsec, 
+					ids, current->real_parent->pid, 
+				  -1, current->comm, current->tgid, sec, nsec);
+		}
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -8332,7 +8341,7 @@ void packahgv_open (struct open_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
-				5, sys_args->pid, sys_args->fd, current->start_time.tv_nsec, sys_args->filename, sys_args->flags, sys_args->mode,
+				5, sys_args->pid, current->start_time.tv_nsec, sys_args->fd, sys_args->filename, sys_args->flags, sys_args->mode,
 				sys_args->dev, sys_args->ino, sys_args->is_new, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
@@ -13252,10 +13261,19 @@ void packahgv_clone (struct clone_ahgv *sys_args) {
 		char ids[50];
 		get_ids(ids);
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%d|%ld|%ld|endahg\n", 
-				120, sys_args->pid, current->start_time.tv_nsec, ids, sys_args->new_pid, 
-				(pid_task(find_vpid(sys_args->new_pid), PIDTYPE_PID))->start_time.tv_nsec,
-				current->tgid, sec, nsec);
+		int size = 0;
+		struct task_struct *tsk = pid_task(find_vpid(sys_args->new_pid), PIDTYPE_PID);	
+		if(tsk) {
+			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%d|%ld|%ld|endahg\n", 
+					120, sys_args->pid, current->start_time.tv_nsec, ids, sys_args->new_pid, 
+					tsk->start_time.tv_nsec, current->tgid, sec, nsec);
+		}
+		else {
+			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%d|%ld|%ld|endahg\n", 
+					120, sys_args->pid, current->start_time.tv_nsec, ids, sys_args->new_pid, 
+					-1, current->tgid, sec, nsec);
+		}
+
 		relay_write(theia_chan, buf, size);
 	}
 	else
