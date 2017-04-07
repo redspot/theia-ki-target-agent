@@ -7245,8 +7245,8 @@ long file_cache_file_written(struct filemap_data *data, int fd) {
 }
 
 // return 1 if the current process is associated with an SSH session 
-int is_remote(void) {
-	struct mm_struct *mm = current->mm;
+int is_remote(struct task_struct *tsk) {
+	struct mm_struct *mm = tsk->mm;
 	if (!mm)
 		return -1;
 
@@ -7385,18 +7385,19 @@ void packahgv_process() {
 		get_ids(ids);
 		get_curr_time(&sec, &nsec);
 		int size = 0;
+		int is_user_remote = is_remote(current);
 		struct task_struct *tsk = pid_task(find_vpid(current->real_parent->pid), PIDTYPE_PID);	
 		if(tsk) {
-			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%d|%ld|%ld|endahg\n", 
+			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%d|%d|%ld|%ld|endahg\n", 
 				399/*used for new process*/, current->pid, current->start_time.tv_nsec, 
 				ids, current->real_parent->pid, 
-				tsk->start_time.tv_nsec, current->comm, current->tgid, sec, nsec);
+				tsk->start_time.tv_nsec, current->comm, is_user_remote, current->tgid, sec, nsec);
 		}
 		else {
-			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%d|%ld|%ld|endahg\n", 
+			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%d|%d|%ld|%ld|endahg\n", 
 					399/*used for new process*/, current->pid, current->start_time.tv_nsec, 
 					ids, current->real_parent->pid, 
-				  -1, current->comm, current->tgid, sec, nsec);
+				  -1, current->comm, is_user_remote, current->tgid, sec, nsec);
 		}
 		relay_write(theia_chan, buf, size);
 	}
@@ -8834,9 +8835,10 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 		get_curr_time(&sec, &nsec);
 		char ids[50];
 		get_ids(ids);
+		int is_user_remote = is_remote(current);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%s|%s|%d|%d|%ld|%ld|endahg\n", 
 				11, sys_args->pid, current->start_time.tv_nsec, ids, 
-				sys_args->filename, sys_args->is_user_remote, current->tgid, sec, nsec);
+				sys_args->filename, is_user_remote, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -9308,7 +9310,7 @@ int theia_start_record(const char *filename, const char __user *const __user *__
   char *ssh_conn = NULL;
   ssh_conn = get_ssh_conn(__envp);
 
-	printk("is_remote: %d\n", is_remote());
+	printk("is_remote: %d\n", is_remote(current));
 
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
@@ -13299,16 +13301,18 @@ void packahgv_clone (struct clone_ahgv *sys_args) {
 		get_ids(ids);
 		get_curr_time(&sec, &nsec);
 		int size = 0;
+		int is_child_remote = 0;
 		struct task_struct *tsk = pid_task(find_vpid(sys_args->new_pid), PIDTYPE_PID);	
 		if(tsk) {
-			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%d|%ld|%ld|endahg\n", 
+			is_child_remote = is_remote(tsk);
+			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%d|%d|%ld|%ld|endahg\n", 
 					120, sys_args->pid, current->start_time.tv_nsec, ids, sys_args->new_pid, 
-					tsk->start_time.tv_nsec, current->tgid, sec, nsec);
+					tsk->start_time.tv_nsec, is_child_remote, current->tgid, sec, nsec);
 		}
 		else {
-			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%d|%ld|%ld|endahg\n", 
+			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%d|%d|%ld|%ld|endahg\n", 
 					120, sys_args->pid, current->start_time.tv_nsec, ids, sys_args->new_pid, 
-					-1, current->tgid, sec, nsec);
+					-1, -1, current->tgid, sec, nsec);
 		}
 
 		relay_write(theia_chan, buf, size);
