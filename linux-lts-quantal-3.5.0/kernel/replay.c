@@ -7244,12 +7244,47 @@ long file_cache_file_written(struct filemap_data *data, int fd) {
 	return 0;
 }
 
+// return 1 if the current process is associated with an SSH session 
+int is_remote(void) {
+	struct mm_struct *mm = current->mm;
+	if (!mm)
+		return -1;
+
+	unsigned long env_start = mm->env_start;
+	unsigned long env_len   = mm->env_end - env_start;
+	if (!env_start || !env_len)
+		return 0;
+
+	char *env = (char*)vmalloc(env_len);
+	char *env_mem = env;
+	char *ret;
+	copy_from_user((void*)env, (const void __user*)env_start, env_len);
+
+	int i, skip;
+	for (i = 0; i < env_len; i+= skip, env += skip) {
+		ret = strstr(env, "SSH_CONNECTION=");
+		if (ret) {
+			// SL: we can return a remote IP address and port if we want
+			vfree(env_mem);
+			return 1;
+		}
+		skip = strlen(env) + 1;
+	}
+
+	vfree(env_mem);
+	return 0;
+}
+
 void get_ids(char* ids) {
 	const struct cred *cred = current_cred();
 	sprintf(ids, "%d/%d/%d/%d/%d/%d/%d/%d", 
 		cred->uid, cred->euid, cred->suid, cred->fsuid, 
 		cred->gid, cred->egid, cred->sgid, cred->fsgid);
+
+//SL: perhaps here?
+//	printk("is_remote: %d\n", is_remote());
 }
+
 
 //Yang
 struct read_ahgv {
@@ -9272,6 +9307,8 @@ int theia_start_record(const char *filename, const char __user *const __user *__
 
   char *ssh_conn = NULL;
   ssh_conn = get_ssh_conn(__envp);
+
+	printk("is_remote: %d\n", is_remote());
 
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
