@@ -16005,9 +16005,11 @@ void packahgv_setuid (struct setuid_ahgv *sys_args) {
 		get_curr_time(&sec, &nsec);
 		char ids[50];
 		get_ids(ids);
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%d|%d|%lu|%ld|%ld|endahg\n", 
+		int size = 0;
+		int is_newuser_remote = is_remote(current);
+		size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%d|%d|%d|%lu|%ld|%ld|endahg\n", 
 				213, sys_args->pid, current->start_time.tv_nsec, 
-				sys_args->newuid, ids, sys_args->rc, current->tgid, 
+				sys_args->newuid, ids, sys_args->rc, is_newuser_remote, current->tgid, 
 				sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
