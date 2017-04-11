@@ -12059,7 +12059,6 @@ struct accept_ahgv {
   int             rc;                                                           
 };
 
-[socketcall]startahg|102|5|641|331096737|4|9||1|641|1491928496|615570|endahg
 void packahgv_accept(struct accept_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
