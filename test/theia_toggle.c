@@ -26,7 +26,7 @@ int main (int argc, char* argv[]) {
 		}
 		else if(strcmp(argv[2], "off") == 0){
 			theia_logging_off(fd);
-			execl("/bin/rm", "/bin/rm", "/home/yang/theia-control.conf", (char*) NULL);
+			execl("/bin/rm", "/bin/rm", "/theia-control.conf", (char*) NULL);
 			printf("Theia logging is off\n");
 		}
 		else {
