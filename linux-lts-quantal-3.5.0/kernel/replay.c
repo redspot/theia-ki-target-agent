@@ -91,9 +91,14 @@
 int debug_flag = 0;
 
 //Yang
-const char* togglefile = "/home/yang/theia-on.conf";
-const char* control_file = "/home/yang/theia-control.conf";
-const char* toggle_record_file = "/home/yang/theia-record-on.conf";
+//const char* togglefile = "/home/yang/theia-on.conf";
+const char* control_file = "/tmp/theia-control.conf";
+//const char* toggle_record_file = "/home/yang/theia-record-on.conf";
+
+bool theia_logging_toggle = 0;
+EXPORT_SYMBOL(theia_logging_toggle);
+bool theia_recording_toggle = 0;
+EXPORT_SYMBOL(theia_recording_toggle);
 
 #define THEIA_TRACK_SHM_OPEN 1
 #define THEIA_TRACK_SHMAT 1
@@ -7424,6 +7429,7 @@ void theia_read_ahg(unsigned int fd, long rc, u_long clock) {
 	int ret;
   struct read_ahgv* pahgv = NULL;
 
+//	printk("theia_logging_toggle: %d\n", theia_logging_toggle);
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
 
@@ -7446,12 +7452,20 @@ void theia_read_ahg(unsigned int fd, long rc, u_long clock) {
 		set_fs(old_fs);                                                              
 		return;
 	}
+
 //	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { 
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { 
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+
+	if(theia_logging_toggle == 0) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
+	
 
 //	printk("from read: pid %d (%d), ppid 1: %d (%d), ppid 2: %d (%d), ppid 3: %d (%d), ppid 4: %d (%d), ppid 5: %d (%d)\n", 
 //		current->pid, current->tgid,
@@ -8005,11 +8019,16 @@ void theia_write_ahg(unsigned int fd, long rc, u_long clock) {
 	}
 
 //	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
 
   //check if the process is new; if so, send an entry of process                             
   if(is_process_new(current->pid, current->comm)) {                              
@@ -8417,11 +8436,16 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, 
 	}
 
 //	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
 
   //check if the process is new; if so, send an entry of process                             
   if(is_process_new(current->pid, current->comm)) {                              
@@ -8648,11 +8672,16 @@ void theia_close_ahg(int fd) {
 	}
 
 //	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
 
   //check if the process is new; if so, send an entry of process                             
   if(is_process_new(current->pid, current->comm)) {                              
@@ -8876,11 +8905,16 @@ void theia_execve_ahg(const char *filename, char *ssh_conn) {
 
 
 //	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
 
   //check if the process is new; if so, send an entry of process                             
   if(is_process_new(current->pid, current->comm)) {                              
@@ -9319,14 +9353,21 @@ int theia_start_record(const char *filename, const char __user *const __user *__
   printk("theia_start_record, execve filename: %s (uid:%d), in whitelist !\n", filename, cred->uid); 
 
 	//record toggle
-	ret = sys_access(toggle_record_file, 0/*F_OK*/);                                       
-	if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//	ret = sys_access(toggle_record_file, 0/*F_OK*/);                                       
+//	if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//		set_fs(old_fs);                                                              
+//    rc = do_execve(filename, __argv, __envp, regs);                                 
+//    theia_execve_ahg(filename, ssh_conn);
+//    KFREE(ssh_conn);
+//    return rc;
+//	} 
+	if(theia_recording_toggle == 0) {
 		set_fs(old_fs);                                                              
     rc = do_execve(filename, __argv, __envp, regs);                                 
     theia_execve_ahg(filename, ssh_conn);
     KFREE(ssh_conn);
     return rc;
-	} 
+	}
 
   const char *whitelist1;                                                             
   whitelist1 = "/home/yang/tests/hello";                                              
@@ -9501,11 +9542,16 @@ void theia_mount_ahg(char __user *dev_name, char __user *dir_name, char __user *
 		return;
 	}
 //	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { 
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { 
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
 
   //check if the process is new; if so, send an entry of process                             
   if(is_process_new(current->pid, current->comm)) {                              
@@ -9723,11 +9769,16 @@ void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
 	}
 
 //	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
 
   //check if the process is new; if so, send an entry of process                             
   if(is_process_new(current->pid, current->comm)) {                              
@@ -10010,11 +10061,16 @@ void theia_ioctl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long 
 		return;
 	}
 //	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { 
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { 
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
 
   //check if the process is new; if so, send an entry of process                             
   if(is_process_new(current->pid, current->comm)) {                              
@@ -10835,11 +10891,16 @@ void theia_munmap_ahg(unsigned long addr, size_t len, long rc, u_long clock) {
 	}
 
 //	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
 
   //check if the process is new; if so, send an entry of process                             
   if(is_process_new(current->pid, current->comm)) {                              
@@ -11998,6 +12059,7 @@ struct accept_ahgv {
   int             rc;                                                           
 };
 
+[socketcall]startahg|102|5|641|331096737|4|9||1|641|1491928496|615570|endahg
 void packahgv_accept(struct accept_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
@@ -12187,11 +12249,16 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 		return;
 	}
 //	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { 
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { 
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
 
   //check if the process is new; if so, send an entry of process                             
   if(is_process_new(current->pid, current->comm)) {                              
@@ -12553,11 +12620,16 @@ void theia_ipc_ahg(long rc, uint call, int first, u_long second,
 		return;
 	}
 //	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { 
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { 
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
 
   //check if the process is new; if so, send an entry of process                             
   if(is_process_new(current->pid, current->comm)) {                              
@@ -13348,11 +13420,16 @@ void theia_clone_ahg(long new_pid) {
 		return;
 	}
 //	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { 
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { 
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
 
   //check if the process is new; if so, send an entry of process                             
   if(is_process_new(current->pid, current->comm)) {                              
@@ -13489,11 +13566,16 @@ void theia_mprotect_ahg(u_long address, u_long len, uint16_t prot, long rc) {
 	}
 
 //	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
 
   //check if the process is new; if so, send an entry of process                             
   if(is_process_new(current->pid, current->comm)) {                              
@@ -15458,11 +15540,16 @@ u_long flags, u_long pgoff, long rc, u_long clock) {
 	}
 
 //	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
 
   //check if the process is new; if so, send an entry of process                             
   if(is_process_new(current->pid, current->comm)) {                              
@@ -15691,14 +15778,14 @@ int theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, un
 
 	rc = sys_mmap_pgoff(addr, len, prot, flags, fd, pgoff);
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-	ret = sys_access(togglefile, 0/*F_OK*/); //only trace shr access at logging status
-	set_fs(old_fs);
+//  mm_segment_t old_fs = get_fs();                                                
+//  set_fs(KERNEL_DS);
+//	ret = sys_access(togglefile, 0/*F_OK*/); //only trace shr access at logging status
+//	set_fs(old_fs);
 
 	//printk("toggle access is %d, %s\n", ret, current->comm);
-	if(ret >= 0) {
-		printk("togglefile is ok\n");
+	if(theia_logging_toggle == 1) {
+		printk("logging toggle is on\n");
 		if ((rc > 0 || rc < -1024) && ((long) fd) >= 0 ) {
 			printk("2 ok\n");
 			struct vm_area_struct *vma;
@@ -16044,11 +16131,16 @@ void theia_setuid_ahg(uid_t uid, int rc, u_long clock) {
 		return;
 	}
 //	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { 
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { 
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
     set_fs(old_fs);                                                              
 		return;
   } 
+
 
   //check if the process is new; if so, send an entry of process                             
   if(is_process_new(current->pid, current->comm)) {                              

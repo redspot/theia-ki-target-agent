@@ -162,3 +162,20 @@ long reset_replay_ndx(int fd_spec)
 {
     return ioctl (fd_spec, SPECI_RESET_REPLAY_NDX);
 }
+
+int theia_logging_on(int fd_spec) {
+	return ioctl (fd_spec, THEIA_LOGGING_ON);
+}
+
+int theia_logging_off(int fd_spec) {
+	return ioctl (fd_spec, THEIA_LOGGING_OFF);
+}
+
+int theia_recording_on(int fd_spec) {
+	return ioctl (fd_spec, THEIA_RECORDING_ON);
+}
+
+int theia_recording_off(int fd_spec) {
+	return ioctl (fd_spec, THEIA_RECORDING_OFF);
+}
+

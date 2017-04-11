@@ -67,5 +67,9 @@ struct filemap_entry_data {
 #define SPECI_GET_NUM_FILEMAP_ENTRIES _IOR('u',12,struct filemap_num_data)
 #define SPECI_GET_FILEMAP _IOR('u', 13,struct filemap_entry_data)
 #define SPECI_RESET_REPLAY_NDX _IO('u', 14)
+#define THEIA_LOGGING_ON _IO('u', 15)
+#define THEIA_LOGGING_OFF _IO('u', 16)
+#define THEIA_RECORDING_ON _IO('u', 17)
+#define THEIA_RECORDING_OFF _IO('u', 18)
 
 #endif
