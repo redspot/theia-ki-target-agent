@@ -18,6 +18,9 @@
 MODULE_AUTHOR("Jason Flinn");
 MODULE_LICENSE("GPL");
 
+extern bool theia_logging_toggle;
+extern bool theia_recording_toggle;
+
 /* Debugging stuff */
 //#define DPRINT printk
 #define DPRINT(x,...)
@@ -58,6 +61,19 @@ spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
 	DPRINT ("pid %d cmd number 0x%08x\n", current->pid, cmd);
 
 	switch (cmd) {
+	case THEIA_LOGGING_ON:
+		theia_logging_toggle = 1;
+		return 0;
+	case THEIA_LOGGING_OFF:
+		theia_logging_toggle = 0;
+		return 0;
+	case THEIA_RECORDING_ON:
+		theia_recording_toggle = 1;
+		return 0;
+	case THEIA_RECORDING_OFF:
+		theia_recording_toggle = 0;
+		return 0;
+
 	case SPECI_REPLAY_FORK:
 		if (len != sizeof(rdata)) {
 			printk ("ioctl SPECI_FORK_REPLAY fails, len %d\n", len);

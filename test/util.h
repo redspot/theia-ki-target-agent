@@ -52,6 +52,11 @@ int get_filemap(int fd_spec, int fd, loff_t offset, int size, void* entries, int
 
 long reset_replay_ndx(int fd_spec);
 
+int theia_logging_on(int fd_spec);
+int theia_logging_off(int fd_spec);
+int theia_recording_on(int fd_spec);
+int theia_recording_off(int fd_spec);
+
 #ifdef __cplusplus
 }
 #endif
