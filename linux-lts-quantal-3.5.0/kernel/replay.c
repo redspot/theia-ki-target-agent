@@ -92,7 +92,7 @@ int debug_flag = 0;
 
 //Yang
 //const char* togglefile = "/home/yang/theia-on.conf";
-const char* control_file = "/theia-control.conf";
+const char* control_file = "/tmp/theia-control.conf";
 //const char* toggle_record_file = "/home/yang/theia-record-on.conf";
 
 bool theia_logging_toggle = 0;
@@ -12059,6 +12059,7 @@ struct accept_ahgv {
   int             rc;                                                           
 };
 
+[socketcall]startahg|102|5|641|331096737|4|9||1|641|1491928496|615570|endahg
 void packahgv_accept(struct accept_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
