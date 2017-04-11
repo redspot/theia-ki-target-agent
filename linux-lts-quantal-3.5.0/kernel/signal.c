@@ -59,7 +59,8 @@
 #include <linux/time.h>
 
 extern ds_list_t* glb_process_list;
-extern const char* togglefile;
+//extern const char* togglefile;
+extern bool theia_logging_toggle;
 extern const char* control_file;
 extern struct dentry	*theia_dir;
 extern struct rchan	*theia_chan;
@@ -1339,11 +1340,15 @@ void theia_shrread_ahg(unsigned int address, u_long clock) {
 	}
 
 //	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
     set_fs(old_fs);                                                              
 		return;
-  } 
+	}
 
   //check if the process is new; if so, send an entry of process                             
   if(is_process_new(current->pid, current->comm)) {                              
@@ -1422,11 +1427,15 @@ void theia_shrwrite_ahg(unsigned int address, u_long clock) {
 	}
 
 //	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
     set_fs(old_fs);                                                              
 		return;
-  } 
+	}
 
   //check if the process is new; if so, send an entry of process                             
   if(is_process_new(current->pid, current->comm)) {                              
@@ -1553,11 +1562,11 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 //Yang: we pre-load before the spin lock
 //	load_from_cache_file(buf_theia);
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-	//For Theia Logging
-	ret = sys_access(togglefile, 0/*F_OK*/);                                       
-	set_fs(old_fs);
+//  mm_segment_t old_fs = get_fs();                                                
+//  set_fs(KERNEL_DS);
+//	//For Theia Logging
+//	ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//	set_fs(old_fs);
 
 	spin_lock_irqsave(&t->sighand->siglock, flags);
 	action = &t->sighand->action[sig-1];
@@ -1597,7 +1606,8 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 
 	void __user *vma_address = (void __user*)vma->vm_start;
 
-	if( ret >= 0 && !(t->record_thrd || t->replay_thrd)) { 
+//	if( ret >= 0 && !(t->record_thrd || t->replay_thrd)) { 
+	if( theia_logging_toggle == 1 && !(t->record_thrd || t->replay_thrd)) { 
 		action->sa.sa_handler = SIG_IGN;
 		//This should be the very first mem access
 		if(!(protection & (PROT_READ | PROT_WRITE))) {

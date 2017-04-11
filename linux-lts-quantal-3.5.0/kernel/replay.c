@@ -91,9 +91,9 @@
 int debug_flag = 0;
 
 //Yang
-const char* togglefile = "/home/yang/theia-on.conf";
-const char* control_file = "/home/yang/theia-control.conf";
-const char* toggle_record_file = "/home/yang/theia-record-on.conf";
+//const char* togglefile = "/home/yang/theia-on.conf";
+const char* control_file = "/theia-control.conf";
+//const char* toggle_record_file = "/home/yang/theia-record-on.conf";
 
 bool theia_logging_toggle = 0;
 EXPORT_SYMBOL(theia_logging_toggle);
