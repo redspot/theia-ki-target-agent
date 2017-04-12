@@ -7249,6 +7249,39 @@ long file_cache_file_written(struct filemap_data *data, int fd) {
 	return 0;
 }
 
+int get_theia_dir(char* dir) {
+	struct mm_struct *mm = current->mm;
+	if (!mm)
+		return -1;
+
+	unsigned long env_start = mm->env_start;
+	unsigned long env_len   = mm->env_end - env_start;
+	if (!env_start || !env_len)
+		return 0;
+
+	char *env = (char*)vmalloc(env_len);
+	char *env_mem = env;
+	char *ret;
+	copy_from_user((void*)env, (const void __user*)env_start, env_len);
+
+	int i, skip;
+	for (i = 0; i < env_len; i+= skip, env += skip) {
+		ret = strstr(env, "OMNIPLAY_DIR=");
+		if (ret) {
+			// SL: we can return a remote IP address and port if we want
+			printk("omniplay:(%s)\n", ret+13);
+			vfree(env_mem);
+			return 1;
+		}
+		skip = strlen(env) + 1;
+		printk("strlen(env):%d\n", skip);
+	}
+
+	vfree(env_mem);
+	return 0;
+
+}
+
 // return 1 if the current process is associated with an SSH session 
 int is_remote(struct task_struct *tsk) {
 	struct mm_struct *mm = tsk->mm;
@@ -7428,7 +7461,10 @@ void packahgv_read (struct read_ahgv *sys_args) {
 void theia_read_ahg(unsigned int fd, long rc, u_long clock) {
 	int ret;
   struct read_ahgv* pahgv = NULL;
-
+	
+//	char theia_home_dir[30];
+//	get_theia_dir(theia_home_dir);
+	
 //	printk("theia_logging_toggle: %d\n", theia_logging_toggle);
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
@@ -9344,13 +9380,13 @@ int theia_start_record(const char *filename, const char __user *const __user *__
   char *ssh_conn = NULL;
   ssh_conn = get_ssh_conn(__envp);
 
-	printk("is_remote: %d\n", is_remote(current));
+//	printk("is_remote: %d\n", is_remote(current));
 
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
 
 	const struct cred *cred = current_cred();
-  printk("theia_start_record, execve filename: %s (uid:%d), in whitelist !\n", filename, cred->uid); 
+//  printk("theia_start_record, execve filename: %s (uid:%d), in whitelist !\n", filename, cred->uid); 
 
 	//record toggle
 //	ret = sys_access(toggle_record_file, 0/*F_OK*/);                                       
@@ -12020,6 +12056,8 @@ void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port
 	cc = (unsigned char *)p_sockaddr;
 	*port = cc[2]*0x100+cc[3];
 	sprintf(ip, "%u.%u.%u.%u",cc[4],cc[5],cc[6],cc[7]);
+
+	printk("ip is %s, port: %lu\n", ip, *port);
 	
 	KFREE(p_sockaddr);
 
@@ -12059,16 +12097,20 @@ struct accept_ahgv {
   int             rc;                                                           
 };
 
-[socketcall]startahg|102|5|641|331096737|4|9||1|641|1491928496|615570|endahg
 void packahgv_accept(struct accept_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
+		char ip[50] = "";
 		get_curr_time(&sec, &nsec);
+		if(strlen(sys_args->ip) == 0)
+			sprintf(ip, "NA");
+		else
+			strcpy(ip, sys_args->ip);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
 				102, SYS_ACCEPT, sys_args->pid, current->start_time.tv_nsec, 
-				sys_args->rc, sys_args->sock_fd, sys_args->ip, sys_args->port, current->tgid, sec, nsec);
+				sys_args->rc, sys_args->sock_fd, ip, sys_args->port, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
