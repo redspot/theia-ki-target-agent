@@ -91,8 +91,6 @@
 int debug_flag = 0;
 
 //Yang
-bool is_theia_home_dir_set = false;
-char theia_home_dir[30];
 
 //const char* togglefile = "/home/yang/theia-on.conf";
 const char* control_file = "/tmp/theia-control.conf";
@@ -3797,48 +3795,6 @@ libpath_env_free (char** env)
 	KFREE(env);
 }
 
-void set_theia_home_dir() {
-
-	if(is_theia_home_dir_set) {
-		return;
-	}
-
-	struct mm_struct *mm = current->mm;
-	if (!mm){
-		printk("set_theia_home_dir !mm\n");
-		return;
-	}
-
-	unsigned long env_start = mm->env_start;
-	unsigned long env_len   = mm->env_end - env_start;
-	if (!env_start || !env_len)
-		return;
-
-	char *env = (char*)vmalloc(env_len);
-	char *env_mem = env;
-	char *ret;
-	copy_from_user((void*)env, (const void __user*)env_start, env_len);
-
-	int i, skip;
-	for (i = 0; i < env_len; i+= skip, env += skip) {
-		ret = strstr(env, "OMNIPLAY_DIR=");
-		if (ret) {
-			// SL: we can return a remote IP address and port if we want
-			sprintf(theia_home_dir, "%s", ret+13);
-			vfree(env_mem);
-			is_theia_home_dir_set = true;
-			printk("theia_home_dir: (%s)", theia_home_dir);
-			return;
-		}
-		skip = strlen(env) + 1;
-	}
-	printk("%s", env_mem);
-	vfree(env_mem);
-	printk("set_theia_home_dir not found\n");
-	return;
-
-}
-
 /* This function forks off a separate process which replays the foreground task.*/
 int fork_replay_theia (char __user* logdir, const char* filename, const char __user *const __user *args,
 		const char __user *const __user *env, char* linker, int save_mmap, int fd,
@@ -3933,9 +3889,7 @@ int fork_replay_theia (char __user* logdir, const char* filename, const char __u
 
 
 	sprintf (ckpt, "%s/ckpt", prg->rg_logdir);
-	set_theia_home_dir();
 	char libpath_contents[200];
-	//sprintf(libpath_contents, "LD_LIBRARY_PATH=%s/eglibc-2.15/prefix/lib:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib", theia_home_dir);
 	sprintf(libpath_contents, "LD_LIBRARY_PATH=/lib/theia_libs:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib");
 	char* libpath = KMALLOC (strlen(libpath_contents), GFP_KERNEL);
 	strcpy(libpath, libpath_contents);
@@ -4068,7 +4022,6 @@ int fork_replay (char __user* logdir, const char __user *const __user *args,
 
 
 	sprintf (ckpt, "%s/ckpt", prg->rg_logdir);
-	set_theia_home_dir();
 	char libpath_contents[200];
 	sprintf(libpath_contents, "LD_LIBRARY_PATH=/lib/theia_libs:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib");
 	char* libpath = KMALLOC (strlen(libpath_contents), GFP_KERNEL);
