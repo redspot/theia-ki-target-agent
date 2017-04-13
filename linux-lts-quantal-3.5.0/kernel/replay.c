@@ -91,6 +91,7 @@
 int debug_flag = 0;
 
 //Yang
+
 //const char* togglefile = "/home/yang/theia-on.conf";
 const char* control_file = "/tmp/theia-control.conf";
 //const char* toggle_record_file = "/home/yang/theia-record-on.conf";
@@ -3888,7 +3889,8 @@ int fork_replay_theia (char __user* logdir, const char* filename, const char __u
 
 
 	sprintf (ckpt, "%s/ckpt", prg->rg_logdir);
-	char* libpath_contents = "LD_LIBRARY_PATH=/home/yang/omniplay/eglibc-2.15/prefix/lib:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib";	
+	char libpath_contents[200];
+	sprintf(libpath_contents, "LD_LIBRARY_PATH=/lib/theia_libs:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib");
 	char* libpath = KMALLOC (strlen(libpath_contents), GFP_KERNEL);
 	strcpy(libpath, libpath_contents);
 	argbuf = copy_args (args, env, &argbuflen, libpath_contents, strlen(libpath_contents));
@@ -4020,7 +4022,8 @@ int fork_replay (char __user* logdir, const char __user *const __user *args,
 
 
 	sprintf (ckpt, "%s/ckpt", prg->rg_logdir);
-	char* libpath_contents = "LD_LIBRARY_PATH=/home/yang/omniplay/eglibc-2.15/prefix/lib:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib";	
+	char libpath_contents[200];
+	sprintf(libpath_contents, "LD_LIBRARY_PATH=/lib/theia_libs:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib");
 	char* libpath = KMALLOC (strlen(libpath_contents), GFP_KERNEL);
 	strcpy(libpath, libpath_contents);
 	argbuf = copy_args (args, env, &argbuflen, libpath_contents, strlen(libpath_contents));
@@ -7249,39 +7252,6 @@ long file_cache_file_written(struct filemap_data *data, int fd) {
 	return 0;
 }
 
-int get_theia_dir(char* dir) {
-	struct mm_struct *mm = current->mm;
-	if (!mm)
-		return -1;
-
-	unsigned long env_start = mm->env_start;
-	unsigned long env_len   = mm->env_end - env_start;
-	if (!env_start || !env_len)
-		return 0;
-
-	char *env = (char*)vmalloc(env_len);
-	char *env_mem = env;
-	char *ret;
-	copy_from_user((void*)env, (const void __user*)env_start, env_len);
-
-	int i, skip;
-	for (i = 0; i < env_len; i+= skip, env += skip) {
-		ret = strstr(env, "OMNIPLAY_DIR=");
-		if (ret) {
-			// SL: we can return a remote IP address and port if we want
-			printk("omniplay:(%s)\n", ret+13);
-			vfree(env_mem);
-			return 1;
-		}
-		skip = strlen(env) + 1;
-		printk("strlen(env):%d\n", skip);
-	}
-
-	vfree(env_mem);
-	return 0;
-
-}
-
 // return 1 if the current process is associated with an SSH session 
 int is_remote(struct task_struct *tsk) {
 	struct mm_struct *mm = tsk->mm;
@@ -7462,8 +7432,6 @@ void theia_read_ahg(unsigned int fd, long rc, u_long clock) {
 	int ret;
   struct read_ahgv* pahgv = NULL;
 	
-//	char theia_home_dir[30];
-//	get_theia_dir(theia_home_dir);
 	
 //	printk("theia_logging_toggle: %d\n", theia_logging_toggle);
   mm_segment_t old_fs = get_fs();                                                
@@ -8902,8 +8870,8 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 		get_ids(ids);
 		int is_user_remote = is_remote(current);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%s|%s|%d|%d|%ld|%ld|endahg\n", 
-				11, sys_args->pid, current->start_time.tv_nsec, ids, 
-				sys_args->filename, is_user_remote, current->tgid, sec, nsec);
+				11, sys_args->pid, current->start_time.tv_nsec, 
+				sys_args->filename, ids, is_user_remote, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
