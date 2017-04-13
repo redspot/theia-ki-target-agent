@@ -7290,21 +7290,52 @@ void get_ids(char* ids) {
 		cred->gid, cred->egid, cred->sgid, cred->fsgid);
 }
 
+/*
 int get_task_fullpath(struct task_struct *tsk, char *buf, size_t buflen) {
 	struct mm_struct *mm = tsk->mm;
+        int ret = 0;
 	if (!mm)
 		return -1;
 
 	struct vm_area_struct *vma;
+	down_read(&mm->mmap_sem);
 	vma = find_vma(mm, mm->start_code);
-	if (vma && vma->vm_file && vma->vm_file->f_path) {
+	if (vma && vma->vm_file) {
 		char vmfpath[PATH_MAX];
 		char *path = d_path(&(vma->vm_file->f_path), vmfpath, PATH_MAX);	
-//		printk("SL: fullpath: %s\n", path);
+		printk("SL: fullpath: %s\n", path);
 		strncpy(buf, path, buflen);
+		ret = 0;
 	}
+        else
+		ret = -1;
+	up_read(&mm->mmap_sem);
 
-	return 0;
+	return ret;
+}
+*/
+
+char* get_task_fullpath(struct task_struct *tsk, char *buf, size_t buflen) {
+	struct mm_struct *mm = tsk->mm;
+        int ret = 0;
+	if (!mm)
+		return NULL;
+
+        char *path = NULL;
+
+	struct vm_area_struct *vma;
+	down_read(&mm->mmap_sem);
+	vma = find_vma(mm, mm->start_code);
+	if (vma && vma->vm_file) {
+		path = d_path(&(vma->vm_file->f_path), buf, buflen);	
+		if (!IS_ERR(path))
+			printk("SL: fullpath: %s\n", path);
+	}
+        else
+		path = NULL;
+	up_read(&mm->mmap_sem);
+
+	return path;
 }
 
 
@@ -7409,19 +7440,27 @@ void packahgv_process() {
 		int size = 0;
 		int is_user_remote = is_remote(current);
 		struct task_struct *tsk = pid_task(find_vpid(current->real_parent->pid), PIDTYPE_PID);	
+
+  		char *fpathbuf = (char*)vmalloc(PATH_MAX);
+	 	char *fpath    = get_task_fullpath(current, fpathbuf, PATH_MAX);
+		if (!fpath) {
+			fpath = current->comm;
+		}
+
 		if(tsk) {
 			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%d|%d|%ld|%ld|endahg\n", 
 				399/*used for new process*/, current->pid, current->start_time.tv_nsec, 
 				ids, current->real_parent->pid, 
-				tsk->start_time.tv_nsec, current->comm, is_user_remote, current->tgid, sec, nsec);
+				tsk->start_time.tv_nsec, fpath, is_user_remote, current->tgid, sec, nsec);
 		}
 		else {
 			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%d|%d|%ld|%ld|endahg\n", 
 					399/*used for new process*/, current->pid, current->start_time.tv_nsec, 
 					ids, current->real_parent->pid, 
-				  -1, current->comm, is_user_remote, current->tgid, sec, nsec);
+				  -1, fpath, is_user_remote, current->tgid, sec, nsec);
 		}
 		relay_write(theia_chan, buf, size);
+		vfree(fpathbuf);
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -9363,6 +9402,14 @@ int theia_start_record(const char *filename, const char __user *const __user *__
   ssh_conn = get_ssh_conn(__envp);
 
 //	printk("is_remote: %d\n", is_remote(current));
+
+/*
+  char *buf = (char*)vmalloc(PATH_MAX);
+  char *path = get_task_fullpath(current, buf, PATH_MAX);
+  if (path)
+	  printk("SL2: fullpath: %s\n", path);
+  vfree(buf); buf = NULL;
+*/
 
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
