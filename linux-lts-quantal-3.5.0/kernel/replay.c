@@ -7288,9 +7288,23 @@ void get_ids(char* ids) {
 	sprintf(ids, "%d/%d/%d/%d/%d/%d/%d/%d", 
 		cred->uid, cred->euid, cred->suid, cred->fsuid, 
 		cred->gid, cred->egid, cred->sgid, cred->fsgid);
+}
 
-//SL: perhaps here?
-//	printk("is_remote: %d\n", is_remote());
+int get_task_fullpath(struct task_struct *tsk, char *buf, size_t buflen) {
+	struct mm_struct *mm = tsk->mm;
+	if (!mm)
+		return -1;
+
+	struct vm_area_struct *vma;
+	vma = find_vma(mm, mm->start_code);
+	if (vma && vma->vm_file && vma->vm_file->f_path) {
+		char vmfpath[PATH_MAX];
+		char *path = d_path(&(vma->vm_file->f_path), vmfpath, PATH_MAX);	
+//		printk("SL: fullpath: %s\n", path);
+		strncpy(buf, path, buflen);
+	}
+
+	return 0;
 }
 
 
@@ -15765,10 +15779,12 @@ replay_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 			printk("vma is %p\n",vma);
 	up_read(&mm->mmap_sem);
 
+/*
 	if(given_fd == 5) { // only for this test
 		printk("replay: protection about myregion1 will be changed\n");
 		sys_mprotect(rc, len, PROT_NONE);
 	}
+*/
 
 	// Save the regions for preallocation for replay+pin
 	if (prt->rp_record_thread->rp_group->rg_save_mmap_flag) {
@@ -15784,7 +15800,7 @@ replay_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 int theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff) {
 	long rc;
 	int ret;
-	char vm_file_path[100];
+//	char vm_file_path[100];
 
 	rc = sys_mmap_pgoff(addr, len, prot, flags, fd, pgoff);
 
@@ -15794,6 +15810,7 @@ int theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, un
 //	set_fs(old_fs);
 
 	//printk("toggle access is %d, %s\n", ret, current->comm);
+/*
 	if(theia_logging_toggle == 1) {
 		printk("logging toggle is on\n");
 		if ((rc > 0 || rc < -1024) && ((long) fd) >= 0 ) {
@@ -15809,7 +15826,6 @@ int theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, un
 					sprintf(vm_file_path, "%s", vma->vm_file->f_dentry->d_iname);
 				}
 				up_read(&mm->mmap_sem);
-
 				if(strcmp(vm_file_path, "myregion1") == 0) {
 			printk("5 ok\n");
 					ret = sys_mprotect(rc, len, PROT_NONE);
@@ -15818,6 +15834,7 @@ int theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, un
 			}
 		}
 	}
+*/
 	theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc, 0);
 
 	return rc;
