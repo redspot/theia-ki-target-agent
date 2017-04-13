@@ -7288,9 +7288,23 @@ void get_ids(char* ids) {
 	sprintf(ids, "%d/%d/%d/%d/%d/%d/%d/%d", 
 		cred->uid, cred->euid, cred->suid, cred->fsuid, 
 		cred->gid, cred->egid, cred->sgid, cred->fsgid);
+}
 
-//SL: perhaps here?
-//	printk("is_remote: %d\n", is_remote());
+int get_task_fullpath(struct task_struct *tsk, char *buf, size_t buflen) {
+	struct mm_struct *mm = tsk->mm;
+	if (!mm)
+		return -1;
+
+	struct vm_area_struct *vma;
+	vma = find_vma(mm, mm->start_code);
+	if (vma && vma->vm_file && vma->vm_file->f_path) {
+		char vmfpath[PATH_MAX];
+		char *path = d_path(&(vma->vm_file->f_path), vmfpath, PATH_MAX);	
+//		printk("SL: fullpath: %s\n", path);
+		strncpy(buf, path, buflen);
+	}
+
+	return 0;
 }
 
 
