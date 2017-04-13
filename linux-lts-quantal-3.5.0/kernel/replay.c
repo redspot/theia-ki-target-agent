@@ -8870,8 +8870,8 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 		get_ids(ids);
 		int is_user_remote = is_remote(current);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%s|%s|%d|%d|%ld|%ld|endahg\n", 
-				11, sys_args->pid, current->start_time.tv_nsec, ids, 
-				sys_args->filename, is_user_remote, current->tgid, sec, nsec);
+				11, sys_args->pid, current->start_time.tv_nsec, 
+				sys_args->filename, ids, is_user_remote, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
