@@ -7319,21 +7319,25 @@ int get_task_fullpath(struct task_struct *tsk, char *buf, size_t buflen) {
 
 char* get_task_fullpath(struct task_struct *tsk, char *buf, size_t buflen) {
 	struct mm_struct *mm = tsk->mm;
+        struct file *exe_file;
+        char *path = NULL;
         int ret = 0;
+
 	if (!mm)
 		return NULL;
 
-        char *path = NULL;
-
 	struct vm_area_struct *vma;
 	down_read(&mm->mmap_sem);
-	vma = find_vma(mm, mm->start_code);
-	if (vma && vma->vm_file) {
-		path = d_path(&(vma->vm_file->f_path), buf, buflen);	
+//	vma = find_vma(mm, mm->start_code);
+//	if (vma && vma->vm_file) {
+	exe_file = get_mm_exe_file(mm);
+	if (exe_file) {
+//		path = d_path(&(vma->vm_file->f_path), buf, buflen);	
+		path = d_path(&(exe_file->f_path), buf, buflen);	
 		if (!IS_ERR(path)) {
 			printk("SL: fullpath: %s\n", path);
 
-			if (path[0] == '\0') /* don't know why */
+			if (path[0] == '\0')
 				path = NULL;
 		}
 		else
@@ -7345,7 +7349,6 @@ char* get_task_fullpath(struct task_struct *tsk, char *buf, size_t buflen) {
 
 	return path;
 }
-
 
 //Yang
 struct read_ahgv {
@@ -8929,7 +8932,13 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 		get_curr_time(&sec, &nsec);
 		char ids[50];
 		get_ids(ids);
-		int is_user_remote = is_remote(current);
+//		int is_user_remote = is_remote(current);
+		int is_user_remote;
+		struct task_struct *tsk = pid_task(find_vpid(current->real_parent->pid), PIDTYPE_PID);	
+		if (tsk)
+			is_user_remote = is_remote(tsk); // try to use parent's env
+		else
+			is_user_remote = is_remote(current);
 
   		char *fpathbuf = (char*)vmalloc(PATH_MAX);
 	 	char *fpath    = get_task_fullpath(current, fpathbuf, PATH_MAX);
