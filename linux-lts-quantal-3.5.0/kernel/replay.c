@@ -3588,6 +3588,7 @@ get_libpath (const char __user* const __user* env)
 	return NULL;
 }
 
+/*
 static char* 
 get_ssh_conn(const char __user* const __user* env)
 {
@@ -3631,6 +3632,7 @@ get_ssh_conn(const char __user* const __user* env)
 
 	return NULL;
 }
+*/
 
 // Checks to see if matching libpath is present in arg/env buffer - returns 0 if true, index if no match, -1 if not present
 static int
@@ -8932,7 +8934,7 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 }
 
 // void theia_execve_ahg(const char *filename, const char __user *const __user *envp) {
-void theia_execve_ahg(const char *filename, char *ssh_conn) {
+void theia_execve_ahg(const char *filename) {
 	int ret;
   struct execve_ahgv* pahgv = NULL;
 
@@ -9009,13 +9011,6 @@ void theia_execve_ahg(const char *filename, char *ssh_conn) {
 	}
 	pahgv->pid = current->pid;
 	strncpy(pahgv->filename, filename, sizeof(pahgv->filename));
-	if (ssh_conn) {
-		printk("%s\n", ssh_conn);
-		pahgv->is_user_remote = 1;
-	}
-	else {
-		pahgv->is_user_remote = 0;
-	}
 	packahgv_execve(pahgv);
 	KFREE(pahgv);	
 //	KFREE(dumped_envp);	
@@ -9038,7 +9033,6 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 	char* argbuf, *newbuf;
 	int argbuflen, present;
 	char** env;
-	char *ssh_conn;
 	mm_segment_t old_fs;
 #ifdef TIME_TRICK
 	struct timeval tv;
@@ -9081,8 +9075,6 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 	}
 */
 
-	ssh_conn = get_ssh_conn(__envp);
-
 	// Hack to support multiple glibcs - make sure that LD_LIBRARY_PATH is in there
 	present = is_libpath_present (current->record_thrd->rp_group, argbuf);
 	if (present) {
@@ -9105,9 +9097,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 	}
 
 	//Yang
-//	theia_execve_ahg(filename, __envp);
-	theia_execve_ahg(filename, ssh_conn);
-	KFREE(ssh_conn);
+	theia_execve_ahg(filename);
 
 	new_syscall_done (11, rc);
 	if (rc >= 0) {
@@ -9378,16 +9368,12 @@ replay_execve(const char *filename, const char __user *const __user *__argv, con
 int theia_sys_execve(const char *filename, const char __user *const __user *__argv, const char __user *const __user *__envp, struct pt_regs *regs) {
 	long rc;
 
-	char *ssh_conn = NULL;
-	ssh_conn = get_ssh_conn(__envp);
-
 	rc = do_execve(filename, __argv, __envp, regs);
 
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
 	{ 
-		theia_execve_ahg(filename, ssh_conn);
-		KFREE(ssh_conn);
+		theia_execve_ahg(filename);
 	}
 	return rc;
 }
@@ -9397,9 +9383,6 @@ int theia_start_record(const char *filename, const char __user *const __user *__
   int ret;
   int fd;
   long rc;
-
-  char *ssh_conn = NULL;
-  ssh_conn = get_ssh_conn(__envp);
 
 //	printk("is_remote: %d\n", is_remote(current));
 
@@ -9429,8 +9412,7 @@ int theia_start_record(const char *filename, const char __user *const __user *__
 	if(theia_recording_toggle == 0) {
 		set_fs(old_fs);                                                              
     rc = do_execve(filename, __argv, __envp, regs);                                 
-    theia_execve_ahg(filename, ssh_conn);
-    KFREE(ssh_conn);
+    theia_execve_ahg(filename);
     return rc;
 	}
 
@@ -9453,9 +9435,8 @@ int theia_start_record(const char *filename, const char __user *const __user *__
     printk("/dev/spec0 not ready yet. ret %d\n", ret);
     set_fs(old_fs);
     rc = do_execve(filename, __argv, __envp, regs);                                 
-		theia_execve_ahg(filename, ssh_conn);
-		KFREE(ssh_conn);
-		return rc;
+    theia_execve_ahg(filename);
+    return rc;
   }
 
 //  fd = sys_open ("/tmp/test.txt", O_RDWR, 0664 /*mode should be ignored anyway*/);
@@ -9477,10 +9458,9 @@ int theia_start_record(const char *filename, const char __user *const __user *__
     if (fd < 0) {
       printk("[theia_start_record]open /dev/spec0 failed\n");
       set_fs(old_fs);
-			rc = do_execve(filename, __argv, __envp, regs);                                 
-			theia_execve_ahg(filename, ssh_conn);
-			KFREE(ssh_conn);
-			return rc;
+      rc = do_execve(filename, __argv, __envp, regs);                                 
+      theia_execve_ahg(filename);
+      return rc;
     }
 
 //Yang: i think pipe is not needed here as we dont have parent process to send to..
