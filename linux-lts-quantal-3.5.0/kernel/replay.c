@@ -7330,8 +7330,14 @@ char* get_task_fullpath(struct task_struct *tsk, char *buf, size_t buflen) {
 	vma = find_vma(mm, mm->start_code);
 	if (vma && vma->vm_file) {
 		path = d_path(&(vma->vm_file->f_path), buf, buflen);	
-		if (!IS_ERR(path))
+		if (!IS_ERR(path)) {
 			printk("SL: fullpath: %s\n", path);
+
+			if (path[0] == '\0') /* don't know why */
+				path = NULL;
+		}
+		else
+			path = NULL;
 	}
         else
 		path = NULL;
@@ -7445,7 +7451,7 @@ void packahgv_process() {
 
   		char *fpathbuf = (char*)vmalloc(PATH_MAX);
 	 	char *fpath    = get_task_fullpath(current, fpathbuf, PATH_MAX);
-		if (!fpath) {
+		if (!fpath) { /* sometimes we can't obtain fullpath */
 			fpath = current->comm;
 		}
 
@@ -8924,9 +8930,16 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 		char ids[50];
 		get_ids(ids);
 		int is_user_remote = is_remote(current);
+
+  		char *fpathbuf = (char*)vmalloc(PATH_MAX);
+	 	char *fpath    = get_task_fullpath(current, fpathbuf, PATH_MAX);
+		if (!fpath) {
+			fpath = sys_args->filename;
+		}
+
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%s|%s|%d|%d|%ld|%ld|endahg\n", 
 				11, sys_args->pid, current->start_time.tv_nsec, 
-				sys_args->filename, ids, is_user_remote, current->tgid, sec, nsec);
+				fpath, ids, is_user_remote, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -9449,7 +9462,7 @@ int theia_start_record(const char *filename, const char __user *const __user *__
     printk("/dev/spec0 ready ! filename: %s\n", filename);
     //should be ready to add the process to record_group
 
-    linker = "/home/yang/omniplay/eglibc-2.15/prefix/lib/ld-linux.so.2";
+    linker = "/lib/theia_libs/ld-linux.so.2";
 
     int save_mmap;
     save_mmap = 1; 
