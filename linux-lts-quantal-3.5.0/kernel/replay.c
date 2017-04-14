@@ -7317,6 +7317,27 @@ int get_task_fullpath(struct task_struct *tsk, char *buf, size_t buflen) {
 }
 */
 
+char* get_file_fullpath(struct file *opened_file, char *buf, size_t buflen) {
+	char *path = NULL;
+	int ret = 0;
+
+	if (opened_file) {
+		path = d_path(&(opened_file->f_path), buf, buflen);	
+		if (!IS_ERR(path)) {
+			printk("SL: file fullpath: %s\n", path);
+
+			if (path[0] == '\0')
+				path = NULL;
+		}
+		else
+			path = NULL;
+	}
+	else
+		path = NULL;
+
+	return path;
+}
+
 char* get_task_fullpath(struct task_struct *tsk, char *buf, size_t buflen) {
 	struct mm_struct *mm = tsk->mm;
         struct file *exe_file;
@@ -8556,12 +8577,22 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, 
 		printk ("theia_open_ahg: can't copy filename to ahgv, filename length %d, copied %d, filename:%s\n", strlen(filename), copied_length, filename); 
 		KFREE(pahgv);	
 	}
+
+	char *fpathbuf = (char*)vmalloc(PATH_MAX);
+	if(rc > 0) {
+		char *fpath    = get_file_fullpath(file, fpathbuf, PATH_MAX);
+		if (fpath) { /* sometimes we can't obtain fullpath */
+			strncpy(pahgv->filename, fpath, 204);
+		}
+	}
+
 //Yang: temp avoiding the "Text file busy" for spec cpu2006
 //	sprintf(pahgv->filename, "hellojacket");
 
 	//Reuse dmesg channel
 	packahgv_open(pahgv);
 	KFREE(pahgv);	
+	vfree(fpathbuf);
 }
 
 static asmlinkage long							
