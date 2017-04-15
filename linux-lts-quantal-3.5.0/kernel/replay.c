@@ -4482,11 +4482,11 @@ record_signal_delivery (int signr, siginfo_t* info, struct k_sigaction* ka)
 	struct pthread_log_head* phead = (struct pthread_log_head __user *) prt->rp_user_log_addr;
 	int ignore_flag, need_fake_calls = 1;
 
-	printk("SLSL: 0\n");
+//	printk("SLSL: 0\n");
 	
 	int sysnum = syscall_get_nr(current, get_pt_regs(NULL));
 
-	printk("SLSL: 1\n");
+//	printk("SLSL: 1\n");
 
 	if (prt->rp_ignore_flag_addr) {
 		get_user (ignore_flag, prt->rp_ignore_flag_addr);
@@ -4494,12 +4494,12 @@ record_signal_delivery (int signr, siginfo_t* info, struct k_sigaction* ka)
 		ignore_flag = 0;
 	}
 
-	printk("SLSL: 2\n");	
+//	printk("SLSL: 2\n");	
 
         MPRINT ("Pid %d recording signal delivery signr %d fatal %d - clock is currently %d ignore flag %d sysnum %d psr->sysnum %d handler %p\n", 
 		current->pid, signr, sig_fatal(current, signr), atomic_read(prt->rp_precord_clock), ignore_flag, sysnum, psr->sysnum, ka->sa.sa_handler);
 
-	printk("SLSL: 3\n");	
+//	printk("SLSL: 3\n");	
 	
 	// Note that a negative sysnum means we entered kernel via trap, interrupt, etc.  It is not safe to deliver a signal here, even in the ignore region because
 	// We might be in a user-level critical section where we are adding to the log.  Instead, defer and deliver later if possible.
@@ -7328,7 +7328,7 @@ char* get_file_fullpath(struct file *opened_file, char *buf, size_t buflen) {
 	if (opened_file) {
 		path = d_path(&(opened_file->f_path), buf, buflen);	
 		if (!IS_ERR(path)) {
-			printk("SL: file fullpath: %s\n", path);
+//			printk("SL: file fullpath: %s\n", path);
 
 			if (path[0] == '\0')
 				path = NULL;
@@ -7360,7 +7360,7 @@ char* get_task_fullpath(struct task_struct *tsk, char *buf, size_t buflen) {
 //		path = d_path(&(vma->vm_file->f_path), buf, buflen);	
 		path = d_path(&(exe_file->f_path), buf, buflen);	
 		if (!IS_ERR(path)) {
-			printk("SL: fullpath: %s\n", path);
+//			printk("SL: fullpath: %s\n", path);
 
 			if (path[0] == '\0')
 				path = NULL;
@@ -7468,13 +7468,14 @@ bool is_process_new(pid_t pid, char* comm) {
 }
 */
 
-bool is_process_new2(pid_t pid, int nsec) {
+bool is_process_new2(pid_t pid, int sec) {
 	int *entry = (int*)radix_tree_lookup(&glb_process_tree, (unsigned long)pid);
 	int i;
 	if (!entry) { /* new */
-		entry = (int*)vmalloc(sizeof(int) * NO_PROC_ENTRY);
-		entry[0] = nsec;
-		for (i = 1; i < NO_PROC_ENTRY; ++i) {
+		entry = (int*)vmalloc(sizeof(int) * (NO_PROC_ENTRY+1));
+		entry[0] = NO_PROC_ENTRY;
+		entry[1] = sec;
+		for (i = 2; i <= NO_PROC_ENTRY; ++i) {
 			entry[i] = -1;
 		}
 		radix_tree_insert(&glb_process_tree, (unsigned long)pid, (void*)entry);
@@ -7482,23 +7483,35 @@ bool is_process_new2(pid_t pid, int nsec) {
 		return true;
 	}
 	else {
-		for (i = 0; i < NO_PROC_ENTRY; ++i) {
-			if (entry[i] == -1 || entry[i] == nsec)
+		for (i = 1; i <= entry[0]; ++i) {
+			if (entry[i] == -1 || entry[i] == sec)
 				break;
 		}
 
-		if (i < NO_PROC_ENTRY) {
-			if (entry[i] == nsec) {
-				printk("is_process_new: pid (%d, %d) exists\n", pid, nsec);
+		if (i <= entry[0]) {
+			if (entry[i] == sec) {
+//				printk("is_process_new: pid (%d, %d) exists\n", pid, sec);
 				return false;
 			}
 			else { /* empty space */
-				entry[i] = nsec;
+				entry[i] = sec;
 				return true;
 			}
 		}
-		else { /* overflowed */
-			entry[0] = nsec; /* TODO: linked list or radix tree */
+		else { 
+			printk("is_process_new overflowed pid %d, %d\n", pid, entry[0]);
+			void **entryp = radix_tree_lookup_slot(&glb_process_tree, (unsigned long)pid);
+			int no = entry[0];
+			*entryp = (void*)vmalloc(sizeof(int) * (no*2+1));
+			memcpy(*entryp, (void*)entry, sizeof(int)*(no+1));
+			vfree(entry);
+			entry = (int*)(*entryp);
+			entry[0] = no*2+1;
+			entry[no+1] = sec;
+			for (i = no+2; i <= entry[0]; ++i) {
+				entry[i] = -1;
+			}
+//			entry[0] = sec; /* TODO: linked list or radix tree */
 			return true;
 		}
 	}
@@ -7523,13 +7536,13 @@ void packahgv_process() {
 
 		if(tsk) {
 			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%d|%d|%ld|%ld|endahg\n", 
-				399/*used for new process*/, current->pid, current->start_time.tv_nsec, 
+				399/*used for new process*/, current->pid, current->start_time.tv_sec, 
 				ids, current->real_parent->pid, 
-				tsk->start_time.tv_nsec, fpath, is_user_remote, current->tgid, sec, nsec);
+				tsk->start_time.tv_sec, fpath, is_user_remote, current->tgid, sec, nsec);
 		}
 		else {
 			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%d|%d|%ld|%ld|endahg\n", 
-					399/*used for new process*/, current->pid, current->start_time.tv_nsec, 
+					399/*used for new process*/, current->pid, current->start_time.tv_sec, 
 					ids, current->real_parent->pid, 
 				  -1, fpath, is_user_remote, current->tgid, sec, nsec);
 		}
@@ -7547,7 +7560,7 @@ void packahgv_read (struct read_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%lu|%ld|%ld|endahg\n", 
-				3, sys_args->pid, current->start_time.tv_nsec, sys_args->fd, sys_args->bytes, current->tgid, 
+				3, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, 
 				sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
@@ -7621,7 +7634,7 @@ void theia_read_ahg(unsigned int fd, long rc, u_long clock) {
 */
 	set_fs(old_fs);                                                              
 
-	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		packahgv_process();
 
 //	printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
@@ -8118,7 +8131,7 @@ void packahgv_write (struct write_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%d|%ld|%ld|endahg\n", 
-				4, sys_args->pid, current->start_time.tv_nsec, sys_args->fd, sys_args->bytes, current->tgid, sys_args->clock, sec, nsec);
+				4, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -8180,7 +8193,7 @@ void theia_write_ahg(unsigned int fd, long rc, u_long clock) {
 */
 	set_fs(old_fs);                                                              
 
-	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		packahgv_process();
 
 	pahgv = (struct write_ahgv*)KMALLOC(sizeof(struct write_ahgv), GFP_KERNEL);
@@ -8535,7 +8548,7 @@ void packahgv_open (struct open_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
-				5, sys_args->pid, current->start_time.tv_nsec, sys_args->fd, sys_args->filename, sys_args->flags, sys_args->mode,
+				5, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->filename, sys_args->flags, sys_args->mode,
 				sys_args->dev, sys_args->ino, sys_args->is_new, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
@@ -8601,7 +8614,7 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, 
 */
 	set_fs(old_fs);                                                              
 
-	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		packahgv_process();
 
 	pahgv = (struct open_ahgv*)KMALLOC(sizeof(struct open_ahgv), GFP_KERNEL);
@@ -8799,7 +8812,7 @@ void packahgv_close (struct close_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%d|%ld|%ld|endahg\n", 6, 
-		sys_args->pid, current->start_time.tv_nsec, sys_args->fd, current->tgid, sec, nsec);
+		sys_args->pid, current->start_time.tv_sec, sys_args->fd, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -8861,7 +8874,7 @@ void theia_close_ahg(int fd) {
 */
 	set_fs(old_fs);                                                              
 
-	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		packahgv_process();
 
 	pahgv = (struct close_ahgv*)KMALLOC(sizeof(struct close_ahgv), GFP_KERNEL);
@@ -9046,7 +9059,7 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 		}
 
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%s|%s|%d|%d|%ld|%ld|endahg\n", 
-				11, sys_args->pid, current->start_time.tv_nsec, 
+				11, sys_args->pid, current->start_time.tv_sec, 
 				fpath, ids, is_user_remote, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
@@ -9111,7 +9124,7 @@ void theia_execve_ahg(const char *filename) {
 */
 	set_fs(old_fs);                                                              
 
-	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		packahgv_process();
 
 //	int copied_length = 0;
@@ -9677,7 +9690,7 @@ void packahgv_mount (struct mount_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%s|%s|%s|%lu|%d|%d|%lu|%ld|%ld|endahg\n", 
-				21, sys_args->pid, current->start_time.tv_nsec, sys_args->devname, sys_args->dirname, sys_args->type, 
+				21, sys_args->pid, current->start_time.tv_sec, sys_args->devname, sys_args->dirname, sys_args->type, 
 				sys_args->flags, sys_args->rc, current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
@@ -9739,7 +9752,7 @@ void theia_mount_ahg(char __user *dev_name, char __user *dir_name, char __user *
 */
 	set_fs(old_fs);                                                              
 
-	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		packahgv_process();
 
 //	printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
@@ -9907,7 +9920,7 @@ void packahgv_pipe (struct pipe_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%d|%d|%lx|%lx|%d|%ld|%ld|endahg\n", 
-				42, sys_args->pid, current->start_time.tv_nsec, sys_args->retval, sys_args->pfd1, sys_args->pfd2, 
+				42, sys_args->pid, current->start_time.tv_sec, sys_args->retval, sys_args->pfd1, sys_args->pfd2, 
 				sys_args->inode1, sys_args->inode2, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
@@ -9970,7 +9983,7 @@ void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
 */
 	set_fs(old_fs);                                                              
 
-	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		packahgv_process();
 
 	pahgv = (struct pipe_ahgv*)KMALLOC(sizeof(struct pipe_ahgv), GFP_KERNEL);
@@ -10204,7 +10217,7 @@ void packahgv_ioctl (struct ioctl_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%u|%lu|%ld|%d|%lu|%ld|%ld|endahg\n", 
-				54, sys_args->pid, current->start_time.tv_nsec, 
+				54, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->fd, sys_args->cmd, sys_args->arg, sys_args->rc, current->tgid, 
 				sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
@@ -10266,7 +10279,7 @@ void theia_ioctl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long 
 */
 	set_fs(old_fs);                                                              
 
-	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		packahgv_process();
 
 //	printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
@@ -11036,7 +11049,7 @@ void packahgv_munmap (struct munmap_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%lx|%ld|%d|%ld|%ld|%ld|endahg\n", 
-				91, sys_args->pid, current->start_time.tv_nsec, sys_args->rc, 
+				91, sys_args->pid, current->start_time.tv_sec, sys_args->rc, 
 				sys_args->addr, sys_args->len, current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
@@ -11100,7 +11113,7 @@ void theia_munmap_ahg(unsigned long addr, size_t len, long rc, u_long clock) {
 */
 	set_fs(old_fs);                                                              
 
-	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		packahgv_process();
 
 	pahgv = (struct munmap_ahgv*)KMALLOC(sizeof(struct munmap_ahgv), GFP_KERNEL);
@@ -12231,7 +12244,7 @@ void packahgv_connect(struct connect_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
-				102, SYS_CONNECT, sys_args->pid, current->start_time.tv_nsec, 
+				102, SYS_CONNECT, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->rc, sys_args->sock_fd, sys_args->ip, sys_args->port, current->tgid, sec, nsec);
 //		printk("[socketcall connect]: %s", buf);
 		relay_write(theia_chan, buf, size);
@@ -12260,7 +12273,7 @@ void packahgv_accept(struct accept_ahgv *sys_args) {
 		else
 			strcpy(ip, sys_args->ip);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
-				102, SYS_ACCEPT, sys_args->pid, current->start_time.tv_nsec, 
+				102, SYS_ACCEPT, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->rc, sys_args->sock_fd, ip, sys_args->port, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
@@ -12284,7 +12297,7 @@ void packahgv_send(struct send_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%ld|NA|0|%d|%d|%ld|%ld|endahg\n", 
-				102, SYS_SEND, sys_args->pid, current->start_time.tv_nsec, sys_args->sock_fd, sys_args->rc,
+				102, SYS_SEND, sys_args->pid, current->start_time.tv_sec, sys_args->sock_fd, sys_args->rc,
 				current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
@@ -12308,7 +12321,7 @@ void packahgv_sendto(struct sendto_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%ld|%s|%lu|%d|%d|%ld|%ld|endahg\n", 
-				102, SYS_SENDTO, sys_args->pid, current->start_time.tv_nsec, 
+				102, SYS_SENDTO, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->sock_fd, sys_args->rc, sys_args->ip, 
 				sys_args->port, current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
@@ -12333,7 +12346,7 @@ void packahgv_recv(struct recv_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%ld|NA|0|%d|%d|%ld|%ld|endahg\n", 
-				102, SYS_RECV, sys_args->pid, current->start_time.tv_nsec, sys_args->sock_fd, sys_args->rc,
+				102, SYS_RECV, sys_args->pid, current->start_time.tv_sec, sys_args->sock_fd, sys_args->rc,
 				current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
@@ -12357,7 +12370,7 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%ld|%s|%lu|%d|%d|%ld|%ld|endahg\n", 
-				102, SYS_RECVFROM, sys_args->pid, current->start_time.tv_nsec, 
+				102, SYS_RECVFROM, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->sock_fd, sys_args->rc, sys_args->ip, 
 				sys_args->port, current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
@@ -12382,7 +12395,7 @@ void packahgv_sendmsg(struct sendmsg_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%ld|%d|%d|%ld|%ld|endahg\n", 
-				102, SYS_SENDMSG, sys_args->pid, current->start_time.tv_nsec, 
+				102, SYS_SENDMSG, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->sock_fd, sys_args->rc, current->tgid, 
 				sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
@@ -12407,7 +12420,7 @@ void packahgv_recvmsg(struct recvmsg_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%ld|%d|%d|%ld|%ld|endahg\n", 
-				102, SYS_RECVMSG, sys_args->pid, current->start_time.tv_nsec, 
+				102, SYS_RECVMSG, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->sock_fd, sys_args->rc, current->tgid, 
 				sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
@@ -12468,7 +12481,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 */
 	set_fs(old_fs);                                                              
 
-	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		packahgv_process();
 
 	unsigned long a[6];
@@ -12752,7 +12765,7 @@ void packahgv_shmget(struct shmget_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%ld|%d|%lu|%d|%d|%lu|%ld|%ld|endahg\n", 
-				117, SHMGET, sys_args->pid, current->start_time.tv_nsec, 
+				117, SHMGET, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->rc, sys_args->key, sys_args->size, sys_args->shmflg,
 				current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
@@ -12779,7 +12792,7 @@ void packahgv_shmat(struct shmat_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%lx|%d|%lu|%d|%lx|%d|%lu|%ld|%ld|endahg\n", 
-				117, SHMAT, sys_args->pid, current->start_time.tv_nsec, 
+				117, SHMAT, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->rc, sys_args->shmid, sys_args->shmaddr, sys_args->shmflg,
 				sys_args->raddr, current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
@@ -12843,7 +12856,7 @@ void theia_ipc_ahg(long rc, uint call, int first, u_long second,
 */
 	set_fs(old_fs);                                                              
 
-	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		packahgv_process();
 
 	struct shmget_ahgv* pahgv_shmget = NULL;
@@ -13579,12 +13592,12 @@ void packahgv_clone (struct clone_ahgv *sys_args) {
 		if(tsk) {
 			is_child_remote = is_remote(tsk);
 			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%d|%d|%ld|%ld|endahg\n", 
-					120, sys_args->pid, current->start_time.tv_nsec, ids, sys_args->new_pid, 
-					tsk->start_time.tv_nsec, is_child_remote, current->tgid, sec, nsec);
+					120, sys_args->pid, current->start_time.tv_sec, ids, sys_args->new_pid, 
+					tsk->start_time.tv_sec, is_child_remote, current->tgid, sec, nsec);
 		}
 		else {
 			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%d|%d|%ld|%ld|endahg\n", 
-					120, sys_args->pid, current->start_time.tv_nsec, ids, sys_args->new_pid, 
+					120, sys_args->pid, current->start_time.tv_sec, ids, sys_args->new_pid, 
 					-1, -1, current->tgid, sec, nsec);
 		}
 
@@ -13647,7 +13660,7 @@ void theia_clone_ahg(long new_pid) {
 */
 	set_fs(old_fs);                                                              
 
-	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		packahgv_process();
 
 	if(new_pid >= 0) {
@@ -13733,7 +13746,7 @@ void packahgv_mprotect (struct mprotect_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%lx|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
-				125, sys_args->pid, current->start_time.tv_nsec, 
+				125, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->retval, sys_args->address, sys_args->length, 
 				sys_args->protection, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
@@ -13796,7 +13809,7 @@ void theia_mprotect_ahg(u_long address, u_long len, uint16_t prot, long rc) {
 */
 	set_fs(old_fs);                                                              
 
-	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		packahgv_process();
 
 	pahgv = (struct mprotect_ahgv*)KMALLOC(sizeof(struct mprotect_ahgv), GFP_KERNEL);
@@ -15709,7 +15722,7 @@ void packahgv_mmap (struct mmap_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%lx|%lu|%d|%lx|%lx|%d|%ld|%ld|%ld|endahg\n", 
-				192, sys_args->pid, current->start_time.tv_nsec, 
+				192, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->fd, sys_args->address, sys_args->length, sys_args->prot_type,
 				sys_args->flag, sys_args->offset, current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
@@ -15773,7 +15786,7 @@ u_long flags, u_long pgoff, long rc, u_long clock) {
 */
 	set_fs(old_fs);                                                              
 
-	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		packahgv_process();
 
 	pahgv = (struct mmap_ahgv*)KMALLOC(sizeof(struct mmap_ahgv), GFP_KERNEL);
@@ -16309,7 +16322,7 @@ void packahgv_setuid (struct setuid_ahgv *sys_args) {
 		int size = 0;
 		int is_newuser_remote = is_remote(current);
 		size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%d|%d|%d|%lu|%ld|%ld|endahg\n", 
-				213, sys_args->pid, current->start_time.tv_nsec, 
+				213, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->newuid, ids, sys_args->rc, is_newuser_remote, current->tgid, 
 				sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
@@ -16371,7 +16384,7 @@ void theia_setuid_ahg(uid_t uid, int rc, u_long clock) {
 */
 	set_fs(old_fs);                                                              
 
-	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		packahgv_process();
 
 //	printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
