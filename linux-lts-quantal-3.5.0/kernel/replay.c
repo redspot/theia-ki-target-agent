@@ -15,7 +15,6 @@
 #include <linux/utime.h>
 #include <linux/futex.h>
 #include <linux/scatterlist.h>
-#include <linux/radix-tree.h>
 #include <linux/replay.h>
 #include <linux/replay_maps.h>
 #include <linux/pthread_log.h>
@@ -346,8 +345,13 @@ void put_blackpid(int grpid) {
 //Yang: bookkeeping the process info
 //ds_list_t* glb_process_list = NULL;
 
-RADIX_TREE(glb_process_tree, GFP_KERNEL);
-#define NO_PROC_ENTRY 20 // handle collision
+DEFINE_MUTEX(theia_process_tree_mutex);
+static struct btree_head64 theia_process_tree;
+static bool theia_process_tree_init = false;
+
+DEFINE_MUTEX(theia_opened_inode_tree_mutex);
+static struct btree_head64 theia_opened_inode_tree;
+static bool theia_opened_inode_tree_init = false;
 
 /* Performance evaluation timers... micro monitoring */
 //struct perftimer *write_btwn_timer;
@@ -7469,52 +7473,49 @@ bool is_process_new(pid_t pid, char* comm) {
 */
 
 bool is_process_new2(pid_t pid, int sec) {
-	int *entry = (int*)radix_tree_lookup(&glb_process_tree, (unsigned long)pid);
-	int i;
-	if (!entry) { /* new */
-		entry = (int*)vmalloc(sizeof(int) * (NO_PROC_ENTRY+1));
-		entry[0] = NO_PROC_ENTRY;
-		entry[1] = sec;
-		for (i = 2; i <= NO_PROC_ENTRY; ++i) {
-			entry[i] = -1;
-		}
-		radix_tree_insert(&glb_process_tree, (unsigned long)pid, (void*)entry);
+	u64 key;
+	void *ret;
+	key = ((u64)pid)<<32 | (u64)sec;
 
+	if (!theia_process_tree_init) {
+		btree_init64(&theia_process_tree);
+		theia_process_tree_init = true;
+	}
+
+	mutex_lock(&theia_process_tree_mutex);
+	ret = btree_lookup64(&theia_process_tree, key);
+	if (ret == NULL) {
+		btree_insert64(&theia_process_tree, key, (void*)1, GFP_KERNEL);
+	}
+	mutex_unlock(&theia_process_tree_mutex);
+
+	if (ret == NULL)
 		return true;
-	}
-	else {
-		for (i = 1; i <= entry[0]; ++i) {
-			if (entry[i] == -1 || entry[i] == sec)
-				break;
-		}
+	else
+		return false;
+}
 
-		if (i <= entry[0]) {
-			if (entry[i] == sec) {
-//				printk("is_process_new: pid (%d, %d) exists\n", pid, sec);
-				return false;
-			}
-			else { /* empty space */
-				entry[i] = sec;
-				return true;
-			}
-		}
-		else { 
-			printk("is_process_new overflowed pid %d, %d\n", pid, entry[0]);
-			void **entryp = radix_tree_lookup_slot(&glb_process_tree, (unsigned long)pid);
-			int no = entry[0];
-			*entryp = (void*)vmalloc(sizeof(int) * (no*2+1));
-			memcpy(*entryp, (void*)entry, sizeof(int)*(no+1));
-			vfree(entry);
-			entry = (int*)(*entryp);
-			entry[0] = no*2+1;
-			entry[no+1] = sec;
-			for (i = no+2; i <= entry[0]; ++i) {
-				entry[i] = -1;
-			}
-//			entry[0] = sec; /* TODO: linked list or radix tree */
-			return true;
-		}
+bool is_opened_inode(struct inode *inode) {
+	u64 key;
+	void *ret;
+	key = ((u64)inode->i_sb->s_dev)<<32 | (u64)inode->i_ino;
+
+	if (!theia_opened_inode_tree_init) {
+		btree_init64(&theia_opened_inode_tree);
+		theia_opened_inode_tree_init = true;
 	}
+
+	mutex_lock(&theia_opened_inode_tree_mutex);
+	ret = btree_lookup64(&theia_opened_inode_tree, key);
+	if (ret == NULL) {
+		btree_insert64(&theia_opened_inode_tree, key, (void*)1, GFP_KERNEL);
+	}
+	mutex_unlock(&theia_opened_inode_tree_mutex);
+
+	if (ret == NULL)
+		return false;
+	else
+		return true;
 }
 
 void packahgv_process() {
@@ -8626,7 +8627,8 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, 
 	pahgv->fd = (int)rc;
 	pahgv->flags = flags;
 	pahgv->mode = mode;
-	pahgv->is_new = is_new;
+//	pahgv->is_new = is_new; /* ignore arg */
+	pahgv->is_new = true;
 
 	file = NULL;
 	if (rc >= 0) {
@@ -8661,6 +8663,10 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, 
 				KFREE(pahgv);	
 				return;
 			}
+		}
+
+		if (is_opened_inode(inode)) { /* already published */
+			pahgv->is_new = false;
 		}
 	}
 
