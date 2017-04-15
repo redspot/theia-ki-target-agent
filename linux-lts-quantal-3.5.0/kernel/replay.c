@@ -8615,28 +8615,39 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, 
 	pahgv->mode = mode;
 	pahgv->is_new = is_new;
 
-	if (rc < 0) {
+	file = NULL;
+	if (rc >= 0) {
+		file = fget ((unsigned int)rc);
+	}
+
+	if (!file) {
 		pahgv->dev = 0;
 		pahgv->ino = 0; 
+		if ((copied_length = strncpy_from_user(pahgv->filename, filename, sizeof(pahgv->filename))) != strlen(filename)) {
+			printk ("theia_open_ahg: can't copy filename to ahgv, filename length %d, copied %d, filename:%s\n", strlen(filename), copied_length, filename); 
+			KFREE(pahgv);	
+			return;
+		}
 	}
 	else {
-		file = fget ((unsigned int)rc);
 		inode = file->f_dentry->d_inode;
 		//	printk("!!!!!!inode is %p, i_sb: %p,s_dev: %lu, i_ino %lu\n", inode, inode->i_sb, inode->i_sb->s_dev, inode->i_ino);
 		pahgv->dev = inode->i_sb->s_dev;
 		pahgv->ino = inode->i_ino;
-	}
 
-	if ((copied_length = strncpy_from_user(pahgv->filename, filename, sizeof(pahgv->filename))) != strlen(filename)) {
-		printk ("theia_open_ahg: can't copy filename to ahgv, filename length %d, copied %d, filename:%s\n", strlen(filename), copied_length, filename); 
-		KFREE(pahgv);	
-	}
-
-	char *fpathbuf = (char*)vmalloc(PATH_MAX);
-	if(rc > 0) {
+		char *fpathbuf = (char*)vmalloc(PATH_MAX);
 		char *fpath    = get_file_fullpath(file, fpathbuf, PATH_MAX);
-		if (fpath) { /* sometimes we can't obtain fullpath */
+		if (!IS_ERR(fpath)) { /* sometimes we can't obtain fullpath */
 			strncpy(pahgv->filename, fpath, 204);
+			vfree(fpathbuf);
+		}
+		else {
+			vfree(fpathbuf);
+			if ((copied_length = strncpy_from_user(pahgv->filename, filename, sizeof(pahgv->filename))) != strlen(filename)) {
+				printk ("theia_open_ahg: can't copy filename to ahgv, filename length %d, copied %d, filename:%s\n", strlen(filename), copied_length, filename); 
+				KFREE(pahgv);	
+				return;
+			}
 		}
 	}
 
@@ -8646,7 +8657,6 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, 
 	//Reuse dmesg channel
 	packahgv_open(pahgv);
 	KFREE(pahgv);	
-	vfree(fpathbuf);
 }
 
 static asmlinkage long							
