@@ -15,7 +15,7 @@
 #include <linux/utime.h>
 #include <linux/futex.h>
 #include <linux/scatterlist.h>
-#include <linux/ds_list.h>
+#include <linux/radix-tree.h>
 #include <linux/replay.h>
 #include <linux/replay_maps.h>
 #include <linux/pthread_log.h>
@@ -344,7 +344,11 @@ void put_blackpid(int grpid) {
 }
 
 //Yang: bookkeeping the process info
-ds_list_t* glb_process_list = NULL;
+//ds_list_t* glb_process_list = NULL;
+
+RADIX_TREE(glb_process_tree, GFP_KERNEL);
+#define NO_PROC_ENTRY 20 // handle collision
+
 /* Performance evaluation timers... micro monitoring */
 //struct perftimer *write_btwn_timer;
 struct perftimer *write_in_timer;
@@ -7441,6 +7445,7 @@ bool check_and_update_controlfile() {
 	return true;
 }
 
+/*
 bool is_process_new(pid_t pid, char* comm) {
 	if(glb_process_list == NULL) {
 		return true;
@@ -7460,6 +7465,43 @@ bool is_process_new(pid_t pid, char* comm) {
 	}
 	ds_list_iter_destroy(i);
 	return true;
+}
+*/
+
+bool is_process_new2(pid_t pid, int nsec) {
+	int *entry = (int*)radix_tree_lookup(&glb_process_tree, (unsigned long)pid);
+	int i;
+	if (!entry) { /* new */
+		entry = (int*)vmalloc(sizeof(int) * NO_PROC_ENTRY);
+		entry[0] = nsec;
+		for (i = 1; i < NO_PROC_ENTRY; ++i) {
+			entry[i] = -1;
+		}
+		radix_tree_insert(&glb_process_tree, (unsigned long)pid, (void*)entry);
+
+		return true;
+	}
+	else {
+		for (i = 0; i < NO_PROC_ENTRY; ++i) {
+			if (entry[i] == -1 || entry[i] == nsec)
+				break;
+		}
+
+		if (i < NO_PROC_ENTRY) {
+			if (entry[i] == nsec) {
+				printk("is_process_new: pid (%d, %d) exists\n", pid, nsec);
+				return false;
+			}
+			else { /* empty space */
+				entry[i] = nsec;
+				return true;
+			}
+		}
+		else { /* overflowed */
+			entry[0] = nsec; /* TODO: linked list or radix tree */
+			return true;
+		}
+	}
 }
 
 void packahgv_process() {
@@ -7565,6 +7607,7 @@ void theia_read_ahg(unsigned int fd, long rc, u_long clock) {
 //		current->parent->parent->parent->parent->parent->pid, current->parent->parent->parent->parent->parent->tgid);
 
   //check if the process is new; if so, send an entry of process                             
+/*
   if(is_process_new(current->pid, current->comm)) {                              
     char *entry = (char*)kmalloc(50, GFP_KERNEL);
 		sprintf(entry, "%d_%s", current->pid, current->comm);
@@ -7575,9 +7618,12 @@ void theia_read_ahg(unsigned int fd, long rc, u_long clock) {
 		
 		packahgv_process();
   }
-
-
+*/
 	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+		packahgv_process();
+
 //	printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
 // Yang: regardless of the return value, passes the failed syscall also
 //	if(rc >= 0) 
@@ -8120,6 +8166,7 @@ void theia_write_ahg(unsigned int fd, long rc, u_long clock) {
 
 
   //check if the process is new; if so, send an entry of process                             
+/*
   if(is_process_new(current->pid, current->comm)) {                              
     char *entry = (char*)kmalloc(50, GFP_KERNEL);
 		sprintf(entry, "%d_%s", current->pid, current->comm);
@@ -8130,8 +8177,11 @@ void theia_write_ahg(unsigned int fd, long rc, u_long clock) {
 		
 		packahgv_process();
   }
-
+*/
 	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+		packahgv_process();
 
 	pahgv = (struct write_ahgv*)KMALLOC(sizeof(struct write_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {
@@ -8537,6 +8587,7 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, 
 
 
   //check if the process is new; if so, send an entry of process                             
+/*
   if(is_process_new(current->pid, current->comm)) {                              
     char *entry = (char*)kmalloc(50, GFP_KERNEL);
 		sprintf(entry, "%d_%s", current->pid, current->comm);
@@ -8547,8 +8598,11 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, 
 		
 		packahgv_process();
   }
-
+*/
 	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+		packahgv_process();
 
 	pahgv = (struct open_ahgv*)KMALLOC(sizeof(struct open_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {
@@ -8783,6 +8837,7 @@ void theia_close_ahg(int fd) {
 
 
   //check if the process is new; if so, send an entry of process                             
+/*
   if(is_process_new(current->pid, current->comm)) {                              
     char *entry = (char*)kmalloc(50, GFP_KERNEL);
 		sprintf(entry, "%d_%s", current->pid, current->comm);
@@ -8793,8 +8848,11 @@ void theia_close_ahg(int fd) {
 		
 		packahgv_process();
   }
-
+*/
 	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+		packahgv_process();
 
 	pahgv = (struct close_ahgv*)KMALLOC(sizeof(struct close_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {
@@ -9029,6 +9087,7 @@ void theia_execve_ahg(const char *filename) {
 
 
   //check if the process is new; if so, send an entry of process                             
+/*
   if(is_process_new(current->pid, current->comm)) {                              
     char *entry = (char*)kmalloc(50, GFP_KERNEL);
 		sprintf(entry, "%d_%s", current->pid, current->comm);
@@ -9039,8 +9098,12 @@ void theia_execve_ahg(const char *filename) {
 		
 		packahgv_process();
   }
-
+*/
 	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+		packahgv_process();
+
 //	int copied_length = 0;
 //	char *dumped_envp = VMALLOC(3000);
 //	dumped_envp[2999] = '\0';
@@ -9652,6 +9715,7 @@ void theia_mount_ahg(char __user *dev_name, char __user *dir_name, char __user *
 
 
   //check if the process is new; if so, send an entry of process                             
+/*
   if(is_process_new(current->pid, current->comm)) {                              
     char *entry = (char*)kmalloc(50, GFP_KERNEL);
 		sprintf(entry, "%d_%s", current->pid, current->comm);
@@ -9662,9 +9726,12 @@ void theia_mount_ahg(char __user *dev_name, char __user *dir_name, char __user *
 		
 		packahgv_process();
   }
-
-
+*/
 	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+		packahgv_process();
+
 //	printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
 // Yang: regardless of the return value, passes the failed syscall also
 //	if(rc >= 0) 
@@ -9879,6 +9946,7 @@ void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
 
 
   //check if the process is new; if so, send an entry of process                             
+/*
   if(is_process_new(current->pid, current->comm)) {                              
     char *entry = (char*)kmalloc(50, GFP_KERNEL);
 		sprintf(entry, "%d_%s", current->pid, current->comm);
@@ -9889,8 +9957,11 @@ void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
 		
 		packahgv_process();
   }
-
+*/
 	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+		packahgv_process();
 
 	pahgv = (struct pipe_ahgv*)KMALLOC(sizeof(struct pipe_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {
@@ -10171,6 +10242,7 @@ void theia_ioctl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long 
 
 
   //check if the process is new; if so, send an entry of process                             
+/*
   if(is_process_new(current->pid, current->comm)) {                              
     char *entry = (char*)kmalloc(50, GFP_KERNEL);
 		sprintf(entry, "%d_%s", current->pid, current->comm);
@@ -10181,9 +10253,12 @@ void theia_ioctl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long 
 		
 		packahgv_process();
   }
-
-
+*/
 	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+		packahgv_process();
+
 //	printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
 // Yang: regardless of the return value, passes the failed syscall also
 //	if(rc >= 0) 
@@ -11001,6 +11076,7 @@ void theia_munmap_ahg(unsigned long addr, size_t len, long rc, u_long clock) {
 
 
   //check if the process is new; if so, send an entry of process                             
+/*
   if(is_process_new(current->pid, current->comm)) {                              
     char *entry = (char*)kmalloc(50, GFP_KERNEL);
 		sprintf(entry, "%d_%s", current->pid, current->comm);
@@ -11011,8 +11087,11 @@ void theia_munmap_ahg(unsigned long addr, size_t len, long rc, u_long clock) {
 		
 		packahgv_process();
   }
-
+*/
 	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+		packahgv_process();
 
 	pahgv = (struct munmap_ahgv*)KMALLOC(sizeof(struct munmap_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {
@@ -12365,6 +12444,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 
 
   //check if the process is new; if so, send an entry of process                             
+/*
   if(is_process_new(current->pid, current->comm)) {                              
     char *entry = (char*)kmalloc(50, GFP_KERNEL);
 		sprintf(entry, "%d_%s", current->pid, current->comm);
@@ -12375,8 +12455,11 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 		
 		packahgv_process();
   }
-
+*/
 	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+		packahgv_process();
 
 	unsigned long a[6];
 	unsigned int len;
@@ -12736,6 +12819,7 @@ void theia_ipc_ahg(long rc, uint call, int first, u_long second,
 
 
   //check if the process is new; if so, send an entry of process                             
+/*
   if(is_process_new(current->pid, current->comm)) {                              
     char *entry = (char*)kmalloc(50, GFP_KERNEL);
 		sprintf(entry, "%d_%s", current->pid, current->comm);
@@ -12746,8 +12830,11 @@ void theia_ipc_ahg(long rc, uint call, int first, u_long second,
 		
 		packahgv_process();
   }
-
+*/
 	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+		packahgv_process();
 
 	struct shmget_ahgv* pahgv_shmget = NULL;
 	struct shmat_ahgv* pahgv_shmat = NULL;
@@ -13536,6 +13623,7 @@ void theia_clone_ahg(long new_pid) {
 
 
   //check if the process is new; if so, send an entry of process                             
+/*
   if(is_process_new(current->pid, current->comm)) {                              
     char *entry = (char*)kmalloc(50, GFP_KERNEL);
 		sprintf(entry, "%d_%s", current->pid, current->comm);
@@ -13546,9 +13634,11 @@ void theia_clone_ahg(long new_pid) {
 		
 		packahgv_process();
   }
-
-
+*/
 	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+		packahgv_process();
 
 	if(new_pid >= 0) {
 		pahgv = (struct clone_ahgv*)KMALLOC(sizeof(struct clone_ahgv), GFP_KERNEL);
@@ -13682,6 +13772,7 @@ void theia_mprotect_ahg(u_long address, u_long len, uint16_t prot, long rc) {
 
 
   //check if the process is new; if so, send an entry of process                             
+/*
   if(is_process_new(current->pid, current->comm)) {                              
     char *entry = (char*)kmalloc(50, GFP_KERNEL);
 		sprintf(entry, "%d_%s", current->pid, current->comm);
@@ -13692,9 +13783,11 @@ void theia_mprotect_ahg(u_long address, u_long len, uint16_t prot, long rc) {
 		
 		packahgv_process();
   }
-
-
+*/
 	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+		packahgv_process();
 
 	pahgv = (struct mprotect_ahgv*)KMALLOC(sizeof(struct mprotect_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {
@@ -15656,6 +15749,7 @@ u_long flags, u_long pgoff, long rc, u_long clock) {
 
 
   //check if the process is new; if so, send an entry of process                             
+/*
   if(is_process_new(current->pid, current->comm)) {                              
     char *entry = (char*)kmalloc(50, GFP_KERNEL);
 		sprintf(entry, "%d_%s", current->pid, current->comm);
@@ -15666,8 +15760,11 @@ u_long flags, u_long pgoff, long rc, u_long clock) {
 		
 		packahgv_process();
   }
-
+*/
 	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+		packahgv_process();
 
 	pahgv = (struct mmap_ahgv*)KMALLOC(sizeof(struct mmap_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {
@@ -16250,6 +16347,7 @@ void theia_setuid_ahg(uid_t uid, int rc, u_long clock) {
 
 
   //check if the process is new; if so, send an entry of process                             
+/*
   if(is_process_new(current->pid, current->comm)) {                              
     char *entry = (char*)kmalloc(50, GFP_KERNEL);
 		sprintf(entry, "%d_%s", current->pid, current->comm);
@@ -16260,9 +16358,12 @@ void theia_setuid_ahg(uid_t uid, int rc, u_long clock) {
 		
 		packahgv_process();
   }
-
-
+*/
 	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+		packahgv_process();
+
 //	printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
 // Yang: regardless of the return value, passes the failed syscall also
 //	if(rc >= 0) 
