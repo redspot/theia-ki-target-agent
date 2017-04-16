@@ -7711,7 +7711,8 @@ record_read (unsigned int fd, char __user * buf, size_t count)
 		err = sys_mprotect(buf, count, PROT_NONE);
 
 	//Yang
-	theia_read_ahg(fd, rc, current->record_thrd->rp_precord_clock);
+	if (rc != -EAGAIN) /* ignore some less meaningful errors */
+		theia_read_ahg(fd, rc, current->record_thrd->rp_precord_clock);
 
 #ifdef TIME_TRICK
 	if (rc <= 0) shift_clock = 0;
@@ -8103,7 +8104,7 @@ int theia_sys_read(unsigned int fd, char __user * buf, size_t count) {
 	rc = sys_read(fd, buf, count);
 
 // Yang: regardless of the return value, passes the failed syscall also
-//	if (rc >= 0) 
+	if (rc != -EAGAIN)
 	{ 
 		theia_read_ahg(fd, rc, 0);
 	}
@@ -8271,7 +8272,8 @@ record_write (unsigned int fd, const char __user * buf, size_t count)
 	size = sys_write (fd, buf, count);
 
 	//Yang
-	theia_write_ahg(fd, size, current->record_thrd->rp_precord_clock);
+	if (size != -EAGAIN)
+		theia_write_ahg(fd, size, current->record_thrd->rp_precord_clock);
 
 	DPRINT ("Pid %d records write returning %d\n", current->pid,size);
 #ifdef X_COMPRESS
@@ -8517,6 +8519,7 @@ int theia_sys_write(unsigned int fd, const char __user * buf, size_t count) {
 
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
+	if (rc != -EAGAIN)
 	{ 
 		theia_write_ahg(fd, rc, 0);
 	}
@@ -11349,7 +11352,8 @@ record_socketcall(int call, unsigned long __user *args)
 	rc = sys_socketcall (call, args);
 
 // Yang also needed at recording
-	theia_socketcall_ahg(rc, call, args, current->record_thrd->rp_precord_clock);
+	if (rc != -EAGAIN) /* ignore some less meaningful errors */
+		theia_socketcall_ahg(rc, call, args, current->record_thrd->rp_precord_clock);
 
 #ifdef TIME_TRICK
 	if ((call == SYS_RECV || call == SYS_RECVMSG) && rc <= 0) 
@@ -12636,7 +12640,7 @@ int theia_sys_socketcall(int call, unsigned long __user * args) {
 
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
-	{ 
+	if (rc != -EAGAIN) { 
 		theia_socketcall_ahg(rc, call, args, 0);
 	}
 	return rc;
