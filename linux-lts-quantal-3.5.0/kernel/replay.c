@@ -12921,8 +12921,43 @@ int theia_sys_ipc(uint call, int first, u_long second,
 
 	if(call == SHMAT) {
 		unsigned long raddr = 0;
+		struct shmid_kernel* shp;
+		u_long size;
+		struct ipc_namespace* ns = current->nsproxy->ipc_ns;
+		struct kern_ipc_perm *ipcp;
+
 		get_user(raddr, (unsigned long __user *) third);
 		theia_ipc_ahg(rc, call, first, second, raddr, ptr, fifth, 0);
+
+		if (theia_logging_toggle == 0)
+			return rc;
+
+		ipcp = ipc_lock(&ns->ids[IPC_SHM_IDS], first);
+		if (IS_ERR(ipcp)) {
+			printk ("theia_sys_ipc: cannot lock ipc for shmat\n");
+			return -EINVAL;
+		}
+		shp = container_of(ipcp, struct shmid_kernel, shm_perm);
+		size = shp->shm_segsz;
+		ipc_unlock(&shp->shm_perm);
+
+#ifdef THEIA_TRACK_SHMAT
+		int ret = 0;
+		ret = sys_mprotect(raddr, size, PROT_NONE);
+		int __user *address = NULL;		
+		int np = size / 0x1000;
+		if (size % 0x1000) ++np;
+		if (!ret) {
+			int i;
+			for (i = 0; i < np; ++i) {
+				address = (int __user *)(raddr + i*0x1000);
+				*address = *address;
+			}
+			
+			ret = sys_mprotect(rc, size, PROT_NONE);
+			printk("protection of a shared page will be changed, ret %d, %d\n", ret, np);			
+		}
+#endif
 	}
 	else if(call == SHMGET) {
 		theia_ipc_ahg(rc, call, first, second, third, ptr, fifth, 0);
