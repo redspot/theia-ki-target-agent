@@ -1654,7 +1654,8 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 			//This should be the very first mem access
 			if(!(protection & (PROT_READ | PROT_WRITE))) {
 				if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
-					ret = theia_mprotect_shared(mm, address, 1, PROT_WRITE);
+//					ret = theia_mprotect_shared(mm, address, 1, PROT_WRITE);
+					ret = sys_mprotect(address, 1, PROT_READ|PROT_WRITE);
 					printk("inside force_sig_info, first from none; address %p is set to prot_write, ret: %d\n", address, ret);
 					
 					//Notify this is a mem_write to the shared memory
@@ -1662,7 +1663,8 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 
 				}
 				else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
-					ret = theia_mprotect_shared(mm, address, 1, PROT_READ);
+//					ret = theia_mprotect_shared(mm, address, 1, PROT_READ);
+					ret = sys_mprotect(address, 1, PROT_READ);
 					printk("inside force_sig_info, first from none; address %p is set to prot_read, ret: %d\n", address, ret);
 
 					//copy from user of this one page
@@ -1681,14 +1683,16 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 			else {
 				// if it is write attempt, we change protection to prot_write
 				if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
-					ret = theia_mprotect_shared(mm, address, 1, PROT_WRITE);
+//					ret = theia_mprotect_shared(mm, address, 1, PROT_WRITE);
+					ret = sys_mprotect(address, 1, PROT_WRITE|PROT_READ);
 					printk("inside force_sig_info, address %p is set to prot_write, ret: %d\n", address, ret);
 					ahg_mem_access = 2;					
 				}
 				// if it is read attempt, we change protection to prot_read
 				else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
 					//					ret = theia_mprotect_shared(mm, address, 1, PROT_READ);
-					ret = theia_mprotect_shared(mm, address, 1, PROT_READ|PROT_EXEC);					
+//					ret = theia_mprotect_shared(mm, address, 1, PROT_READ|PROT_EXEC);					
+					ret = sys_mprotect(address, 1, PROT_READ|PROT_EXEC);
 					printk("inside force_sig_info, address %p is set to prot_read|exec, ret: %d\n", address, ret);
 					//copy from user of this one page
 //					if ((ret = copy_from_user (buf_theia, address, 4096))) {
