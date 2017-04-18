@@ -1360,13 +1360,13 @@ void theia_shrread_ahg(unsigned int address, u_long clock) {
 		}
     ds_list_insert (glb_process_list, entry);                                                
 		
-		packahgv_process();
+		recursive_packahgv_process();
   }
 */
 	set_fs(old_fs);                                                              
 	
 	if(is_process_new2(current->pid, current->start_time.tv_nsec))
-		packahgv_process();
+		recursive_packahgv_process();
 
 	pahgv = (struct shr_read_ahgv*)kmalloc(sizeof(struct shr_read_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {
@@ -1451,13 +1451,13 @@ void theia_shrwrite_ahg(unsigned int address, u_long clock) {
 		}
     ds_list_insert (glb_process_list, entry);                                                
 		
-		packahgv_process();
+		recursive_packahgv_process();
   }
 */
 	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_nsec))
-		packahgv_process();
+		recursive_packahgv_process();
 
 	pahgv = (struct shr_write_ahgv*)kmalloc(sizeof(struct shr_write_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {

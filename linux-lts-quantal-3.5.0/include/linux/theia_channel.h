@@ -20,11 +20,9 @@ struct rchan *create_channel(unsigned size, unsigned n);
 
 static void destroy_channel(void);
 
-bool is_process_new(pid_t pid, char* comm);
-
 bool is_process_new2(pid_t pid, int nsec);
 
-void packahgv_process();
+void recursive_packahgv_process();
 
 bool check_and_update_controlfile();
 

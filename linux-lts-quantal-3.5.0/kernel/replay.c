@@ -4231,6 +4231,7 @@ new_syscall_enter (long sysnum)
 
 //SL: dump userspace return addresses
 // dump_user_return_addresses();
+dump_user_stack();
 
 #ifdef MCPRINT
 	if (replay_min_debug || replay_debug) {
@@ -7518,7 +7519,7 @@ bool is_opened_inode(struct inode *inode) {
 		return true;
 }
 
-void packahgv_process() {
+void packahgv_process(struct task_struct *tsk) {
 	if(theia_chan) {
 		long sec, nsec;
 		char buf[512];
@@ -7526,32 +7527,68 @@ void packahgv_process() {
 		get_ids(ids);
 		get_curr_time(&sec, &nsec);
 		int size = 0;
-		int is_user_remote = is_remote(current);
-		struct task_struct *tsk = pid_task(find_vpid(current->real_parent->pid), PIDTYPE_PID);	
+		int is_user_remote = is_remote(tsk);
+		rcu_read_lock();
+		struct task_struct *ptsk = pid_task(find_vpid(tsk->real_parent->pid), PIDTYPE_PID);	
+		rcu_read_unlock();
 
   		char *fpathbuf = (char*)vmalloc(PATH_MAX);
-	 	char *fpath    = get_task_fullpath(current, fpathbuf, PATH_MAX);
+	 	char *fpath    = get_task_fullpath(tsk, fpathbuf, PATH_MAX);
 		if (!fpath) { /* sometimes we can't obtain fullpath */
-			fpath = current->comm;
+			fpath = tsk->comm;
 		}
 
-		if(tsk) {
+		if(ptsk) {
 			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%d|%d|%ld|%ld|endahg\n", 
-				399/*used for new process*/, current->pid, current->start_time.tv_sec, 
-				ids, current->real_parent->pid, 
-				tsk->start_time.tv_sec, fpath, is_user_remote, current->tgid, sec, nsec);
+				399/*used for new process*/, tsk->pid, tsk->start_time.tv_sec, 
+				ids, tsk->real_parent->pid, 
+				ptsk->start_time.tv_sec, fpath, is_user_remote, tsk->tgid, sec, nsec);
 		}
 		else {
 			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%d|%d|%ld|%ld|endahg\n", 
-					399/*used for new process*/, current->pid, current->start_time.tv_sec, 
-					ids, current->real_parent->pid, 
-				  -1, fpath, is_user_remote, current->tgid, sec, nsec);
+					399/*used for new process*/, tsk->pid, tsk->start_time.tv_sec, 
+					ids, tsk->real_parent->pid, 
+				  -1, fpath, is_user_remote, tsk->tgid, sec, nsec);
 		}
 		relay_write(theia_chan, buf, size);
 		vfree(fpathbuf);
 	}
 	else
 		printk("theia_chan invalid\n");
+}
+
+#define TSK_STACK_SIZE 100
+void recursive_packahgv_process() {
+	struct task_struct* tsk_stack[TSK_STACK_SIZE];
+	int stack_top = 0, i;
+	struct task_struct *tsk = current;
+
+	tsk_stack[stack_top++] = tsk;
+	rcu_read_lock();
+	tsk = tsk->real_parent;
+	rcu_read_unlock();
+
+	do {
+		tsk_stack[stack_top++] = tsk;
+		rcu_read_lock();
+		tsk = tsk->real_parent;
+		rcu_read_unlock();
+	} while (tsk && is_process_new2(tsk->pid, tsk->start_time.tv_sec));
+
+	for (i = stack_top-1; i >= 0; --i) {
+		packahgv_process(tsk_stack[i]);
+	}
+
+/*
+	printk("tsk_stack: ");
+	for (i = 0; i < stack_top; ++i) {
+		printk("%d ", tsk_stack[i]->pid);
+	}
+	if (tsk)
+		printk("[%d]", tsk->pid);
+	printk("\n");
+*/
+
 }
 
 void packahgv_read (struct read_ahgv *sys_args) {
@@ -7630,13 +7667,13 @@ void theia_read_ahg(unsigned int fd, long rc, u_long clock) {
 		}
     ds_list_insert (glb_process_list, entry);                                                
 		
-		packahgv_process();
+		recursive_packahgv_process();
   }
 */
 	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		packahgv_process();
+		recursive_packahgv_process();
 
 //	printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
 // Yang: regardless of the return value, passes the failed syscall also
@@ -8119,8 +8156,12 @@ int theia_sys_read(unsigned int fd, char __user * buf, size_t count) {
 	rc = sys_read(fd, buf, count);
 
 #ifdef THEIA_TRACK_SHM_OPEN
-	if (shared_none)
+	if (shared_none) {
 		err = sys_mprotect(buf, count, PROT_NONE);
+		if (err) {
+			printk("theia_sys_read: mprotect none returned an error\n");
+		}
+	}
 #endif
 
 // Yang: regardless of the return value, passes the failed syscall also
@@ -8210,13 +8251,13 @@ void theia_write_ahg(unsigned int fd, long rc, u_long clock) {
 		}
     ds_list_insert (glb_process_list, entry);                                                
 		
-		packahgv_process();
+		recursive_packahgv_process();
   }
 */
 	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		packahgv_process();
+		recursive_packahgv_process();
 
 	pahgv = (struct write_ahgv*)KMALLOC(sizeof(struct write_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {
@@ -8633,13 +8674,13 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, 
 		}
     ds_list_insert (glb_process_list, entry);                                                
 		
-		packahgv_process();
+		recursive_packahgv_process();
   }
 */
 	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		packahgv_process();
+		recursive_packahgv_process();
 
 	pahgv = (struct open_ahgv*)KMALLOC(sizeof(struct open_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {
@@ -8898,13 +8939,13 @@ void theia_close_ahg(int fd) {
 		}
     ds_list_insert (glb_process_list, entry);                                                
 		
-		packahgv_process();
+		recursive_packahgv_process();
   }
 */
 	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		packahgv_process();
+		recursive_packahgv_process();
 
 	pahgv = (struct close_ahgv*)KMALLOC(sizeof(struct close_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {
@@ -9148,13 +9189,13 @@ void theia_execve_ahg(const char *filename) {
 		}
     ds_list_insert (glb_process_list, entry);                                                
 		
-		packahgv_process();
+		recursive_packahgv_process();
   }
 */
 	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		packahgv_process();
+		recursive_packahgv_process();
 
 //	int copied_length = 0;
 //	char *dumped_envp = VMALLOC(3000);
@@ -9169,8 +9210,6 @@ void theia_execve_ahg(const char *filename) {
 //	}
 //	else
 //		pahgv->is_user_remote = 0;
-
-		
 
 	pahgv = (struct execve_ahgv*)KMALLOC(sizeof(struct execve_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {
@@ -9776,13 +9815,13 @@ void theia_mount_ahg(char __user *dev_name, char __user *dir_name, char __user *
 		}
     ds_list_insert (glb_process_list, entry);                                                
 		
-		packahgv_process();
+		recursive_packahgv_process();
   }
 */
 	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		packahgv_process();
+		recursive_packahgv_process();
 
 //	printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
 // Yang: regardless of the return value, passes the failed syscall also
@@ -10007,13 +10046,13 @@ void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
 		}
     ds_list_insert (glb_process_list, entry);                                                
 		
-		packahgv_process();
+		recursive_packahgv_process();
   }
 */
 	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		packahgv_process();
+		recursive_packahgv_process();
 
 	pahgv = (struct pipe_ahgv*)KMALLOC(sizeof(struct pipe_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {
@@ -10303,13 +10342,13 @@ void theia_ioctl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long 
 		}
     ds_list_insert (glb_process_list, entry);                                                
 		
-		packahgv_process();
+		recursive_packahgv_process();
   }
 */
 	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		packahgv_process();
+		recursive_packahgv_process();
 
 //	printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
 // Yang: regardless of the return value, passes the failed syscall also
@@ -11137,13 +11176,13 @@ void theia_munmap_ahg(unsigned long addr, size_t len, long rc, u_long clock) {
 		}
     ds_list_insert (glb_process_list, entry);                                                
 		
-		packahgv_process();
+		recursive_packahgv_process();
   }
 */
 	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		packahgv_process();
+		recursive_packahgv_process();
 
 	pahgv = (struct munmap_ahgv*)KMALLOC(sizeof(struct munmap_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {
@@ -12506,13 +12545,13 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 		}
     ds_list_insert (glb_process_list, entry);                                                
 		
-		packahgv_process();
+		recursive_packahgv_process();
   }
 */
 	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		packahgv_process();
+		recursive_packahgv_process();
 
 	unsigned long a[6];
 	unsigned int len;
@@ -12881,13 +12920,13 @@ void theia_ipc_ahg(long rc, uint call, int first, u_long second,
 		}
     ds_list_insert (glb_process_list, entry);                                                
 		
-		packahgv_process();
+		recursive_packahgv_process();
   }
 */
 	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		packahgv_process();
+		recursive_packahgv_process();
 
 	struct shmget_ahgv* pahgv_shmget = NULL;
 	struct shmat_ahgv* pahgv_shmat = NULL;
@@ -13654,6 +13693,20 @@ void packahgv_clone (struct clone_ahgv *sys_args) {
 		int size = 0;
 		int is_child_remote = 0;
 		struct task_struct *tsk = pid_task(find_vpid(sys_args->new_pid), PIDTYPE_PID);	
+/*
+
+		if (sys_args->pid == sys_args->new_pid) {
+			printk("pid %d == new_pid %d!\n", sys_args->pid, sys_args->new_pid);
+			if (tsk) {
+				sys_args->pid = tsk->real_parent->pid;
+			}
+			else {
+				sys_args->pid = current->real_parent->pid;
+			}
+			printk("use ppid %d instead\n", sys_args->pid);
+		}
+*/
+
 		if(tsk) {
 			is_child_remote = is_remote(tsk);
 			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%d|%d|%ld|%ld|endahg\n", 
@@ -13720,13 +13773,13 @@ void theia_clone_ahg(long new_pid) {
 		}
     ds_list_insert (glb_process_list, entry);                                                
 		
-		packahgv_process();
+		recursive_packahgv_process();
   }
 */
 	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		packahgv_process();
+		recursive_packahgv_process();
 
 	if(new_pid >= 0) {
 		pahgv = (struct clone_ahgv*)KMALLOC(sizeof(struct clone_ahgv), GFP_KERNEL);
@@ -13869,13 +13922,13 @@ void theia_mprotect_ahg(u_long address, u_long len, uint16_t prot, long rc) {
 		}
     ds_list_insert (glb_process_list, entry);                                                
 		
-		packahgv_process();
+		recursive_packahgv_process();
   }
 */
 	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		packahgv_process();
+		recursive_packahgv_process();
 
 	pahgv = (struct mprotect_ahgv*)KMALLOC(sizeof(struct mprotect_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {
@@ -15846,13 +15899,13 @@ u_long flags, u_long pgoff, long rc, u_long clock) {
 		}
     ds_list_insert (glb_process_list, entry);                                                
 		
-		packahgv_process();
+		recursive_packahgv_process();
   }
 */
 	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		packahgv_process();
+		recursive_packahgv_process();
 
 	pahgv = (struct mmap_ahgv*)KMALLOC(sizeof(struct mmap_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {
@@ -16470,13 +16523,13 @@ void theia_setuid_ahg(uid_t uid, int rc, u_long clock) {
 		}
     ds_list_insert (glb_process_list, entry);                                                
 		
-		packahgv_process();
+		recursive_packahgv_process();
   }
 */
 	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		packahgv_process();
+		recursive_packahgv_process();
 
 //	printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
 // Yang: regardless of the return value, passes the failed syscall also
