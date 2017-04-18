@@ -7711,7 +7711,8 @@ record_read (unsigned int fd, char __user * buf, size_t count)
 		err = sys_mprotect(buf, count, PROT_NONE);
 
 	//Yang
-	theia_read_ahg(fd, rc, current->record_thrd->rp_precord_clock);
+	if (rc != -EAGAIN) /* ignore some less meaningful errors */
+		theia_read_ahg(fd, rc, current->record_thrd->rp_precord_clock);
 
 #ifdef TIME_TRICK
 	if (rc <= 0) shift_clock = 0;
@@ -8100,10 +8101,30 @@ replay_read (unsigned int fd, char __user * buf, size_t count)
 
 int theia_sys_read(unsigned int fd, char __user * buf, size_t count) {
 	long rc;
+
+#ifdef THEIA_TRACK_SHM_OPEN
+	int err;
+
+	// TODO: corner case: kernel writes data into shared memory (TA5's test case)
+	// what else? recvmsg, ...
+	struct vm_area_struct *vma = find_vma(current->mm, buf);
+	bool shared_none = false;
+	if (vma->vm_flags & VM_SHARED && !(vma->vm_flags & VM_WRITE)) {
+		err = sys_mprotect(buf, count, PROT_WRITE);
+		shared_none = true;
+		printk("theia_sys_read: a buffer for read() is a shared memory (%p)\n", buf);
+        }
+#endif
+
 	rc = sys_read(fd, buf, count);
 
+#ifdef THEIA_TRACK_SHM_OPEN
+	if (shared_none)
+		err = sys_mprotect(buf, count, PROT_NONE);
+#endif
+
 // Yang: regardless of the return value, passes the failed syscall also
-//	if (rc >= 0) 
+	if (rc != -EAGAIN)
 	{ 
 		theia_read_ahg(fd, rc, 0);
 	}
@@ -8271,7 +8292,8 @@ record_write (unsigned int fd, const char __user * buf, size_t count)
 	size = sys_write (fd, buf, count);
 
 	//Yang
-	theia_write_ahg(fd, size, current->record_thrd->rp_precord_clock);
+	if (size != -EAGAIN)
+		theia_write_ahg(fd, size, current->record_thrd->rp_precord_clock);
 
 	DPRINT ("Pid %d records write returning %d\n", current->pid,size);
 #ifdef X_COMPRESS
@@ -8517,6 +8539,7 @@ int theia_sys_write(unsigned int fd, const char __user * buf, size_t count) {
 
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
+	if (rc != -EAGAIN)
 	{ 
 		theia_write_ahg(fd, rc, 0);
 	}
@@ -11349,7 +11372,8 @@ record_socketcall(int call, unsigned long __user *args)
 	rc = sys_socketcall (call, args);
 
 // Yang also needed at recording
-	theia_socketcall_ahg(rc, call, args, current->record_thrd->rp_precord_clock);
+	if (rc != -EAGAIN) /* ignore some less meaningful errors */
+		theia_socketcall_ahg(rc, call, args, current->record_thrd->rp_precord_clock);
 
 #ifdef TIME_TRICK
 	if ((call == SYS_RECV || call == SYS_RECVMSG) && rc <= 0) 
@@ -12636,7 +12660,7 @@ int theia_sys_socketcall(int call, unsigned long __user * args) {
 
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
-	{ 
+	if (rc != -EAGAIN) { 
 		theia_socketcall_ahg(rc, call, args, 0);
 	}
 	return rc;
@@ -12917,8 +12941,43 @@ int theia_sys_ipc(uint call, int first, u_long second,
 
 	if(call == SHMAT) {
 		unsigned long raddr = 0;
+		struct shmid_kernel* shp;
+		u_long size;
+		struct ipc_namespace* ns = current->nsproxy->ipc_ns;
+		struct kern_ipc_perm *ipcp;
+
 		get_user(raddr, (unsigned long __user *) third);
 		theia_ipc_ahg(rc, call, first, second, raddr, ptr, fifth, 0);
+
+		if (theia_logging_toggle == 0)
+			return rc;
+
+		ipcp = ipc_lock(&ns->ids[IPC_SHM_IDS], first);
+		if (IS_ERR(ipcp)) {
+			printk ("theia_sys_ipc: cannot lock ipc for shmat\n");
+			return -EINVAL;
+		}
+		shp = container_of(ipcp, struct shmid_kernel, shm_perm);
+		size = shp->shm_segsz;
+		ipc_unlock(&shp->shm_perm);
+
+#ifdef THEIA_TRACK_SHMAT
+		int ret = 0;
+		ret = sys_mprotect(raddr, size, PROT_NONE);
+		int __user *address = NULL;		
+		int np = size / 0x1000;
+		if (size % 0x1000) ++np;
+		if (!ret) {
+			int i;
+			for (i = 0; i < np; ++i) {
+				address = (int __user *)(raddr + i*0x1000);
+				*address = *address;
+			}
+			
+			ret = sys_mprotect(rc, size, PROT_NONE);
+			printk("protection of a shared page will be changed, ret %d, %d\n", ret, np);			
+		}
+#endif
 	}
 	else if(call == SHMGET) {
 		theia_ipc_ahg(rc, call, first, second, third, ptr, fifth, 0);
@@ -13074,7 +13133,7 @@ record_ipc (uint call, int first, u_long second, u_long third, void __user *ptr,
 					*address = *address;
 				}
 			
-				ret = sys_mprotect(rc, len, PROT_NONE);
+				ret = sys_mprotect(rc, size, PROT_NONE);
 				printk("protection of a shared page will be changed, ret %d, %d\n", ret, np);			
 			}
 #endif
@@ -15864,7 +15923,7 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 				printk("d_path returned an error!\n");
 			}
 
-			if (!strncmp(path, "/run/shm/", 9)) {
+			if (!strncmp(path, "/run/shm/", 9) && strncmp(path, "/run/shm/pulse-shm-", 19)) {				
 				// shared memory under /dev/shm
 				is_shmem = true;
 			}
@@ -16006,42 +16065,68 @@ replay_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 int theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff) {
 	long rc;
 	int ret;
-//	char vm_file_path[100];
+	char vm_file_path[PATH_MAX];
+	char *path = NULL;
+	bool is_shmem = false;
 
-	rc = sys_mmap_pgoff(addr, len, prot, flags, fd, pgoff);
+	rc = sys_mmap_pgoff(addr, len, prot, flags, fd, pgoff);	
 
-//  mm_segment_t old_fs = get_fs();                                                
-//  set_fs(KERNEL_DS);
-//	ret = sys_access(togglefile, 0/*F_OK*/); //only trace shr access at logging status
-//	set_fs(old_fs);
+        if (theia_logging_toggle == 0)
+		return rc;
 
-	//printk("toggle access is %d, %s\n", ret, current->comm);
-/*
-	if(theia_logging_toggle == 1) {
-		printk("logging toggle is on\n");
-		if ((rc > 0 || rc < -1024) && ((long) fd) >= 0 ) {
-			printk("2 ok\n");
-			struct vm_area_struct *vma;
-			struct mm_struct *mm = current->mm;
-			down_read(&mm->mmap_sem);
-			vma = find_vma(mm, rc);
-			if (vma) {
-			printk("3 ok\n");
-				if(vma->vm_file) {
-			printk("4 ok\n");
-					sprintf(vm_file_path, "%s", vma->vm_file->f_dentry->d_iname);
-				}
-				up_read(&mm->mmap_sem);
-				if(strcmp(vm_file_path, "myregion1") == 0) {
-			printk("5 ok\n");
-					ret = sys_mprotect(rc, len, PROT_NONE);
-					printk("protection bit is changed to none at mmap, ret %d\n", ret);
-				}
+	theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc, 0);
+
+        if ((flags & MAP_SHARED) == 0)
+		return rc;
+
+#ifdef THEIA_TRACK_SHM_OPEN
+	memset(vm_file_path, '\0', PATH_MAX);
+	if ((rc > 0 || rc < -1024) && ((long) fd) >= 0) {
+		struct vm_area_struct *vma;
+		struct mm_struct *mm = current->mm;
+		down_read(&mm->mmap_sem);
+		vma = find_vma(mm, rc);
+		if (vma && rc >= vma->vm_start && vma->vm_file) {
+			printk("theia_sys_mmap: rc: %lx prot: %lu.\n", rc, prot);
+
+			path = d_path(&(vma->vm_file->f_path), vm_file_path, PATH_MAX);
+			if (!IS_ERR(path)) {
+				printk("d_path: %s\n", path);
+			}
+			else {
+				printk("d_path returned an error!\n");
+			}
+
+			if (!strncmp(path, "/run/shm/", 9) && strncmp(path, "/run/shm/pulse-shm-", 19)) {
+				is_shmem = true;
 			}
 		}
+		up_read(&mm->mmap_sem);
 	}
-*/
-	theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc, 0);
+
+	if (flags & MAP_SHARED && is_shmem) {
+		// enforce page allocation
+		int __user *address = NULL;
+
+		// TODO: bookeeping vma and prot (read only, read and write, exec)
+
+		int np = len / 0x1000;
+		if (len % 0x1000)
+			++np;
+
+		ret = sys_mprotect(rc, len, PROT_WRITE);
+		if (!ret) {
+			int i;
+			for (i = 0; i < np; ++i) {
+				address = (int __user *)(rc + i*0x1000);
+				*address = *address;
+			}
+
+			ret = sys_mprotect(rc, len, PROT_NONE);
+			printk("[logging]protection of a shared page will be changed, ret %d, %s\n", ret, path);
+		}
+	}
+#endif
 
 	return rc;
 }

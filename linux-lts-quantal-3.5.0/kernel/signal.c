@@ -1297,14 +1297,14 @@ struct shr_read_ahgv {
 	u_long					clock;
 };
 
-void packahgv_shrread (struct shr_read_ahgv sys_args) {
+void packahgv_shrread (struct shr_read_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%lx|%d|%d|%ld|%ld|endahg\n", 
-				500, sys_args.pid, sys_args.address, current->tgid, sys_args.clock, sec, nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%d|%d|%ld|%ld|endahg\n", 
+				   500, sys_args->pid, current->start_time.tv_sec, sys_args->address, current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -1376,7 +1376,7 @@ void theia_shrread_ahg(unsigned int address, u_long clock) {
 	pahgv->pid = current->pid;
 	pahgv->address = address;
 	pahgv->clock = clock;
-	packahgv_shrread(*pahgv);
+	packahgv_shrread(pahgv);
 	kfree(pahgv);	
 
 }
@@ -1388,14 +1388,14 @@ struct shr_write_ahgv {
 	u_long					clock;
 };
 
-void packahgv_shrwrite (struct shr_write_ahgv sys_args) {
+void packahgv_shrwrite (struct shr_write_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%lx|%d|%d|%ld|%ld|endahg\n", 
-				501, sys_args.pid, sys_args.address, current->tgid, sys_args.clock, sec, nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%d|%d|%ld|%ld|endahg\n", 
+				   501, sys_args->pid, current->start_time.tv_sec, sys_args->address, current->tgid, sys_args->clock, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -1467,7 +1467,7 @@ void theia_shrwrite_ahg(unsigned int address, u_long clock) {
 	pahgv->pid = current->pid;
 	pahgv->address = address;
 	pahgv->clock = clock;
-	packahgv_shrwrite(*pahgv);
+	packahgv_shrwrite(pahgv);
 	kfree(pahgv);	
 
 }
@@ -1611,8 +1611,7 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	buf_theia_len = vma->vm_end - vma->vm_start;
 	printk("buf_theia_len: %u\n", buf_theia_len);
 	buf_theia = (char*)vmalloc(buf_theia_len+1);
-
-	void __user *vma_address = (void __user*)vma->vm_start;
+	void __user *vma_address = (void __user*)vma->vm_start;		
 
 //	if( ret >= 0 && !(t->record_thrd || t->replay_thrd)) { 
 	if( theia_logging_toggle == 1 && !(t->record_thrd || t->replay_thrd)) { 
@@ -1634,10 +1633,12 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 			// if it is write attempt, we change protection to prot_write
 			if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
 				ret = sys_mprotect(address, 1, PROT_WRITE);
+				ahg_mem_access = 2;				
 			}
 			// if it is read attempt, we change protection to prot_read
 			else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
 				ret = sys_mprotect(address, 1, PROT_READ);
+				ahg_mem_access = 1;				
 			}
 		}
 	}
@@ -1653,7 +1654,8 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 			//This should be the very first mem access
 			if(!(protection & (PROT_READ | PROT_WRITE))) {
 				if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
-					ret = theia_mprotect_shared(mm, address, 1, PROT_WRITE);
+//					ret = theia_mprotect_shared(mm, address, 1, PROT_WRITE);
+					ret = sys_mprotect(address, 1, PROT_READ|PROT_WRITE);
 					printk("inside force_sig_info, first from none; address %p is set to prot_write, ret: %d\n", address, ret);
 					
 					//Notify this is a mem_write to the shared memory
@@ -1661,7 +1663,8 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 
 				}
 				else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
-					ret = theia_mprotect_shared(mm, address, 1, PROT_READ);
+//					ret = theia_mprotect_shared(mm, address, 1, PROT_READ);
+					ret = sys_mprotect(address, 1, PROT_READ);
 					printk("inside force_sig_info, first from none; address %p is set to prot_read, ret: %d\n", address, ret);
 
 					//copy from user of this one page
@@ -1669,6 +1672,7 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 					if ((ret = copy_from_user (buf_theia, vma_address, buf_theia_len))) {
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 					}
+					ahg_mem_access = 1;
 					save_flag = true;
 				}
 
@@ -1679,13 +1683,16 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 			else {
 				// if it is write attempt, we change protection to prot_write
 				if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
-					ret = theia_mprotect_shared(mm, address, 1, PROT_WRITE);
+//					ret = theia_mprotect_shared(mm, address, 1, PROT_WRITE);
+					ret = sys_mprotect(address, 1, PROT_WRITE|PROT_READ);
 					printk("inside force_sig_info, address %p is set to prot_write, ret: %d\n", address, ret);
+					ahg_mem_access = 2;					
 				}
 				// if it is read attempt, we change protection to prot_read
 				else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
 					//					ret = theia_mprotect_shared(mm, address, 1, PROT_READ);
-					ret = theia_mprotect_shared(mm, address, 1, PROT_READ|PROT_EXEC);					
+//					ret = theia_mprotect_shared(mm, address, 1, PROT_READ|PROT_EXEC);					
+					ret = sys_mprotect(address, 1, PROT_READ|PROT_EXEC);
 					printk("inside force_sig_info, address %p is set to prot_read|exec, ret: %d\n", address, ret);
 					//copy from user of this one page
 //					if ((ret = copy_from_user (buf_theia, address, 4096))) {
@@ -1693,6 +1700,7 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 					}
 					save_flag = true;
+					ahg_mem_access = 1;					
 				}
 			}
 		}
