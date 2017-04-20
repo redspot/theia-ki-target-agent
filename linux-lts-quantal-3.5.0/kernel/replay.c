@@ -4231,7 +4231,7 @@ new_syscall_enter (long sysnum)
 
 //SL: dump userspace return addresses
 // dump_user_return_addresses();
-dump_user_stack();
+// dump_user_stack();
 
 #ifdef MCPRINT
 	if (replay_min_debug || replay_debug) {
