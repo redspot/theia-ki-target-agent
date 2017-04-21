@@ -726,8 +726,8 @@ atomic_t vmalloc_cnt = ATOMIC_INIT(0);
 #define SIGNAL_WHILE_SYSCALL_IGNORED 53
 
 /* Variables configurable via /proc file system */
-unsigned int syslog_recs = 20000;
-unsigned int replay_debug = 1;
+unsigned int syslog_recs = 2000;
+unsigned int replay_debug = 0;
 unsigned int replay_min_debug = 0;
 unsigned long argsalloc_size = (512*1024);
 // If the replay clock is greater than this value, MPRINT out the syscalls made by pin
@@ -4281,7 +4281,7 @@ new_syscall_enter (long sysnum)
 	}
 	prt->rp_expected_clock = new_clock;
 	MPRINT ("pid %d incremented clock to %d on syscall %ld enter\n", current->pid, atomic_read(prt->rp_precord_clock), sysnum);
-	printk ("pid %d incremented precord_clock to %d, expected_clock %d, start_clock %d, on syscall %ld enter\n", current->pid, atomic_read(prt->rp_precord_clock), prt->rp_expected_clock, start_clock,sysnum);
+//	printk ("pid %d incremented precord_clock to %d, expected_clock %d, start_clock %d, on syscall %ld enter\n", current->pid, atomic_read(prt->rp_precord_clock), prt->rp_expected_clock, start_clock,sysnum);
 
 #ifdef USE_HPC
 	psr->hpc_begin = rdtsc(); // minus cc_calibration
@@ -16021,7 +16021,7 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 	}
 
 	rc = sys_mmap_pgoff (addr, len, prot, flags, fd, pgoff);
-	printk("mmap record is done. rc:%lx\n", rc);
+//	printk("mmap record is done. rc:%lx\n", rc);
 //Yang
 	theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc, 
 	current->record_thrd->rp_precord_clock);
