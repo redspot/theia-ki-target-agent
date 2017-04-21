@@ -68,6 +68,7 @@
 #include <linux/delay.h>
 #include <linux/time.h>
 #include <linux/theia_channel.h>
+#include <linux/theia_ahglog.h>
 
 
 //xdou
@@ -7532,7 +7533,7 @@ void packahgv_process(struct task_struct *tsk) {
 		struct task_struct *ptsk = pid_task(find_vpid(tsk->real_parent->pid), PIDTYPE_PID);	
 		rcu_read_unlock();
 
-  		char *fpathbuf = (char*)vmalloc(PATH_MAX);
+		char *fpathbuf = (char*)vmalloc(PATH_MAX);
 	 	char *fpath    = get_task_fullpath(tsk, fpathbuf, PATH_MAX);
 		if (!fpath) { /* sometimes we can't obtain fullpath */
 			fpath = tsk->comm;
@@ -7552,6 +7553,69 @@ void packahgv_process(struct task_struct *tsk) {
 		}
 		relay_write(theia_chan, buf, size);
 		vfree(fpathbuf);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+void packahgv_process_bin(struct task_struct *tsk) {
+	if(theia_chan) {
+		long sec, nsec;
+		char ids[50];
+		get_curr_time(&sec, &nsec);
+		rcu_read_lock();
+		struct task_struct *ptsk = pid_task(find_vpid(tsk->real_parent->pid), PIDTYPE_PID);	
+		rcu_read_unlock();
+
+//pack struct
+		struct process_pack_ahg *buf_ahg = vmalloc(sizeof(struct process_pack_ahg));
+		buf_ahg->pid = tsk->pid;
+		buf_ahg->task_sec = tsk->start_time.tv_sec;
+		get_ids(ids);
+		buf_ahg->size_ids = strlen(ids);
+		printk("ids:(%s),size:%hu\n", ids, buf_ahg->size_ids);
+		buf_ahg->p_pid = tsk->real_parent->pid;
+		if(ptsk)
+			buf_ahg->p_task_sec = ptsk->start_time.tv_sec;	
+		else
+			buf_ahg->p_task_sec = -1; 
+		char *fpathbuf = (char*)vmalloc(PATH_MAX);
+	 	char *fpath = get_task_fullpath(tsk, fpathbuf, PATH_MAX);
+		if(!fpath) {
+			strncpy(fpathbuf, tsk->comm, TASK_COMM_LEN);
+		}
+		buf_ahg->size_fpathbuf = strlen(fpath);
+		printk("fpath:(%s),size:%hu\n", fpathbuf, buf_ahg->size_fpathbuf);
+		buf_ahg->is_user_remote = is_remote(tsk);
+		buf_ahg->tgid = tsk->tgid;
+		buf_ahg->sec = sec;
+		buf_ahg->nsec = nsec;
+		
+//pack final buffer
+		int size = 8/*startahg*/ + 2/*syscall type*/ 
+							+ sizeof(struct process_pack_ahg) 
+							+ buf_ahg->size_ids
+							+ buf_ahg->size_fpathbuf
+				  		+ 6/*endahg*/;
+		void *buf = vmalloc(size);
+		void *curr_ptr = buf;
+		sprintf((char*)curr_ptr, "startahg");
+		curr_ptr += 8;
+		*(uint16_t*)(curr_ptr) = 399;
+		curr_ptr += 2;
+		memcpy(curr_ptr, (void*)buf_ahg, sizeof(struct process_pack_ahg));
+		curr_ptr += sizeof(struct process_pack_ahg);
+		strncpy((char*)curr_ptr, ids, buf_ahg->size_ids);
+		curr_ptr += buf_ahg->size_ids;
+		strncpy((char*)curr_ptr, fpath, buf_ahg->size_fpathbuf);
+		curr_ptr += buf_ahg->size_fpathbuf;
+		sprintf((char*)curr_ptr, "endahg");
+
+		relay_write(theia_chan, buf, size);
+
+		vfree(buf_ahg);
+		vfree(fpathbuf);
+		vfree(buf);
 	}
 	else
 		printk("theia_chan invalid\n");
