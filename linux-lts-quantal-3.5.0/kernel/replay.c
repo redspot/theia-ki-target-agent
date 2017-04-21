@@ -7447,6 +7447,11 @@ bool check_and_update_controlfile() {
 			return false;
 		}
 	}
+
+        if (strcmp(current->comm, "relay-read-sock") == 0 ||
+                strcmp(current->comm, "theia_toggle") == 0) {
+                return false;
+        }
 	return true;
 }
 
