@@ -102,7 +102,7 @@ bool theia_recording_toggle = 0;
 EXPORT_SYMBOL(theia_recording_toggle);
 
 #define THEIA_TRACK_SHM_OPEN 1
-#define THEIA_TRACK_SHMAT 1
+// #define THEIA_TRACK_SHMAT 1
 
 //#define REPLAY_PARANOID
 
@@ -7533,7 +7533,8 @@ void packahgv_process(struct task_struct *tsk) {
 		get_ids(ids);
 		get_curr_time(&sec, &nsec);
 		int size = 0;
-		int is_user_remote = is_remote(tsk);
+//		int is_user_remote = is_remote(tsk);
+		int is_user_remote = 0;
 		rcu_read_lock();
 		struct task_struct *ptsk = pid_task(find_vpid(tsk->real_parent->pid), PIDTYPE_PID);	
 		rcu_read_unlock();
@@ -8798,9 +8799,11 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, 
 			}
 		}
 
+#if 0
 		if (is_opened_inode(inode)) { /* already published */
 			pahgv->is_new = false;
 		}
+#endif
 	}
 
 //Yang: temp avoiding the "Text file busy" for spec cpu2006
@@ -9185,11 +9188,14 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 		get_ids(ids);
 //		int is_user_remote = is_remote(current);
 		int is_user_remote;
+/*
 		struct task_struct *tsk = pid_task(find_vpid(current->real_parent->pid), PIDTYPE_PID);	
 		if (tsk)
 			is_user_remote = is_remote(tsk); // try to use parent's env
 		else
 			is_user_remote = is_remote(current);
+*/
+		is_user_remote = 0;
 
   		char *fpathbuf = (char*)vmalloc(PATH_MAX);
 	 	char *fpath    = get_task_fullpath(current, fpathbuf, PATH_MAX);
