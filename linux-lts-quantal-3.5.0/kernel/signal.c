@@ -58,6 +58,8 @@
 #include <linux/delay.h>
 #include <linux/time.h>
 
+// #define THEIA_STORE_SHMEM 1
+
 //extern ds_list_t* glb_process_list;
 //extern const char* togglefile;
 extern bool theia_logging_toggle;
@@ -1558,12 +1560,13 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	struct vm_area_struct *vma;
 	unsigned long error_code = t->thread.error_code;
 	unsigned long protection;
-	bool save_flag = false;
-//	bool load_flag = false;
 	int ahg_mem_access = 0; //0:no need; 1:read; 2:write;
 	
+#ifdef THEIA_STORE_SHMEM
+	bool save_flag = false;
 	char *buf_theia = NULL;
 	size_t buf_theia_len = 0;
+#endif
 
 	printk("error code: %lu\n", error_code);
 
@@ -1608,9 +1611,11 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	printk("vma->start: %p, end: %p, current page prot: %lu, vm_flags: %lu\n", 
 				vma->vm_start,vma->vm_end,pgprot_val(vma->vm_page_prot), vma->vm_flags);
 
+#ifdef THEIA_STORE_SHMEM
 	buf_theia_len = vma->vm_end - vma->vm_start;
 	printk("buf_theia_len: %u\n", buf_theia_len);
 	buf_theia = (char*)vmalloc(buf_theia_len+1);
+#endif
 	void __user *vma_address = (void __user*)vma->vm_start;		
 
 //	if( ret >= 0 && !(t->record_thrd || t->replay_thrd)) { 
@@ -1667,17 +1672,18 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 					ret = sys_mprotect(address, 1, PROT_READ);
 					printk("inside force_sig_info, first from none; address %p is set to prot_read, ret: %d\n", address, ret);
 
+#ifdef THEIA_STORE_SHMEM
 					//copy from user of this one page
-//					if ((ret = copy_from_user (buf_theia, address, 4096))) {
 					if ((ret = copy_from_user (buf_theia, vma_address, buf_theia_len))) {
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 					}
-					ahg_mem_access = 1;
 					save_flag = true;
+#endif
+					ahg_mem_access = 1;
 				}
 
 				//Notify this is a mem_read to the shared memory
-				ahg_mem_access = 1;
+//				ahg_mem_access = 1;
 			}
 			//This is the following mem access
 			else {
@@ -1694,12 +1700,13 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 //					ret = theia_mprotect_shared(mm, address, 1, PROT_READ|PROT_EXEC);					
 					ret = sys_mprotect(address, 1, PROT_READ|PROT_EXEC);
 					printk("inside force_sig_info, address %p is set to prot_read|exec, ret: %d\n", address, ret);
+#ifdef THEIA_STORE_SHMEM
 					//copy from user of this one page
-//					if ((ret = copy_from_user (buf_theia, address, 4096))) {
 					if ((ret = copy_from_user (buf_theia, vma_address, buf_theia_len))) {
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 					}
 					save_flag = true;
+#endif
 					ahg_mem_access = 1;					
 				}
 			}
@@ -1723,10 +1730,13 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 //					load_from_cache_file(buf_theia);
 //					load_flag =  true;
 
+					// TODO: what should we do?
+					ret = sys_mprotect(address, 1, PROT_READ);
+
+#ifdef THEIA_STORE_SHMEM
 					if ((ret = copy_to_user (address, buf_theia, 4096))) {
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 					}
-					ret = sys_mprotect(address, 1, PROT_READ);
 					printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", address, ret);
 
 					buf_theia[4096] = '\0';
@@ -1736,6 +1746,7 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 						printk("%02x", buf_theia[i]);
 					}
 					printk("\n");
+#endif
 				}
 			}
 
@@ -1753,10 +1764,13 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 //					load_from_cache_file(buf_theia);
 //					load_flag =  true;
 
+					// TODO: what should we do?
+					ret = sys_mprotect(address, 1, PROT_READ);
+#ifdef THEIA_STORE_SHMEM
 					if ((ret = copy_to_user (address, buf_theia, 4096))) {
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
 					}
-					ret = sys_mprotect(address, 1, PROT_READ);
+#endif
 					printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", address, ret);
 				}
 			}
@@ -1768,21 +1782,13 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	ret = specific_send_sig_info(sig, info, t);
 	spin_unlock_irqrestore(&t->sighand->siglock, flags);
 
+#ifdef THEIA_STORE_SHMEM
 	if(save_flag) {	
 		//write to cache file
 		save_to_cache_file(buf_theia, buf_theia_len, vma->vm_start);
-		//					write_shr_cache(buf_theia, 4096);
-
-		/*
-		buf_theia[4096] = '\0';
-		printk("buf_theia: %s\n", buf_theia);
-		int i=0;
-		for(i=0;i<4096;i++){
-			printk("%02x", buf_theia[i]);
-		}
-		printk("\n");
-		*/
 	}
+	vfree(buf_theia);
+#endif
 
 /*
 	if(load_flag) {
@@ -1798,7 +1804,6 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 		theia_shrwrite_ahg(address, 0);	
 	}
 
-	vfree(buf_theia);
 
 	return ret;
 out:
