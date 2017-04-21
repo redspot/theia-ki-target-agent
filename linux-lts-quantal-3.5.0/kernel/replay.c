@@ -9207,6 +9207,7 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 				11, sys_args->pid, current->start_time.tv_sec, 
 				fpath, ids, is_user_remote, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
+		vfree(fpathbuf);
 	}
 	else
 		printk("theia_chan invalid\n");
