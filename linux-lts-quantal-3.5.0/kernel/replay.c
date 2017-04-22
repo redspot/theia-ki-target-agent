@@ -7456,7 +7456,9 @@ bool check_and_update_controlfile() {
 	}
 
         if (strcmp(current->comm, "relay-read-sock") == 0 ||
-                strcmp(current->comm, "theia_toggle") == 0) {
+                strcmp(current->comm, "theia_toggle") == 0 ||
+                strcmp(current->comm, "rsyslogd") == 0 ||
+		strcmp(current->comm, "gnome-pty-helper") == 0) {
                 return false;
         }
 	return true;
@@ -9091,7 +9093,7 @@ record_close (int fd)
 	new_syscall_exit (6, NULL);				
 
 	//Yang
-	theia_close_ahg(fd);
+//	theia_close_ahg(fd);
 
 	perftimer_stop(close_timer);
 	return rc;
@@ -9129,9 +9131,7 @@ int theia_sys_close(int fd) {
 
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
-	{ 
-		theia_close_ahg(fd);
-	}
+//		theia_close_ahg(fd);
 	return rc;
 }
 
