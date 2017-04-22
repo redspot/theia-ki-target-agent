@@ -101,8 +101,10 @@ EXPORT_SYMBOL(theia_logging_toggle);
 bool theia_recording_toggle = 0;
 EXPORT_SYMBOL(theia_recording_toggle);
 
+// static unsigned int no_new_proc = 0;
+
 #define THEIA_TRACK_SHM_OPEN 1
-// #define THEIA_TRACK_SHMAT 1
+#define THEIA_TRACK_SHMAT 1
 
 //#define REPLAY_PARANOID
 
@@ -7497,6 +7499,7 @@ bool is_process_new2(pid_t pid, int sec) {
 	ret = btree_lookup64(&theia_process_tree, key);
 	if (ret == NULL) {
 		btree_insert64(&theia_process_tree, key, (void*)1, GFP_KERNEL);
+//		printk("no_new_proc: %lu, %d, %d\n", ++no_new_proc, pid, sec);
 	}
 	mutex_unlock(&theia_process_tree_mutex);
 
@@ -7504,6 +7507,22 @@ bool is_process_new2(pid_t pid, int sec) {
 		return true;
 	else
 		return false;
+}
+
+void remove_process_from_tree(pid_t pid, int sec) {
+	u64 key;
+	void *ret;
+	key = ((u64)current->pid)<<32 | (u64)current->start_time.tv_sec;
+	mutex_lock(&theia_process_tree_mutex);
+	ret = btree_remove64(&theia_process_tree, key);
+	mutex_unlock(&theia_process_tree_mutex);
+
+/*
+	if (ret) {
+		--no_new_proc;
+		printk("exit: %d, %d\n", current->pid, current->start_time.tv_sec);
+	}
+*/
 }
 
 bool is_opened_inode(struct inode *inode) {
