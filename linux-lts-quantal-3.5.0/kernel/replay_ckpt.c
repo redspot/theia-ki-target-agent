@@ -76,7 +76,7 @@ copy_args (const char __user* const __user* args, const char __user* const __use
 	} while (1);
 	
 	// Now allocate buffer
-	printk("lipath_len:%d, contents: %s\n", hc_libpath_len, hc_libpath);
+//	printk("lipath_len:%d, contents: %s\n", hc_libpath_len, hc_libpath);
 	if(hc_libpath>0)
 		*buflen = 2*sizeof(int) + args_len + env_len + hc_libpath_len+1 + sizeof(int);
 	else

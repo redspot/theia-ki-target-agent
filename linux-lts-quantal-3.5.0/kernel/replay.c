@@ -142,6 +142,10 @@ int verify_debug = 0;
 //#define MPRINT(x,...)
 #define MCPRINT
 
+unsigned int theia_debug = 0;
+#define TPRINT if(theia_debug) printk
+//#define DPRINT(x,...)
+
 //xdou
 /*
    * LOG_COMPRESS is the basic compression level, any other compression technique relies on this, i.e. if you want level_1, xproxy or det_time to be on, LOG_COMPRESS should also be on
@@ -3927,10 +3931,10 @@ int fork_replay_theia (char __user* logdir, const char* filename, const char __u
 	// Hack to support multiple glibcs - record and LD_LIBRARY_PATH info
 	prg->rg_libpath = get_libpath (env);
 	if (prg->rg_libpath == NULL) {
-		printk ("fork_replay: libpath not found\n");
+		TPRINT("fork_replay: libpath not found\n");
 	
 		prg->rg_libpath = libpath;
-		printk("hardcoded libpath is (%s)", prg->rg_libpath);
+		TPRINT("hardcoded libpath is (%s)", prg->rg_libpath);
 //		return -EINVAL;
 	}
 
@@ -8357,12 +8361,13 @@ record_write (unsigned int fd, const char __user * buf, size_t count)
 	//perftimer_tick(write_btwn_timer);
 	perftimer_start(write_in_timer);
 
+	// TODO: fd 99999?
 	if (fd == 99999) {  // Hack that assists in debugging user-level code
 		new_syscall_enter (4);
 		new_syscall_done (4, count);			       
 		memset (kbuf, 0, sizeof(kbuf));
 		if (copy_from_user (kbuf, buf, count < 179 ? count : 180)) printk ("record_write: cannot copy kstring\n");
-		printk ("Pid %d clock %d logged clock %ld records: %s", current->pid, atomic_read(current->record_thrd->rp_precord_clock)-1, current->record_thrd->rp_expected_clock-1, kbuf);
+//		printk ("Pid %d clock %d logged clock %ld records: %s", current->pid, atomic_read(current->record_thrd->rp_precord_clock)-1, current->record_thrd->rp_expected_clock-1, kbuf);
 		new_syscall_exit (4, NULL);
 		return count;
 	}
@@ -12360,13 +12365,13 @@ void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port
 		return;
 	}
 	
-	print_mem((u_long)p_sockaddr, sizeof(struct sockaddr));	
+//	print_mem((u_long)p_sockaddr, sizeof(struct sockaddr));	
 
 	cc = (unsigned char *)p_sockaddr;
 	*port = cc[2]*0x100+cc[3];
 	sprintf(ip, "%u.%u.%u.%u",cc[4],cc[5],cc[6],cc[7]);
 
-	printk("ip is %s, port: %lu\n", ip, *port);
+	TPRINT("ip is %s, port: %lu\n", ip, *port);
 	
 	KFREE(p_sockaddr);
 
@@ -13090,7 +13095,7 @@ int theia_sys_ipc(uint call, int first, u_long second,
 			}
 			
 			ret = sys_mprotect(rc, size, PROT_NONE);
-			printk("protection of a shared page will be changed, ret %d, %d\n", ret, np);			
+//			printk("protection of a shared page will be changed, ret %d, %d\n", ret, np);			
 		}
 #endif
 	}
@@ -13249,7 +13254,7 @@ record_ipc (uint call, int first, u_long second, u_long third, void __user *ptr,
 				}
 			
 				ret = sys_mprotect(rc, size, PROT_NONE);
-				printk("protection of a shared page will be changed, ret %d, %d\n", ret, np);			
+//				printk("protection of a shared page will be changed, ret %d, %d\n", ret, np);			
 			}
 #endif
 
@@ -16041,18 +16046,21 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 		if (vma && rc >= vma->vm_start && vma->vm_file) {
 			recbuf = ARGSKMALLOC(sizeof(struct mmap_pgoff_retvals), GFP_KERNEL);
 			add_file_to_cache (vma->vm_file, &recbuf->dev, &recbuf->ino, &recbuf->mtime);
-			printk("record_mmap_pgoff: rc: %lx, vm_file->fdentry->d_iname: %s, prot: %lu.\n", rc, vma->vm_file->f_dentry->d_iname, prot);
+//			printk("record_mmap_pgoff: rc: %lx, vm_file->fdentry->d_iname: %s, prot: %lu.\n", rc, vma->vm_file->f_dentry->d_iname, prot);
 			//			sprintf(vm_file_path, "%s", vma->vm_file->f_dentry->d_iname);
 			
 			path = d_path(&(vma->vm_file->f_path), vm_file_path, PATH_MAX);
 			if (!IS_ERR(path)) {
-				printk("d_path: %s\n", path);
+//				printk("d_path: %s\n", path);
 			}
 			else {
 				printk("d_path returned an error!\n");
+				path = current->comm;
 			}
 
-			if (!strncmp(path, "/run/shm/", 9) && strncmp(path, "/run/shm/pulse-shm-", 19)) {				
+			if (!strncmp(path, "/run/shm/", 9) && 
+				strncmp(path, "/run/shm/pulse-shm-", 19) &&
+				strncmp(path, "/run/shm/uclock", 15)) {				
 				// shared memory under /dev/shm
 				is_shmem = true;
 			}
@@ -16080,7 +16088,7 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 			}
 			
 			ret = sys_mprotect(rc, len, PROT_NONE);
-			printk("protection of a shared page will be changed, ret %d\n", ret);			
+//			printk("protection of a shared page will be changed, ret %d\n", ret);			
 		}
 	}
 #endif
@@ -16216,17 +16224,19 @@ int theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, un
 		down_read(&mm->mmap_sem);
 		vma = find_vma(mm, rc);
 		if (vma && rc >= vma->vm_start && vma->vm_file) {
-			printk("theia_sys_mmap: rc: %lx prot: %lu.\n", rc, prot);
+			TPRINT("theia_sys_mmap: rc: %lx prot: %lu.\n", rc, prot);
 
 			path = d_path(&(vma->vm_file->f_path), vm_file_path, PATH_MAX);
 			if (!IS_ERR(path)) {
-				printk("d_path: %s\n", path);
+				TPRINT("d_path: %s\n", path);
 			}
 			else {
-				printk("d_path returned an error!\n");
+				TPRINT("d_path returned an error!\n");
 			}
 
-			if (!strncmp(path, "/run/shm/", 9) && strncmp(path, "/run/shm/pulse-shm-", 19)) {
+			if (!strncmp(path, "/run/shm/", 9) && 
+				strncmp(path, "/run/shm/pulse-shm-", 19) &&
+				strncmp(path, "/run/shm/uclock", 15)) {
 				is_shmem = true;
 			}
 		}
@@ -16252,7 +16262,7 @@ int theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, un
 			}
 
 			ret = sys_mprotect(rc, len, PROT_NONE);
-			printk("[logging]protection of a shared page will be changed, ret %d, %s\n", ret, path);
+//			printk("[logging]protection of a shared page will be changed, ret %d, %s\n", ret, path);
 		}
 	}
 #endif

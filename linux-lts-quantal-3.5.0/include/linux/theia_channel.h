@@ -10,8 +10,8 @@
 #define APP_DIR		"theia_logs"
 //static struct rchan	*theia_chan = NULL;
 //static struct dentry	*theia_dir = NULL;
-static size_t		subbuf_size = 262144*5;
-static size_t		n_subbufs = 8;
+static size_t		subbuf_size = 262144*16;
+static size_t		n_subbufs = 16;
 static size_t		event_n = 20;
 static size_t write_count;
 static int suspended;

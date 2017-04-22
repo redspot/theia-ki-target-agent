@@ -1568,7 +1568,7 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	size_t buf_theia_len = 0;
 #endif
 
-	printk("error code: %lu\n", error_code);
+//	printk("error code: %lu\n", error_code);
 
 //Yang: we pre-load before the spin lock
 //	load_from_cache_file(buf_theia);
@@ -1608,8 +1608,8 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	unsigned long address_ul = (unsigned long)address;
 	vma = find_vma(mm, address_ul);
 	protection = pgprot_val(vma->vm_page_prot);
-	printk("vma->start: %p, end: %p, current page prot: %lu, vm_flags: %lu\n", 
-				vma->vm_start,vma->vm_end,pgprot_val(vma->vm_page_prot), vma->vm_flags);
+//	printk("vma->start: %p, end: %p, current page prot: %lu, vm_flags: %lu\n", 
+//				vma->vm_start,vma->vm_end,pgprot_val(vma->vm_page_prot), vma->vm_flags);
 
 #ifdef THEIA_STORE_SHMEM
 	buf_theia_len = vma->vm_end - vma->vm_start;
@@ -1649,11 +1649,11 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	}
 
 	if(t->record_thrd || t->replay_thrd) {
-		printk("t->comm: %s\n", t->comm);
+//		printk("t->comm: %s\n", t->comm);
 		//RECORD
 		if (t->record_thrd) { /* uncomment it after doing enough tests */		
 			//		if(t->record_thrd && (strcmp(t->comm, "p3") == 0 || strcmp(t->comm, "p4") == 0) ) {
-			printk("in signal.c record, id: %lld\n", t->rg_id);
+//			printk("in signal.c record, id: %lld\n", t->rg_id);
 			action->sa.sa_handler = SIG_IGN;
 
 			//This should be the very first mem access
@@ -1721,12 +1721,12 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 				if(error_code & PF_USER && error_code & PF_WRITE) {
 					//we expect segfault happens again
 					ret = sys_mprotect(address, 1, PROT_READ);
-					printk("inside force_sig_info, first from none; address %p is set to prot_READ, ret: %d\n", address, ret);
+//					printk("inside force_sig_info, first from none; address %p is set to prot_READ, ret: %d\n", address, ret);
 				}
 				else if(error_code & PF_USER && !(error_code & PF_WRITE)) {
 					//in order to dump the read page, we change protection to prot_write temporarily
 					ret = sys_mprotect(address, 1, PROT_WRITE);
-					printk("inside force_sig_info, address %p is set to prot_write temp, ret: %d\n", address, ret);
+//					printk("inside force_sig_info, address %p is set to prot_write temp, ret: %d\n", address, ret);
 //					load_from_cache_file(buf_theia);
 //					load_flag =  true;
 
