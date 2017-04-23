@@ -84,7 +84,7 @@ void get_logdir_for_replay_id (__u64 id, char* buf);
 int make_logdir_for_replay_id (__u64 id, char* buf);
 
 /* In replay_ckpt.h */
-char* copy_args (const char __user* const __user* args, const char __user* const __user* env, int* buflen);
+char* copy_args (const char __user* const __user* args, const char __user* const __user* env, int* buflen, char* libpath, int libpath_len);
 #ifdef TIME_TRICK
 long replay_checkpoint_to_disk (char* filename, char* execname, char* buf, int buflen, __u64 parent_rg_id, struct timeval* tv, struct timespec* tp);
 long replay_resume_from_disk (char* filename, char** execname, char*** argsp, char*** envp, __u64* prg_id, struct timeval* tv, struct timespec* tp);
@@ -119,4 +119,7 @@ long get_filemap(int fd, loff_t offset, int size, void * entries, int num_entrie
 
 long reset_replay_ndx(void);
 
+void write_shr_cache(char *buf, long len);
+
+void remove_process_from_tree(pid_t pid, int sec);
 #endif

@@ -16,7 +16,7 @@ total_count = 0
 total_bytes = 0
 total_bsize = 0
 
-for cfile in glob.glob("/replay_cache/*"):
+for cfile in glob.glob("/data/replay_cache/*"):
     if re.search("replaymap", cfile):
         continue
     st = os.stat (cfile)
@@ -37,7 +37,7 @@ print "Total:      %6d files comprising %5d MB (%5d MB by blocksize)" % (total_c
 # Replay map
 print
 print "Replay map:"
-for cfile in glob.glob("/replay_cache/replaymap*"):
+for cfile in glob.glob("/data/replay_cache/replaymap*"):
     st = os.stat (cfile)
     print "%s stat size %d MB block size %d MB"%(cfile, st.st_size/(1024*1024), (512 * st.st_blocks)/(1024*1024))
 
@@ -65,7 +65,7 @@ print
 
 # Now get list of recordings that fall within the specified range
 recordings = {}
-for recdir in glob.glob ("/replay_logdb/rec_*"):
+for recdir in glob.glob ("/data/replay_logdb/rec_*"):
     m = re.search("_([0-9]+)$", recdir)
     if m:
         ndx = int(m.groups()[0])
@@ -74,7 +74,7 @@ for recdir in glob.glob ("/replay_logdb/rec_*"):
 reclist = sorted(recordings.keys())
 for rec in reclist:
     try:
-        for logfile in glob.glob ("/replay_logdb/rec_" + str(rec) + "/*"):
+        for logfile in glob.glob ("/data/replay_logdb/rec_" + str(rec) + "/*"):
             st = os.stat (logfile)
             ts_string = time.strftime("%m-%d", time.localtime(st.st_ctime))
 

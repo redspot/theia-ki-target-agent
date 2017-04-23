@@ -44,7 +44,7 @@ if (len(sys.argv) > 2):
 
 # Now get list of recordings that fall within the specified range
 recordings = {}
-for recdir in glob.glob ("/replay_logdb/rec_*"):
+for recdir in glob.glob ("/data/replay_logdb/rec_*"):
     m = re.search("_([0-9]+)$", recdir)
     if m:
         ndx = int(m.groups()[0])

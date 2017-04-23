@@ -25,7 +25,7 @@
 
 #define DPRINT(x,...)
 
-char cache_dir[] = "/replay_cache";
+char cache_dir[] = "/data/replay_cache";
 #define COPY_CHUNK 4096
 
 // We hold the record lock when this function is called

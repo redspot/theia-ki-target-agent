@@ -1481,7 +1481,7 @@ void save_to_cache_file(char* buf, size_t buf_len, unsigned long start) {
 	int written = 0;
 	char filename[50];
 
-	sprintf (filename, "/replay_cache/shr_cache_%lld_%lu", current->rg_id, current->rg_shm_count);
+	sprintf (filename, "/data/replay_cache/shr_cache_%lld_%lu", current->rg_id, current->rg_shm_count);
 
 	++(current->rg_shm_count);
 
@@ -1525,7 +1525,7 @@ void load_from_cache_file(char* buf) {
 	set_fs(KERNEL_DS);
 	set_fs(get_ds());
 
-	sprintf (filename, "/replay_cache/shr_cache_%lld_%lu", current->rg_id, current->rg_shm_count);
+	sprintf (filename, "/data/replay_cache/shr_cache_%lld_%lu", current->rg_id, current->rg_shm_count);
 	++(current->rg_shm_count);
 
 	fd = sys_open(filename, O_RDWR, 0);

@@ -6,7 +6,7 @@
 #include <linux/mutex.h>
 #include <linux/mm.h>
 
-#define REPLAYFS_DISK_FILE "/replay_cache/replaymap.disk"
+#define REPLAYFS_DISK_FILE "/data/replay_cache/replaymap.disk"
 /* 4MB extents */
 #define EXTENT_SIZE (1 << 22)
 /* The number of free'd bytes in an extent before its scheduled to merge */

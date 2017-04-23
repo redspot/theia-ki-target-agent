@@ -43,7 +43,7 @@ p.stdout.close()
 
 offset = symbol - last_address
 
-last_path = "/replay_cache/" + last_dev + "_" + last_ino;
+last_path = "/data/replay_cache/" + last_dev + "_" + last_ino;
 print last_path, last_hex_address,
 print "0x%x"%offset
 
