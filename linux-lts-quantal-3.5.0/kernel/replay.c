@@ -104,7 +104,7 @@ EXPORT_SYMBOL(theia_recording_toggle);
 // static unsigned int no_new_proc = 0;
 
 #define THEIA_TRACK_SHM_OPEN 1
-#define THEIA_TRACK_SHMAT 1
+// #define THEIA_TRACK_SHMAT 1
 
 //#define REPLAY_PARANOID
 
@@ -9161,7 +9161,7 @@ add_file_to_cache_by_name (const char __user * filename, dev_t* pdev, u_long* pi
 	set_fs (KERNEL_DS);
 	fd = sys_open (filename, O_RDONLY, 0); // note that there is a race here if library is changed after syscall
 	if (fd < 0) {
-		printk ("add_file_to_cache_by_name: pid %d cannot open file %s\n", current->pid, filename);
+//		printk ("add_file_to_cache_by_name: pid %d cannot open file %s\n", current->pid, filename);
 		set_fs(old_fs);
 		return -EINVAL;
 	}

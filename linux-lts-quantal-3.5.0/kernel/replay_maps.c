@@ -123,8 +123,10 @@ int add_file_to_cache (struct file* vm_file, dev_t* pdev, unsigned long* pino, s
 			}
 		}
 	} while (copyed > 0);
+/*
 	printk("%s %d: Creating file %s @ %lu\n", __func__, __LINE__, cname,
 			get_clock_value());
+*/
 
 	rc = sys_rename (tname, cname);
 	if (rc < 0) printk ("add_file_to_cache: atomic rename from %s to %s failed, rc = %d\n", tname, cname, rc);
