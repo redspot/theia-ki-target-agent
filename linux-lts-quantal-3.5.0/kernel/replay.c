@@ -1069,7 +1069,7 @@ struct record_thread {
 
 	char rp_ulog_opened;		// Flag that says whether or not the user log has been opened 
 	char rp_klog_opened;		// Flag that says whether or not the kernel log has been opened 
-	char ahg_rp_log_opened;		// Flag that says whether or not the ahg log has been opened 
+//	char ahg_rp_log_opened;		// Flag that says whether or not the ahg log has been opened 
 	loff_t rp_read_ulog_pos;	// The current position in the ulog file that is being read
 	struct repsignal_context* rp_repsignal_context_stack;  // Saves replay context on signal delivery
 	u_long rp_record_hook;          // Used for dumbass linking in glibc
@@ -1148,7 +1148,7 @@ struct replay_thread {
 /* Prototypes */
 struct file* init_log_write (struct record_thread* prect, loff_t* ppos, int* pfd);
 //Yang
-struct file* ahg_init_log_write (struct record_thread* prect, loff_t* ppos, int* pfd);
+//struct file* ahg_init_log_write (struct record_thread* prect, loff_t* ppos, int* pfd);
 
 void term_log_write (struct file* file, int fd);
 int read_log_data (struct record_thread* prt);
@@ -1171,7 +1171,7 @@ static void clogfreeall (struct record_thread* prect);
 void write_begin_log (struct file* file, loff_t* ppos, struct record_thread* prect);
 static void write_and_free_kernel_log(struct record_thread *prect);
 //Yang
-static void ahg_write_and_free_kernel_log(struct record_thread *prect);
+//static void ahg_write_and_free_kernel_log(struct record_thread *prect);
 void write_mmap_log (struct record_group* prg);
 int read_mmap_log (struct record_group* prg);
 //static int add_sysv_mapping (struct replay_thread* prt, int record_id, int replay_id);
@@ -2276,7 +2276,7 @@ new_record_thread (struct record_group* prg, u_long recpid, struct record_cache_
 	prp->rp_expected_clock = 0;
 	prp->rp_ulog_opened = 0;			
 	prp->rp_klog_opened = 0;			
-	prp->ahg_rp_log_opened = 0;			
+//	prp->ahg_rp_log_opened = 0;			
 	prp->rp_read_ulog_pos = 0;	
 	prp->rp_repsignal_context_stack = NULL;
 	prp->rp_record_hook = 0;
@@ -18351,6 +18351,7 @@ SIMPLE_SHIM5(kcmp, 349, pid_t, pid1, pid_t, pid2, int, type, unsigned long, idx1
 
 //Yang
 //Need to rewrite init_log_write to write to ahg log file.
+#if 0
 struct file* ahg_init_log_write (struct record_thread* prect, loff_t* ppos, int* pfd)
 {
 	char filename[MAX_LOGDIR_STRLEN+20];
@@ -18408,6 +18409,7 @@ out:
 
 	return ret;
 }
+#endif
 
 
 struct file* init_log_write (struct record_thread* prect, loff_t* ppos, int* pfd)
@@ -18611,48 +18613,48 @@ static ssize_t write_log_data (struct file* file, loff_t* ppos, struct record_th
 
 	/* Now write ancillary data - count of bytes goes first */
 	data_len = 0;
-/*
-  if (isAhg) {
-    list_for_each_entry_reverse (node, &prect->ahg_argsalloc_list, list) {
-      data_len += node->pos - node->head;
-    }
-  }
-  else {
-*/
-    list_for_each_entry_reverse (node, &prect->rp_argsalloc_list, list) {
-      data_len += node->pos - node->head;
-    }
-//  }
+	/*
+	   if (isAhg) {
+	   list_for_each_entry_reverse (node, &prect->ahg_argsalloc_list, list) {
+	   data_len += node->pos - node->head;
+	   }
+	   }
+	   else {
+	 */
+	list_for_each_entry_reverse (node, &prect->rp_argsalloc_list, list) {
+		data_len += node->pos - node->head;
+	}
+	//  }
 	MPRINT ("Ancillary data written is %lu\n", data_len);
 	copyed = vfs_write(file, (char *) &data_len, sizeof(data_len), ppos);
 	if (copyed != sizeof(count)) {
 		printk ("write_log_data: tried to write ancillary data length, got rc %d\n", copyed);
 		KFREE (pvec);
 		return -EINVAL;
-  }
-/*
-  if (isAhg) {
-    list_for_each_entry_reverse (node, &prect->ahg_argsalloc_list, list) {
-      MPRINT ("Pid %d ahg argssize write buffer slab size %d\n", current->pid, node->pos - node->head);
-      pvec[kcnt].iov_base = node->head;
-      pvec[kcnt].iov_len = node->pos - node->head;
-      if (++kcnt == UIO_MAXIOV) {
-        copyed = vfs_writev (file, pvec, kcnt, ppos);
-        kcnt = 0;
-      }
-    }
-  }
-  else {
-*/
-    list_for_each_entry_reverse (node, &prect->rp_argsalloc_list, list) {
-      MPRINT ("Pid %d argssize write buffer slab size %d\n", current->pid, node->pos - node->head);
-      pvec[kcnt].iov_base = node->head;
-      pvec[kcnt].iov_len = node->pos - node->head;
-      if (++kcnt == UIO_MAXIOV) {
-        copyed = vfs_writev (file, pvec, kcnt, ppos);
-        kcnt = 0;
-      }
-    }
+	}
+	/*
+	   if (isAhg) {
+	   list_for_each_entry_reverse (node, &prect->ahg_argsalloc_list, list) {
+	   MPRINT ("Pid %d ahg argssize write buffer slab size %d\n", current->pid, node->pos - node->head);
+	   pvec[kcnt].iov_base = node->head;
+	   pvec[kcnt].iov_len = node->pos - node->head;
+	   if (++kcnt == UIO_MAXIOV) {
+	   copyed = vfs_writev (file, pvec, kcnt, ppos);
+	   kcnt = 0;
+	   }
+	   }
+	   }
+	   else {
+	 */
+list_for_each_entry_reverse (node, &prect->rp_argsalloc_list, list) {
+	MPRINT ("Pid %d argssize write buffer slab size %d\n", current->pid, node->pos - node->head);
+	pvec[kcnt].iov_base = node->head;
+	pvec[kcnt].iov_len = node->pos - node->head;
+	if (++kcnt == UIO_MAXIOV) {
+		copyed = vfs_writev (file, pvec, kcnt, ppos);
+		kcnt = 0;
+	}
+}
 //  }
 
 
