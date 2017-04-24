@@ -183,8 +183,8 @@ unsigned int replay_pause_tool = 0;
 #define ARGSKFREE(ptr, size) argsfree(ptr, size)
 
 //Yang
-#define AHG_ARGSKMALLOC(size, flags) ahg_argsalloc(size)
-#define AHG_ARGSKFREE(ptr, size) ahg_argsfree(ptr, size)
+//#define AHG_ARGSKMALLOC(size, flags) ahg_argsalloc(size)
+//#define AHG_ARGSKFREE(ptr, size) ahg_argsfree(ptr, size)
 
 #define new_syscall_exit(sysnum, retparam) _new_syscall_exit(sysnum, retparam, NULL)
 #define ahg_new_syscall_exit(sysnum, retparam, ahgparam) _new_syscall_exit(sysnum, retparam, ahgparam)
@@ -1048,7 +1048,7 @@ struct record_thread {
 	struct list_head rp_argsalloc_list;	// kernel linked list head pointing to linked list of argsalloc_nodes
 
 //Yang
-	struct list_head ahg_argsalloc_list;	// This is for THEIA AHG
+//	struct list_head ahg_argsalloc_list;	// This is for THEIA AHG
 #ifdef LOG_COMPRESS_1
 	struct list_head rp_clog_list; 		// the linked list for compressed log, written to another file
 #endif
@@ -2255,7 +2255,7 @@ new_record_thread (struct record_group* prg, u_long recpid, struct record_cache_
 
 	INIT_LIST_HEAD(&prp->rp_argsalloc_list);
 //Yang
-	INIT_LIST_HEAD(&prp->ahg_argsalloc_list);
+//	INIT_LIST_HEAD(&prp->ahg_argsalloc_list);
 
 #ifdef TRACE_READ_WRITE
 	memset(prp->recorded_filemap_valid, 0, sizeof(char) * RECORD_FILE_SLOTS);
@@ -2967,6 +2967,7 @@ static int add_argsalloc_node (struct record_thread* prect, void* slab, size_t s
 
 //Yang
 /* Adds another slab for args/retparams for theia-ahg; if no slab exists, create one */
+/*
 static int ahg_add_argsalloc_node (struct record_thread* prect, void* slab, size_t size) { 
 	struct argsalloc_node* new_node;
 	new_node = new_argsalloc_node(slab, size);
@@ -2980,6 +2981,7 @@ static int ahg_add_argsalloc_node (struct record_thread* prect, void* slab, size
 	list_add(&new_node->list, &prect->ahg_argsalloc_list);
 	return 0;
 }
+*/
 
 #ifdef LOG_COMPRESS_1
 static int add_compress_node (struct record_thread* prect, void* slab, size_t size, struct list_head *rp_list) { 
@@ -3003,6 +3005,7 @@ static int inline add_clog_node (struct record_thread* prect, void* slab, size_t
 #endif
 
 //Yang
+/*
 static void* ahg_argsalloc (size_t size)
 {
 	struct record_thread* prect = current->record_thrd;
@@ -3044,6 +3047,7 @@ static void* ahg_argsalloc (size_t size)
 
 	return ptr;
 }
+*/
 
 static void* argsalloc (size_t size)
 {
@@ -3292,6 +3296,7 @@ static void argsfree (const void* ptr, size_t size)
 
 // Free all allocated data values at once
 //Yang
+/*
 static void ahg_argsfreeall (struct record_thread* prect)
 {
 	struct argsalloc_node* node;
@@ -3303,6 +3308,7 @@ static void ahg_argsfreeall (struct record_thread* prect)
 		KFREE(node);	
 	}
 }
+*/
 static void argsfreeall (struct record_thread* prect)
 {
 	struct argsalloc_node* node;
@@ -4258,7 +4264,7 @@ new_syscall_enter (long sysnum)
 		// overwrite this log before the writout occurs
 		write_and_free_kernel_log (prt);
 //Yang
-		ahg_write_and_free_kernel_log (prt);
+//		ahg_write_and_free_kernel_log (prt);
 
 		prt->rp_in_ptr = 0;
 	}
@@ -4275,9 +4281,11 @@ new_syscall_enter (long sysnum)
 		if (unlikely (p == NULL)) return -ENOMEM;
 		*p = start_clock;
 //Yang
+/*
 		p = AHG_ARGSKMALLOC(sizeof(u_long), GFP_KERNEL);
 		if (unlikely (p == NULL)) return -ENOMEM;
 		*p = start_clock;
+*/
 #ifdef LOG_COMPRESS_1
 		// compression for start_clock
 		encodeValue ((unsigned int) start_clock, 32, 4, clog_alloc (4));
@@ -4332,9 +4340,11 @@ new_syscall_done (long sysnum, long retval)
 		if (unlikely (p == NULL)) return -ENOMEM;
 		*p = retval;
 //Yang
+/*
 		p = AHG_ARGSKMALLOC(sizeof(long), GFP_KERNEL);
 		if (unlikely (p == NULL)) return -ENOMEM;
 		*p = retval;
+*/
 	} 
 
 	new_clock = atomic_add_return (1, prt->rp_precord_clock);
@@ -4345,9 +4355,11 @@ new_syscall_done (long sysnum, long retval)
 		if (unlikely (ulp == NULL)) return -ENOMEM;
 		*ulp = stop_clock;
 //Yang
+/*
 		ulp = AHG_ARGSKMALLOC(sizeof(u_long), GFP_KERNEL);
 		if (unlikely (ulp == NULL)) return -ENOMEM;
 		*ulp = stop_clock;
+*/
 	}
 	prt->rp_expected_clock = new_clock;
 
@@ -4661,6 +4673,7 @@ int replay_has_pending_signal (void) {
 }
 
 //Yang
+/*
 static void
 ahg_write_and_free_kernel_log(struct record_thread *prect)
 {
@@ -4681,6 +4694,7 @@ ahg_write_and_free_kernel_log(struct record_thread *prect)
 
 	ahg_argsfreeall (prect);
 }
+*/
 
 static void
 write_and_free_kernel_log(struct record_thread *prect)
@@ -6657,7 +6671,7 @@ recplay_exit_middle(void)
 #else
 		write_and_free_kernel_log(prt); // Write out remaining records
 //Yang
-		ahg_write_and_free_kernel_log(prt); // Write out remaining records
+//		ahg_write_and_free_kernel_log(prt); // Write out remaining records
 #endif
 		// write out mmaps if the last record thread to exit the record group
 		if (atomic_dec_and_test(&prt->rp_group->rg_record_threads)) {
@@ -9500,7 +9514,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 			new_syscall_exit (11, pretval); 
 			write_and_free_kernel_log (prt);
 //Yang
-			ahg_write_and_free_kernel_log (prt);
+//			ahg_write_and_free_kernel_log (prt);
 
 			if (atomic_dec_and_test(&prt->rp_group->rg_record_threads)) {
 				rg_lock (prt->rp_group);
@@ -18597,16 +18611,18 @@ static ssize_t write_log_data (struct file* file, loff_t* ppos, struct record_th
 
 	/* Now write ancillary data - count of bytes goes first */
 	data_len = 0;
+/*
   if (isAhg) {
     list_for_each_entry_reverse (node, &prect->ahg_argsalloc_list, list) {
       data_len += node->pos - node->head;
     }
   }
   else {
+*/
     list_for_each_entry_reverse (node, &prect->rp_argsalloc_list, list) {
       data_len += node->pos - node->head;
     }
-  }
+//  }
 	MPRINT ("Ancillary data written is %lu\n", data_len);
 	copyed = vfs_write(file, (char *) &data_len, sizeof(data_len), ppos);
 	if (copyed != sizeof(count)) {
@@ -18614,6 +18630,7 @@ static ssize_t write_log_data (struct file* file, loff_t* ppos, struct record_th
 		KFREE (pvec);
 		return -EINVAL;
   }
+/*
   if (isAhg) {
     list_for_each_entry_reverse (node, &prect->ahg_argsalloc_list, list) {
       MPRINT ("Pid %d ahg argssize write buffer slab size %d\n", current->pid, node->pos - node->head);
@@ -18626,6 +18643,7 @@ static ssize_t write_log_data (struct file* file, loff_t* ppos, struct record_th
     }
   }
   else {
+*/
     list_for_each_entry_reverse (node, &prect->rp_argsalloc_list, list) {
       MPRINT ("Pid %d argssize write buffer slab size %d\n", current->pid, node->pos - node->head);
       pvec[kcnt].iov_base = node->head;
@@ -18635,7 +18653,7 @@ static ssize_t write_log_data (struct file* file, loff_t* ppos, struct record_th
         kcnt = 0;
       }
     }
-  }
+//  }
 
 
 	vfs_writev (file, pvec, kcnt, ppos); // Write any remaining data before exit
