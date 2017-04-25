@@ -7683,7 +7683,7 @@ void recursive_packahgv_process() {
 		rcu_read_lock();
 		tsk = tsk->real_parent;
 		rcu_read_unlock();
-	} while (tsk && is_process_new2(tsk->pid, tsk->start_time.tv_sec));
+	} while (tsk && stack_top < TSK_STACK_SIZE && is_process_new2(tsk->pid, tsk->start_time.tv_sec));
 
 	for (i = stack_top-1; i >= 0; --i) {
 		packahgv_process(tsk_stack[i]);
