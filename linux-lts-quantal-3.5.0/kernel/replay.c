@@ -7373,18 +7373,13 @@ char* get_task_fullpath(struct task_struct *tsk, char *buf, size_t buflen) {
 	struct mm_struct *mm = tsk->mm;
         struct file *exe_file;
         char *path = NULL;
-        int ret = 0;
 
 	if (!mm)
 		return NULL;
 
 	struct vm_area_struct *vma;
-	down_read(&mm->mmap_sem);
-//	vma = find_vma(mm, mm->start_code);
-//	if (vma && vma->vm_file) {
 	exe_file = get_mm_exe_file(mm);
 	if (exe_file) {
-//		path = d_path(&(vma->vm_file->f_path), buf, buflen);	
 		path = d_path(&(exe_file->f_path), buf, buflen);	
 		if (!IS_ERR(path)) {
 //			printk("SL: fullpath: %s\n", path);
@@ -7397,7 +7392,6 @@ char* get_task_fullpath(struct task_struct *tsk, char *buf, size_t buflen) {
 	}
         else
 		path = NULL;
-	up_read(&mm->mmap_sem);
 
 	return path;
 }
@@ -7512,13 +7506,13 @@ bool is_process_new2(pid_t pid, int sec) {
 		theia_process_tree_init = true;
 	}
 
-	mutex_lock(&theia_process_tree_mutex);
+//	mutex_lock(&theia_process_tree_mutex);
 	ret = btree_lookup64(&theia_process_tree, key);
 	if (ret == NULL) {
 		btree_insert64(&theia_process_tree, key, (void*)1, GFP_KERNEL);
 //		printk("no_new_proc: %lu, %d, %d\n", ++no_new_proc, pid, sec);
 	}
-	mutex_unlock(&theia_process_tree_mutex);
+//	mutex_unlock(&theia_process_tree_mutex);
 
 	if (ret == NULL)
 		return true;
@@ -7683,7 +7677,7 @@ void recursive_packahgv_process() {
 		rcu_read_lock();
 		tsk = tsk->real_parent;
 		rcu_read_unlock();
-	} while (tsk && is_process_new2(tsk->pid, tsk->start_time.tv_sec));
+	} while (tsk && stack_top < TSK_STACK_SIZE && is_process_new2(tsk->pid, tsk->start_time.tv_sec));
 
 	for (i = stack_top-1; i >= 0; --i) {
 		packahgv_process(tsk_stack[i]);
