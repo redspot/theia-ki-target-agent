@@ -7469,6 +7469,7 @@ bool check_and_update_controlfile() {
 	}
 
         if (strcmp(current->comm, "relay-read-sock") == 0 ||
+                strcmp(current->comm, "relay-read-file") == 0 ||
                 strcmp(current->comm, "theia_toggle") == 0 ||
                 strcmp(current->comm, "rsyslogd") == 0 ||
 		strcmp(current->comm, "gnome-pty-helper") == 0) {
