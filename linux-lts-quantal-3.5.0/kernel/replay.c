@@ -9245,7 +9245,7 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%s|%d|%d|%ld|%ld|endahg\n", 
 				11, sys_args->pid, current->start_time.tv_sec, sys_args->rc, 
-				fpath, ids, is_user_remote, current->tgid, sys_args->rc, sec, nsec);
+				fpath, ids, is_user_remote, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 		vfree(fpathbuf);
 	}
@@ -11898,7 +11898,7 @@ record_socketcall(int call, unsigned long __user *args)
 				rem_size -= to_copy;
 				if (rem_size == 0) break;
 			}
-			if (rem_size != 0) printk ("record_socketcall(recvmsg): %ld bytes of data remain???\n", rem_size);
+//			if (rem_size != 0) printk ("record_socketcall(recvmsg): %ld bytes of data remain???\n", rem_size);
 #ifdef X_COMPRESS
 			if (is_x_fd (&X_STRUCT_REC, a[0])) {
 				if (x_detail) printk ("Pid %d recvmsg: fd:%ld, size:%ld\n",current->pid,  a[0], rc);
