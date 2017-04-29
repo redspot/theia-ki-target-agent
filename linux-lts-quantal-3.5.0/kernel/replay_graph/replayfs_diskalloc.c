@@ -274,6 +274,7 @@ static void add_to_lru_list(struct page_data *data, struct list_head *head,
 		printk("%s %d: Lookup returns unexpected result for key of 0x%016llX, verify_data is %p\n",
 				__func__, __LINE__, key, verify_data);
 		BUG();
+		return;
 	}
 
 	cache_debugk("%s %d: Inserting key of 0x%016llX\n", __func__, __LINE__, key);
@@ -289,7 +290,10 @@ static void add_to_free_list(struct page_data *data, struct list_head *head,
 	key = (u32)data;
 
 	verify_data = btree_lookup32(verify_tree, key);
-	BUG_ON(verify_data != NULL || IS_ERR(verify_data));
+	//	BUG_ON(verify_data != NULL || IS_ERR(verify_data));
+	if (verify_data != NULL || IS_ERR(verify_data)) {
+		return;
+	}
 
 	/* If this is on the free list it cannot also be on the lru list */
 	/*
@@ -311,7 +315,10 @@ static void remove_from_lru_list(struct page_data *data, struct list_head *head,
 	key = crappy_pagecache_key(data->alloc, data->page->index);
 
 	verify_data = btree_lookup64(verify_tree, key);
-	BUG_ON(verify_data == NULL || IS_ERR(verify_data));
+	//	BUG_ON(verify_data == NULL || IS_ERR(verify_data));
+	if (verify_data == NULL || IS_ERR(verify_data)) {
+		return;
+	}
 
 	list_del(head);
 	INIT_LIST_HEAD(head);
@@ -328,7 +335,10 @@ static void remove_from_free_list(struct page_data *data, struct list_head *head
 	key = (u32)data;
 
 	verify_data = btree_lookup32(verify_tree, key);
-	BUG_ON(verify_data == NULL || IS_ERR(verify_data));
+	//	BUG_ON(verify_data == NULL || IS_ERR(verify_data));
+	if (verify_data == NULL || IS_ERR(verify_data)) {
+		return;
+	}
 
 	list_del(head);
 	INIT_LIST_HEAD(head);
