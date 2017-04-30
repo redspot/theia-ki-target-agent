@@ -34,7 +34,7 @@
 #define REPLAYFS_DISKALLOC_ALLOC_DEBUG
 */
 
-#define REPLAYFS_DISKALLOC_MONITOR_LISTS
+// #define REPLAYFS_DISKALLOC_MONITOR_LISTS
 
 #define REPLAYFS_DISKALLOC_STANDARD_CHECKS
 
@@ -603,7 +603,7 @@ static void alloc_free_page_internal(struct page_data *data, struct replayfs_dis
 	add_to_free(data);
 
 	/* Remove the element from the alloc list */
-	check_not_in_lru(data);
+//	check_not_in_lru(data);
 	cache_debugk("%s %d: Removing {%lu, %lu} from alloc_list\n", __func__,
 			__LINE__, data->page->index, data->alloc->filp->f_dentry->d_inode->i_ino);
 	list_del_init(&data->alloc_list);
