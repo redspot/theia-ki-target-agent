@@ -1,1 +1,0 @@
-cmd_/home/yang/omniplay/test/dev/spec.ko := ld -r -m elf_i386 -T /home/yang/omniplay/linux-lts-quantal-3.5.0/scripts/module-common.lds --build-id  -o /home/yang/omniplay/test/dev/spec.ko /home/yang/omniplay/test/dev/spec.o /home/yang/omniplay/test/dev/spec.mod.o

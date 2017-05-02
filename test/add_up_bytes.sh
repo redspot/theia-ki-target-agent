@@ -2,7 +2,7 @@
 
 extra=0
 count=0
-for replay_dir in /replay_logdb/*; do
+for replay_dir in /data/replay_logdb/*; do
 	if [[ -d $replay_dir ]]; then
 		echo "Parsing replay dir $replay_dir"
 		for replay_file in $replay_dir/*; do

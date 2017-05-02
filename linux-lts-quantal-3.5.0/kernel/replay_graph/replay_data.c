@@ -42,7 +42,7 @@
  * TODO: From Mike, learn how to start a replay pragmatically inside the kernel
  */
 #define REPLAY_RESUME_PROG "/home/ddevec/omniplay/test/resume"
-#define REPLAYFS_LOG_DIR "/replay_logdb/"
+#define REPLAYFS_LOG_DIR "/data/replay_logdb/"
 
 /* strlen + _ + "8digithex" + _ + "16digithex" */
 #define REPLAYFS_LOG_DIRLEN strlen(REPLAYFS_LOG_DIR)+8+16+2

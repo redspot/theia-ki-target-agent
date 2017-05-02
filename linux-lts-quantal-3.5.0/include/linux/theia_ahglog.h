@@ -10,7 +10,7 @@ struct process_pack_ahg {
 	int32_t 		p_pid;
 	int32_t 		p_task_sec;
 	uint16_t		size_fpathbuf;
-	bool 				is_user_remote;
+	uint8_t			is_user_remote;
 	int32_t			tgid;
 	int32_t			sec;
 	int32_t			nsec;

@@ -120,4 +120,6 @@ long get_filemap(int fd, loff_t offset, int size, void __user * entries, int num
 long reset_replay_ndx(void);
 
 void write_shr_cache(char *buf, long len);
+
+void remove_process_from_tree(pid_t pid, int sec);
 #endif

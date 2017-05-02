@@ -928,6 +928,8 @@ void do_exit(long code)
 
 	ptrace_event(PTRACE_EVENT_EXIT, code);
 
+	remove_process_from_tree(current->pid, current->start_time.tv_sec);
+
 	if (current->record_thrd || current->replay_thrd) recplay_exit_start (); /* REPLAY */
 
 	validate_creds_for_do_exit(tsk);
