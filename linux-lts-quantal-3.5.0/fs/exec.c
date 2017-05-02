@@ -789,7 +789,7 @@ struct file *open_exec(const char *name)
 
 	trace_open_exec((char *)name);
 	
-	if(theia_recording_toggle) {
+	if(theia_recording_toggle || current->replay_thrd) {
 		inode = file->f_dentry->d_inode;
 		printk ("in open_exec writecount is %d\n", atomic_read(&inode->i_writecount));
 		if(atomic_read(&inode->i_writecount) == 1)
