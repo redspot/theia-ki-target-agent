@@ -4852,7 +4852,6 @@ write_user_log (struct record_thread* prect)
 	file = fget(fd);
 	if (file == NULL) {
 		printk ("write_user_log: invalid file\n");
-		sys_close (fd);
 		return -EINVAL;
 	}
 
@@ -4933,7 +4932,6 @@ read_user_log (struct record_thread* prect)
 	file = fget(fd);
 	if (file == NULL) {
 		printk ("read_user_log: invalid file\n");
-		sys_close(fd);
 		return -EINVAL;
 	}
 
@@ -5031,7 +5029,6 @@ write_user_extra_log (struct record_thread* prect)
 	file = fget(fd);
 	if (file == NULL) {
 		printk ("write_extra_user_log: invalid file\n");
-		sys_close(fd);
 		return -EINVAL;
 	}
 
@@ -5109,7 +5106,6 @@ read_user_extra_log (struct record_thread* prect)
 	file = fget(fd);
 	if (file == NULL) {
 		printk ("read_user_extra_log: invalid file\n");
-		sys_close(fd);
 		return -EINVAL;
 	}
 
@@ -7511,13 +7507,13 @@ bool is_process_new2(pid_t pid, int sec) {
 		theia_process_tree_init = true;
 	}
 
-//	mutex_lock(&theia_process_tree_mutex);
+	mutex_lock(&theia_process_tree_mutex);
 	ret = btree_lookup64(&theia_process_tree, key);
 	if (ret == NULL) {
 		btree_insert64(&theia_process_tree, key, (void*)1, GFP_KERNEL);
 //		printk("no_new_proc: %lu, %d, %d\n", ++no_new_proc, pid, sec);
 	}
-//	mutex_unlock(&theia_process_tree_mutex);
+	mutex_unlock(&theia_process_tree_mutex);
 
 	if (ret == NULL)
 		return true;
@@ -9182,7 +9178,6 @@ add_file_to_cache_by_name (const char __user * filename, dev_t* pdev, u_long* pi
 	file = fget (fd);
 	if (file == NULL) {
 		printk ("add_file_to_cache_by_name: pid %d cannot get file\n", current->pid);
-		sys_close (fd);
 		set_fs(old_fs);
 		return -EINVAL;
 	}

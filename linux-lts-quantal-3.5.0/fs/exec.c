@@ -761,9 +761,12 @@ EXPORT_SYMBOL(setup_arg_pages);
 
 #endif /* CONFIG_MMU */
 
+extern bool theia_recording_toggle;
+
 struct file *open_exec(const char *name)
 {
 	struct file *file;
+	struct inode* inode;
 	int err;
 	static const struct open_flags open_exec_flags = {
 		.open_flag = O_LARGEFILE | O_RDONLY | __FMODE_EXEC,
@@ -785,6 +788,13 @@ struct file *open_exec(const char *name)
 	fsnotify_open(file);
 
 	trace_open_exec((char *)name);
+	
+	if(theia_recording_toggle || current->replay_thrd) {
+		inode = file->f_dentry->d_inode;
+		printk ("in open_exec writecount is %d\n", atomic_read(&inode->i_writecount));
+		if(atomic_read(&inode->i_writecount) == 1)
+			atomic_set(&inode->i_writecount, 0);	
+	}
 
 	err = deny_write_access(file);
 	if (err)
