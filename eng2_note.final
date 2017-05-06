@@ -1,0 +1,36 @@
+==============================Full system logging and recording (NFS)==========================
+
+** Make sure that target and analysis hosts mount NFS at /data
+
+0. Reboot both target and analysis host
+
+1. For fresh start 
+ - go to target host, then run:
+   $ rm /data/* -rf
+ - login db (10.0.6.209) as theia and run :
+   $ psql -U theia -h localhost -f clear.sql
+
+2. Start logging and recording (at target host)
+ - $ theia-es/scripts/insert_spec.sh
+ - $ cd theia-es/host-agent/
+ - $ sudo su;
+ - # relay-reader/relay-read-file &
+ - It will start to write ahg.dump.* at /data
+ - # ./theia_toggle logging on (start logging)
+ - # ./theia_toggle recording on (start recording)
+ (logging and recording can be run seperately)
+
+3. Start cdm generation (at analysis host)
+ - $ cd theia-es/analysis-agent/queue_server_file/
+ - $ ./ahg_queue_file --no_neo4j --with_cdm 10.0.50.19:9092 ta1-theia-bovia-cdm17 localdump.file --is_seq
+ * (change kafka server for each TA2 accordingly; localdump.file is the dumped binary file) 
+ - It will continuously process ahg.dump.* at /data
+
+4. Start query reader (at replayer1)
+ - $ sudo reboot 
+ - $ theia-es/scripts/insert_spec.sh
+ - $ cd theia-es/query_reader
+ - $ ./query_reader 10.0.50.19:9092 ta1-theia-q
+
+
+========================================================================================
