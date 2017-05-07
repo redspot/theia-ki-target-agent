@@ -2,11 +2,11 @@
 
 ** Make sure that target and analysis hosts mount NFS at /data
 
-0. Reboot both target and analysis host
+0. Reboot target host, and replayer1.
 
 1. For fresh start 
  - go to target host, then run:
-   $ rm /data/* -rf
+   $ rm /data/ahg.dump.* /data/replay_* -rf
  - login db (10.0.6.209) as theia and run :
    $ psql -U theia -h localhost -f clear.sql
 
@@ -31,6 +31,23 @@
  - $ theia-es/scripts/insert_spec.sh
  - $ cd theia-es/query_reader
  - $ ./query_reader 10.0.50.19:9092 ta1-theia-q
+
+
+** Crash handle
+If the target host crashes, follow the following instruction:
+a) Let the ahg_queue_file at analysis host run until it is idling (no more output to screen), then kill it.
+b) $ rm /data/ahg.dump.*
+c) Force reset at target host, then do 2, 3.
+
+If the ahg_queue_file crashes:
+a) at target host, turn off recording and logging: 
+ - $ cd theia-es/host-agent/ 
+ - $ sudo su
+ - ./theia_toggle recording off
+ - ./theia_toggle logging off
+b) rm /data/ahg.dump.*
+c) reboot target host
+d) do 2, 3
 
 
 ========================================================================================
