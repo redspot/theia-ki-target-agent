@@ -7,6 +7,8 @@
 1. For fresh start 
  - go to target host, then run:
    $ rm /data/ahg.dump.* /data/replay_* -rf
+ - go to analysis host, run:
+ - $ rm theia-ki-analysis-dump-* -rf
  - login db (10.0.6.209) as theia and run :
    $ psql -U theia -h localhost -f clear.sql
 
