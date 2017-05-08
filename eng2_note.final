@@ -14,6 +14,7 @@
 
 2. Start logging and recording (at target host)
  - $ theia-es/scripts/insert_spec.sh
+ - $ sudo mount -t debugfs debugfs /debug
  - $ cd theia-es/host-agent/
  - $ sudo su;
  - # relay-reader/relay-read-file &
