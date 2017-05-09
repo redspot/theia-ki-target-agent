@@ -25,7 +25,7 @@
 
 3. Start cdm generation (at analysis host)
  - $ cd theia-es/analysis-agent/queue_server_file/
- - $ ./ahg_queue_file --no_neo4j --with_cdm 10.0.50.19:9092 ta1-theia-bovia-cdm17 localdump.file --is_seq
+ - $ ./ahg_queue_file --no_neo4j --with_cdm 10.0.50.19:9092 ta1-theia-bovia-cdm17 localdump.file --is_seq 1 1
  * (change kafka server for each TA2 accordingly; localdump.file is the dumped binary file) 
  - It will continuously process ahg.dump.* at /data
 
@@ -43,14 +43,9 @@ b) $ rm /data/ahg.dump.*
 c) Force reset at target host, then do 2, 3.
 
 If the ahg_queue_file crashes:
-a) at target host, turn off recording and logging: 
- - $ cd theia-es/host-agent/ 
- - $ sudo su
- - ./theia_toggle recording off
- - ./theia_toggle logging off
-b) rm /data/ahg.dump.*
-c) reboot target host
-d) do 2, 3
-
+a) check the dying line of ahg_queue_file of how many events (->num_evt) have it consumed.
+b) ./ahg_queue_file --no_neo4j --with_cdm 10.0.50.19:9092 ta1-theia-bovia-cdm17 localdump.file --is_seq dump_num num_evt
+c) for example: ./ahg_queue_file --no_neo4j --with_cdm 10.0.50.19:9092 ta1-theia-bovia-cdm17 localdump.file --is_seq 2 95
+** this will resume from ahg.dump.2 number 95 event.
 
 ========================================================================================
