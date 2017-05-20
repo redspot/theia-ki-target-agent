@@ -1553,6 +1553,7 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 {
 	unsigned long int flags;
 	int ret, blocked, ignored;
+	int mprotect_error = false;
 	struct k_sigaction *action;
 
 //Yang
@@ -1625,12 +1626,14 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 		if(!(protection & (PROT_READ | PROT_WRITE))) {
 			if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
 				ret = sys_mprotect(address, 1, PROT_READ|PROT_WRITE);
+				if (ret < 0) mprotect_error = true;
 				//Notify this is a mem_write to the shared memory
 				ahg_mem_access = 2;
 			}
 			else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
 				//Notify this is a mem_read to the shared memory
 				ret = sys_mprotect(address, 1, PROT_READ|PROT_WRITE);
+				if (ret < 0) mprotect_error = true;
 				ahg_mem_access = 1;
 			}
 		}
@@ -1638,11 +1641,13 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 			// if it is write attempt, we change protection to prot_write
 			if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
 				ret = sys_mprotect(address, 1, PROT_WRITE);
+				if (ret < 0) mprotect_error = true;
 				ahg_mem_access = 2;				
 			}
 			// if it is read attempt, we change protection to prot_read
 			else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
 				ret = sys_mprotect(address, 1, PROT_READ);
+				if (ret < 0) mprotect_error = true;
 				ahg_mem_access = 1;				
 			}
 		}
@@ -1661,6 +1666,7 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 				if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
 //					ret = theia_mprotect_shared(mm, address, 1, PROT_WRITE);
 					ret = sys_mprotect(address, 1, PROT_READ|PROT_WRITE);
+					if (ret < 0) mprotect_error = true;
 					printk("inside force_sig_info, first from none; address %p is set to prot_write, ret: %d\n", address, ret);
 					
 					//Notify this is a mem_write to the shared memory
@@ -1670,6 +1676,7 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 				else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
 //					ret = theia_mprotect_shared(mm, address, 1, PROT_READ);
 					ret = sys_mprotect(address, 1, PROT_READ);
+					if (ret < 0) mprotect_error = true;
 					printk("inside force_sig_info, first from none; address %p is set to prot_read, ret: %d\n", address, ret);
 
 #ifdef THEIA_STORE_SHMEM
@@ -1691,6 +1698,7 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 				if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
 //					ret = theia_mprotect_shared(mm, address, 1, PROT_WRITE);
 					ret = sys_mprotect(address, 1, PROT_WRITE|PROT_READ);
+					if (ret < 0) mprotect_error = true;
 					printk("inside force_sig_info, address %p is set to prot_write, ret: %d\n", address, ret);
 					ahg_mem_access = 2;					
 				}
@@ -1699,6 +1707,7 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 					//					ret = theia_mprotect_shared(mm, address, 1, PROT_READ);
 //					ret = theia_mprotect_shared(mm, address, 1, PROT_READ|PROT_EXEC);					
 					ret = sys_mprotect(address, 1, PROT_READ|PROT_EXEC);
+					if (ret < 0) mprotect_error = true;
 					printk("inside force_sig_info, address %p is set to prot_read|exec, ret: %d\n", address, ret);
 #ifdef THEIA_STORE_SHMEM
 					//copy from user of this one page
@@ -1721,11 +1730,13 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 				if(error_code & PF_USER && error_code & PF_WRITE) {
 					//we expect segfault happens again
 					ret = sys_mprotect(address, 1, PROT_READ);
+					if (ret < 0) mprotect_error = true;
 //					printk("inside force_sig_info, first from none; address %p is set to prot_READ, ret: %d\n", address, ret);
 				}
 				else if(error_code & PF_USER && !(error_code & PF_WRITE)) {
 					//in order to dump the read page, we change protection to prot_write temporarily
 					ret = sys_mprotect(address, 1, PROT_WRITE);
+					if (ret < 0) mprotect_error = true;
 //					printk("inside force_sig_info, address %p is set to prot_write temp, ret: %d\n", address, ret);
 //					load_from_cache_file(buf_theia);
 //					load_flag =  true;
@@ -1754,18 +1765,21 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 				// if it is write attempt, we change protection to prot_write
 				if(error_code & PF_USER && error_code & PF_WRITE) {
 					ret = sys_mprotect(address, 1, PROT_WRITE);
+					if (ret < 0) mprotect_error = true;
 					printk("inside force_sig_info, address %p is set to prot_write, ret: %d\n", address, ret);
 				}
 				// if it is read attempt, we change protection to prot_read
 				else if(error_code & PF_USER && !(error_code & PF_WRITE)) {
 					//in order to dump the read page, we change protection to prot_write temporarily
 					ret = sys_mprotect(address, 1, PROT_WRITE);
+					if (ret < 0) mprotect_error = true;
 					printk("inside force_sig_info, address %p is set to prot_write temp, ret: %d\n", address, ret);
 //					load_from_cache_file(buf_theia);
 //					load_flag =  true;
 
 					// TODO: what should we do?
 					ret = sys_mprotect(address, 1, PROT_READ);
+					if (ret < 0) mprotect_error = true;
 #ifdef THEIA_STORE_SHMEM
 					if ((ret = copy_to_user (address, buf_theia, 4096))) {
 						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
@@ -1776,6 +1790,9 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 			}
 		}
 	}
+
+	if (mprotect_error) /* let's fire segfault not by us */
+		action->sa.sa_handler = SIG_DFL;
 
 	if (action->sa.sa_handler == SIG_DFL)
 		t->signal->flags &= ~SIGNAL_UNKILLABLE;
