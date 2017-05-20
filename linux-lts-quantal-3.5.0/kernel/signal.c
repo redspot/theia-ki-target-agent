@@ -1608,6 +1608,8 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	void __user *address = (void __user *)((unsigned long)info->si_addr & ~0xfff); // page
 	unsigned long address_ul = (unsigned long)address;
 	vma = find_vma(mm, address_ul);
+	if (!vma) /* invalid memory */
+		goto skip_page_table_trick;
 	protection = pgprot_val(vma->vm_page_prot);
 //	printk("vma->start: %p, end: %p, current page prot: %lu, vm_flags: %lu\n", 
 //				vma->vm_start,vma->vm_end,pgprot_val(vma->vm_page_prot), vma->vm_flags);
@@ -1791,8 +1793,10 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 		}
 	}
 
-	if (mprotect_error) /* let's fire segfault not by us */
+skip_page_table_trick:
+	if (mprotect_error) { /* let's fire segfault not by us */ 
 		action->sa.sa_handler = SIG_DFL;
+	}
 
 	if (action->sa.sa_handler == SIG_DFL)
 		t->signal->flags &= ~SIGNAL_UNKILLABLE;
