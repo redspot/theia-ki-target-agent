@@ -103,7 +103,7 @@ EXPORT_SYMBOL(theia_recording_toggle);
 
 // static unsigned int no_new_proc = 0;
 
-#define THEIA_TRACK_SHM_OPEN 1
+#define THEIA_TRACK_SHM_OPEN 0
 // #define THEIA_TRACK_SHMAT 1
 
 //#define REPLAY_PARANOID
@@ -144,7 +144,7 @@ int verify_debug = 0;
 //#define MPRINT(x,...)
 #define MCPRINT
 
-unsigned int theia_debug = 0;
+unsigned int theia_debug = 1;
 #define TPRINT if(theia_debug) printk
 //#define DPRINT(x,...)
 
@@ -733,7 +733,7 @@ atomic_t vmalloc_cnt = ATOMIC_INIT(0);
 
 /* Variables configurable via /proc file system */
 unsigned int syslog_recs = 2000;
-unsigned int replay_debug = 0;
+unsigned int replay_debug = 1;
 unsigned int replay_min_debug = 0;
 unsigned long argsalloc_size = (512*1024);
 // If the replay clock is greater than this value, MPRINT out the syscalls made by pin
@@ -8874,6 +8874,7 @@ record_open (const char __user * filename, int flags, int mode)
 	new_syscall_done (5, rc);
 
 	// If opened read-only and a regular file, then use replay cache
+		MPRINT ("record_open of name %s with flags %x returns fd %ld\n", filename, flags, rc);
 	if (rc >= 0) {
 		/*
 		do {
@@ -12399,27 +12400,83 @@ void print_mem(u_long addr, int length) {
   }                                                                              
 }  
 
-void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port) {
-	struct sockaddr* p_sockaddr;
-	unsigned char* cc;
-	p_sockaddr = (struct sockaddr*)KMALLOC(sizeof(struct sockaddr), GFP_KERNEL);
+void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port, char* sun_path, sa_family_t* sa_family) {
 
-	if (copy_from_user (p_sockaddr, sockaddr, sizeof(struct sockaddr))) {
-		KFREE(p_sockaddr);
+	struct sockaddr* basic_sockaddr;
+	basic_sockaddr = (struct sockaddr*)KMALLOC(sizeof(struct sockaddr), GFP_KERNEL);
+	if (copy_from_user (basic_sockaddr, sockaddr, sizeof(struct sockaddr))) {
+		KFREE(basic_sockaddr);
 		printk("fails to copy sockaddr from userspace\n");
 		// TODO: what should we do?
 		return;
 	}
-	
-//	print_mem((u_long)p_sockaddr, sizeof(struct sockaddr));	
+	*sa_family = basic_sockaddr->sa_family;
 
-	cc = (unsigned char *)p_sockaddr;
-	*port = cc[2]*0x100+cc[3];
-	sprintf(ip, "%u.%u.%u.%u",cc[4],cc[5],cc[6],cc[7]);
+	if(basic_sockaddr->sa_family == AF_INET) {
+		struct sockaddr_in* in_sockaddr;
+		unsigned char* cc;
+		in_sockaddr = (struct sockaddr_in*)KMALLOC(sizeof(struct sockaddr_in), GFP_KERNEL);
 
-	TPRINT("ip is %s, port: %lu\n", ip, *port);
-	
-	KFREE(p_sockaddr);
+		if (copy_from_user (in_sockaddr, sockaddr, sizeof(struct sockaddr_in))) {
+			KFREE(in_sockaddr);
+			printk("fails to copy sockaddr from userspace\n");
+			// TODO: what should we do?
+			return;
+		}
+
+		//	print_mem((u_long)p_sockaddr, sizeof(struct sockaddr));	
+
+		*port = in_sockaddr->sin_port;
+	 	cc = (unsigned char *)in_sockaddr;
+		sprintf(ip, "%u.%u.%u.%u",cc[4],cc[5],cc[6],cc[7]);
+
+		TPRINT("ip is %s, port: %lu\n", ip, *port);
+
+		KFREE(in_sockaddr);
+
+	}
+	else if(basic_sockaddr->sa_family == AF_LOCAL) { //AF_LOCAL == AF_UNIX
+		struct sockaddr_un* un_sockaddr;
+		un_sockaddr = (struct sockaddr_un*)KMALLOC(sizeof(struct sockaddr_un), GFP_KERNEL);
+
+		if (copy_from_user (un_sockaddr, sockaddr, sizeof(struct sockaddr_un))) {
+			KFREE(un_sockaddr);
+			printk("fails to copy sockaddr from userspace\n");
+			// TODO: what should we do?
+			return;
+		}
+		*port = 0;
+		strncpy(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX);
+		TPRINT("sun_path is %s, port: %lu\n", sun_path, *port);
+		
+		KFREE(un_sockaddr);
+	}
+	else {//not support
+		*port = 0;
+		sprintf(ip, "NA");
+	}
+	KFREE(basic_sockaddr);
+
+//	struct sockaddr* p_sockaddr;
+//	unsigned char* cc;
+//	p_sockaddr = (struct sockaddr*)KMALLOC(sizeof(struct sockaddr), GFP_KERNEL);
+//
+//	if (copy_from_user (p_sockaddr, sockaddr, sizeof(struct sockaddr))) {
+//		KFREE(p_sockaddr);
+//		printk("fails to copy sockaddr from userspace\n");
+//		// TODO: what should we do?
+//		return;
+//	}
+//	
+////	print_mem((u_long)p_sockaddr, sizeof(struct sockaddr));	
+//
+//	cc = (unsigned char *)p_sockaddr;
+//	*port = cc[2]*0x100+cc[3];
+//	sprintf(ip, "%u.%u.%u.%u",cc[4],cc[5],cc[6],cc[7]);
+//
+//	TPRINT("ip is %s, port: %lu\n", ip, *port);
+//	
+//	KFREE(p_sockaddr);
 
 	return;
 }
@@ -12431,17 +12488,27 @@ struct connect_ahgv {
 	char						ip[16];
 	u_long					port;
 	int							rc;
+	sa_family_t			sa_family;
+	char						sun_path[UNIX_PATH_MAX];
 };
 
 void packahgv_connect(struct connect_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
-		char buf[256];
+		char buf[512];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
-				102, SYS_CONNECT, sys_args->pid, current->start_time.tv_sec, 
-				sys_args->rc, sys_args->sock_fd, sys_args->ip, sys_args->port, current->tgid, sec, nsec);
+		int size = 0;
+		if(sys_args->sa_family == AF_LOCAL){
+			size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
+					102, SYS_CONNECT, sys_args->pid, current->start_time.tv_sec, 
+					sys_args->rc, sys_args->sock_fd, sys_args->sun_path, sys_args->port, current->tgid, sec, nsec);
+		}
+		else {
+			size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
+					102, SYS_CONNECT, sys_args->pid, current->start_time.tv_sec, 
+					sys_args->rc, sys_args->sock_fd, sys_args->ip, sys_args->port, current->tgid, sec, nsec);
+		}
 //		printk("[socketcall connect]: %s", buf);
 		relay_write(theia_chan, buf, size);
 	}
@@ -12455,6 +12522,8 @@ struct accept_ahgv {
 	char						ip[16];
 	u_long					port;
   int             rc;                                                           
+	sa_family_t			sa_family;
+	char						sun_path[UNIX_PATH_MAX];
 };
 
 void packahgv_accept(struct accept_ahgv *sys_args) {
@@ -12468,9 +12537,18 @@ void packahgv_accept(struct accept_ahgv *sys_args) {
 			sprintf(ip, "NA");
 		else
 			strcpy(ip, sys_args->ip);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
+		int size = 0;
+		if(sys_args->sa_family == AF_LOCAL){
+		 size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
+				102, SYS_ACCEPT, sys_args->pid, current->start_time.tv_sec, 
+				sys_args->rc, sys_args->sock_fd, sys_args->sun_path, sys_args->port, current->tgid, sec, nsec);
+		}
+		else {
+		 size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
 				102, SYS_ACCEPT, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->rc, sys_args->sock_fd, ip, sys_args->port, current->tgid, sec, nsec);
+		}
+
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -12508,18 +12586,30 @@ struct sendto_ahgv {
 	u_long					port;
 	long						rc;
 //	u_long 					clock;
+	sa_family_t			sa_family;
+	char						sun_path[UNIX_PATH_MAX];
 };
 
 void packahgv_sendto(struct sendto_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
-		char buf[256];
+		char buf[512];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%ld|%s|%lu|%d|%ld|%ld|endahg\n", 
-				102, SYS_SENDTO, sys_args->pid, current->start_time.tv_sec, 
-				sys_args->sock_fd, sys_args->rc, sys_args->ip, 
-				sys_args->port, current->tgid, sec, nsec);
+		int size = 0;
+		if(sys_args->sa_family == AF_LOCAL){
+			size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%ld|%s|%lu|%d|%ld|%ld|endahg\n", 
+					102, SYS_SENDTO, sys_args->pid, current->start_time.tv_sec, 
+					sys_args->sock_fd, sys_args->rc, sys_args->sun_path, 
+					sys_args->port, current->tgid, sec, nsec);
+		}
+		else {
+			size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%ld|%s|%lu|%d|%ld|%ld|endahg\n", 
+					102, SYS_SENDTO, sys_args->pid, current->start_time.tv_sec, 
+					sys_args->sock_fd, sys_args->rc, sys_args->ip, 
+					sys_args->port, current->tgid, sec, nsec);
+
+		}
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -12557,18 +12647,29 @@ struct recvfrom_ahgv {
 	u_long					port;
 	long						rc;
 //	u_long					clock;
+	sa_family_t			sa_family;
+	char						sun_path[UNIX_PATH_MAX];
 };
 
 void packahgv_recvfrom(struct recvfrom_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
-		char buf[256];
+		char buf[512];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%ld|%s|%lu|%d|%ld|%ld|endahg\n", 
+		int size = 0;
+		if(sys_args->sa_family == AF_LOCAL){
+			size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%ld|%s|%lu|%d|%ld|%ld|endahg\n", 
+				102, SYS_RECVFROM, sys_args->pid, current->start_time.tv_sec, 
+				sys_args->sock_fd, sys_args->rc, sys_args->sun_path, 
+				sys_args->port, current->tgid, sec, nsec);
+		}
+		else {
+			size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%ld|%s|%lu|%d|%ld|%ld|endahg\n", 
 				102, SYS_RECVFROM, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->sock_fd, sys_args->rc, sys_args->ip, 
 				sys_args->port, current->tgid, sec, nsec);
+		}
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -12716,7 +12817,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 				pahgv_connect->pid = current->pid;
 				pahgv_connect->rc = rc;
 				pahgv_connect->sock_fd = (int)a[0];
-				get_ip_port_sockaddr((unsigned long*)a[1], pahgv_connect->ip, &(pahgv_connect->port));
+				get_ip_port_sockaddr((unsigned long*)a[1], pahgv_connect->ip, &(pahgv_connect->port), pahgv_connect->sun_path, &(pahgv_connect->sa_family));
 				packahgv_connect(pahgv_connect);
 				KFREE(pahgv_connect);	
 				break;
@@ -12729,7 +12830,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 				pahgv_accept->pid = current->pid;
 				pahgv_accept->rc = rc;
 				pahgv_accept->sock_fd = (int)a[0];
-				get_ip_port_sockaddr((unsigned long*)a[1], pahgv_accept->ip, &(pahgv_accept->port));
+				get_ip_port_sockaddr((unsigned long*)a[1], pahgv_accept->ip, &(pahgv_accept->port), pahgv_accept->sun_path, &(pahgv_accept->sa_family));
 				packahgv_accept(pahgv_accept);
 				KFREE(pahgv_accept);	
 				break;
@@ -12755,7 +12856,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 				pahgv_sendto->pid = current->pid;
 				pahgv_sendto->sock_fd = (int)a[0];
 				pahgv_sendto->rc = rc;
-				get_ip_port_sockaddr((unsigned long*)a[4], pahgv_sendto->ip, &(pahgv_sendto->port));
+				get_ip_port_sockaddr((unsigned long*)a[4], pahgv_sendto->ip, &(pahgv_sendto->port), pahgv_sendto->sun_path, &(pahgv_sendto->sa_family));
 //				pahgv_sendto->clock = clock;
 				packahgv_sendto(pahgv_sendto);
 				KFREE(pahgv_sendto);	
@@ -12781,7 +12882,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 				}
 				pahgv_recvfrom->pid = current->pid;
 				pahgv_recvfrom->sock_fd = (int)a[0];
-				get_ip_port_sockaddr((unsigned long*)a[4], pahgv_recvfrom->ip, &(pahgv_recvfrom->port));
+				get_ip_port_sockaddr((unsigned long*)a[4], pahgv_recvfrom->ip, &(pahgv_recvfrom->port), pahgv_recvfrom->sun_path, &(pahgv_recvfrom->sa_family));
 				pahgv_recvfrom->rc = rc;
 //				pahgv_recvfrom->clock = clock;
 				packahgv_recvfrom(pahgv_recvfrom);
