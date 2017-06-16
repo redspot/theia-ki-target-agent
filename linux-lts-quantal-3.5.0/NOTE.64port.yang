@@ -1,0 +1,25 @@
+# related files besides replay.c
+arch/x86/kernel/signal.c
+arch/x86/kernel/process.c
+arch/x86/mm/mmap.c
+fork.c
+exit.c
+signal.c
+sched/core.c
+fs/file_table.c
+fs/exec.c
+fs/pipe.c
+fs/namei.c
+fs/binfmt_script.c
+fs/binfmt_elf.c
+net/unix/af_unix.c
+
+
+
+
+# changed parts: 6/16/2017, yang
+1. stat64->stat, lstat64->lstat, fstat,....
+2. dummy_sigreturn -> dummy_rt_sigreturn, sigsuspend, sigaction, ...
+3. entry_64.S: added ret_from_fork_2 according to entry_32.S. But not sure the location of call ret_from_fork is correct
+
+

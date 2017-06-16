@@ -461,6 +461,33 @@ ENTRY(ret_from_fork)
 	CFI_ENDPROC
 END(ret_from_fork)
 
+ENTRY(ret_from_fork_2)
+	DEFAULT_FRAME
+
+	LOCK ; btr $TIF_FORK,TI_flags(%r8)
+
+	pushq_cfi kernel_eflags(%rip)
+	popfq_cfi				# reset kernel eflags
+
+	call schedule_tail			# rdi: 'prev' task parameter
+
+	GET_THREAD_INFO(%rcx)
+
+	RESTORE_REST
+
+	call ret_from_fork_replay		#64port. not sure should be here..
+
+	testl $3, CS-ARGOFFSET(%rsp)		# from kernel_thread?
+	jz   retint_restore_args
+
+	testl $_TIF_IA32, TI_flags(%rcx)	# 32-bit compat task needs IRET
+	jnz  int_ret_from_sys_call
+
+	RESTORE_TOP_OF_STACK %rdi, -ARGOFFSET
+	jmp ret_from_sys_call			# go to the SYSRET fastpath
+
+	CFI_ENDPROC
+END(ret_from_fork_2)
 /*
  * System call entry. Up to 6 arguments in registers are supported.
  *

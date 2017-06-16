@@ -10808,33 +10808,33 @@ asmlinkage int sys_sigaction(int sig, const struct sigaction __user *act, struct
 
 //RET1_RECORD3(sigaction, 67, struct old_sigaction, oact, int, sig, const struct old_sigaction __user *, act, struct old_sigaction __user *, oact);
 //64port
-RET1_RECORD3(sigaction, 67, struct sigaction, oact, int, sig, const struct sigaction __user *, act, struct sigaction __user *, oact);
+//RET1_RECORD3(sigaction, 67, struct sigaction, oact, int, sig, const struct sigaction __user *, act, struct sigaction __user *, oact);
 
 //static asmlinkage long replay_sigaction (int sig, const struct old_sigaction __user *act, struct old_sigaction __user *oact)
 //64port
-static asmlinkage long replay_sigaction (int sig, const struct sigaction __user *act, struct sigaction __user *oact)
-{									
-	char *retparams = NULL;						
-	long rc;
-									
-	if (current->replay_thrd->app_syscall_addr) {
-		return sys_sigaction (sig, act, oact); // do actual syscall when PIN is attached
-	}
-
-	rc = get_next_syscall (67, (char **) &retparams); 
-	if (retparams) {						
-		//if (copy_to_user (oact, retparams, sizeof(struct old_sigaction))) printk ("replay_sigaction: pid %d cannot copy to user\n", current->pid); 
-		//argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct old_sigaction));
-//64port
-		if (copy_to_user (oact, retparams, sizeof(struct sigaction))) printk ("replay_sigaction: pid %d cannot copy to user\n", current->pid); 
-		argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct sigaction));
-	}								
-	return rc;							
-}									
+//static asmlinkage long replay_sigaction (int sig, const struct sigaction __user *act, struct sigaction __user *oact)
+//{									
+//	char *retparams = NULL;						
+//	long rc;
+//									
+//	if (current->replay_thrd->app_syscall_addr) {
+//		return sys_sigaction (sig, act, oact); // do actual syscall when PIN is attached
+//	}
+//
+//	rc = get_next_syscall (67, (char **) &retparams); 
+//	if (retparams) {						
+//		//if (copy_to_user (oact, retparams, sizeof(struct old_sigaction))) printk ("replay_sigaction: pid %d cannot copy to user\n", current->pid); 
+//		//argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct old_sigaction));
+////64port
+//		if (copy_to_user (oact, retparams, sizeof(struct sigaction))) printk ("replay_sigaction: pid %d cannot copy to user\n", current->pid); 
+//		argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct sigaction));
+//	}								
+//	return rc;							
+//}									
 
 //asmlinkage int shim_sigaction (int sig, const struct old_sigaction __user *act, struct old_sigaction __user *oact) SHIM_CALL(sigaction, 67, sig, act, oact);
 //64port
-asmlinkage int shim_sigaction (int sig, const struct sigaction __user *act, struct sigaction __user *oact) SHIM_CALL(sigaction, 67, sig, act, oact);
+//asmlinkage int shim_sigaction (int sig, const struct sigaction __user *act, struct sigaction __user *oact) SHIM_CALL(sigaction, 67, sig, act, oact);
 
 SIMPLE_SHIM0(sgetmask, 68);
 SIMPLE_SHIM1(ssetmask, 69, int, newmask);
@@ -10845,7 +10845,8 @@ SIMPLE_SHIM1(ssetmask, 69, int, newmask);
 //64port
 //SIMPLE_SHIM2(setregid16, 71, gid_t, rgid, gid_t, egid);
 asmlinkage int sys_sigsuspend(int history0, int history1, old_sigset_t mask); /* No prototype for sys_sigsuspend */
-SIMPLE_SHIM3(sigsuspend, 72, int, history0, int, history1, old_sigset_t, mask);
+//64port
+//SIMPLE_SHIM3(sigsuspend, 72, int, history0, int, history1, old_sigset_t, mask);
 RET1_SHIM1(sigpending, 73, old_sigset_t, set, old_sigset_t __user *, set);
 SIMPLE_SHIM2(sethostname, 74, char __user *, name, int, len);
 SIMPLE_RECORD2(setrlimit, 75, unsigned int, resource, struct rlimit __user *, rlim);
@@ -13665,7 +13666,9 @@ theia_sys_ipc(call, first, second, third, ptr, fifth))
 
 SIMPLE_SHIM1(fsync, 118, unsigned int, fd);
 
-unsigned long dummy_sigreturn(struct pt_regs *regs); /* In arch/x86/kernel/signal.c */
+//64port
+//unsigned long dummy_sigreturn(struct pt_regs *regs); /* In arch/x86/kernel/signal.c */
+long dummy_rt_sigreturn(struct pt_regs *regs); /* In arch/x86/kernel/signal.c */
 
 long shim_sigreturn(struct pt_regs* regs)
 {
@@ -13680,7 +13683,9 @@ long shim_sigreturn(struct pt_regs* regs)
 		}
 	}
 
-	return dummy_sigreturn(regs);
+	//return dummy_sigreturn(regs);
+//64port
+	return dummy_rt_sigreturn(regs);
 }
 
 static long 
@@ -15370,7 +15375,6 @@ replay_prctl (int option, unsigned long arg2, unsigned long arg3, unsigned long 
 
 asmlinkage long shim_prctl (int option, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5) SHIM_CALL(prctl, 172, option, arg2, arg3, arg4, arg5);
 
-long dummy_rt_sigreturn(struct pt_regs *regs); /* In arch/x86/kernel/signal.c */
 
 long shim_rt_sigreturn(struct pt_regs* regs)
 {
