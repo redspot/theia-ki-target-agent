@@ -32,7 +32,9 @@ char cache_dir[] = "/data/replay_cache";
 int add_file_to_cache (struct file* vm_file, dev_t* pdev, unsigned long* pino, struct timespec* pmtime) 
 {
 	char cname[CACHE_FILENAME_SIZE], nname[CACHE_FILENAME_SIZE], tname[CACHE_FILENAME_SIZE];
-	struct stat64 st;
+	//struct stat64 st;
+//64port
+	struct stat st;
 	int fd, rc, copyed;
 	mm_segment_t old_fs;
 	loff_t ipos = 0, opos = 0;
@@ -51,7 +53,9 @@ int add_file_to_cache (struct file* vm_file, dev_t* pdev, unsigned long* pino, s
 	set_fs(KERNEL_DS);
 	
 	// See if file is already in cache
-	rc = sys_stat64 (cname, &st);
+	//rc = sys_stat64 (cname, &st);
+//64port
+	rc = sys_newstat(cname, &st);
 	if (rc >= 0) {
 		
 		DPRINT ("cache time: %lu.%u\n", st.st_mtime, st.st_mtime_nsec);
@@ -131,7 +135,9 @@ int add_file_to_cache (struct file* vm_file, dev_t* pdev, unsigned long* pino, s
 	rc = sys_rename (tname, cname);
 	if (rc < 0) printk ("add_file_to_cache: atomic rename from %s to %s failed, rc = %d\n", tname, cname, rc);
 	
-	rc = sys_stat64 (cname, &st);
+	//rc = sys_stat64 (cname, &st);
+//64port
+	rc = sys_newstat (cname, &st);
 	if (rc < 0) printk ("add_file_to_cache: stat on newly created cache file failed, rc = %d\n", rc);
 	pmtime->tv_sec = st.st_mtime;
 	pmtime->tv_nsec = st.st_mtime_nsec;
@@ -147,7 +153,9 @@ int add_file_to_cache (struct file* vm_file, dev_t* pdev, unsigned long* pino, s
 int get_cache_file_name (char* cname, dev_t dev, u_long ino, struct timespec mtime)
 {
 	mm_segment_t old_fs;
-	struct stat64 st;
+	//struct stat64 st;
+//64port
+	struct stat st;
 	int rc;
 
 	// check if most recent cache file is still valid
@@ -156,7 +164,9 @@ int get_cache_file_name (char* cname, dev_t dev, u_long ino, struct timespec mti
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
 	
-	rc = sys_stat64 (cname, &st);
+	//rc = sys_stat64 (cname, &st);
+//64port
+	rc = sys_newstat (cname, &st);
 	if (rc < 0) {
 		printk ("get_cache_file_name: cannot stat cache file, rc=%d\n", rc);
 		set_fs(old_fs);
@@ -178,7 +188,9 @@ int open_cache_file (dev_t dev, u_long ino, struct timespec mtime, int flags)
 {
 	char cname[CACHE_FILENAME_SIZE];
 	mm_segment_t old_fs;
-	struct stat64 st;
+	//struct stat64 st;
+//64port
+	struct stat st;
 	int fd, rc;
 
         // check if most recent cache file is still valid
@@ -187,7 +199,9 @@ int open_cache_file (dev_t dev, u_long ino, struct timespec mtime, int flags)
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
 	
-	rc = sys_stat64 (cname, &st);
+	//rc = sys_stat64 (cname, &st);
+//64port
+	rc = sys_newstat (cname, &st);
 	if (rc < 0) {
 		printk ("open_cache_file: cannot stat cache file, rc=%d\n", rc);
 		set_fs(old_fs);
@@ -216,7 +230,9 @@ int open_mmap_cache_file (dev_t dev, u_long ino, struct timespec mtime, int is_w
 {
 	char cname[CACHE_FILENAME_SIZE], tname[CACHE_FILENAME_SIZE];
 	mm_segment_t old_fs;
-	struct stat64 st;
+	//struct stat64 st;
+//64port
+	struct stat st;
 	int fd, tfd, rc, copyed;
 	struct file* tfile, *cfile;
 	loff_t ipos = 0, opos = 0;
@@ -229,7 +245,9 @@ int open_mmap_cache_file (dev_t dev, u_long ino, struct timespec mtime, int is_w
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
 	
-	rc = sys_stat64 (cname, &st);
+	//rc = sys_stat64 (cname, &st);
+//64port
+	rc = sys_newstat (cname, &st);
 	if (rc < 0) {
 		printk ("open_cache_file: cannot stat cache file, rc=%d\n", rc);
 		set_fs(old_fs);
