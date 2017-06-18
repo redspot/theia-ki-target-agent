@@ -53,14 +53,16 @@ int main (int argc, char* argv[])
         printf ("parseckpt: tried to read rg_id, got %ld\n", copyed);
         return -1;
     }
-    printf ("record group id: %llu\n", rg_id);
+    //printf ("record group id: %llu\n", rg_id);
+    printf ("record group id: %lu\n", rg_id);
 
     copyed = read(fd, (char *) &parent_rg_id, sizeof(parent_rg_id));
     if (copyed != sizeof(parent_rg_id)) {
         printf ("parseckpt: tried to read parent_rg_id, got %ld\n", copyed);
         return -1;
     }
-    printf ("parent record group id: %llu\n", parent_rg_id);
+    //printf ("parent record group id: %llu\n", parent_rg_id);
+    printf ("parent record group id: %lu\n", parent_rg_id);
 
     copyed = read(fd, (char *) &len, sizeof(len));
     if (copyed != sizeof(len)) {

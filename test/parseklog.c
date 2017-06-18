@@ -15,7 +15,8 @@ static void print_write_pipe(FILE *out, struct klog_result *res) {
 	char *retparams = res->retparams;
 
 	if (retparams) {
-		fprintf(out, "%d, %ld, %lu, %lld\n", *((int *)retparams), res->retval,
+		//fprintf(out, "%d, %ld, %lu, %lld\n", *((int *)retparams), res->retval,
+		fprintf(out, "%d, %ld, %lu, %ld\n", *((int *)retparams), res->retval,
 				res->start_clock, res->index);
 	}
 }
@@ -38,7 +39,8 @@ static void print_socketcall_pipe(FILE *out, struct klog_result *res) {
 					pipe_id = *((int *)retparams);
 					retparams += sizeof(int);
 
-					fprintf(out, "%d, %ld, %lu, %lld\n", pipe_id, res->retval,
+					//fprintf(out, "%d, %ld, %lu, %lld\n", pipe_id, res->retval,
+					fprintf(out, "%d, %ld, %lu, %ld\n", pipe_id, res->retval,
 							res->start_clock, res->index);
 					break;
 				}
@@ -55,7 +57,8 @@ static void do_print_graph(FILE *out, struct klog_result *res, char *retparams,
 		entry = (struct replayfs_filemap_entry *)retparams;
 
 		for (i = 0; i < entry->num_elms; i++) {
-			fprintf(out, "%lld %lld %d {%lld, %d, %lld, %d, %d}\n",
+			//fprintf(out, "%lld %lld %d {%lld, %d, %lld, %d, %d}\n",
+			fprintf(out, "%ld %ld %ld {%ld, %d, %ld, %ld, %ld}\n",
 					res->index, entry->elms[i].offset - entry->elms[0].offset, entry->elms[i].size,
 					(loff_t)entry->elms[i].bval.id.unique_id, entry->elms[i].bval.id.pid,
 					(loff_t)entry->elms[i].bval.id.sysnum,
@@ -67,7 +70,8 @@ static void do_print_graph(FILE *out, struct klog_result *res, char *retparams,
 
 
 		for (i = 0; i < entry->num_elms; i++) {
-			fprintf(out, "pipe: %lld %d %d {%lld, %d, %lld, %d, %ld}\n",
+			//fprintf(out, "pipe: %lld %d %d {%lld, %d, %lld, %d, %ld}\n",
+			fprintf(out, "pipe: %ld %ld %ld {%ld, %d, %ld, %ld, %ld}\n",
 					res->index, entry->elms[i].bval.buff_offs, entry->elms[i].size,
 					(loff_t)entry->elms[i].bval.id.unique_id, entry->elms[i].bval.id.pid,
 					(loff_t)entry->elms[i].bval.id.sysnum,
@@ -79,7 +83,8 @@ static void do_print_graph(FILE *out, struct klog_result *res, char *retparams,
 		writer = *((uint64_t *)retparams);
 		retparams += sizeof(uint64_t);
 		pipe_id = *((int *)retparams);
-		fprintf(out, "pipe: %lld, %d, %lld {%ld} {%lu}\n", writer, pipe_id,
+		//fprintf(out, "pipe: %lld, %d, %lld {%ld} {%lu}\n", writer, pipe_id,
+		fprintf(out, "pipe: %ld, %d, %ld {%ld} {%lu}\n", writer, pipe_id,
 				res->index, res->retval, res->start_clock);
 	}
 }
@@ -153,7 +158,8 @@ static void print_getcwd(FILE *out, struct klog_result *res) {
 
 	parseklog_default_print(out, res);
 
-	fprintf(out, "         path has %d bytes\n", res->retparams_size-sizeof(int));
+	//fprintf(out, "         path has %d bytes\n", res->retparams_size-sizeof(int));
+	fprintf(out, "         path has %ld bytes\n", res->retparams_size-sizeof(int));
 	if (res->retparams_size-sizeof(int) > 0) {
 		fprintf(out, "         path is %s\n", ((char *)res->retparams)+sizeof(int));
 	}
@@ -236,7 +242,8 @@ static void print_read(FILE *out, struct klog_result *res) {
 							entry->num_elms);
 
 					for (i = 0; i < entry->num_elms; i++) {
-						fprintf(out, "         \tSource %d is {id, pid, syscall_num} {%lld %d %lld}\n", i,
+						//fprintf(out, "         \tSource %d is {id, pid, syscall_num} {%lld %d %lld}\n", i,
+						fprintf(out, "         \tSource %d is {id, pid, syscall_num} {%ld %d %ld}\n", i,
 								(loff_t)entry->elms[i].bval.id.unique_id, entry->elms[i].bval.id.pid,
 								(loff_t)entry->elms[i].bval.id.sysnum);
 					}
@@ -253,12 +260,14 @@ static void print_read(FILE *out, struct klog_result *res) {
 						entry->num_elms);
 
 				for (i = 0; i < entry->num_elms; i++) {
-					fprintf(out, "         \tSource %d is {id, pid, syscall_num} {%lld %d %lld}\n", i,
+					//fprintf(out, "         \tSource %d is {id, pid, syscall_num} {%lld %d %lld}\n", i,
+					fprintf(out, "         \tSource %d is {id, pid, syscall_num} {%ld %d %ld}\n", i,
 							(loff_t)entry->elms[i].bval.id.unique_id, entry->elms[i].bval.id.pid,
 							(loff_t)entry->elms[i].bval.id.sysnum);
 				}
 			} else {
-				fprintf(out, "         File is a pipe sourced by id %llu, pipe id %d\n",
+				//fprintf(out, "         File is a pipe sourced by id %llu, pipe id %d\n",
+				fprintf(out, "         File is a pipe sourced by id %lu, pipe id %d\n",
 						*((uint64_t *)buf), 
 						/* Yeah, I went there */
 						*((int *)((uint64_t *)buf + 1)));
@@ -308,7 +317,8 @@ static void print_stat(FILE *out, struct klog_result *res) {
 	if (psr->flags & SR_HAS_RETPARAMS) {
 		struct stat64* pst = (struct stat64 *) res->retparams;
 
-		fprintf(out, "         stat64 size %Ld blksize %lx blocks %Ld ino %Ld\n", 
+		//fprintf(out, "         stat64 size %Ld blksize %lx blocks %Ld ino %Ld\n", 
+		fprintf(out, "         stat64 size %ld blksize %lx blocks %ld ino %ld\n", 
 			pst->st_size, pst->st_blksize, pst->st_blocks, pst->st_ino);
 	}
 }

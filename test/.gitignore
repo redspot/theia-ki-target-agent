@@ -2,6 +2,7 @@
 *.o
 .deps
 filemap
+theia_toggle
 getstats
 launcher
 parse_ahglog

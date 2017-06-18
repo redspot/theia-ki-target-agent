@@ -54,7 +54,8 @@ static void default_printfcn(FILE *out, struct klog_result *res) {
 	int len;
 	int i;
 
-	sprintf(idx, "%lld", res->index);
+	//sprintf(idx, "%lld", res->index);
+	sprintf(idx, "%ld", res->index);
 	len = strlen(idx);
 	for (i = 0; i < 5-len; i++) {
 		spacing[i] = ' ';
@@ -158,14 +159,16 @@ static int read_psr_chunk(struct klogfile *log) {
 	}
 
 	if (rc != sizeof(count)) {
-		fprintf(stderr, "read returns %ld, expected %d, errno = %d\n", rc, sizeof(count), errno);
+		//fprintf(stderr, "read returns %ld, expected %d, errno = %d\n", rc, sizeof(count), errno);
+		fprintf(stderr, "read returns %ld, expected %lu, errno = %d\n", rc, sizeof(count), errno);
 		goto out;
 	}
 
 	/* Read the records... eventually */
 	psrs = malloc(sizeof(struct syscall_result) * count);
 	if (!psrs) {
-		fprintf(stderr, "Cound not malloc %d bytes\n", sizeof(struct syscall_result)*count);
+		//fprintf(stderr, "Cound not malloc %d bytes\n", sizeof(struct syscall_result)*count);
+		fprintf(stderr, "Cound not malloc %lu bytes\n", sizeof(struct syscall_result)*count);
 		goto out;
 	}
 
@@ -175,7 +178,8 @@ static int read_psr_chunk(struct klogfile *log) {
 
 	log->active_psrs = malloc(sizeof(struct klog_result) * count);
 	if (!log->active_psrs) {
-		fprintf(stderr, "Could not malloc %d bytes\n", sizeof(struct klog_result) * count);
+		//fprintf(stderr, "Could not malloc %d bytes\n", sizeof(struct klog_result) * count);
+		fprintf(stderr, "Could not malloc %lu bytes\n", sizeof(struct klog_result) * count);
 		goto out_free;
 	}
 

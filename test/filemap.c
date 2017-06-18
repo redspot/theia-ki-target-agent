@@ -77,7 +77,8 @@ int main(int argc, char** argv)
 	for (i=0; i < num_entries; i++) {
 		struct replay_filemap_entry* entry;
 		entry = entries + i;
-		fprintf(stdout, "%lld %d %lld %d %lld %d\n",
+		//fprintf(stdout, "%lld %d %lld %d %lld %d\n",
+		fprintf(stdout, "%ld %ld %ld %d %ld %ld\n",
 			entry->offset,
 			entry->size,
 			(loff_t)entry->bval.id.unique_id,

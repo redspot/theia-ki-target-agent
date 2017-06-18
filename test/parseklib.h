@@ -245,17 +245,17 @@ struct __old_kernel_stat {
 	unsigned short st_uid;
 	unsigned short st_gid;
 	unsigned short st_rdev;
-#ifdef __i386__
+//#ifdef __i386__
 	unsigned long  xst_size;
   	unsigned long  xst_atime;
   	unsigned long  xst_mtime;
   	unsigned long  xst_ctime;
-#else
-	unsigned int  st_size;
-	unsigned int  st_atime;
-	unsigned int  st_mtime;
-	unsigned int  st_ctime;
-#endif
+//#else
+//	unsigned int  st_size;
+//	unsigned int  st_atime;
+//	unsigned int  st_mtime;
+//	unsigned int  st_ctime;
+//#endif
 };
 
 struct wait4_retvals {

@@ -9,8 +9,8 @@ KERN_CONFIG := replay_headers/include/linux/replay_configs.h
 
 DEPS_DIR := .deps
 
-TARGETS=parse_ahglog parseklog parseulog parsemlog launcher resume parseckpt \
-	getstats filemap replay_pause parseklog_old reset_ndx theia_toggle
+TARGETS=parseklog parseulog parsemlog launcher resume parseckpt \
+	getstats filemap replay_pause reset_ndx theia_toggle
 
 # For automatic .h dependency tracking... may not work perfectly for launcher as
 #    the include path changes for it
@@ -32,8 +32,6 @@ getstats: libutil.a
 filemap: libutil.a 
 
 parseklog: parseklib.o
-
-parse_ahglog: parse_ahglib.o
 
 rewriteklog: parseklib.o
 
