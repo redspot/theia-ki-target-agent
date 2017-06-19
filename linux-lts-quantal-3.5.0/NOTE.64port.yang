@@ -23,3 +23,39 @@ net/unix/af_unix.c
 3. entry_64.S: added ret_from_fork_2 according to entry_32.S. But not sure the location of call ret_from_fork is correct
 
 
+Added new shim:
+
+shim_shmget
+shim_shmat
+shim_shmctl
+shim_semget
+shim_semop
+shim_semctl
+shim_semtimedop
+shim_shmdt
+shim_msgget
+shim_msgsnd
+shim_msgrcv
+shim_msgctl
+
+shim_socket
+shim_connect
+shim_accept
+shim_sendto
+shim_recvfrom
+sys_sendmsg
+sys_recvmsg
+shim_listen
+shim_getsockname
+shim_getpeername
+shim_socketpair
+shim_setsockopt
+shim_getsockopt
+
+shim_arch_prctl
+
+shim_shutdown
+
+shim_newfstatat
+
+shim_accept4
