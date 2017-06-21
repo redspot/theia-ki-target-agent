@@ -59,3 +59,7 @@ shim_shutdown
 shim_newfstatat
 
 shim_accept4
+
+restart_syscall is strange, it had number 168, but not mapped to 32 tbl.
+
+

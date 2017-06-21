@@ -62,7 +62,7 @@
 53	common	socketpair		shim_socketpair
 54	64	setsockopt		shim_setsockopt
 55	64	getsockopt		shim_getsockopt
-56	common	clone			stub_clone
+56	common	clone			ptregs_clone  stub_clone
 57	common	fork			ptregs_fork   stub_fork
 58	common	vfork			ptregs_vfork  stub_vfork
 59	64	execve			ptregs_execve   stub_execve
