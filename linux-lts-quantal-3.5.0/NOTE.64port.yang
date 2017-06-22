@@ -43,8 +43,9 @@ shim_connect
 shim_accept
 shim_sendto
 shim_recvfrom
-sys_sendmsg
-sys_recvmsg
+shim_sendmsg
+shim_recvmsg
+shim_bind
 shim_listen
 shim_getsockname
 shim_getpeername
