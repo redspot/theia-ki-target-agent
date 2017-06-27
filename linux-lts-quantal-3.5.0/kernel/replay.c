@@ -103,7 +103,7 @@ EXPORT_SYMBOL(theia_recording_toggle);
 
 // static unsigned int no_new_proc = 0;
 
-#define THEIA_TRACK_SHM_OPEN 0
+//#define THEIA_TRACK_SHM_OPEN 0
 // #define THEIA_TRACK_SHMAT 1
 
 //#define REPLAY_PARANOID

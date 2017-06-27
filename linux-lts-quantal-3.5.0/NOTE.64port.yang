@@ -63,4 +63,5 @@ shim_accept4
 
 restart_syscall is strange, it had number 168, but not mapped to 32 tbl.
 
+sys_mmap, stub_rt_sigreturn remain as-is, they go through routine of shim_*.
 
