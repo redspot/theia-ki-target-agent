@@ -13280,6 +13280,8 @@ void packahgv_shmat(struct shmat_ahgv *sys_args)
 void theia_shmat_ahg(long rc, int shmid, char __user *shmaddr, int shmflg) {
 
 	int ret;
+	unsigned long raddr;
+	get_user(raddr, (unsigned long __user *) rc);
 
 	mm_segment_t old_fs = get_fs();
 	set_fs(KERNEL_DS);
@@ -13324,7 +13326,7 @@ void theia_shmat_ahg(long rc, int shmid, char __user *shmaddr, int shmflg) {
 	}
 	pahgv_shmat->pid = current->pid;
 	pahgv_shmat->rc = rc;
-	pahgv_shmat->raddr = 0; // Carter: This argument is provided in sys_ipc, not sys_shmat
+	pahgv_shmat->raddr = raddr;
 	pahgv_shmat->shmid = shmid;
 	pahgv_shmat->shmaddr = shmaddr;
 	pahgv_shmat->shmflg = shmflg;
@@ -13338,11 +13340,13 @@ int theia_sys_shmat(int shmid, char __user *shmaddr, int shmflg)
 
 	rc = sys_shmat(shmid, shmaddr, shmflg);
 
-	unsigned long raddr = 0; // Carter: This argument is provided in sys_ipc, not sys_shmat
+	unsigned long raddr;
 	struct shmid_kernel* shp;
 	u_long size;
 	struct ipc_namespace* ns = current->nsproxy->ipc_ns;
 	struct kern_ipc_perm *ipcp;
+
+	get_user(raddr, (unsigned long __user *) rc);
 
 	theia_shmat_ahg(rc, shmid, shmaddr, shmflg);
 
@@ -13385,11 +13389,13 @@ record_shmat(int shmid, char __user *shmaddr, int shmflg)
 	char* pretval = NULL;
 	u_long len = 0;
 	long rc;
+	unsigned long raddr;
 
 	new_syscall_enter (30);
 	rc = sys_shmat(shmid, shmaddr, shmflg);
 
-	unsigned long raddr = 0; // Carter: This argument is provided in sys_ipc, not sys_shmat
+	get_user(raddr, (unsigned long __user *) rc);
+
 	theia_shmat_ahg(rc, shmid, shmaddr, shmflg);
 
 	new_syscall_done (30, rc);
@@ -13460,7 +13466,7 @@ replay_shmat(int shmid, char __user *shmaddr, int shmflg)
 	long rc = get_next_syscall (30, (char **) &retparams);
 	int repid, cmd;
 
-	if (rc == 0) {
+	if (rc > 0) {
 		struct shmat_retvals* atretparams = (struct shmat_retvals *) retparams;
 
 		if (current->replay_thrd->rp_record_thread->rp_group->rg_save_mmap_flag) {
@@ -13495,15 +13501,14 @@ replay_shmat(int shmid, char __user *shmaddr, int shmflg)
 			printk ("replay_ipc(shmat) returns different value %ld than %ld\n", retval, rc);
 			return syscall_mismatch();
 		}
-		// Carter: sys_shmat has no raddr parameter, only sys_ipc does
-		/*if (retval == 0) {
+		if (retval > 0) {
 			u_long raddr;
-			get_user(raddr, (unsigned long __user *) third);
+			get_user(raddr, (unsigned long __user *) retval);
 			printk ("Pid %d replays SHMAT success address %lx\n", current->pid, raddr);
 			if (raddr != atretparams->raddr) {
 				printk ("replay_ipc(shmat) returns different address %lx than %lx\n", raddr, atretparams->raddr);
 			}
-		}*/
+		}
 		argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct shmat_retvals));
 	}
 	return rc;
@@ -13513,6 +13518,87 @@ asmlinkage long shim_shmat (int shmid, char __user *shmaddr, int shmflg)
 SHIM_CALL_MAIN(30, record_shmat(shmid, shmaddr, shmflg),
 replay_shmat(shmid, shmaddr, shmflg),
 theia_sys_shmat(shmid, shmaddr, shmflg))
+
+static asmlinkage long
+record_shmctl(int shmid, int cmd, struct shmid_ds __user *buf)
+{
+	mm_segment_t old_fs;
+	char* pretval = NULL;
+	u_long len = 0;
+	long rc;
+
+	new_syscall_enter(31);
+        rc = sys_shmctl(shmid, cmd, buf);
+
+	new_syscall_done(31, rc);
+
+	if (rc >= 0) {
+		ipc_parse_version(&cmd);
+		switch (cmd) {
+			case IPC_STAT:
+			case SHM_STAT:
+				len = sizeof(struct shmid_ds);
+				break;
+			case IPC_INFO:
+			case SHM_INFO:
+				len = sizeof(struct shminfo);
+				break;
+		}
+		if (len > 0) {
+			pretval = ARGSKMALLOC(sizeof(u_long) + sizeof(int) + len, GFP_KERNEL);
+			if (pretval == NULL) {
+				printk("record_ipc (shmctl): can't allocate return value\n");
+				return -ENOMEM;
+			}
+			*((u_long *) pretval) = sizeof(int) + len;
+			*((int *) pretval + sizeof(u_long)) = SHMCTL;
+			if (copy_from_user (pretval + sizeof(u_long) + sizeof(int), buf, len)) {
+				printk("record_ipc (shmctl): can't copy data from user\n");
+				ARGSKFREE (pretval, sizeof(u_long)+sizeof(int)+len);
+				return -EFAULT;
+			}
+		}
+	}
+
+	new_syscall_exit(31, pretval);
+	return rc;
+}
+
+static asmlinkage long
+replay_shmctl(int shmid, int cmd, struct shmid_ds __user *buf)
+{
+	char* retparams;
+	long retval;
+	long rc = get_next_syscall (31, (char **) &retparams);
+	int repid;
+
+	ipc_parse_version(&cmd);
+	switch (cmd) {
+		case IPC_STAT:
+		case IPC_INFO:
+		case SHM_STAT:
+		case SHM_INFO:
+			if (retparams && buf) {
+				u_long len = *((u_long *) retparams);
+				if (copy_to_user (buf, retparams+sizeof(u_long)+sizeof(int), len-sizeof(int))) {
+					printk ("replay_ipc (call %d): pid %d cannot copy to user\n", SHMCTL, current->pid);
+					return syscall_mismatch();
+				}
+				argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + len);
+			}
+			break;
+		case IPC_RMID:
+			repid = find_sysv_mapping (current->replay_thrd, shmid);
+			return sys_shmctl(repid, cmd, buf);
+	}
+
+	return rc;
+}
+
+asmlinkage long shim_shmctl(int shmid, int cmd, struct shmid_ds __user *buf)
+SHIM_CALL_MAIN(31, record_shmctl(shmid, cmd, buf),
+replay_shmctl(shmid, cmd, buf),
+sys_shmctl(shmid, cmd, buf))
 
 //Yang: for now, we only handle shmget, shmat
 void theia_ipc_ahg(long rc, uint call, int first, u_long second,
