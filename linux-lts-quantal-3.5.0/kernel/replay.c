@@ -13117,65 +13117,35 @@ SIMPLE_SHIM1(swapoff, 168, const char __user *, specialfile);
 RET1_SHIM1(sysinfo, 99, struct sysinfo, info, struct sysinfo __user *, info);
 
 struct shmget_ahgv {
-  int             pid;                                                           
-	long						rc;
-	int							key;
-	u_long					size;
-	int 						shmflg;
-//	u_long					clock;
+	int	pid;
+	long	rc;
+	int	key;
+	u_long	size;
+	int	shmflg;
 };
 
-void packahgv_shmget(struct shmget_ahgv *sys_args) {
-	//Yang
+void packahgv_shmget(struct shmget_ahgv *sys_args)
+{
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%ld|%d|%lu|%d|%d|%ld|%ld|endahg\n", 
-				117, SHMGET, sys_args->pid, current->start_time.tv_sec, 
+		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%ld|%d|%lu|%d|%d|%ld|%ld|endahg\n",
+				117, SHMGET, sys_args->pid, current->start_time.tv_sec,
 				sys_args->rc, sys_args->key, sys_args->size, sys_args->shmflg,
 				current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
-	}
-	else
+	} else {
 		printk("theia_chan invalid\n");
+	}
 }
 
-
-struct shmat_ahgv {
-  int             pid;                                                           
-	long						rc;
-	int							shmid;
-	void __user			*shmaddr;
-	int 						shmflg;
-	u_long					raddr;
-//	u_long					clock;
-};
-
-void packahgv_shmat(struct shmat_ahgv *sys_args) {
-	//Yang
-	if(theia_chan) {
-		char buf[256];
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%lx|%d|%lu|%d|%lx|%d|%ld|%ld|endahg\n", 
-				117, SHMAT, sys_args->pid, current->start_time.tv_sec, 
-				sys_args->rc, sys_args->shmid, sys_args->shmaddr, sys_args->shmflg,
-				sys_args->raddr, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
-}
-
-//Yang: for now, we only handle shmget, shmat
-void theia_ipc_ahg(long rc, uint call, int first, u_long second, 
-	u_long third, void __user *ptr, long fifth, u_long clock) {
+void theia_shmget_ahg(long rc, key_t key, size_t size, int flag) {
 
 	int ret;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
+	mm_segment_t old_fs = get_fs();
+	set_fs(KERNEL_DS);
 
 	if(theia_dir == NULL) {
 		theia_dir = debugfs_create_dir(APP_DIR, NULL);
@@ -13193,35 +13163,411 @@ void theia_ipc_ahg(long rc, uint call, int first, u_long second,
 	}
 
 	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+		set_fs(old_fs);
+		return;
+	}
+
+	if(theia_logging_toggle == 0) {
+		set_fs(old_fs);
+		return;
+	}
+
+	set_fs(old_fs);
+
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
+		recursive_packahgv_process();
+
+	struct shmget_ahgv* pahgv_shmget = NULL;
+	struct shmat_ahgv* pahgv_shmat = NULL;
+
+	pahgv_shmget = (struct shmget_ahgv*)KMALLOC(sizeof(struct shmget_ahgv), GFP_KERNEL);
+	if(pahgv_shmget == NULL) {
+		printk ("theia_shmget_ahg: failed to KMALLOC.\n");
+		return;
+	}
+	pahgv_shmget->pid = current->pid;
+	pahgv_shmget->rc = rc;
+	pahgv_shmget->key = key;
+	pahgv_shmget->size = size;
+	pahgv_shmget->shmflg = flag;
+	packahgv_shmget(pahgv_shmget);
+	KFREE(pahgv_shmget);
+}
+
+int theia_sys_shmget(key_t key, size_t size, int flag)
+{
+	long rc;
+
+	rc = sys_shmget(key, size, flag);
+
+	theia_shmget_ahg(rc, key, size, flag);
+
+	return rc;
+}
+
+static asmlinkage long
+record_shmget(key_t key, size_t size, int flag)
+{
+	mm_segment_t old_fs;
+	char* pretval = NULL;
+	u_long len = 0;
+	long rc;
+
+	new_syscall_enter (29);
+	rc = sys_shmget(key, size, flag);
+
+	theia_shmget_ahg(rc, key, size, flag);
+
+	new_syscall_done(29, rc);
+
+	new_syscall_exit(29, pretval);
+	return rc;
+}
+
+static asmlinkage long
+replay_shmget(key_t key, size_t size, int flag)
+{
+	char* retparams;
+	long retval;
+	long rc = get_next_syscall(29, (char **) &retparams);
+	int repid, cmd;
+
+	retval = sys_shmget(key, size, flag);
+	if ((rc < 0 && retval >= 0) || (rc >= 0 && retval < 0)) {
+		printk ("Pid %d replay_ipc SHMGET, on record we got %ld, but replay we got %ld\n", current->pid, rc, retval);
+		return syscall_mismatch();
+	}
+
+	// put a mapping from the re-run replay identifier (pseudo), to the record one
+	if (add_sysv_mapping (current->replay_thrd, rc, retval)) {
+		printk ("Pid %d replay_ipc SHMGET, could not add replay identifier mapping, replay: %ld, record %ld\n", current->pid, retval, rc);
+		return syscall_mismatch();
+	}
+
+	return rc;
+}
+
+asmlinkage long shim_shmget(key_t key, size_t size, int flag)
+SHIM_CALL_MAIN(29, record_shmget(key, size, flag),
+replay_shmget(key, size, flag),
+theia_sys_shmget(key, size, flag))
+
+struct shmat_ahgv {
+	int		pid;
+	long		rc;
+	int		shmid;
+	void __user	*shmaddr;
+	int 		shmflg;
+	u_long		raddr;
+};
+
+void packahgv_shmat(struct shmat_ahgv *sys_args)
+{
+	if(theia_chan) {
+		char buf[256];
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%lx|%d|%lu|%d|%lx|%d|%ld|%ld|endahg\n",
+				117, SHMAT, sys_args->pid, current->start_time.tv_sec,
+				sys_args->rc, sys_args->shmid, sys_args->shmaddr, sys_args->shmflg,
+				sys_args->raddr, current->tgid, sec, nsec);
+		relay_write(theia_chan, buf, size);
+	} else {
+		printk("theia_chan invalid\n");
+	}
+}
+
+void theia_shmat_ahg(long rc, int shmid, char __user *shmaddr, int shmflg) {
+
+	int ret;
+
+	mm_segment_t old_fs = get_fs();
+	set_fs(KERNEL_DS);
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+
+	if(!check_and_update_controlfile()) {
+		set_fs(old_fs);
+		return;
+	}
+
+	if(theia_logging_toggle == 0) {
+		set_fs(old_fs);
+		return;
+	}
+
+	set_fs(old_fs);
+
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
+		recursive_packahgv_process();
+
+	struct shmget_ahgv* pahgv_shmget = NULL;
+	struct shmat_ahgv* pahgv_shmat = NULL;
+
+	pahgv_shmat = (struct shmat_ahgv*)KMALLOC(sizeof(struct shmat_ahgv), GFP_KERNEL);
+	if(pahgv_shmat == NULL) {
+		printk ("theia_shmat_ahg: failed to KMALLOC.\n");
+		return;
+	}
+	pahgv_shmat->pid = current->pid;
+	pahgv_shmat->rc = rc;
+	pahgv_shmat->raddr = 0; // Carter: This argument is provided in sys_ipc, not sys_shmat
+	pahgv_shmat->shmid = shmid;
+	pahgv_shmat->shmaddr = shmaddr;
+	pahgv_shmat->shmflg = shmflg;
+	packahgv_shmat(pahgv_shmat);
+	KFREE(pahgv_shmat);
+}
+
+int theia_sys_shmat(int shmid, char __user *shmaddr, int shmflg)
+{
+	long rc;
+
+	rc = sys_shmat(shmid, shmaddr, shmflg);
+
+	unsigned long raddr = 0; // Carter: This argument is provided in sys_ipc, not sys_shmat
+	struct shmid_kernel* shp;
+	u_long size;
+	struct ipc_namespace* ns = current->nsproxy->ipc_ns;
+	struct kern_ipc_perm *ipcp;
+
+	theia_shmat_ahg(rc, shmid, shmaddr, shmflg);
+
+	if (theia_logging_toggle == 0)
+		return rc;
+
+	ipcp = ipc_lock(&ns->ids[IPC_SHM_IDS], shmid);
+	if (IS_ERR(ipcp)) {
+		printk ("theia_sys_ipc: cannot lock ipc for shmat\n");
+		return -EINVAL;
+	}
+	shp = container_of(ipcp, struct shmid_kernel, shm_perm);
+	size = shp->shm_segsz;
+	ipc_unlock(&shp->shm_perm);
+
+#ifdef THEIA_TRACK_SHMAT
+	int ret = 0;
+	ret = sys_mprotect(raddr, size, PROT_NONE);
+	int __user *address = NULL;
+	int np = size / 0x1000;
+	if (size % 0x1000) ++np;
+	if (!ret) {
+		int i;
+		for (i = 0; i < np; ++i) {
+			address = (int __user *)(raddr + i*0x1000);
+			*address = *address;
+		}
+
+		ret = sys_mprotect(rc, size, PROT_NONE);
+//		printk("protection of a shared page will be changed, ret %d, %d\n", ret, np);
+	}
+#endif
+	return rc;
+}
+
+static asmlinkage long
+record_shmat(int shmid, char __user *shmaddr, int shmflg)
+{
+	mm_segment_t old_fs;
+	char* pretval = NULL;
+	u_long len = 0;
+	long rc;
+
+	new_syscall_enter (30);
+	rc = sys_shmat(shmid, shmaddr, shmflg);
+
+	unsigned long raddr = 0; // Carter: This argument is provided in sys_ipc, not sys_shmat
+	theia_shmat_ahg(rc, shmid, shmaddr, shmflg);
+
+	new_syscall_done (30, rc);
+
+	if (rc >= 0) {
+		struct shmat_retvals* patretval;
+		struct shmid_kernel* shp;
+		u_long size;
+		struct ipc_namespace* ns = current->nsproxy->ipc_ns;
+		struct kern_ipc_perm *ipcp;
+
+		// Need to get size in case we need to attach PIN on replay
+		ipcp = ipc_lock(&ns->ids[IPC_SHM_IDS], shmid);
+		if (IS_ERR(ipcp)) {
+			printk ("record_ipc: cannot lock ipc for shmat\n");
+			return -EINVAL;
+		}
+		shp = container_of(ipcp, struct shmid_kernel, shm_perm);
+		size = shp->shm_segsz;
+		ipc_unlock(&shp->shm_perm);
+
+		pretval = ARGSKMALLOC (sizeof(struct shmat_retvals), GFP_KERNEL);
+		patretval = (struct shmat_retvals *) pretval;
+		if (patretval == NULL) {
+			printk ("record_ipc(shmat) can't allocate buffer\n");
+			return -ENOMEM;
+		}
+		patretval->len = sizeof(struct shmat_retvals) - sizeof(u_long);
+		patretval->call = SHMAT;
+		patretval->size = size;
+		patretval->raddr = raddr;
+
+#ifdef THEIA_TRACK_SHMAT
+		int ret = 0;
+		ret = sys_mprotect(raddr, size, PROT_NONE);
+		int __user *address = NULL;
+		int np = size / 0x1000;
+		if (size % 0x1000) ++np;
+		if (!ret) {
+			int i;
+			for (i = 0; i < np; ++i) {
+				address = (int __user *)(raddr + i*0x1000);
+				*address = *address;
+			}
+
+			ret = sys_mprotect(rc, size, PROT_NONE);
+//			printk("protection of a shared page will be changed, ret %d, %d\n", ret, np);
+		}
+#endif
+
+		if (current->record_thrd->rp_group->rg_save_mmap_flag) {
+			MPRINT("Pid %d, shmat reserve memory %lx len %lx\n",
+					current->pid,
+					patretval->raddr, patretval->size);
+			reserve_memory(patretval->raddr, patretval->size);
+		}
+	}
+
+	new_syscall_exit(30, pretval);
+	return rc;
+}
+
+static asmlinkage long
+replay_shmat(int shmid, char __user *shmaddr, int shmflg)
+{
+	char* retparams;
+	long retval;
+	long rc = get_next_syscall (30, (char **) &retparams);
+	int repid, cmd;
+
+	if (rc == 0) {
+		struct shmat_retvals* atretparams = (struct shmat_retvals *) retparams;
+
+		if (current->replay_thrd->rp_record_thread->rp_group->rg_save_mmap_flag) {
+			MPRINT ("Pid %d, replay shmat reserve memory %lx len %lx\n",
+					current->pid,
+					atretparams->raddr, atretparams->size);
+			reserve_memory(atretparams->raddr, atretparams->size);
+		}
+
+		// do_shmat checks to see if there are any existing mmaps in the region to be shmat'ed. So we'll have to munmap our preallocations for this region
+		// before proceding.
+		if (is_pin_attached()) {
+			struct sysv_shm* tmp;
+			tmp = KMALLOC(sizeof(struct sysv_shm), GFP_KERNEL);
+			if (tmp == NULL) {
+				printk ("Pid %d: could not alllocate for sysv_shm\n", current->pid);
+				return -ENOMEM;
+			}
+			tmp->addr = atretparams->raddr;
+			tmp->len = atretparams->size;
+			list_add(&tmp->list, &current->replay_thrd->rp_sysv_shms);
+
+			MPRINT ("  Pin is attached to pid %d - munmap preallocation before shmat at addr %lx size %lu\n", current->pid, atretparams->raddr, atretparams->size);
+			retval = sys_munmap (atretparams->raddr, atretparams->size);
+			if (retval) printk ("[WARN]Pid %d shmat failed to munmap the preallocation at addr %lx size %lu\n", current->pid, rc, atretparams->size);
+		}
+
+		// redo the mapping with at the same address returned during recording
+		repid = find_sysv_mapping (current->replay_thrd, shmid);
+		retval = sys_shmat(shmid, shmaddr, shmflg);
+		if (retval != rc) {
+			printk ("replay_ipc(shmat) returns different value %ld than %ld\n", retval, rc);
+			return syscall_mismatch();
+		}
+		// Carter: sys_shmat has no raddr parameter, only sys_ipc does
+		/*if (retval == 0) {
+			u_long raddr;
+			get_user(raddr, (unsigned long __user *) third);
+			printk ("Pid %d replays SHMAT success address %lx\n", current->pid, raddr);
+			if (raddr != atretparams->raddr) {
+				printk ("replay_ipc(shmat) returns different address %lx than %lx\n", raddr, atretparams->raddr);
+			}
+		}*/
+		argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct shmat_retvals));
+	}
+	return rc;
+}
+
+asmlinkage long shim_shmat (int shmid, char __user *shmaddr, int shmflg)
+SHIM_CALL_MAIN(30, record_shmat(shmid, shmaddr, shmflg),
+replay_shmat(shmid, shmaddr, shmflg),
+theia_sys_shmat(shmid, shmaddr, shmflg))
+
+//Yang: for now, we only handle shmget, shmat
+void theia_ipc_ahg(long rc, uint call, int first, u_long second,
+	u_long third, void __user *ptr, long fifth, u_long clock) {
+
+	int ret;
+
+	mm_segment_t old_fs = get_fs();
+	set_fs(KERNEL_DS);
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+
+	if(!check_and_update_controlfile()) {
+		set_fs(old_fs);
 		return;
 	}
 //	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { 
-//    set_fs(old_fs);                                                              
+//  ret = sys_access(togglefile, 0/*F_OK*/);
+//  if(ret < 0) {
+//    set_fs(old_fs);
 //		return;
-//  } 
+//  }
 	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
+		set_fs(old_fs);
 		return;
-  } 
+	}
 
 
-  //check if the process is new; if so, send an entry of process                             
+  //check if the process is new; if so, send an entry of process
 /*
-  if(is_process_new(current->pid, current->comm)) {                              
+  if(is_process_new(current->pid, current->comm)) {
     char *entry = (char*)kmalloc(50, GFP_KERNEL);
 		sprintf(entry, "%d_%s", current->pid, current->comm);
 		if(glb_process_list == NULL) {
 			glb_process_list = ds_list_create (NULL, 0, 0);
 		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
+    ds_list_insert (glb_process_list, entry);
+
 		recursive_packahgv_process();
   }
 */
-	set_fs(old_fs);                                                              
+	set_fs(old_fs);
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -13231,50 +13577,46 @@ void theia_ipc_ahg(long rc, uint call, int first, u_long second,
 
 
 	// Yang: regardless of the return value, passes the failed syscall also
-	//	if(rc >= 0) 
-	{
-		switch(call) {
-			case SHMGET:
-				pahgv_shmget = (struct shmget_ahgv*)KMALLOC(sizeof(struct shmget_ahgv), GFP_KERNEL);
-				if(pahgv_shmget == NULL) {
-					printk ("theia_shmget_ahg: failed to KMALLOC.\n");
-					return;
-				}
-				pahgv_shmget->pid = current->pid;
-				pahgv_shmget->rc = rc;
-				pahgv_shmget->key = first;
-				pahgv_shmget->size = second;
-				pahgv_shmget->shmflg = third;
-				packahgv_shmget(pahgv_shmget);
-				KFREE(pahgv_shmget);	
-				break;
-			case SHMAT:
-				pahgv_shmat = (struct shmat_ahgv*)KMALLOC(sizeof(struct shmat_ahgv), GFP_KERNEL);
-				if(pahgv_shmat == NULL) {
-					printk ("theia_shmat_ahg: failed to KMALLOC.\n");
-					return;
-				}
-				pahgv_shmat->pid = current->pid;
-				pahgv_shmat->rc = rc;
-				pahgv_shmat->raddr = third;
-				pahgv_shmat->shmid = first;
-				pahgv_shmat->shmaddr = ptr;
-				pahgv_shmat->shmflg = second;
-				packahgv_shmat(pahgv_shmat);
-				KFREE(pahgv_shmat);	
-				break;
-			default:
-				break;
-		}	
+	switch(call) {
+		case SHMGET:
+			pahgv_shmget = (struct shmget_ahgv*)KMALLOC(sizeof(struct shmget_ahgv), GFP_KERNEL);
+			if(pahgv_shmget == NULL) {
+				printk ("theia_shmget_ahg: failed to KMALLOC.\n");
+				return;
+			}
+			pahgv_shmget->pid = current->pid;
+			pahgv_shmget->rc = rc;
+			pahgv_shmget->key = first;
+			pahgv_shmget->size = second;
+			pahgv_shmget->shmflg = third;
+			packahgv_shmget(pahgv_shmget);
+			KFREE(pahgv_shmget);
+			break;
+		case SHMAT:
+			pahgv_shmat = (struct shmat_ahgv*)KMALLOC(sizeof(struct shmat_ahgv), GFP_KERNEL);
+			if(pahgv_shmat == NULL) {
+				printk ("theia_shmat_ahg: failed to KMALLOC.\n");
+				return;
+			}
+			pahgv_shmat->pid = current->pid;
+			pahgv_shmat->rc = rc;
+			pahgv_shmat->raddr = third;
+			pahgv_shmat->shmid = first;
+			pahgv_shmat->shmaddr = ptr;
+			pahgv_shmat->shmflg = second;
+			packahgv_shmat(pahgv_shmat);
+			KFREE(pahgv_shmat);
+			break;
+		default:
+			break;
 	}
-
 }
 
-int theia_sys_ipc(uint call, int first, u_long second, 
+int theia_sys_ipc(uint call, int first, u_long second,
 	u_long third, void __user *ptr, long fifth) {
 	long rc;
 
-	rc = sys_ipc (call, first, second, third, ptr, fifth);
+	rc = sys_ipc(call, first, second, third, ptr, fifth);
 
 	if(call == SHMAT) {
 		unsigned long raddr = 0;
@@ -13301,7 +13643,7 @@ int theia_sys_ipc(uint call, int first, u_long second,
 #ifdef THEIA_TRACK_SHMAT
 		int ret = 0;
 		ret = sys_mprotect(raddr, size, PROT_NONE);
-		int __user *address = NULL;		
+		int __user *address = NULL;
 		int np = size / 0x1000;
 		if (size % 0x1000) ++np;
 		if (!ret) {
@@ -13310,24 +13652,19 @@ int theia_sys_ipc(uint call, int first, u_long second,
 				address = (int __user *)(raddr + i*0x1000);
 				*address = *address;
 			}
-			
+
 			ret = sys_mprotect(rc, size, PROT_NONE);
-//			printk("protection of a shared page will be changed, ret %d, %d\n", ret, np);			
+//			printk("protection of a shared page will be changed, ret %d, %d\n", ret, np);
 		}
 #endif
-	}
-	else if(call == SHMGET) {
+	} else if(call == SHMGET) {
 		theia_ipc_ahg(rc, call, first, second, third, ptr, fifth, 0);
 	}
 
-// Yang: regardless of the return value, passes the failed syscall also
-//	if (rc >= 0) 
-	{ 
-	}
 	return rc;
 }
 
-static asmlinkage long 
+static asmlinkage long
 record_ipc (uint call, int first, u_long second, u_long third, void __user *ptr, long fifth)
 {
 	mm_segment_t old_fs;
@@ -13336,7 +13673,7 @@ record_ipc (uint call, int first, u_long second, u_long third, void __user *ptr,
 	long rc;
 
 	new_syscall_enter (117);
-	rc = sys_ipc (call, first, second, third, ptr, fifth);
+	rc = sys_ipc(call, first, second, third, ptr, fifth);
 
 //Yang
 	if(call == SHMAT) {
@@ -13351,7 +13688,7 @@ record_ipc (uint call, int first, u_long second, u_long third, void __user *ptr,
 	new_syscall_done (117, rc);
 	if (rc >= 0) {
 		switch (call) {
-		case MSGCTL: 
+		case MSGCTL:
 			switch (second) {
 			case IPC_STAT:
 			case MSG_STAT:
@@ -13519,7 +13856,7 @@ record_ipc (uint call, int first, u_long second, u_long third, void __user *ptr,
 	return rc;
 }
 
-static asmlinkage long 
+static asmlinkage long
 replay_ipc (uint call, int first, u_long second, u_long third, void __user *ptr, long fifth)
 {
 	char* retparams;
@@ -13658,10 +13995,10 @@ replay_ipc (uint call, int first, u_long second, u_long third, void __user *ptr,
 
 
 
-asmlinkage long shim_ipc (uint call, int first, u_long second, u_long third, void __user *ptr, long fifth) 
+asmlinkage long shim_ipc (uint call, int first, u_long second, u_long third, void __user *ptr, long fifth)
 //SHIM_CALL (ipc, 117, call, first, second, third, ptr, fifth);
-SHIM_CALL_MAIN(117, record_ipc(call, first, second, third, ptr, fifth), 
-replay_ipc(call, first, second, third, ptr, fifth), 
+SHIM_CALL_MAIN(117, record_ipc(call, first, second, third, ptr, fifth),
+replay_ipc(call, first, second, third, ptr, fifth),
 theia_sys_ipc(call, first, second, third, ptr, fifth))
 
 SIMPLE_SHIM1(fsync, 74, unsigned int, fd);
