@@ -13600,6 +13600,85 @@ SHIM_CALL_MAIN(31, record_shmctl(shmid, cmd, buf),
 replay_shmctl(shmid, cmd, buf),
 sys_shmctl(shmid, cmd, buf))
 
+SIMPLE_SHIM3(semget, 64, key_t, key, int, nsems, int, semflg);
+SIMPLE_SHIM3(semop, 65, int, semid, struct sembuf __user *, sops, unsigned, nsops);
+
+static asmlinkage long
+record_semctl(int semid, int semnum, int cmd, union semun arg)
+{
+	mm_segment_t old_fs;
+	char* pretval = NULL;
+	u_long len = 0;
+	long rc;
+
+	new_syscall_enter(66);
+	rc = sys_semctl(semid, semnum, cmd, arg);
+
+	new_syscall_done(66, rc);
+	if (rc >= 0) {
+		switch (cmd) {
+			case IPC_STAT:
+			case MSG_STAT:
+				len = sizeof(struct semid_ds);
+				break;
+			case IPC_INFO:
+			case MSG_INFO:
+				len = sizeof(struct seminfo);
+				break;
+			case GETALL: {
+				union semun fourth;
+				struct semid_ds info;
+				fourth.buf = &info;
+				old_fs = get_fs();
+				set_fs(KERNEL_DS);
+				sys_semctl (semid, semnum, IPC_STAT, fourth);
+				set_fs(old_fs);
+				len = info.sem_nsems*sizeof(u_short);
+				break;
+			}
+		}
+		if (len > 0) {
+			pretval = ARGSKMALLOC(sizeof(u_long) + sizeof(int)+len, GFP_KERNEL);
+			if (pretval == NULL) {
+				printk("record_ipc (semctl): can't allocate return value\n");
+				return -ENOMEM;
+			}
+			*((u_long *) pretval) = sizeof(int) + len;
+			*((int *) pretval + sizeof(u_long)) = SEMCTL;
+			if (copy_from_user (pretval + sizeof(u_long) + sizeof(int), arg.buf, len)) {
+				ARGSKFREE (pretval, sizeof(u_long)+sizeof(int)+len);
+				return -EFAULT;
+			}
+		}
+	}
+	new_syscall_exit(66, pretval);
+	return rc;
+}
+
+static asmlinkage long
+replay_semctl(int semid, int semnum, int cmd, union semun arg)
+{
+	char* retparams;
+	long retval;
+	long rc = get_next_syscall(66, (char **) &retparams);
+	int repid;
+
+	if (retparams && arg.buf) {
+		u_long len = *((u_long *) retparams);
+		if (copy_to_user (arg.buf, retparams+sizeof(u_long)+sizeof(int), len-sizeof(int))) {
+			printk ("replay_ipc (call %d): pid %d cannot copy to user\n", SEMCTL, current->pid);
+			return syscall_mismatch();
+		}
+		argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + len);
+	}
+	return rc;
+}
+
+asmlinkage long shim_semctl(int semid, int semnum, int cmd, union semun arg)
+SHIM_CALL_MAIN(66, record_semctl(semid, semnum, cmd, arg),
+replay_semctl(semid, semnum, cmd, arg),
+sys_semctl(semid, semnum, cmd, arg))
+
 //Yang: for now, we only handle shmget, shmat
 void theia_ipc_ahg(long rc, uint call, int first, u_long second,
 	u_long third, void __user *ptr, long fifth, u_long clock) {
@@ -14078,8 +14157,6 @@ replay_ipc (uint call, int first, u_long second, u_long third, void __user *ptr,
 	}
 	return rc;
 }
-
-
 
 asmlinkage long shim_ipc (uint call, int first, u_long second, u_long third, void __user *ptr, long fifth)
 //SHIM_CALL (ipc, 117, call, first, second, third, ptr, fifth);
