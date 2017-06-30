@@ -13003,9 +13003,54 @@ int theia_sys_socketcall(int call, unsigned long __user * args) {
 	return rc;
 }
 
-asmlinkage long shim_socketcall (int call, unsigned long __user *args)
-// SHIM_CALL(socketcall, 102, call, args);
-SHIM_CALL_MAIN(102, record_socketcall(call, args), replay_socketcall(call, args), theia_sys_socketcall(call, args))
+//asmlinkage long shim_socketcall (int call, unsigned long __user *args)
+//// SHIM_CALL(socketcall, 102, call, args);
+//SHIM_CALL_MAIN(102, record_socketcall(call, args), replay_socketcall(call, args), theia_sys_socketcall(call, args))
+//
+
+
+asmlinkage int shim_socket (int family, int type, int protocol)
+SHIM_CALL_MAIN(41, record_socket(family, type, protocal), replay_socket(family, type, protocal), theia_sys_socket(family, type, protocal))
+
+asmlinkage int shim_connect (int fd, struct sockaddr __user *uservaddr, int addrlen)
+SHIM_CALL_MAIN(42, record_connect(fd, uservaddr, addrlen), replay_connect(fd, uservaddr, addrlen), theia_sys_connect(fd, uservaddr, addrlen))
+
+asmlinkage int shim_accept (int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen)
+SHIM_CALL_MAIN(43, record_accept(fd, upeer_sockaddr, upeer_addrlen), replay_accept(fd, upeer_sockaddr, upeer_addrlen), theia_sys_accept(fd, upeer_sockaddr, upeer_addrlen))
+
+asmlinkage int shim_sendto (int fd, void __user *buff, size_t len, unsigned int flags, struct sockaddr __user *addr, int addr_len)
+SHIM_CALL_MAIN(44, record_sendto(fd, buff, len, flags, addr, addr_len), replay_sendto(fd, buff, len, flags, addr, addr_len), theia_sys_sendto(fd, buff, len, flags, addr, addr_len))
+
+asmlinkage int shim_recvfrom (int fd, void __user *ubuf, size_t size, unsigned int flags, struct sockaddr __user *addr, int __user *addr_len)
+SHIM_CALL_MAIN(45, record_recvfrom(fd, ubuf, size, flags, addr, addr_len), replay_recvfrom(fd, ubuf, size, flags, addr, addr_len), theia_sys_recvfrom(fd, ubuf, size, flags, addr, addr_len))
+
+asmlinkage int shim_sendmsg (int fd, struct msghdr __user *msg, unsigned int flags)
+SHIM_CALL_MAIN(46, record_sendmsg(fd, msg, flags), replay_sendmsg(fd, msg, flags), theia_sys_sendmsg(fd, msg, flags))
+
+asmlinkage int shim_recvmsg (int fd, struct msghdr __user *msg, unsigned int flags)
+SHIM_CALL_MAIN(47, record_recvmsg(fd, msg, flags), replay_recvmsg(fd, msg, flags), theia_sys_recvmsg(fd, msg, flags))
+
+asmlinkage int shim_bind (int fd, struct sockaddr __user *umyaddr, int addrlen)
+SHIM_CALL_MAIN(49, record_bind(fd, umyaddr, addrlen), replay_bind(fd, umyaddr, addrlen), theia_sys_bind(fd, umyaddr, addrlen))
+
+asmlinkage int shim_listen (int fd, int backlog)
+SHIM_CALL_MAIN(50, record_listen(fd, backlog), replay_listen(fd, backlog), theia_sys_listen(fd, backlog))
+
+asmlinkage int shim_getsockname (int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len)
+SHIM_CALL_MAIN(51, record_getsockname(fd, usockaddr, usockaddr_len), replay_getsockname(fd, usockaddr, usockaddr_len), theia_sys_getsockname(fd, usockaddr, usockaddr_len))
+
+asmlinkage int shim_getpeername (int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len)
+SHIM_CALL_MAIN(52, record_getpeername(fd, usockaddr, usockaddr_len), replay_getpeername(fd, usockaddr, usockaddr_len), theia_sys_getpeername(fd, usockaddr, usockaddr_len))
+
+asmlinkage int shim_socketpair (int family, int type, int protocol, int __user *usockvec)
+SHIM_CALL_MAIN(53, record_socketpair(family, type, protocol, usockvec), replay_socketpair(family, type, protocol, usockvec), theia_sys_socketpair(family, type, protocol, usockvec))
+
+asmlinkage int shim_setsockopt (int fd, int level, int optname, char __user *optval, int optlen)
+SHIM_CALL_MAIN(54, record_setsockopt(fd, level, optname, optval, optlen), replay_setsockopt(fd, level, optname, optval, optlen), theia_sys_setsockopt(fd, level, optname, optval, optlen))
+
+asmlinkage int shim_getsockopt (int fd, int level, int optname, char __user *optval, int __user *optlen)
+SHIM_CALL_MAIN(55, record_getsockopt(fd, level, optname, optval, optlen), replay_getsockopt(fd, level, optname, optval, optlen), theia_sys_getsockopt(fd, level, optname, optval, optlen))
+
 
 static asmlinkage long 
 record_syslog (int type, char __user *buf, int len)
