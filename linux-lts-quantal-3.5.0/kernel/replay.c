@@ -13679,6 +13679,189 @@ SHIM_CALL_MAIN(66, record_semctl(semid, semnum, cmd, arg),
 replay_semctl(semid, semnum, cmd, arg),
 sys_semctl(semid, semnum, cmd, arg))
 
+SIMPLE_SHIM4(semtimedop, 220, int, semid, struct sembuf __user *, sops, unsigned, nsops, const struct timespec __user *, timeout);
+
+static asmlinkage long
+record_shmdt(char __user *shmaddr)
+{
+	mm_segment_t old_fs;
+	char* pretval = NULL;
+	u_long len = 0;
+	long rc;
+
+	new_syscall_enter(67);
+	rc = sys_shmdt(shmaddr);
+	new_syscall_done(67, rc);
+
+	return rc;
+}
+
+static asmlinkage long
+replay_shmdt(char __user *shmaddr)
+{
+	char* retparams;
+	long retval;
+	long rc = get_next_syscall(67, (char **) &retparams);
+	int repid, cmd;
+
+	retval = sys_shmdt(shmaddr);
+	if (retval != rc) {
+		printk ("replay_ipc(shmdt) returns different value %ld than %ld\n", retval, rc);
+		return syscall_mismatch();
+	}
+	/*
+	 * For Pin support, we need to preallocate this again if this memory area that was just munmap'ed
+	 */
+	if (!retval && is_pin_attached()) {
+		u_long size = 0;
+		struct sysv_shm* tmp;
+		struct sysv_shm* tmp_safe;
+		list_for_each_entry_safe(tmp, tmp_safe, &current->replay_thrd->rp_sysv_shms, list) {
+			if (tmp->addr == (u_long)shmaddr) {
+				size = tmp->len;
+				list_del(&tmp->list);
+				KFREE(tmp);
+			}
+		}
+		if (size == 0) {
+			MPRINT("Pid %d replay shmdt: could not find shm %lx ???\n", current->pid, (u_long) shmaddr);
+			syscall_mismatch();
+		}
+
+		MPRINT("Pid %d Remove shm at addr %lx, len %lx\n", current->pid, (u_long) shmaddr, size);
+		preallocate_after_munmap((u_long) shmaddr, size);
+	}
+
+	return rc;
+}
+
+asmlinkage long shim_shmdt(char __user *shmaddr)
+SHIM_CALL_MAIN(67, record_shmdt(shmaddr),
+replay_shmdt(shmaddr),
+sys_shmdt(shmaddr))
+
+SIMPLE_SHIM2(msgget, 68, key_t, key, int, msgflg);
+SIMPLE_SHIM4(msgsnd, 69, int, msqid, struct msgbuf __user *, msgp, size_t, msgsz, int, msgflg);
+
+static asmlinkage long
+record_msgrcv(int msqid, struct msgbuf __user *msgp, size_t msgsz, long msgtyp, int msgflg)
+{
+	mm_segment_t old_fs;
+	char* pretval = NULL;
+	u_long len = 0;
+	long rc;
+
+	new_syscall_enter(70);
+	rc = sys_msgrcv(msqid, msgp, msgsz, msgtyp, msgflg);
+	new_syscall_done(70, rc);
+
+	if (rc >= 0) {
+		pretval = ARGSKMALLOC(sizeof(u_long) + sizeof(long) + rc, GFP_KERNEL);
+		if (pretval == NULL) {
+			printk("record_ipc (msgrcv): can't allocate return value\n");
+			return -ENOMEM;
+		}
+		*((u_long *) pretval) = sizeof(int) + sizeof(long) + rc;
+		*((int *) pretval + sizeof(u_long)) = MSGRCV;
+		if (copy_from_user (pretval + sizeof(u_long) + sizeof(int), msgp, sizeof(long)+rc)) {
+			ARGSKFREE (pretval, sizeof(u_long)+sizeof(int)+sizeof(long)+rc);
+			return -EFAULT;
+		}
+	}
+	new_syscall_exit(70, pretval);
+	return rc;
+}
+
+static asmlinkage long
+replay_msgrcv(int msqid, struct msgbuf __user *msgp, size_t msgsz, long msgtyp, int msgflg)
+{
+	char* retparams;
+	long retval;
+	long rc = get_next_syscall(70, (char **) &retparams);
+	int repid, cmd;
+
+	if (retparams && msgp) {
+		u_long len = *((u_long *) retparams);
+		if (copy_to_user (msgp, retparams+sizeof(u_long)+sizeof(int), len-sizeof(int))) {
+			printk ("replay_ipc (call %d): pid %d cannot copy to user\n", MSGRCV, current->pid);
+			return syscall_mismatch();
+		}
+		argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + len);
+	}
+	return rc;
+}
+
+asmlinkage long shim_msgrcv(int msqid, struct msgbuf __user *msgp, size_t msgsz, long msgtyp, int msgflg)
+SHIM_CALL_MAIN(70, record_msgrcv(msqid, msgp, msgsz, msgtyp, msgflg),
+replay_msgrcv(msqid, msgp, msgsz, msgtyp, msgflg),
+sys_msgrcv(msqid, msgp, msgsz, msgtyp, msgflg))
+
+static asmlinkage long
+record_msgctl(int msqid, int cmd, struct msqid_ds __user *buf)
+{
+	mm_segment_t old_fs;
+	char* pretval = NULL;
+	u_long len = 0;
+	long rc;
+
+	new_syscall_enter(71);
+	rc = sys_msgctl(msqid, cmd, buf);
+
+	new_syscall_done(71, rc);
+	if (rc >= 0) {
+		switch (cmd) {
+			case IPC_STAT:
+			case MSG_STAT:
+				len = sizeof(struct msqid64_ds);
+				break;
+			case IPC_INFO:
+			case MSG_INFO:
+				len = sizeof(struct msginfo);
+				break;
+
+		}
+		if (len > 0) {
+			pretval = ARGSKMALLOC(sizeof(u_long) + sizeof(int) + len, GFP_KERNEL);
+			if (pretval == NULL) {
+				printk("record_ipc (msgctl): can't allocate return value\n");
+				return -ENOMEM;
+			}
+			*((u_long *) pretval) = sizeof(int) + len;
+			*((int *) pretval + sizeof(u_long)) = MSGCTL;
+			if (copy_from_user (pretval + sizeof(u_long) + sizeof(int), buf, len)) {
+				ARGSKFREE (pretval, sizeof(u_long)+sizeof(int)+len);
+				return -EFAULT;
+			}
+		}
+	}
+	new_syscall_exit(71, pretval);
+	return rc;
+}
+
+static asmlinkage long
+replay_msgctl(int msqid, int cmd, struct msqid_ds __user *buf)
+{
+	char* retparams;
+	long retval;
+	long rc = get_next_syscall(71, (char **) &retparams);
+	int repid;
+
+	if (retparams && buf) {
+		u_long len = *((u_long *) retparams);
+		if (copy_to_user (buf, retparams+sizeof(u_long)+sizeof(int), len-sizeof(int))) {
+			printk ("replay_ipc (call %d): pid %d cannot copy to user\n", MSGCTL, current->pid);
+			return syscall_mismatch();
+		}
+		argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + len);
+	}
+	return rc;
+}
+
+asmlinkage long shim_msgctl(int msqid, int cmd, struct msqid_ds __user *buf)
+SHIM_CALL_MAIN(71, record_msgctl(msqid, cmd, buf),
+replay_msgctl(msqid, cmd, buf),
+sys_msgctl(msqid, cmd, buf))
+
 //Yang: for now, we only handle shmget, shmat
 void theia_ipc_ahg(long rc, uint call, int first, u_long second,
 	u_long third, void __user *ptr, long fifth, u_long clock) {
