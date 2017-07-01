@@ -13022,7 +13022,7 @@ int theia_sys_connect(int fd, struct sockaddr __user *uservaddr, int addrlen) {
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
 	if (rc != -EAGAIN) { 
-		theia_socket_connect(fd, uservaddr, addrlen);
+		theia_connect_ahg(fd, uservaddr, addrlen);
 	}
 	return rc;
 }
@@ -13034,7 +13034,7 @@ int theia_sys_accept(int fd, struct sockaddr __user *upeer_sockaddr, int __user 
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
 	if (rc != -EAGAIN) { 
-		theia_socket_accept(fd, upeer_sockaddr, upeer_addrlen);
+		theia_accept_ahg(fd, upeer_sockaddr, upeer_addrlen);
 	}
 	return rc;
 }
@@ -13046,7 +13046,7 @@ int theia_sys_sendto(int fd, void __user *buff, size_t len, unsigned int flags, 
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
 	if (rc != -EAGAIN) { 
-		theia_socket_sendto(fd, buff, len, flags, addr, addr_len);
+		theia_sendto_ahg(fd, buff, len, flags, addr, addr_len);
 	}
 	return rc;
 }
@@ -13058,7 +13058,7 @@ int theia_sys_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flag
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
 	if (rc != -EAGAIN) { 
-		theia_socket_recvfrom(fd, ubuf, size, flags, addr, addr_len);
+		theia_recvfrom_ahg(fd, ubuf, size, flags, addr, addr_len);
 	}
 	return rc;
 }
@@ -13070,7 +13070,7 @@ int theia_sys_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags) {
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
 	if (rc != -EAGAIN) { 
-		theia_socket_sendmsg(fd, msg, flags);
+		theia_sendmsg_ahg(fd, msg, flags);
 	}
 	return rc;
 }
@@ -13082,7 +13082,7 @@ int theia_sys_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags) {
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
 	if (rc != -EAGAIN) { 
-		theia_socket_recvmsg(fd, msg, flags);
+		theia_recvmsg_ahg(fd, msg, flags);
 	}
 	return rc;
 }
@@ -13134,6 +13134,643 @@ int theia_sys_getsockopt(int fd, int level, int optname, char __user *optval, in
 	rc = sys_getsockopt(fd, level, optname, optval, optlen);
 
 	return rc;
+}
+
+static asmlinkage int 
+record_socket(int family, int type, int protocol)
+{
+	int rc = 0;
+#ifdef TIME_TRICK
+	int shift_clock = 1;
+#endif
+
+	new_syscall_enter (41);
+
+#ifdef TRACE_SOCKET_READ_WRITE
+	if (call == SYS_SENDTO || call == SYS_SEND) {
+		int err = 0;
+		struct socket *sock = sockfd_lookup(a[0], &err);
+
+		if (sock != NULL && (sock->ops == &unix_stream_ops || sock->ops == &unix_seqpacket_ops)) {
+			int ret;
+			struct sock *peer;
+			struct sock *sk = sock->sk;
+			peer = unix_peer_get(sk);
+			ret = track_usually_pt2pt_write_begin(peer, sock->file);
+			sock_put(peer);
+
+			fput(sock->file);
+		}
+	}
+#endif
+
+	rc = sys_socket (family, type, protocol);
+
+	new_syscall_done (41, rc);
+
+	DPRINT ("Pid %d records socket  returning %ld\n", current->pid, rc);
+
+  struct generic_socket_retvals* pretvals = NULL;
+  pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
+  if (pretvals == NULL) {
+    printk("record_socketcall(socket): can't allocate buffer\n");
+    return -ENOMEM;
+  }
+  pretvals->call = SYS_SOCKET;
+  new_syscall_exit (41, pretvals);
+  return rc;
+}
+
+static asmlinkage int 
+record_connect(int fd, struct sockaddr __user *uservaddr, int addrlen)
+{
+	int rc = 0;
+#ifdef TIME_TRICK
+	int shift_clock = 1;
+#endif
+
+	new_syscall_enter (42);
+
+	rc = sys_connect (fd, uservaddr, addrlen);
+
+// Yang also needed at recording
+	if (rc != -EAGAIN) /* ignore some less meaningful errors */
+		theia_connect_ahg(fd, uservaddr, addrlen, current->record_thrd->rp_precord_clock);
+
+  new_syscall_done (42, rc);
+
+  struct generic_socket_retvals* pretvals = NULL;
+  pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
+  if (pretvals == NULL) {
+    printk("record_socketcall(socket): can't allocate buffer\n");
+    return -ENOMEM;
+  }
+  pretvals->call = SYS_CONNECT;
+  new_syscall_exit (42, pretvals);
+  return rc;
+}
+
+static asmlinkage int 
+record_accept(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen)
+{
+	int rc = 0;
+#ifdef TIME_TRICK
+	int shift_clock = 1;
+#endif
+
+	new_syscall_enter (43);
+
+	rc = sys_accept (fd, upeer_sockaddr, upeer_addrlen);
+
+// Yang also needed at recording
+	if (rc != -EAGAIN) /* ignore some less meaningful errors */
+		theia_accept_ahg(rc, call, args, current->record_thrd->rp_precord_clock);
+
+	new_syscall_done (43, rc);
+
+  struct accept_retvals* pretvals = NULL;
+  long addrlen;
+  DPRINT ("Pid %d record_accept\n", current->pid);
+  if (rc >= 0) {
+    if (upeer_sockaddr) {
+      addrlen = *((int *) a[2]);
+    } else {
+      addrlen = 0;
+    }
+    pretvals = ARGSKMALLOC(sizeof(struct accept_retvals) + addrlen, GFP_KERNEL);
+    if (pretvals == NULL) {
+      printk("record_socketcall(accept): can't allocate buffer\n");
+      return -ENOMEM;
+    }
+    pretvals->addrlen = addrlen;
+    if (addrlen) {
+      if (copy_from_user(&pretvals->addr, (char *) upeer_sockaddr, addrlen)) {
+        printk("record_socketcall(accept): can't copy addr\n");
+        ARGSKFREE (pretvals, sizeof(struct accept_retvals) + addrlen);
+        return -EFAULT;
+      }
+    } 
+    pretvals->call = SYS_ACCEPT;
+  }
+  new_syscall_exit (43, pretvals);
+  return rc;
+}
+
+static asmlinkage int 
+record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct sockaddr __user *addr, int addr_len)
+{
+	int rc = 0;
+#ifdef TIME_TRICK
+	int shift_clock = 1;
+#endif
+
+	new_syscall_enter (44);
+
+#ifdef TRACE_SOCKET_READ_WRITE
+  int err = 0;
+  struct socket *sock = sockfd_lookup(fd, &err);
+
+  if (sock != NULL && (sock->ops == &unix_stream_ops || sock->ops == &unix_seqpacket_ops)) {
+    int ret;
+    struct sock *peer;
+    struct sock *sk = sock->sk;
+    peer = unix_peer_get(sk);
+    ret = track_usually_pt2pt_write_begin(peer, sock->file);
+    sock_put(peer);
+
+    fput(sock->file);
+  }
+#endif
+
+	rc = sys_sendto (fd, buff, len, flags, addr, addr_len);
+
+// Yang also needed at recording
+	if (rc != -EAGAIN) /* ignore some less meaningful errors */
+		theia_sendto_ahg(rc, call, args, current->record_thrd->rp_precord_clock);
+
+  new_syscall_done (44, rc);
+
+  DPRINT ("Pid %d records sendto returning %d\n", current->pid, rc);
+
+#ifdef TRACE_SOCKET_READ_WRITE
+  struct generic_socket_retvals* pretvals = NULL;
+  pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
+  if (pretvals == NULL) {
+    printk("record_socketcall(socket): can't allocate buffer\n");
+    return -ENOMEM;
+  }
+  pretvals->call = SYS_SENDTO;
+
+  /* Need to track write info for send and sendto */
+  if (rc >= 0) {
+    struct file *filp = fget(fd);
+    struct socket *sock = filp->private_data;
+
+
+    if (sock->ops == &unix_stream_ops || sock->ops == &unix_seqpacket_ops) {
+      int ret;
+      struct sock *peer;
+      struct sock *sk = sock->sk;
+      peer = unix_peer_get(sk);
+      ret = track_usually_pt2pt_write(peer, rc, filp, 1);
+      sock_put(peer);
+      if (ret) {
+        ARGSKFREE(pretvals, sizeof(struct generic_socket_retvals));
+        return ret;
+      }
+    } else {
+      int *is_cached = ARGSKMALLOC(sizeof(u_int), GFP_KERNEL);
+      if (is_cached == NULL) {
+        return -ENOMEM;
+      }
+      *is_cached = 0;
+    }
+
+    fput(filp);
+  }
+
+  new_syscall_exit (44, pretvals);
+  return rc;
+#else
+  struct generic_socket_retvals* pretvals = NULL;
+  pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
+  if (pretvals == NULL) {
+    printk("record_socketcall(socket): can't allocate buffer\n");
+    return -ENOMEM;
+  }
+  pretvals->call = SYS_SENDTO;
+  new_syscall_exit (44, pretvals);
+  return rc;
+#endif
+}
+
+static asmlinkage int 
+record_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, struct sockaddr __user *addr, int __user *addr_len)
+{
+	int rc = 0;
+#ifdef TIME_TRICK
+	int shift_clock = 1;
+#endif
+
+	new_syscall_enter (45);
+
+	rc = sys_recvfrom (fd, ubuf, size, flags, addr, addr_len);
+
+// Yang also needed at recording
+	if (rc != -EAGAIN) /* ignore some less meaningful errors */
+    theia_recvfrom_ahg(rc, call, args, current->record_thrd->rp_precord_clock);
+
+  new_syscall_done (45, rc);
+
+  DPRINT ("Pid %d records recvfrom returning %ld\n", current->pid, rc);
+
+  struct recvfrom_retvals* pretvals = NULL;
+  if (rc >= 0) {
+    pretvals = ARGSKMALLOC(sizeof(struct recvfrom_retvals)+rc-1, GFP_KERNEL);
+    if (pretvals == NULL) {
+      printk("record_socketcall(recvfrom): can't allocate buffer\n");
+      return -ENOMEM;
+    }
+
+    if (copy_from_user (&pretvals->buf, (char *) ubuf, rc)) {
+      printk("record_socketcall(recvfrom): can't copy data buffer of size %ld\n", rc);
+      ARGSKFREE (pretvals, sizeof(struct recvfrom_retvals)+rc-1);
+      return -EFAULT;
+    }
+    if (addr) {
+      pretvals->addrlen = *((int*)addr_len);
+      if (pretvals->addrlen > sizeof(struct sockaddr)) {
+        printk("record_socketcall(recvfrom): addr length %d too big\n", pretvals->addrlen);
+        ARGSKFREE (pretvals, sizeof(struct recvfrom_retvals)+rc-1);
+        return -EFAULT;
+      }
+      if (copy_from_user(&pretvals->addr, (char *) addr, pretvals->addrlen)) {
+        printk("record_socketcall(recvfrom): can't copy addr\n");
+        ARGSKFREE (pretvals, sizeof(struct recvfrom_retvals)+rc-1);
+        return -EFAULT;
+      }
+    }
+    pretvals->call = SYS_RECVFROM;
+
+#ifdef TRACE_SOCKET_READ_WRITE
+    do /* magic */ {
+      struct file *filp = fget(fd);
+      struct socket *socket = filp->private_data;
+
+      if (socket->ops == &unix_stream_ops || socket->ops == &unix_seqpacket_ops) {
+        int ret;
+        ret = track_usually_pt2pt_read(socket->sk, rc, filp);
+        if (ret) {
+          ARGSKFREE(pretvals, sizeof(struct recvfrom_retvals)+rc-1);
+          return ret;
+        }
+      } else {
+        u_int *is_cached = ARGSKMALLOC(sizeof(u_int), GFP_KERNEL);
+        if (is_cached == NULL) {
+          return -ENOMEM;
+        }
+        *is_cached = 0;
+      }
+
+      fput(filp);
+    } while (0);
+#endif
+  }
+
+  new_syscall_exit (45, pretvals);
+  return rc;
+}
+
+static asmlinkage int 
+record_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags)
+{
+	int rc = 0;
+#ifdef TIME_TRICK
+	int shift_clock = 1;
+#endif
+
+	new_syscall_enter (46);
+
+	rc = sys_sendmsg (fd, msg, flags);
+
+// Yang also needed at recording
+	if (rc != -EAGAIN) /* ignore some less meaningful errors */
+		theia_sendmsg_ahg(rc, call, args, current->record_thrd->rp_precord_clock);
+
+	new_syscall_done (46, rc);
+
+	DPRINT ("Pid %d records sendmsg returning %ld\n", current->pid, rc);
+
+  struct generic_socket_retvals* pretvals = NULL;
+  pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
+  if (pretvals == NULL) {
+    printk("record_socketcall(socket): can't allocate buffer\n");
+    return -ENOMEM;
+  }
+  pretvals->call = SYS_SENDMSG;
+  new_syscall_exit (46, pretvals);
+  return rc;
+}
+
+static asmlinkage int 
+record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
+{
+	int rc = 0;
+#ifdef TIME_TRICK
+	int shift_clock = 1;
+#endif
+
+	new_syscall_enter (47);
+
+	rc = sys_recvmsg (fd, msg, flags);
+
+// Yang also needed at recording
+	if (rc != -EAGAIN) /* ignore some less meaningful errors */
+		theia_recvmsg_ahg(rc, call, args, current->record_thrd->rp_precord_clock);
+
+#ifdef TIME_TRICK
+  shift_clock = 0;
+	cnew_syscall_done (47, rc, -1, shift_clock);
+#else
+	new_syscall_done (47, rc);
+#endif
+
+  DPRINT ("Pid %d records recvmsg returning %ld\n", current->pid, rc);
+
+  struct recvmsg_retvals* pretvals = NULL;
+  struct msghdr __user *pmsghdr = (struct msghdr __user *) msg;
+  char* pdata;
+  long iovlen, rem_size, to_copy, i;
+
+  if (rc >= 0) {
+
+    DPRINT ("record_socketcall(recvmsg): namelen: %d, controllen %ld iov_len %d rc %ld\n", pmsghdr->msg_namelen, (long) pmsghdr->msg_controllen, pmsghdr->msg_iovlen, rc);
+
+    pretvals = ARGSKMALLOC(sizeof(struct recvmsg_retvals) + pmsghdr->msg_namelen + pmsghdr->msg_controllen + rc, GFP_KERNEL);
+    if (pretvals == NULL) {
+      printk("record_socketcall(recvmsg): can't allocate buffer\n");
+      return -ENOMEM;
+    }
+    pretvals->call = SYS_RECVMSG;
+    get_user (pretvals->msg_namelen, &pmsghdr->msg_namelen);
+    get_user (pretvals->msg_controllen, &pmsghdr->msg_controllen);
+    get_user (pretvals->msg_flags, &pmsghdr->msg_flags);
+
+    pdata = ((char *) pretvals) + sizeof (struct recvmsg_retvals);
+
+    if (pretvals->msg_namelen) {
+      if (copy_from_user (pdata, pmsghdr->msg_name, pretvals->msg_namelen)) {
+        printk("record_socketcall(recvmsg): can't copy msg_name of size %d\n", pretvals->msg_namelen);
+        ARGSKFREE (pretvals, sizeof(struct recvmsg_retvals) + pmsghdr->msg_namelen + pmsghdr->msg_controllen + rc);
+        return -EFAULT;
+      }
+      pdata += pmsghdr->msg_namelen;
+    }
+    if (pmsghdr->msg_controllen) {
+      if (copy_from_user (pdata, pmsghdr->msg_control, pretvals->msg_controllen)) {
+        printk("record_socketcall(recvmsg): can't copy msg_control of size %ld\n", pretvals->msg_controllen);
+        ARGSKFREE (pretvals, sizeof(struct recvmsg_retvals) + pmsghdr->msg_namelen + pmsghdr->msg_controllen + rc);
+        return -EFAULT;
+      }
+      pdata += pmsghdr->msg_controllen;
+    }
+
+    get_user (iovlen, &pmsghdr->msg_iovlen);
+    rem_size = rc;
+    for (i = 0; i < iovlen; i++) {
+      get_user(to_copy, &pmsghdr->msg_iov[i].iov_len);
+      if (rem_size < to_copy) to_copy = rem_size;
+
+      if (copy_from_user (pdata, pmsghdr->msg_iov[i].iov_base, to_copy)) {
+        printk ("Pid %d record_readv copy_from_user of data failed\n", current->pid);
+        ARGSKFREE (pretvals, sizeof(struct recvmsg_retvals) + pmsghdr->msg_namelen + pmsghdr->msg_controllen + rc);
+        return -EFAULT;
+      }
+      pdata += to_copy;
+      rem_size -= to_copy;
+      if (rem_size == 0) break;
+    }
+    //			if (rem_size != 0) printk ("record_socketcall(recvmsg): %ld bytes of data remain???\n", rem_size);
+#ifdef X_COMPRESS
+    if (is_x_fd (&X_STRUCT_REC, fd)) {
+      if (x_detail) printk ("Pid %d recvmsg: fd:%ld, size:%ld\n",current->pid,  fd, rc);
+      change_log_special_second ();
+    }
+#endif
+  }
+
+  new_syscall_exit (47, pretvals);
+  return rc;
+}
+
+static asmlinkage int 
+record_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
+{
+	int rc = 0;
+#ifdef TIME_TRICK
+	int shift_clock = 1;
+#endif
+
+	new_syscall_enter (49);
+
+	rc = sys_bind (fd, umyaddr, addrlen);
+
+	new_syscall_done (49, rc);
+
+	DPRINT ("Pid %d records bind returning %ld\n", current->pid, rc);
+
+  struct generic_socket_retvals* pretvals = NULL;
+  pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
+  if (pretvals == NULL) {
+    printk("record_socketcall(socket): can't allocate buffer\n");
+    return -ENOMEM;
+  }
+  pretvals->call = SYS_BIND;
+  new_syscall_exit (49, pretvals);
+  return rc;
+}
+
+static asmlinkage int 
+record_listen(int fd, int backlog)
+{
+	int rc = 0;
+#ifdef TIME_TRICK
+	int shift_clock = 1;
+#endif
+
+	new_syscall_enter (50);
+
+	rc = sys_listen (fd, backlog);
+
+	new_syscall_done (50, rc);
+
+	DPRINT ("Pid %d records listen returning %ld\n", current->pid, rc);
+
+  struct generic_socket_retvals* pretvals = NULL;
+  pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
+  if (pretvals == NULL) {
+    printk("record_socketcall(socket): can't allocate buffer\n");
+    return -ENOMEM;
+  }
+  pretvals->call = SYS_LISTEN;
+  new_syscall_exit (50, pretvals);
+  return rc;
+}
+
+  static asmlinkage int 
+record_getsockname(int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len)
+{
+  int rc = 0;
+#ifdef TIME_TRICK
+  int shift_clock = 1;
+#endif
+
+  new_syscall_enter (51);
+
+  rc = sys_getsockname (fd, usockaddr, usockaddr_len);
+
+  new_syscall_done (51, rc);
+
+  DPRINT ("Pid %d records getsockname returning %ld\n", current->pid, rc);
+
+  struct accept_retvals* pretvals = NULL;
+  long addrlen;
+  DPRINT ("Pid %d record_getsockname\n", current->pid);
+  if (rc >= 0) {
+    if (usockaddr) {
+      addrlen = *((int *) usockaddr_len);
+    } else {
+      addrlen = 0;
+    }
+    pretvals = ARGSKMALLOC(sizeof(struct accept_retvals) + addrlen, GFP_KERNEL);
+    if (pretvals == NULL) {
+      printk("record_socketcall(accept): can't allocate buffer\n");
+      return -ENOMEM;
+    }
+    pretvals->addrlen = addrlen;
+    if (addrlen) {
+      if (copy_from_user(&pretvals->addr, (char *) usockaddr, addrlen)) {
+        printk("record_socketcall(accept): can't copy addr\n");
+        ARGSKFREE (pretvals, sizeof(struct accept_retvals) + addrlen);
+        return -EFAULT;
+      }
+    } 
+    pretvals->call = SYS_GETSOCKNAME;
+  }
+  new_syscall_exit (51, pretvals);
+  return rc;
+}
+
+static asmlinkage int 
+record_getpeername(int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len)
+{
+	int rc = 0;
+#ifdef TIME_TRICK
+	int shift_clock = 1;
+#endif
+
+	new_syscall_enter (52);
+
+	rc = sys_getpeername (fd, usockaddr, usockaddr_len);
+
+  new_syscall_done (52, rc);
+
+  DPRINT ("Pid %d records getpeername returning %ld\n", current->pid, rc);
+
+  struct accept_retvals* pretvals = NULL;
+  long addrlen;
+  DPRINT ("Pid %d record_getsockname\n", current->pid);
+  if (rc >= 0) {
+    if (usockaddr) {
+      addrlen = *((int *) usockaddr_len);
+    } else {
+      addrlen = 0;
+    }
+    pretvals = ARGSKMALLOC(sizeof(struct accept_retvals) + addrlen, GFP_KERNEL);
+    if (pretvals == NULL) {
+      printk("record_socketcall(accept): can't allocate buffer\n");
+      return -ENOMEM;
+    }
+    pretvals->addrlen = addrlen;
+    if (addrlen) {
+      if (copy_from_user(&pretvals->addr, (char *) usockaddr, addrlen)) {
+        printk("record_socketcall(accept): can't copy addr\n");
+        ARGSKFREE (pretvals, sizeof(struct accept_retvals) + addrlen);
+        return -EFAULT;
+      }
+    } 
+    pretvals->call = SYS_GETPEERNAME;
+  }
+  new_syscall_exit (52, pretvals);
+  return rc;
+}
+
+static asmlinkage int 
+record_socketpair(int family, int type, int protocol, int __user *usockvec)
+{
+	int rc = 0;
+#ifdef TIME_TRICK
+	int shift_clock = 1;
+#endif
+
+	new_syscall_enter (53);
+
+	rc = sys_socketpair (family, type, protocol, usockvec);
+
+  new_syscall_done (53, rc);
+
+  DPRINT ("Pid %d records socketpair returning %ld\n", current->pid, rc);
+
+  struct socketpair_retvals* pretvals = NULL;
+  int* sv;
+  if (rc >= 0) {
+    sv = (int *) usockvec;
+    pretvals = ARGSKMALLOC(sizeof(struct socketpair_retvals), GFP_KERNEL);
+    if (pretvals == NULL) {
+      printk("record_socketcall(socketpair): can't allocate buffer\n");
+      return -ENOMEM;
+    }
+    pretvals->call = SYS_SOCKETPAIR;
+    pretvals->sv0 = *(sv);
+    pretvals->sv1 = *(sv+1);
+    DPRINT ("pid %d records socketpair retuning %ld, sockets %d and %d\n", current->pid, rc, pretvals->sv0, pretvals->sv1);
+  }
+  new_syscall_exit (53, pretvals);
+  return rc;
+}
+
+static asmlinkage int 
+record_setsockopt(int fd, int level, int optname, char __user *optval, int optlen)
+{
+	int rc = 0;
+#ifdef TIME_TRICK
+	int shift_clock = 1;
+#endif
+
+	new_syscall_enter (54);
+
+	rc = sys_setsockopt (fd, level, optname, optval, optlen);
+
+  new_syscall_done (54, rc);
+
+  DPRINT ("Pid %d records setsockopt returning %ld\n", current->pid, rc);
+
+  struct generic_socket_retvals* pretvals = NULL;
+  pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
+  if (pretvals == NULL) {
+    printk("record_socketcall(socket): can't allocate buffer\n");
+    return -ENOMEM;
+  }
+  pretvals->call = SYS_SETSOCKOPT;
+  new_syscall_exit (54, pretvals);
+  return rc;
+}
+
+static asmlinkage int 
+record_getsockopt(int fd, int level, int optname, char __user *optval, int __user *optlen)
+{
+	int rc = 0;
+#ifdef TIME_TRICK
+	int shift_clock = 1;
+#endif
+
+	new_syscall_enter (55);
+
+	rc = sys_getsockopt (fd, level, optname, optval, optlen);
+
+  new_syscall_done (55, rc);
+
+  DPRINT ("Pid %d records getsockopt returning %ld\n", current->pid, rc);
+
+  struct generic_socket_retvals* pretvals = NULL;
+  pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
+  if (pretvals == NULL) {
+    printk("record_socketcall(socket): can't allocate buffer\n");
+    return -ENOMEM;
+  }
+  pretvals->call = SYS_GETSOCKOPT;
+  new_syscall_exit (55, pretvals);
+  return rc;
 }
 
 asmlinkage int shim_socket (int family, int type, int protocol)
