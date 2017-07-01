@@ -13008,6 +13008,133 @@ int theia_sys_socketcall(int call, unsigned long __user * args) {
 //SHIM_CALL_MAIN(102, record_socketcall(call, args), replay_socketcall(call, args), theia_sys_socketcall(call, args))
 //
 
+int theia_sys_socket(int family, int type, int protocol) {
+	int rc;
+	rc = sys_socket(family, type, protocal);
+
+	return rc;
+}
+
+int theia_sys_connect(int fd, struct sockaddr __user *uservaddr, int addrlen) {
+	int rc;
+	rc = sys_connect(fd, uservaddr, addrlen);
+
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+	if (rc != -EAGAIN) { 
+		theia_socket_connect(fd, uservaddr, addrlen);
+	}
+	return rc;
+}
+
+int theia_sys_accept(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen) {
+	int rc;
+	rc = sys_accept(fd, upeer_sockaddr, upeer_addrlen);
+
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+	if (rc != -EAGAIN) { 
+		theia_socket_accept(fd, upeer_sockaddr, upeer_addrlen);
+	}
+	return rc;
+}
+
+int theia_sys_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct sockaddr __user *addr, int addr_len) {
+	int rc;
+	rc = sys_sendto(fd, buff, len, flags, addr, addr_len);
+
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+	if (rc != -EAGAIN) { 
+		theia_socket_sendto(fd, buff, len, flags, addr, addr_len);
+	}
+	return rc;
+}
+
+int theia_sys_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, struct sockaddr __user *addr, int __user *addr_len) {
+	int rc;
+	rc = sys_recvfrom(fd, ubuf, size, flags, addr, addr_len);
+
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+	if (rc != -EAGAIN) { 
+		theia_socket_recvfrom(fd, ubuf, size, flags, addr, addr_len);
+	}
+	return rc;
+}
+
+int theia_sys_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags) {
+	int rc;
+	rc = sys_sendmsg(fd, msg, flags);
+
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+	if (rc != -EAGAIN) { 
+		theia_socket_sendmsg(fd, msg, flags);
+	}
+	return rc;
+}
+
+int theia_sys_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags) {
+	int rc;
+	rc = sys_recvmsg(fd, msg, flags);
+
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+	if (rc != -EAGAIN) { 
+		theia_socket_recvmsg(fd, msg, flags);
+	}
+	return rc;
+}
+
+int theia_sys_bind(int fd, struct sockaddr __user *umyaddr, int addrlen) {
+	int rc;
+	rc = sys_bind(fd, umyaddr, addrlen);
+
+	return rc;
+}
+
+int theia_sys_listen(int fd, int backlog) {
+	int rc;
+	rc = sys_listen(fd, backlog);
+
+	return rc;
+}
+
+int theia_sys_getsockname(int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len) {
+	int rc;
+	rc = sys_getsockname(fd, usockaddr, usockaddr_len);
+
+	return rc;
+}
+
+int theia_sys_getpeername(int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len) {
+	int rc;
+	rc = sys_getpeername(fd, usockaddr, usockaddr_len);
+
+	return rc;
+}
+
+int theia_sys_socketpair(int family, int type, int protocol, int __user *usockvec) {
+	int rc;
+	rc = sys_socketpair(family, type, protocol, usockvec);
+
+	return rc;
+}
+
+int theia_sys_setsockopt(int fd, int level, int optname, char __user *optval, int optlen) {
+	int rc;
+	rc = sys_setsockopt(fd, level, optname, optval, optlen);
+
+	return rc;
+}
+
+int theia_sys_getsockopt(int fd, int level, int optname, char __user *optval, int __user *optlen) {
+	int rc;
+	rc = sys_getsockopt(fd, level, optname, optval, optlen);
+
+	return rc;
+}
 
 asmlinkage int shim_socket (int family, int type, int protocol)
 SHIM_CALL_MAIN(41, record_socket(family, type, protocal), replay_socket(family, type, protocal), theia_sys_socket(family, type, protocal))
