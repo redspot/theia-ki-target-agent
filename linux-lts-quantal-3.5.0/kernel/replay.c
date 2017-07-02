@@ -13087,6 +13087,13 @@ int theia_sys_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags) {
 	return rc;
 }
 
+int theia_sys_shutdown(int fd, int how) {
+	int rc;
+	rc = sys_shutdown(fd, how);
+
+	return rc;
+}
+
 int theia_sys_bind(int fd, struct sockaddr __user *umyaddr, int addrlen) {
 	int rc;
 	rc = sys_bind(fd, umyaddr, addrlen);
@@ -13544,6 +13551,33 @@ record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
 }
 
 static asmlinkage int 
+record_shutdown(int fd, int how)
+{
+	int rc = 0;
+#ifdef TIME_TRICK
+	int shift_clock = 1;
+#endif
+
+	new_syscall_enter (48);
+
+	rc = sys_shutdown (fd, how);
+
+	new_syscall_done (48, rc);
+
+	DPRINT ("Pid %d records bind returning %ld\n", current->pid, rc);
+
+		struct generic_socket_retvals* pretvals = NULL;
+		pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
+		if (pretvals == NULL) {
+			printk("record_socketcall(socket): can't allocate buffer\n");
+			return -ENOMEM;
+		}
+		pretvals->call = SYS_SHUTDOWN;
+		new_syscall_exit (48, pretvals);
+		return rc;
+}
+
+static asmlinkage int 
 record_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
 {
 	int rc = 0;
@@ -13773,6 +13807,402 @@ record_getsockopt(int fd, int level, int optname, char __user *optval, int __use
   return rc;
 }
 
+
+static asmlinkage int 
+replay_socket (int family, int type, int protocol)
+{
+	char* retparams = NULL;
+	int rc; 
+
+	DPRINT ("Pid %d in replay_socket(%d)\n", current->pid);
+
+	rc = get_next_syscall (41, &retparams);
+
+	DPRINT ("Pid %d, replay_socket, rc is %ld, retparams is %p\n", current->pid, rc, retparams);
+
+#ifndef LOG_COMPRESS
+  if (retparams) argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct generic_socket_retvals));
+  return rc;
+#else
+  if (x_proxy) {
+    int retval = sys_socket (family, type, protocol);
+    if (retval <= 0) 
+      printk ("Pid %d create socket fails, expected:%ld, actual:%ld\n", current->pid, rc, retval);
+    else {
+      if (x_detail) printk ("Pid %d create socket, recorded fd is %ld, actual fd is %ld\n", current->pid, rc, retval);
+      X_STRUCT_REP.last_fd = retval;
+    }
+  }
+  if (retparams) argsconsume (current->replay_thrd->rp_record_thread, sizeof (struct generic_socket_retvals));
+  return rc;
+#endif
+	return syscall_mismatch();
+}
+
+static asmlinkage int 
+replay_connect (int fd, struct sockaddr __user *uservaddr, int addrlen)
+{
+  char* retparams = NULL;
+  int rc; 
+
+  DPRINT ("Pid %d in replay_connect\n", current->pid);
+
+  rc = get_next_syscall (42, &retparams);
+
+  DPRINT ("Pid %d, replay_connect, rc is %ld, retparams is %p\n", current->pid, rc, retparams);
+
+  if (retparams) argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct generic_socket_retvals));
+  return rc;
+}
+
+static asmlinkage int 
+replay_accept (int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen)
+{
+  char* retparams = NULL;
+  int rc; 
+
+  DPRINT ("Pid %d in replay_accept\n", current->pid);
+
+  rc = get_next_syscall (43, &retparams);
+
+  DPRINT ("Pid %d, replay_accept, rc is %ld, retparams is %p\n", current->pid, rc, retparams);
+
+  if (retparams) {
+    struct accept_retvals* retvals = (struct accept_retvals *) retparams;
+    if (upeer_sockaddr) {
+      *((int *) upeer_addrlen) = retvals->addrlen;
+      if (copy_to_user ((char *) upeer_sockaddr, &retvals->addr, retvals->addrlen)) {
+        printk ("Pid %d replay_socketcall_accept cannot copy to user\n", current->pid);
+      }
+    }
+    argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct accept_retvals)+retvals->addrlen);
+  }
+  return rc;
+}
+
+static asmlinkage int 
+replay_sendto (int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen)
+{
+  char* retparams = NULL;
+  int rc; 
+
+  DPRINT ("Pid %d in replay_sendto\n", current->pid);
+
+  rc = get_next_syscall (44, &retparams);
+
+  DPRINT ("Pid %d, replay_sendto, rc is %ld, retparams is %p\n", current->pid, rc, retparams);
+
+#ifdef TRACE_SOCKET_READ_WRITE
+  if (retparams) {
+    argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct generic_socket_retvals));
+    retparams += sizeof(struct generic_socket_retvals);
+    if (rc >= 0) {
+      /* We need to allocate something on write regardless, then use it to determine how much to free... ugh */
+      consume_socket_args_write(retparams);
+    }
+  }
+#else
+  if (retparams) argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct generic_socket_retvals));
+#endif
+  return rc;
+}
+
+static asmlinkage int 
+replay_recvfrom (int fd, void __user *ubuf, size_t size, unsigned int flags, struct sockaddr __user *addr, int __user *addr_len)
+{
+  char* retparams = NULL;
+  int rc; 
+
+  DPRINT ("Pid %d in replay_recvfrom\n", current->pid);
+
+  rc = get_next_syscall (45, &retparams);
+
+  DPRINT ("Pid %d, replay_recvfrom, rc is %ld, retparams is %p\n", current->pid, rc, retparams);
+
+  if (retparams) {
+    struct recvfrom_retvals* retvals = (struct recvfrom_retvals *) retparams;
+    if (copy_to_user ((char *) ubuf, &retvals->buf, rc)) {
+      printk ("Pid %d replay_recvfrom cannot copy to user\n", current->pid);
+    }
+    if (addr) {
+      *((int *) addr_len) = retvals->addrlen;
+      if (copy_to_user ((char *) addr, &retvals->addr, retvals->addrlen)) {
+        printk ("Pid %d cannot copy sockaddr from to user\n", current->pid);
+      }
+
+    }
+    argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct recvfrom_retvals)+rc-1);
+#ifdef TRACE_SOCKET_READ_WRITE
+    consume_socket_args_read(retparams + sizeof(struct recvfrom_retvals) + rc - 1);
+#endif
+  }
+  return rc;
+}
+
+static asmlinkage int 
+replay_sendmsg (int fd, struct msghdr __user *msg, unsigned int flags)
+{
+  char* retparams = NULL;
+  int rc; 
+
+  DPRINT ("Pid %d in replay_sendmsg\n", current->pid);
+
+  rc = get_next_syscall (46, &retparams);
+
+  DPRINT ("Pid %d, replay_sendmsg, rc is %ld, retparams is %p\n", current->pid, rc, retparams);
+
+  if (retparams) argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct generic_socket_retvals));
+  return rc;
+}
+
+static asmlinkage int 
+replay_recvmsg (int fd, struct msghdr __user *msg, unsigned int flags)
+{
+  char* retparams = NULL;
+  int rc; 
+
+  DPRINT ("Pid %d in replay_recvmsg\n", current->pid);
+
+  rc = get_next_syscall (47, &retparams);
+
+  DPRINT ("Pid %d, replay_recvmsg, rc is %ld, retparams is %p\n", current->pid, rc, retparams);
+
+		if (retparams) {
+			struct recvmsg_retvals* retvals = (struct recvmsg_retvals *) retparams;
+			char* pdata = ((char *) retvals) + sizeof (struct recvmsg_retvals);
+			struct msghdr *msg = (struct msghdr __user *) msg;
+			long rem_size, to_copy, i, iovlen;
+
+			put_user (retvals->msg_controllen, &msg->msg_controllen); // This is a in-out parameter
+			put_user (retvals->msg_flags, &msg->msg_flags);           // Out parameter
+
+			if (retvals->msg_namelen) {
+				long crc = copy_to_user ((char *) msg->msg_name, pdata, retvals->msg_namelen);
+				if (crc) {
+					printk ("Pid %d cannot copy msg_namelen %p to user %p len %d, rc=%ld\n", 
+						current->pid, msg->msg_name, pdata, retvals->msg_namelen, crc);
+					syscall_mismatch();
+				}
+				pdata += retvals->msg_namelen;
+			}
+
+			if (retvals->msg_controllen) {
+				long crc = copy_to_user ((char *) msg->msg_control, pdata, retvals->msg_controllen);
+				if (crc) {
+					printk ("Pid %d cannot copy msg_control %p to user %p len %ld, rc=%ld\n", 
+						current->pid, msg->msg_control, pdata, retvals->msg_controllen, crc);
+					syscall_mismatch();
+				}
+				pdata += retvals->msg_controllen;
+			}
+
+			get_user (iovlen, &msg->msg_iovlen);
+			rem_size = rc;
+			for (i = 0; i < iovlen; i++) {
+				get_user (to_copy, &msg->msg_iov[i].iov_len);
+				if (rem_size < to_copy) to_copy = rem_size;
+
+				if (copy_to_user (msg->msg_iov[i].iov_base, pdata, to_copy)) {
+					printk ("Pid %d replay_readv copy_to_user of data failed\n", current->pid);
+					syscall_mismatch();
+				}
+				pdata += to_copy;
+				rem_size -= to_copy;
+				if (rem_size == 0) break;
+			}
+
+			if (rem_size != 0) {
+				printk ("replay_socketcall(recvmsg): %ld bytes remaining\n", rem_size);
+				syscall_mismatch();
+			}
+#ifdef X_COMPRESS
+			if (is_x_fd (&X_STRUCT_REP, fd)) {
+				if (x_detail) printk ("Pid %d recvmsg for x\n", current->pid);
+				//x_decompress_reply (iovlen, &X_STRUCT_REP, xnode);
+				//validate_decode_buffer (((char*) retvals) + sizeof (struct recvmsg_retvals) + retvals->msg_namelen + retvals->msg_controllen, iovlen, &X_STRUCT_REP);
+				//consume_decode_buffer (iovlen, &X_STRUCT_REP);
+				if (x_proxy) { 
+					long retval = sys_recvmsg (fd, msg, flags);	
+					// it should be the same with RECV; fix if needed
+					BUG ();
+					if (retval != rc) 
+						printk ("Pid %d recvmsg from x fails, expected:%ld, actual:%ld\n", current->pid, rc, retval);
+				}
+
+			}
+#endif
+			argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct recvmsg_retvals)+retvals->msg_namelen+retvals->msg_controllen+rc);
+		}
+		return rc;
+}
+
+static asmlinkage int 
+replay_shutdown (int fd, int how)
+{
+  char* retparams = NULL;
+  int rc; 
+
+  DPRINT ("Pid %d in replay_bind\n", current->pid);
+
+  rc = get_next_syscall (48, &retparams);
+
+  DPRINT ("Pid %d, replay_shutdown, rc is %ld, retparams is %p\n", current->pid, rc, retparams);
+
+  if (retparams) argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct generic_socket_retvals));
+  return rc;
+}
+
+static asmlinkage int 
+replay_bind (int fd, struct sockaddr __user *umyaddr, int addrlen)
+{
+  char* retparams = NULL;
+  int rc; 
+
+  DPRINT ("Pid %d in replay_bind\n", current->pid);
+
+  rc = get_next_syscall (49, &retparams);
+
+  DPRINT ("Pid %d, replay_bind, rc is %ld, retparams is %p\n", current->pid, rc, retparams);
+
+  if (retparams) argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct generic_socket_retvals));
+  return rc;
+}
+
+static asmlinkage int 
+replay_listen (int fd, int backlog)
+{
+  char* retparams = NULL;
+  int rc; 
+
+  DPRINT ("Pid %d in replay_listen\n", current->pid);
+
+  rc = get_next_syscall (50, &retparams);
+
+  DPRINT ("Pid %d, replay_listen, rc is %ld, retparams is %p\n", current->pid, rc, retparams);
+
+  if (retparams) argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct generic_socket_retvals));
+  return rc;
+}
+
+static asmlinkage int 
+replay_getsockname (int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len)
+{
+  char* retparams = NULL;
+  int rc; 
+
+  DPRINT ("Pid %d in replay_getsockname\n", current->pid);
+
+  rc = get_next_syscall (51, &retparams);
+
+  DPRINT ("Pid %d, replay_getsockname, rc is %ld, retparams is %p\n", current->pid, rc, retparams);
+
+  if (retparams) {
+    struct accept_retvals* retvals = (struct accept_retvals *) retparams;
+    *((int *) usockaddr_len) = retvals->addrlen;
+    if (copy_to_user ((char *) usockaddr, &retvals->addr, retvals->addrlen)) {
+      printk ("Pid %d replay_socketcall_getpeername cannot copy to user\n", current->pid);
+    }
+    argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct accept_retvals)+retvals->addrlen);
+  }
+  return rc;
+}
+
+static asmlinkage int 
+replay_getpeername (int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len)
+{
+  char* retparams = NULL;
+  int rc; 
+
+  DPRINT ("Pid %d in replay_getpeername\n", current->pid);
+
+  rc = get_next_syscall (52, &retparams);
+
+  DPRINT ("Pid %d, replay_getpeername, rc is %ld, retparams is %p\n", current->pid, rc, retparams);
+
+  if (retparams) {
+    struct accept_retvals* retvals = (struct accept_retvals *) retparams;
+    *((int *) usockaddr_len) = retvals->addrlen;
+    if (copy_to_user ((char *) usockaddr, &retvals->addr, retvals->addrlen)) {
+      printk ("Pid %d replay_socketcall_getpeername cannot copy to user\n", current->pid);
+    }
+    argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct accept_retvals)+retvals->addrlen);
+  }
+  return rc;
+}
+
+static asmlinkage int 
+replay_socketpair (int family, int type, int protocol, int __user *usockvec)
+{
+  char* retparams = NULL;
+  int rc; 
+
+  DPRINT ("Pid %d in replay_socketpair\n", current->pid);
+
+  rc = get_next_syscall (53, &retparams);
+
+  DPRINT ("Pid %d, replay_socketpair, rc is %ld, retparams is %p\n", current->pid, rc, retparams);
+
+  if (retparams) {
+    int* sv;
+    struct socketpair_retvals* retvals = (struct socketpair_retvals *) retparams;
+
+    sv = (int *) KMALLOC(2 * sizeof(int), GFP_KERNEL);
+    *sv = retvals->sv0;
+    *(sv+1) = retvals->sv1;
+
+    if (copy_to_user ((int *) usockvec, sv, 2 * sizeof(int))) {
+      printk ("Pid %d replay_socketcall_socketpair cannot copy to user\n", current->pid);
+    }	       
+
+    KFREE(sv);
+    argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct socketpair_retvals));
+  }
+  return rc;
+}
+
+static asmlinkage int 
+replay_setsockopt (int fd, int level, int optname, char __user *optval, int __user *optlen)
+{
+  char* retparams = NULL;
+  int rc; 
+
+  DPRINT ("Pid %d in replay_setsockopt\n", current->pid);
+
+  rc = get_next_syscall (54, &retparams);
+
+  DPRINT ("Pid %d, replay_setsockopt, rc is %ld, retparams is %p\n", current->pid, rc, retparams);
+
+  if (retparams) argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct generic_socket_retvals));
+  return rc;
+}
+
+static asmlinkage int 
+replay_getsockopt (int fd, int level, int optname, char __user *optval, int __user *optlen)
+{
+  char* retparams = NULL;
+  int rc; 
+
+  DPRINT ("Pid %d in replay_getsockopt\n", current->pid);
+
+  rc = get_next_syscall (55, &retparams);
+
+  DPRINT ("Pid %d, replay_getsockopt, rc is %ld, retparams is %p\n", current->pid, rc, retparams);
+
+  if (retparams) {
+    struct getsockopt_retvals* retvals = (struct getsockopt_retvals *) retparams;
+
+    if (copy_to_user ((char*) optval, &retvals->optval, retvals->optlen)) {
+      printk ("Pid %d cannot copy optval to user\n", current->pid);
+    }
+
+    if (copy_to_user ((char *) optlen, &retvals->optlen, sizeof(int))) {
+      printk ("Pid %d cannot copy optlen to user\n", current->pid);
+    }
+    argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct getsockopt_retvals)+retvals->optlen);
+  }
+  return rc;
+}
+
 asmlinkage int shim_socket (int family, int type, int protocol)
 SHIM_CALL_MAIN(41, record_socket(family, type, protocal), replay_socket(family, type, protocal), theia_sys_socket(family, type, protocal))
 
@@ -13793,6 +14223,9 @@ SHIM_CALL_MAIN(46, record_sendmsg(fd, msg, flags), replay_sendmsg(fd, msg, flags
 
 asmlinkage int shim_recvmsg (int fd, struct msghdr __user *msg, unsigned int flags)
 SHIM_CALL_MAIN(47, record_recvmsg(fd, msg, flags), replay_recvmsg(fd, msg, flags), theia_sys_recvmsg(fd, msg, flags))
+
+asmlinkage int shim_shutdown(int fd, int how)
+SHIM_CALL_MAIN(48, record_shutdown(fd, how), replay_shutdown(fd, how), theia_sys_shutdown(fd, how))
 
 asmlinkage int shim_bind (int fd, struct sockaddr __user *umyaddr, int addrlen)
 SHIM_CALL_MAIN(49, record_bind(fd, umyaddr, addrlen), replay_bind(fd, umyaddr, addrlen), theia_sys_bind(fd, umyaddr, addrlen))

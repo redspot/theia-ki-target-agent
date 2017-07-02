@@ -45,6 +45,7 @@ shim_sendto
 shim_recvfrom
 shim_sendmsg
 shim_recvmsg
+shim_shutdown
 shim_bind
 shim_listen
 shim_getsockname
@@ -54,8 +55,6 @@ shim_setsockopt
 shim_getsockopt
 
 shim_arch_prctl
-
-shim_shutdown
 
 shim_newfstatat
 
