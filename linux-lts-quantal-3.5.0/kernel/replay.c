@@ -12991,6 +12991,433 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 
 }
 
+void theia_connect_ahg(int rc, int fd, struct sockaddr __user *uservaddr, int addrlen) {
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+
+	if(!check_and_update_controlfile()) {
+		set_fs(old_fs);                                                              
+		return;
+	}
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { 
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
+
+  //check if the process is new; if so, send an entry of process                             
+/*
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		recursive_packahgv_process();
+  }
+*/
+	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
+		recursive_packahgv_process();
+
+	struct connect_ahgv* pahgv_connect = NULL;
+
+  pahgv_connect = (struct connect_ahgv*)KMALLOC(sizeof(struct connect_ahgv), GFP_KERNEL);
+  if(pahgv_connect == NULL) {
+    printk ("theia_connect_ahg: failed to KMALLOC.\n");
+    return;
+  }
+  pahgv_connect->pid = current->pid;
+  pahgv_connect->rc = rc;
+  pahgv_connect->sock_fd = fd;
+  get_ip_port_sockaddr((unsigned long*)uservaddr, pahgv_connect->ip, &(pahgv_connect->port), pahgv_connect->sun_path, &(pahgv_connect->sa_family));
+  packahgv_connect(pahgv_connect);
+  KFREE(pahgv_connect);	
+
+  return;
+}
+
+void theia_accept_ahg(int rc, int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen) {
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+
+	if(!check_and_update_controlfile()) {
+		set_fs(old_fs);                                                              
+		return;
+	}
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { 
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
+
+  //check if the process is new; if so, send an entry of process                             
+/*
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		recursive_packahgv_process();
+  }
+*/
+	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
+		recursive_packahgv_process();
+
+	struct accept_ahgv* pahgv_accept = NULL;
+
+  pahgv_accept = (struct accept_ahgv*)KMALLOC(sizeof(struct accept_ahgv), GFP_KERNEL);
+  if(pahgv_accept == NULL) {
+    printk ("theia_accept_ahg: failed to KMALLOC.\n");
+    return;
+  }
+  pahgv_accept->pid = current->pid;
+  pahgv_accept->rc = rc;
+  pahgv_accept->sock_fd = fd;
+  get_ip_port_sockaddr((unsigned long*)upeer_sockaddr, pahgv_accept->ip, &(pahgv_accept->port), pahgv_accept->sun_path, &(pahgv_accept->sa_family));
+  packahgv_accept(pahgv_accept);
+  KFREE(pahgv_accept);	
+
+  return;
+}
+
+void theia_sendto_ahg(int rc, int fd, void __user *buff, size_t len, unsigned int flags, struct sockaddr __user *addr, int addr_len) {
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+
+	if(!check_and_update_controlfile()) {
+		set_fs(old_fs);                                                              
+		return;
+	}
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { 
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
+
+  //check if the process is new; if so, send an entry of process                             
+/*
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		recursive_packahgv_process();
+  }
+*/
+	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
+		recursive_packahgv_process();
+
+	struct sendto_ahgv* pahgv_sendto = NULL;
+
+  pahgv_sendto = (struct sendto_ahgv*)KMALLOC(sizeof(struct sendto_ahgv), GFP_KERNEL);
+  if(pahgv_sendto == NULL) {
+    printk ("theia_sendto_ahg: failed to KMALLOC.\n");
+    return;
+  }
+  pahgv_sendto->pid = current->pid;
+  pahgv_sendto->sock_fd = fd;
+  pahgv_sendto->rc = rc;
+  get_ip_port_sockaddr((unsigned long*)addr, pahgv_sendto->ip, &(pahgv_sendto->port), pahgv_sendto->sun_path, &(pahgv_sendto->sa_family));
+  packahgv_sendto(pahgv_sendto);
+  KFREE(pahgv_sendto);	
+
+  return;
+}
+
+void theia_recvfrom_ahg(int rc, int fd, void __user *ubuf, size_t size, unsigned int flags, struct sockaddr __user *addr, int __user *addr_len) {
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+
+	if(!check_and_update_controlfile()) {
+		set_fs(old_fs);                                                              
+		return;
+	}
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { 
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
+
+  //check if the process is new; if so, send an entry of process                             
+/*
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		recursive_packahgv_process();
+  }
+*/
+	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
+		recursive_packahgv_process();
+
+  struct recvfrom_ahgv* pahgv_recvfrom = NULL;
+
+  pahgv_recvfrom = (struct recvfrom_ahgv*)KMALLOC(sizeof(struct recvfrom_ahgv), GFP_KERNEL);
+  if(pahgv_recvfrom == NULL) {
+    printk ("theia_recvfrom_ahg: failed to KMALLOC.\n");
+    return;
+  }
+  pahgv_recvfrom->pid = current->pid;
+  pahgv_recvfrom->sock_fd = fd;
+  get_ip_port_sockaddr((unsigned long*)addr, pahgv_recvfrom->ip, &(pahgv_recvfrom->port), pahgv_recvfrom->sun_path, &(pahgv_recvfrom->sa_family));
+  pahgv_recvfrom->rc = rc;
+  //				pahgv_recvfrom->clock = clock;
+  packahgv_recvfrom(pahgv_recvfrom);
+  KFREE(pahgv_recvfrom);	
+
+  return;
+}
+
+void theia_sendmsg_ahg(int rc, int fd, struct msghdr __user *msg, unsigned int flags) {
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+
+	if(!check_and_update_controlfile()) {
+		set_fs(old_fs);                                                              
+		return;
+	}
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { 
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
+
+  //check if the process is new; if so, send an entry of process                             
+/*
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		recursive_packahgv_process();
+  }
+*/
+	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
+		recursive_packahgv_process();
+
+	struct sendmsg_ahgv* pahgv_sendmsg = NULL;
+
+  pahgv_sendmsg = (struct sendmsg_ahgv*)KMALLOC(sizeof(struct sendmsg_ahgv), GFP_KERNEL);
+  if(pahgv_sendmsg == NULL) {
+    printk ("theia_sendmsg_ahg: failed to KMALLOC.\n");
+    return;
+  }
+  pahgv_sendmsg->pid = current->pid;
+  pahgv_sendmsg->sock_fd = fd;
+  pahgv_sendmsg->rc = rc;
+  //				pahgv_sendmsg->clock = clock;
+  packahgv_sendmsg(pahgv_sendmsg);
+  KFREE(pahgv_sendmsg);	
+
+  return;
+}
+
+void theia_recvmsg_ahg(int rc, int fd, struct msghdr __user *msg, unsigned int flags) {
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+
+	if(!check_and_update_controlfile()) {
+		set_fs(old_fs);                                                              
+		return;
+	}
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { 
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
+    set_fs(old_fs);                                                              
+		return;
+  } 
+
+
+  //check if the process is new; if so, send an entry of process                             
+/*
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		recursive_packahgv_process();
+  }
+*/
+	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
+		recursive_packahgv_process();
+
+	struct recvmsg_ahgv* pahgv_recvmsg = NULL;
+
+  pahgv_recvmsg = (struct recvmsg_ahgv*)KMALLOC(sizeof(struct recvmsg_ahgv), GFP_KERNEL);
+  if(pahgv_recvmsg == NULL) {
+    printk ("theia_recvmsg_ahg: failed to KMALLOC.\n");
+    return;
+  }
+  pahgv_recvmsg->pid = current->pid;
+  pahgv_recvmsg->sock_fd = fd;
+  pahgv_recvmsg->rc = rc;
+  //				pahgv_recvmsg->clock = clock;
+  packahgv_recvmsg(pahgv_recvmsg);
+  KFREE(pahgv_recvmsg);	
+
+  return;
+}
+
 int theia_sys_socketcall(int call, unsigned long __user * args) {
 	long rc;
 	rc = sys_socketcall(call, args);
@@ -13022,7 +13449,7 @@ int theia_sys_connect(int fd, struct sockaddr __user *uservaddr, int addrlen) {
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
 	if (rc != -EAGAIN) { 
-		theia_connect_ahg(fd, uservaddr, addrlen);
+		theia_connect_ahg(rc, fd, uservaddr, addrlen);
 	}
 	return rc;
 }
@@ -13034,7 +13461,7 @@ int theia_sys_accept(int fd, struct sockaddr __user *upeer_sockaddr, int __user 
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
 	if (rc != -EAGAIN) { 
-		theia_accept_ahg(fd, upeer_sockaddr, upeer_addrlen);
+		theia_accept_ahg(rc, fd, upeer_sockaddr, upeer_addrlen);
 	}
 	return rc;
 }
@@ -13046,7 +13473,7 @@ int theia_sys_sendto(int fd, void __user *buff, size_t len, unsigned int flags, 
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
 	if (rc != -EAGAIN) { 
-		theia_sendto_ahg(fd, buff, len, flags, addr, addr_len);
+		theia_sendto_ahg(rc, fd, buff, len, flags, addr, addr_len);
 	}
 	return rc;
 }
@@ -13058,7 +13485,7 @@ int theia_sys_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flag
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
 	if (rc != -EAGAIN) { 
-		theia_recvfrom_ahg(fd, ubuf, size, flags, addr, addr_len);
+    theia_recvfrom_ahg(rc, fd, ubuf, size, flags, addr, addr_len);
 	}
 	return rc;
 }
@@ -13070,7 +13497,7 @@ int theia_sys_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags) {
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
 	if (rc != -EAGAIN) { 
-		theia_sendmsg_ahg(fd, msg, flags);
+		theia_sendmsg_ahg(rc, fd, msg, flags);
 	}
 	return rc;
 }
@@ -13082,7 +13509,7 @@ int theia_sys_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags) {
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
 	if (rc != -EAGAIN) { 
-		theia_recvmsg_ahg(fd, msg, flags);
+		theia_recvmsg_ahg(rc, fd, msg, flags);
 	}
 	return rc;
 }
@@ -13202,7 +13629,7 @@ record_connect(int fd, struct sockaddr __user *uservaddr, int addrlen)
 
 // Yang also needed at recording
 	if (rc != -EAGAIN) /* ignore some less meaningful errors */
-		theia_connect_ahg(fd, uservaddr, addrlen, current->record_thrd->rp_precord_clock);
+		theia_connect_ahg(rc, fd, uservaddr, addrlen);
 
   new_syscall_done (42, rc);
 
@@ -13231,7 +13658,7 @@ record_accept(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_
 
 // Yang also needed at recording
 	if (rc != -EAGAIN) /* ignore some less meaningful errors */
-		theia_accept_ahg(rc, call, args, current->record_thrd->rp_precord_clock);
+		theia_accept_ahg(rc, fd, upeer_sockaddr, upeer_addrlen);
 
 	new_syscall_done (43, rc);
 
@@ -13293,7 +13720,7 @@ record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct 
 
 // Yang also needed at recording
 	if (rc != -EAGAIN) /* ignore some less meaningful errors */
-		theia_sendto_ahg(rc, call, args, current->record_thrd->rp_precord_clock);
+		theia_sendto_ahg(rc, fd, buff, len, flags, addr, addr_len);
 
   new_syscall_done (44, rc);
 
@@ -13365,7 +13792,7 @@ record_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, stru
 
 // Yang also needed at recording
 	if (rc != -EAGAIN) /* ignore some less meaningful errors */
-    theia_recvfrom_ahg(rc, call, args, current->record_thrd->rp_precord_clock);
+    theia_recvfrom_ahg(rc, fd, ubuf, size, flags, addr, addr_len);
 
   new_syscall_done (45, rc);
 
@@ -13442,7 +13869,7 @@ record_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags)
 
 // Yang also needed at recording
 	if (rc != -EAGAIN) /* ignore some less meaningful errors */
-		theia_sendmsg_ahg(rc, call, args, current->record_thrd->rp_precord_clock);
+		theia_sendmsg_ahg(rc, fd, msg, flags);
 
 	new_syscall_done (46, rc);
 
@@ -13473,7 +13900,7 @@ record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
 
 // Yang also needed at recording
 	if (rc != -EAGAIN) /* ignore some less meaningful errors */
-		theia_recvmsg_ahg(rc, call, args, current->record_thrd->rp_precord_clock);
+		theia_recvmsg_ahg(rc, fd, msg, flags);
 
 #ifdef TIME_TRICK
   shift_clock = 0;
