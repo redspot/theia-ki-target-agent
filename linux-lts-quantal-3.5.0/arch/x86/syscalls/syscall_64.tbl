@@ -47,21 +47,21 @@
 38	common	setitimer		shim_setitimer
 39	common	getpid			shim_getpid
 40	common	sendfile		shim_sendfile64
-41	common	socket			sys_socket
-42	common	connect			sys_connect
-43	common	accept			sys_accept
-44	common	sendto			sys_sendto
-45	64	recvfrom		sys_recvfrom
-46	64	sendmsg			sys_sendmsg
-47	64	recvmsg			sys_recvmsg
-48	common	shutdown		sys_shutdown
-49	common	bind			sys_bind
-50	common	listen			sys_listen
-51	common	getsockname		sys_getsockname
-52	common	getpeername		sys_getpeername
-53	common	socketpair		sys_socketpair
-54	64	setsockopt		sys_setsockopt
-55	64	getsockopt		sys_getsockopt
+41	common	socket			shim_socket
+42	common	connect			shim_connect
+43	common	accept			shim_accept
+44	common	sendto			shim_sendto
+45	64	recvfrom		shim_recvfrom
+46	64	sendmsg			shim_sendmsg
+47	64	recvmsg			shim_recvmsg
+48	common	shutdown		shim_shutdown
+49	common	bind			shim_bind
+50	common	listen			shim_listen
+51	common	getsockname		shim_getsockname
+52	common	getpeername		shim_getpeername
+53	common	socketpair		shim_socketpair
+54	64	setsockopt		shim_setsockopt
+55	64	getsockopt		shim_getsockopt
 56	common	clone			stub_clone  stub_clone
 57	common	fork			stub_fork   stub_fork
 58	common	vfork			stub_vfork  stub_vfork

@@ -12557,7 +12557,7 @@ struct connect_ahgv {
 	int							sock_fd;
 	char						ip[16];
 	u_long					port;
-	int							rc;
+	long							rc;
 	sa_family_t			sa_family;
 	char						sun_path[UNIX_PATH_MAX];
 };
@@ -12570,7 +12570,7 @@ void packahgv_connect(struct connect_ahgv *sys_args) {
 		get_curr_time(&sec, &nsec);
 		int size = 0;
 		if(sys_args->sa_family == AF_LOCAL){
-			size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
+			size = sprintf(buf, "startahg|%d|%d|%d|%ld|%ld|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
 					102, SYS_CONNECT, sys_args->pid, current->start_time.tv_sec, 
 					sys_args->rc, sys_args->sock_fd, sys_args->sun_path, sys_args->port, current->tgid, sec, nsec);
 		}
@@ -12591,7 +12591,7 @@ struct accept_ahgv {
 	int							sock_fd;
 	char						ip[16];
 	u_long					port;
-  int             rc;                                                           
+  long             rc;                                                           
 	sa_family_t			sa_family;
 	char						sun_path[UNIX_PATH_MAX];
 };
@@ -12609,12 +12609,12 @@ void packahgv_accept(struct accept_ahgv *sys_args) {
 			strcpy(ip, sys_args->ip);
 		int size = 0;
 		if(sys_args->sa_family == AF_LOCAL){
-		 size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
+		 size = sprintf(buf, "startahg|%d|%d|%d|%ld|%ld|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
 				102, SYS_ACCEPT, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->rc, sys_args->sock_fd, sys_args->sun_path, sys_args->port, current->tgid, sec, nsec);
 		}
 		else {
-		 size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
+		 size = sprintf(buf, "startahg|%d|%d|%d|%ld|%ld|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
 				102, SYS_ACCEPT, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->rc, sys_args->sock_fd, ip, sys_args->port, current->tgid, sec, nsec);
 		}
@@ -12991,7 +12991,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 
 }
 
-void theia_connect_ahg(int rc, int fd, struct sockaddr __user *uservaddr, int addrlen) {
+void theia_connect_ahg(long rc, int fd, struct sockaddr __user *uservaddr, int addrlen) {
 
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
@@ -13062,7 +13062,7 @@ void theia_connect_ahg(int rc, int fd, struct sockaddr __user *uservaddr, int ad
   return;
 }
 
-void theia_accept_ahg(int rc, int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen) {
+void theia_accept_ahg(long rc, int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen) {
 
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
@@ -13133,7 +13133,7 @@ void theia_accept_ahg(int rc, int fd, struct sockaddr __user *upeer_sockaddr, in
   return;
 }
 
-void theia_sendto_ahg(int rc, int fd, void __user *buff, size_t len, unsigned int flags, struct sockaddr __user *addr, int addr_len) {
+void theia_sendto_ahg(long rc, int fd, void __user *buff, size_t len, unsigned int flags, struct sockaddr __user *addr, int addr_len) {
 
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
@@ -13204,7 +13204,7 @@ void theia_sendto_ahg(int rc, int fd, void __user *buff, size_t len, unsigned in
   return;
 }
 
-void theia_recvfrom_ahg(int rc, int fd, void __user *ubuf, size_t size, unsigned int flags, struct sockaddr __user *addr, int __user *addr_len) {
+void theia_recvfrom_ahg(long rc, int fd, void __user *ubuf, size_t size, unsigned int flags, struct sockaddr __user *addr, int __user *addr_len) {
 
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
@@ -13276,7 +13276,7 @@ void theia_recvfrom_ahg(int rc, int fd, void __user *ubuf, size_t size, unsigned
   return;
 }
 
-void theia_sendmsg_ahg(int rc, int fd, struct msghdr __user *msg, unsigned int flags) {
+void theia_sendmsg_ahg(long rc, int fd, struct msghdr __user *msg, unsigned int flags) {
 
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
@@ -13347,7 +13347,7 @@ void theia_sendmsg_ahg(int rc, int fd, struct msghdr __user *msg, unsigned int f
   return;
 }
 
-void theia_recvmsg_ahg(int rc, int fd, struct msghdr __user *msg, unsigned int flags) {
+void theia_recvmsg_ahg(long rc, int fd, struct msghdr __user *msg, unsigned int flags) {
 
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
@@ -13430,20 +13430,20 @@ int theia_sys_socketcall(int call, unsigned long __user * args) {
 	return rc;
 }
 
-//asmlinkage long shim_socketcall (int call, unsigned long __user *args)
-//// SHIM_CALL(socketcall, 102, call, args);
-//SHIM_CALL_MAIN(102, record_socketcall(call, args), replay_socketcall(call, args), theia_sys_socketcall(call, args))
-//
+asmlinkage long shim_socketcall (int call, unsigned long __user *args)
+// SHIM_CALL(socketcall, 102, call, args);
+SHIM_CALL_MAIN(102, record_socketcall(call, args), replay_socketcall(call, args), theia_sys_socketcall(call, args))
 
-int theia_sys_socket(int family, int type, int protocol) {
-	int rc;
-	rc = sys_socket(family, type, protocal);
+
+long theia_sys_socket(int family, int type, int protocol) {
+	long rc;
+	rc = sys_socket(family, type, protocol);
 
 	return rc;
 }
 
-int theia_sys_connect(int fd, struct sockaddr __user *uservaddr, int addrlen) {
-	int rc;
+long theia_sys_connect(int fd, struct sockaddr __user *uservaddr, int addrlen) {
+	long rc;
 	rc = sys_connect(fd, uservaddr, addrlen);
 
 // Yang: regardless of the return value, passes the failed syscall also
@@ -13454,9 +13454,9 @@ int theia_sys_connect(int fd, struct sockaddr __user *uservaddr, int addrlen) {
 	return rc;
 }
 
-int theia_sys_accept(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen) {
-	int rc;
-	rc = sys_accept(fd, upeer_sockaddr, upeer_addrlen);
+long theia_sys_accept(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen) {
+	long rc;
+	rc = sys_accept4(fd, upeer_sockaddr, upeer_addrlen, 0);
 
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
@@ -13466,8 +13466,8 @@ int theia_sys_accept(int fd, struct sockaddr __user *upeer_sockaddr, int __user 
 	return rc;
 }
 
-int theia_sys_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct sockaddr __user *addr, int addr_len) {
-	int rc;
+long theia_sys_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct sockaddr __user *addr, int addr_len) {
+	long rc;
 	rc = sys_sendto(fd, buff, len, flags, addr, addr_len);
 
 // Yang: regardless of the return value, passes the failed syscall also
@@ -13478,8 +13478,8 @@ int theia_sys_sendto(int fd, void __user *buff, size_t len, unsigned int flags, 
 	return rc;
 }
 
-int theia_sys_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, struct sockaddr __user *addr, int __user *addr_len) {
-	int rc;
+long theia_sys_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, struct sockaddr __user *addr, int __user *addr_len) {
+	long rc;
 	rc = sys_recvfrom(fd, ubuf, size, flags, addr, addr_len);
 
 // Yang: regardless of the return value, passes the failed syscall also
@@ -13490,8 +13490,8 @@ int theia_sys_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flag
 	return rc;
 }
 
-int theia_sys_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags) {
-	int rc;
+long theia_sys_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags) {
+	long rc;
 	rc = sys_sendmsg(fd, msg, flags);
 
 // Yang: regardless of the return value, passes the failed syscall also
@@ -13502,8 +13502,8 @@ int theia_sys_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags) {
 	return rc;
 }
 
-int theia_sys_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags) {
-	int rc;
+long theia_sys_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags) {
+	long rc;
 	rc = sys_recvmsg(fd, msg, flags);
 
 // Yang: regardless of the return value, passes the failed syscall also
@@ -13514,89 +13514,71 @@ int theia_sys_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags) {
 	return rc;
 }
 
-int theia_sys_shutdown(int fd, int how) {
-	int rc;
+long theia_sys_shutdown(int fd, int how) {
+	long rc;
 	rc = sys_shutdown(fd, how);
 
 	return rc;
 }
 
-int theia_sys_bind(int fd, struct sockaddr __user *umyaddr, int addrlen) {
-	int rc;
+long theia_sys_bind(int fd, struct sockaddr __user *umyaddr, int addrlen) {
+	long rc;
 	rc = sys_bind(fd, umyaddr, addrlen);
 
 	return rc;
 }
 
-int theia_sys_listen(int fd, int backlog) {
-	int rc;
+long theia_sys_listen(int fd, int backlog) {
+	long rc;
 	rc = sys_listen(fd, backlog);
 
 	return rc;
 }
 
-int theia_sys_getsockname(int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len) {
-	int rc;
+long theia_sys_getsockname(int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len) {
+	long rc;
 	rc = sys_getsockname(fd, usockaddr, usockaddr_len);
 
 	return rc;
 }
 
-int theia_sys_getpeername(int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len) {
-	int rc;
+long theia_sys_getpeername(int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len) {
+	long rc;
 	rc = sys_getpeername(fd, usockaddr, usockaddr_len);
 
 	return rc;
 }
 
-int theia_sys_socketpair(int family, int type, int protocol, int __user *usockvec) {
-	int rc;
+long theia_sys_socketpair(int family, int type, int protocol, int __user *usockvec) {
+	long rc;
 	rc = sys_socketpair(family, type, protocol, usockvec);
 
 	return rc;
 }
 
-int theia_sys_setsockopt(int fd, int level, int optname, char __user *optval, int optlen) {
-	int rc;
+long theia_sys_setsockopt(int fd, int level, int optname, char __user *optval, int optlen) {
+	long rc;
 	rc = sys_setsockopt(fd, level, optname, optval, optlen);
 
 	return rc;
 }
 
-int theia_sys_getsockopt(int fd, int level, int optname, char __user *optval, int __user *optlen) {
-	int rc;
+long theia_sys_getsockopt(int fd, int level, int optname, char __user *optval, int __user *optlen) {
+	long rc;
 	rc = sys_getsockopt(fd, level, optname, optval, optlen);
 
 	return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 record_socket(int family, int type, int protocol)
 {
-	int rc = 0;
+	long rc = 0;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
 
 	new_syscall_enter (41);
-
-#ifdef TRACE_SOCKET_READ_WRITE
-	if (call == SYS_SENDTO || call == SYS_SEND) {
-		int err = 0;
-		struct socket *sock = sockfd_lookup(a[0], &err);
-
-		if (sock != NULL && (sock->ops == &unix_stream_ops || sock->ops == &unix_seqpacket_ops)) {
-			int ret;
-			struct sock *peer;
-			struct sock *sk = sock->sk;
-			peer = unix_peer_get(sk);
-			ret = track_usually_pt2pt_write_begin(peer, sock->file);
-			sock_put(peer);
-
-			fput(sock->file);
-		}
-	}
-#endif
 
 	rc = sys_socket (family, type, protocol);
 
@@ -13615,10 +13597,10 @@ record_socket(int family, int type, int protocol)
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 record_connect(int fd, struct sockaddr __user *uservaddr, int addrlen)
 {
-	int rc = 0;
+	long rc = 0;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -13644,10 +13626,10 @@ record_connect(int fd, struct sockaddr __user *uservaddr, int addrlen)
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 record_accept(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen)
 {
-	int rc = 0;
+	long rc = 0;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -13667,7 +13649,7 @@ record_accept(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_
   DPRINT ("Pid %d record_accept\n", current->pid);
   if (rc >= 0) {
     if (upeer_sockaddr) {
-      addrlen = *((int *) a[2]);
+      addrlen = *((int *) upeer_addrlen);
     } else {
       addrlen = 0;
     }
@@ -13690,10 +13672,10 @@ record_accept(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct sockaddr __user *addr, int addr_len)
 {
-	int rc = 0;
+	long rc = 0;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -13778,10 +13760,10 @@ record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct 
 #endif
 }
 
-static asmlinkage int 
+static asmlinkage long 
 record_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, struct sockaddr __user *addr, int __user *addr_len)
 {
-	int rc = 0;
+	long rc = 0;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -13855,10 +13837,10 @@ record_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, stru
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 record_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags)
 {
-	int rc = 0;
+	long rc = 0;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -13886,10 +13868,10 @@ record_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags)
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
 {
-	int rc = 0;
+	long rc = 0;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -13977,10 +13959,10 @@ record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 record_shutdown(int fd, int how)
 {
-	int rc = 0;
+	long rc = 0;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -14004,10 +13986,10 @@ record_shutdown(int fd, int how)
 		return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 record_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
 {
-	int rc = 0;
+	long rc = 0;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -14031,10 +14013,10 @@ record_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 record_listen(int fd, int backlog)
 {
-	int rc = 0;
+	long rc = 0;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -14058,10 +14040,10 @@ record_listen(int fd, int backlog)
   return rc;
 }
 
-  static asmlinkage int 
+  static asmlinkage long 
 record_getsockname(int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len)
 {
-  int rc = 0;
+  long rc = 0;
 #ifdef TIME_TRICK
   int shift_clock = 1;
 #endif
@@ -14102,10 +14084,10 @@ record_getsockname(int fd, struct sockaddr __user *usockaddr, int __user *usocka
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 record_getpeername(int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len)
 {
-	int rc = 0;
+	long rc = 0;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -14146,10 +14128,10 @@ record_getpeername(int fd, struct sockaddr __user *usockaddr, int __user *usocka
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 record_socketpair(int family, int type, int protocol, int __user *usockvec)
 {
-	int rc = 0;
+	long rc = 0;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -14180,10 +14162,10 @@ record_socketpair(int family, int type, int protocol, int __user *usockvec)
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 record_setsockopt(int fd, int level, int optname, char __user *optval, int optlen)
 {
-	int rc = 0;
+	long rc = 0;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -14207,10 +14189,10 @@ record_setsockopt(int fd, int level, int optname, char __user *optval, int optle
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 record_getsockopt(int fd, int level, int optname, char __user *optval, int __user *optlen)
 {
-	int rc = 0;
+	long rc = 0;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -14235,11 +14217,11 @@ record_getsockopt(int fd, int level, int optname, char __user *optval, int __use
 }
 
 
-static asmlinkage int 
+static asmlinkage long 
 replay_socket (int family, int type, int protocol)
 {
 	char* retparams = NULL;
-	int rc; 
+	long rc; 
 
 	DPRINT ("Pid %d in replay_socket(%d)\n", current->pid);
 
@@ -14266,11 +14248,11 @@ replay_socket (int family, int type, int protocol)
 	return syscall_mismatch();
 }
 
-static asmlinkage int 
+static asmlinkage long 
 replay_connect (int fd, struct sockaddr __user *uservaddr, int addrlen)
 {
   char* retparams = NULL;
-  int rc; 
+  long rc; 
 
   DPRINT ("Pid %d in replay_connect\n", current->pid);
 
@@ -14282,11 +14264,11 @@ replay_connect (int fd, struct sockaddr __user *uservaddr, int addrlen)
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 replay_accept (int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen)
 {
   char* retparams = NULL;
-  int rc; 
+  long rc; 
 
   DPRINT ("Pid %d in replay_accept\n", current->pid);
 
@@ -14307,11 +14289,11 @@ replay_accept (int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer
   return rc;
 }
 
-static asmlinkage int 
-replay_sendto (int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen)
+static asmlinkage long 
+replay_sendto (int fd, void __user *buff, size_t len, unsigned int flags, struct sockaddr __user *addr, int addr_len)
 {
   char* retparams = NULL;
-  int rc; 
+  long rc; 
 
   DPRINT ("Pid %d in replay_sendto\n", current->pid);
 
@@ -14334,11 +14316,11 @@ replay_sendto (int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long
 replay_recvfrom (int fd, void __user *ubuf, size_t size, unsigned int flags, struct sockaddr __user *addr, int __user *addr_len)
 {
   char* retparams = NULL;
-  int rc; 
+  long rc; 
 
   DPRINT ("Pid %d in replay_recvfrom\n", current->pid);
 
@@ -14366,11 +14348,11 @@ replay_recvfrom (int fd, void __user *ubuf, size_t size, unsigned int flags, str
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 replay_sendmsg (int fd, struct msghdr __user *msg, unsigned int flags)
 {
   char* retparams = NULL;
-  int rc; 
+  long rc; 
 
   DPRINT ("Pid %d in replay_sendmsg\n", current->pid);
 
@@ -14382,11 +14364,11 @@ replay_sendmsg (int fd, struct msghdr __user *msg, unsigned int flags)
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 replay_recvmsg (int fd, struct msghdr __user *msg, unsigned int flags)
 {
   char* retparams = NULL;
-  int rc; 
+  long rc; 
 
   DPRINT ("Pid %d in replay_recvmsg\n", current->pid);
 
@@ -14463,11 +14445,11 @@ replay_recvmsg (int fd, struct msghdr __user *msg, unsigned int flags)
 		return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 replay_shutdown (int fd, int how)
 {
   char* retparams = NULL;
-  int rc; 
+  long rc; 
 
   DPRINT ("Pid %d in replay_bind\n", current->pid);
 
@@ -14479,11 +14461,11 @@ replay_shutdown (int fd, int how)
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 replay_bind (int fd, struct sockaddr __user *umyaddr, int addrlen)
 {
   char* retparams = NULL;
-  int rc; 
+  long rc; 
 
   DPRINT ("Pid %d in replay_bind\n", current->pid);
 
@@ -14495,11 +14477,11 @@ replay_bind (int fd, struct sockaddr __user *umyaddr, int addrlen)
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 replay_listen (int fd, int backlog)
 {
   char* retparams = NULL;
-  int rc; 
+  long rc; 
 
   DPRINT ("Pid %d in replay_listen\n", current->pid);
 
@@ -14511,11 +14493,11 @@ replay_listen (int fd, int backlog)
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 replay_getsockname (int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len)
 {
   char* retparams = NULL;
-  int rc; 
+  long rc; 
 
   DPRINT ("Pid %d in replay_getsockname\n", current->pid);
 
@@ -14534,11 +14516,11 @@ replay_getsockname (int fd, struct sockaddr __user *usockaddr, int __user *usock
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 replay_getpeername (int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len)
 {
   char* retparams = NULL;
-  int rc; 
+  long rc; 
 
   DPRINT ("Pid %d in replay_getpeername\n", current->pid);
 
@@ -14557,11 +14539,11 @@ replay_getpeername (int fd, struct sockaddr __user *usockaddr, int __user *usock
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long
 replay_socketpair (int family, int type, int protocol, int __user *usockvec)
 {
   char* retparams = NULL;
-  int rc; 
+  long rc; 
 
   DPRINT ("Pid %d in replay_socketpair\n", current->pid);
 
@@ -14587,11 +14569,11 @@ replay_socketpair (int family, int type, int protocol, int __user *usockvec)
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 replay_setsockopt (int fd, int level, int optname, char __user *optval, int __user *optlen)
 {
   char* retparams = NULL;
-  int rc; 
+  long rc; 
 
   DPRINT ("Pid %d in replay_setsockopt\n", current->pid);
 
@@ -14603,11 +14585,11 @@ replay_setsockopt (int fd, int level, int optname, char __user *optval, int __us
   return rc;
 }
 
-static asmlinkage int 
+static asmlinkage long 
 replay_getsockopt (int fd, int level, int optname, char __user *optval, int __user *optlen)
 {
   char* retparams = NULL;
-  int rc; 
+  long rc; 
 
   DPRINT ("Pid %d in replay_getsockopt\n", current->pid);
 
@@ -14630,49 +14612,49 @@ replay_getsockopt (int fd, int level, int optname, char __user *optval, int __us
   return rc;
 }
 
-asmlinkage int shim_socket (int family, int type, int protocol)
-SHIM_CALL_MAIN(41, record_socket(family, type, protocal), replay_socket(family, type, protocal), theia_sys_socket(family, type, protocal))
+asmlinkage long shim_socket (int family, int type, int protocol)
+SHIM_CALL_MAIN(41, record_socket(family, type, protocol), replay_socket(family, type, protocol), theia_sys_socket(family, type, protocol))
 
-asmlinkage int shim_connect (int fd, struct sockaddr __user *uservaddr, int addrlen)
+asmlinkage long shim_connect (int fd, struct sockaddr __user *uservaddr, int addrlen)
 SHIM_CALL_MAIN(42, record_connect(fd, uservaddr, addrlen), replay_connect(fd, uservaddr, addrlen), theia_sys_connect(fd, uservaddr, addrlen))
 
-asmlinkage int shim_accept (int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen)
+asmlinkage long shim_accept (int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen)
 SHIM_CALL_MAIN(43, record_accept(fd, upeer_sockaddr, upeer_addrlen), replay_accept(fd, upeer_sockaddr, upeer_addrlen), theia_sys_accept(fd, upeer_sockaddr, upeer_addrlen))
 
-asmlinkage int shim_sendto (int fd, void __user *buff, size_t len, unsigned int flags, struct sockaddr __user *addr, int addr_len)
+asmlinkage long shim_sendto (int fd, void __user *buff, size_t len, unsigned int flags, struct sockaddr __user *addr, int addr_len)
 SHIM_CALL_MAIN(44, record_sendto(fd, buff, len, flags, addr, addr_len), replay_sendto(fd, buff, len, flags, addr, addr_len), theia_sys_sendto(fd, buff, len, flags, addr, addr_len))
 
-asmlinkage int shim_recvfrom (int fd, void __user *ubuf, size_t size, unsigned int flags, struct sockaddr __user *addr, int __user *addr_len)
+asmlinkage long shim_recvfrom (int fd, void __user *ubuf, size_t size, unsigned int flags, struct sockaddr __user *addr, int __user *addr_len)
 SHIM_CALL_MAIN(45, record_recvfrom(fd, ubuf, size, flags, addr, addr_len), replay_recvfrom(fd, ubuf, size, flags, addr, addr_len), theia_sys_recvfrom(fd, ubuf, size, flags, addr, addr_len))
 
-asmlinkage int shim_sendmsg (int fd, struct msghdr __user *msg, unsigned int flags)
+asmlinkage long shim_sendmsg (int fd, struct msghdr __user *msg, unsigned int flags)
 SHIM_CALL_MAIN(46, record_sendmsg(fd, msg, flags), replay_sendmsg(fd, msg, flags), theia_sys_sendmsg(fd, msg, flags))
 
-asmlinkage int shim_recvmsg (int fd, struct msghdr __user *msg, unsigned int flags)
+asmlinkage long shim_recvmsg (int fd, struct msghdr __user *msg, unsigned int flags)
 SHIM_CALL_MAIN(47, record_recvmsg(fd, msg, flags), replay_recvmsg(fd, msg, flags), theia_sys_recvmsg(fd, msg, flags))
 
-asmlinkage int shim_shutdown(int fd, int how)
+asmlinkage long shim_shutdown(int fd, int how)
 SHIM_CALL_MAIN(48, record_shutdown(fd, how), replay_shutdown(fd, how), theia_sys_shutdown(fd, how))
 
-asmlinkage int shim_bind (int fd, struct sockaddr __user *umyaddr, int addrlen)
+asmlinkage long shim_bind (int fd, struct sockaddr __user *umyaddr, int addrlen)
 SHIM_CALL_MAIN(49, record_bind(fd, umyaddr, addrlen), replay_bind(fd, umyaddr, addrlen), theia_sys_bind(fd, umyaddr, addrlen))
 
-asmlinkage int shim_listen (int fd, int backlog)
+asmlinkage long shim_listen (int fd, int backlog)
 SHIM_CALL_MAIN(50, record_listen(fd, backlog), replay_listen(fd, backlog), theia_sys_listen(fd, backlog))
 
-asmlinkage int shim_getsockname (int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len)
+asmlinkage long shim_getsockname (int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len)
 SHIM_CALL_MAIN(51, record_getsockname(fd, usockaddr, usockaddr_len), replay_getsockname(fd, usockaddr, usockaddr_len), theia_sys_getsockname(fd, usockaddr, usockaddr_len))
 
-asmlinkage int shim_getpeername (int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len)
+asmlinkage long shim_getpeername (int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len)
 SHIM_CALL_MAIN(52, record_getpeername(fd, usockaddr, usockaddr_len), replay_getpeername(fd, usockaddr, usockaddr_len), theia_sys_getpeername(fd, usockaddr, usockaddr_len))
 
-asmlinkage int shim_socketpair (int family, int type, int protocol, int __user *usockvec)
+asmlinkage long shim_socketpair (int family, int type, int protocol, int __user *usockvec)
 SHIM_CALL_MAIN(53, record_socketpair(family, type, protocol, usockvec), replay_socketpair(family, type, protocol, usockvec), theia_sys_socketpair(family, type, protocol, usockvec))
 
-asmlinkage int shim_setsockopt (int fd, int level, int optname, char __user *optval, int optlen)
+asmlinkage long shim_setsockopt (int fd, int level, int optname, char __user *optval, int optlen)
 SHIM_CALL_MAIN(54, record_setsockopt(fd, level, optname, optval, optlen), replay_setsockopt(fd, level, optname, optval, optlen), theia_sys_setsockopt(fd, level, optname, optval, optlen))
 
-asmlinkage int shim_getsockopt (int fd, int level, int optname, char __user *optval, int __user *optlen)
+asmlinkage long shim_getsockopt (int fd, int level, int optname, char __user *optval, int __user *optlen)
 SHIM_CALL_MAIN(55, record_getsockopt(fd, level, optname, optval, optlen), replay_getsockopt(fd, level, optname, optval, optlen), theia_sys_getsockopt(fd, level, optname, optval, optlen))
 
 
