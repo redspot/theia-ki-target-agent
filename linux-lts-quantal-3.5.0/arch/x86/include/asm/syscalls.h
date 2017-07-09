@@ -37,6 +37,9 @@ long sys_rt_sigreturn(struct pt_regs *);
 long sys_sigaltstack(const stack_t __user *, stack_t __user *,
 		     struct pt_regs *);
 
+#ifndef sys_rt_sigsuspend
+asmlinkage long sys_rt_sigsuspend(sigset_t __user *unewset, size_t sigsetsize);
+#endif
 
 /* kernel/tls.c */
 asmlinkage int sys_set_thread_area(struct user_desc __user *);

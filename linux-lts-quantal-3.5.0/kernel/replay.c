@@ -5,7 +5,8 @@
 
 #include <linux/kernel.h>
 #include <linux/syscalls.h>
-#include <asm-generic/syscalls.h>
+//#include <asm-generic/syscalls.h>
+#include <asm/syscalls.h>
 #include <linux/mm.h>
 #include <linux/highmem.h>
 #include <linux/sched.h>
@@ -43,6 +44,7 @@
 #include <net/sock.h>
 #include <net/af_unix.h>
 #include <asm/atomic.h>
+#include <asm/prctl.h>
 #include <asm/ldt.h>
 #include <asm/syscall.h>
 #include <linux/statfs.h>
@@ -13466,6 +13468,19 @@ long theia_sys_accept(int fd, struct sockaddr __user *upeer_sockaddr, int __user
 	return rc;
 }
 
+long theia_sys_accept4(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen, int flags) {
+	long rc;
+	rc = sys_accept4(fd, upeer_sockaddr, upeer_addrlen, flags);
+
+// Yang: regardless of the return value, passes the failed syscall also
+//	if (rc >= 0) 
+	if (rc != -EAGAIN) { 
+  //we reuse accept interface
+		theia_accept_ahg(rc, fd, upeer_sockaddr, upeer_addrlen);
+	}
+	return rc;
+}
+
 long theia_sys_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct sockaddr __user *addr, int addr_len) {
 	long rc;
 	rc = sys_sendto(fd, buff, len, flags, addr, addr_len);
@@ -13669,6 +13684,53 @@ record_accept(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_
     pretvals->call = SYS_ACCEPT;
   }
   new_syscall_exit (43, pretvals);
+  return rc;
+}
+
+static asmlinkage long 
+record_accept4(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen, int flags)
+{
+	long rc = 0;
+#ifdef TIME_TRICK
+	int shift_clock = 1;
+#endif
+
+	new_syscall_enter (288);
+
+	rc = sys_accept4 (fd, upeer_sockaddr, upeer_addrlen, flags);
+
+// Yang also needed at recording
+	if (rc != -EAGAIN) /* ignore some less meaningful errors */
+  //we reuse the accept ahg format
+		theia_accept_ahg(rc, fd, upeer_sockaddr, upeer_addrlen);
+
+	new_syscall_done (288, rc);
+
+  struct accept_retvals* pretvals = NULL;
+  long addrlen;
+  DPRINT ("Pid %d record_accept\n", current->pid);
+  if (rc >= 0) {
+    if (upeer_sockaddr) {
+      addrlen = *((int *) upeer_addrlen);
+    } else {
+      addrlen = 0;
+    }
+    pretvals = ARGSKMALLOC(sizeof(struct accept_retvals) + addrlen, GFP_KERNEL);
+    if (pretvals == NULL) {
+      printk("record_socketcall(accept): can't allocate buffer\n");
+      return -ENOMEM;
+    }
+    pretvals->addrlen = addrlen;
+    if (addrlen) {
+      if (copy_from_user(&pretvals->addr, (char *) upeer_sockaddr, addrlen)) {
+        printk("record_socketcall(accept): can't copy addr\n");
+        ARGSKFREE (pretvals, sizeof(struct accept_retvals) + addrlen);
+        return -EFAULT;
+      }
+    } 
+    pretvals->call = SYS_ACCEPT;
+  }
+  new_syscall_exit (288, pretvals);
   return rc;
 }
 
@@ -14290,6 +14352,31 @@ replay_accept (int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer
 }
 
 static asmlinkage long 
+replay_accept4 (int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen, int flags)
+{
+  char* retparams = NULL;
+  long rc; 
+
+  DPRINT ("Pid %d in replay_accept4\n", current->pid);
+
+  rc = get_next_syscall (288, &retparams);
+
+  DPRINT ("Pid %d, replay_accept4, rc is %ld, retparams is %p\n", current->pid, rc, retparams);
+
+  if (retparams) {
+    struct accept_retvals* retvals = (struct accept_retvals *) retparams;
+    if (upeer_sockaddr) {
+      *((int *) upeer_addrlen) = retvals->addrlen;
+      if (copy_to_user ((char *) upeer_sockaddr, &retvals->addr, retvals->addrlen)) {
+        printk ("Pid %d replay_socketcall_accept cannot copy to user\n", current->pid);
+      }
+    }
+    argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct accept_retvals)+retvals->addrlen);
+  }
+  return rc;
+}
+
+static asmlinkage long 
 replay_sendto (int fd, void __user *buff, size_t len, unsigned int flags, struct sockaddr __user *addr, int addr_len)
 {
   char* retparams = NULL;
@@ -14656,6 +14743,9 @@ SHIM_CALL_MAIN(54, record_setsockopt(fd, level, optname, optval, optlen), replay
 
 asmlinkage long shim_getsockopt (int fd, int level, int optname, char __user *optval, int __user *optlen)
 SHIM_CALL_MAIN(55, record_getsockopt(fd, level, optname, optval, optlen), replay_getsockopt(fd, level, optname, optval, optlen), theia_sys_getsockopt(fd, level, optname, optval, optlen))
+
+asmlinkage long shim_accept4 (int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen, int flags)
+SHIM_CALL_MAIN(288, record_accept4(fd, upeer_sockaddr, upeer_addrlen, flags), replay_accept4(fd, upeer_sockaddr, upeer_addrlen, flags), theia_sys_accept4(fd, upeer_sockaddr, upeer_addrlen, flags))
 
 
 static asmlinkage long 
@@ -17709,6 +17799,72 @@ replay_prctl (int option, unsigned long arg2, unsigned long arg3, unsigned long 
 
 asmlinkage long shim_prctl (int option, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5) SHIM_CALL(prctl, 157, option, arg2, arg3, arg4, arg5);
 
+asmlinkage long 
+record_arch_prctl (int code, unsigned long addr)
+{
+	char* pretval = NULL;
+	u_long len = 0;
+	long rc;
+
+	new_syscall_enter (158);
+	rc = sys_arch_prctl (code, addr);
+	new_syscall_done (158, rc);
+	if (rc == 0) {
+			pretval = ARGSKMALLOC(sizeof(int) + sizeof(u_long), GFP_KERNEL);
+			if (pretval == NULL) {
+				printk("record_arch_prctl: can't allocate return value\n");
+				return -ENOMEM;
+			}
+			*((int *) pretval) = code;
+      if(code == ARCH_SET_FS || code == ARCH_SET_GS){
+        *((unsigned long*) (pretval+sizeof(int))) = addr;
+      }
+      else {
+        if (copy_from_user (pretval + sizeof(int), (char __user *) addr, sizeof(unsigned long))) {
+          ARGSKFREE (pretval, sizeof(u_long)+sizeof(int));
+          return -EFAULT;
+        }
+			}
+	}
+	new_syscall_exit (158, NULL);
+
+	return rc;
+}
+
+asmlinkage long 
+replay_arch_prctl (int code, unsigned long addr)
+{
+	char* retparams = NULL;
+	long retval;
+	long rc = get_next_syscall (158, &retparams);
+
+	DPRINT("Pid %d calls replay_arch_prctl with code %d\n", current->pid, code);
+	if (code == ARCH_SET_FS || code == ARCH_SET_GS) { // Do this also during recording
+		retval = sys_arch_prctl(code, addr);
+		if (retval != rc) {
+			printk ("pid %d mismatch: arch_prctl code %d returns %ld on replay and %ld during recording\n", current->pid, code, retval, rc);
+			return syscall_mismatch();
+		}
+	}
+	if (retparams) {
+		if (copy_to_user ((unsigned long __user *) addr, retparams+sizeof(int), sizeof(unsigned long))) {
+			printk ("replay_arch_prctl: pid %d cannot copy to user\n", current->pid);
+			return syscall_mismatch();
+		}
+		argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + sizeof(int));
+	}
+	return rc;
+}
+
+long theia_sys_arch_prctl(int code, unsigned long addr) {
+	long rc;
+	rc = sys_arch_prctl(code, addr);
+
+	return rc;
+}
+
+asmlinkage long shim_arch_prctl (int code, unsigned long addr) 
+SHIM_CALL_MAIN(158, record_arch_prctl(code, addr), replay_arch_prctl(code, addr), theia_sys_arch_prctl(code, addr))
 
 long shim_rt_sigreturn(struct pt_regs* regs)
 {
