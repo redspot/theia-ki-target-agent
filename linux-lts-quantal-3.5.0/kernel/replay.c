@@ -20464,6 +20464,7 @@ SIMPLE_SHIM5(fchownat, 260, int, dfd, const char __user *, filename, uid_t, user
 SIMPLE_SHIM3(futimesat, 261, int, dfd, char __user *, filename, struct timeval __user *,utimes);
 //64port
 //RET1_SHIM4(fstatat64, 300, struct stat64, statbuf, int, dfd, char __user *, filename, struct stat64 __user *, statbuf, int, flag);
+RET1_SHIM4(newfstatat, 262, struct stat, statbuf, int, dfd, char __user *, filename, struct stat __user *, statbuf, int, flag);
 
 SIMPLE_SHIM3(unlinkat, 263, int, dfd, const char __user *, pathname, int, flag);
 
