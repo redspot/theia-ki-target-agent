@@ -26,10 +26,10 @@
 
 	.text
 
-	.globl	sem_post
-	.type	sem_post,@function
+	.globl	__new_internal_sem_post
+	.type	__new_internal_sem_post,@function
 	.align	16
-sem_post:
+__new_internal_sem_post:
 #if VALUE == 0
 	movl	(%rdi), %eax
 #else
@@ -73,4 +73,4 @@ sem_post:
 	movl	%eax, %fs:(%rdx)
 	orl	$-1, %eax
 	retq
-	.size	sem_post,.-sem_post
+	.size	__new_internal_sem_post,.-__new_internal_sem_post

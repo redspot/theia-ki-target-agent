@@ -31,10 +31,10 @@
 	.text
 
 /* int pthread_cond_wait (pthread_cond_t *cond, pthread_mutex_t *mutex)  */
-	.globl	__pthread_cond_wait
-	.type	__pthread_cond_wait, @function
+	.globl	__internal_pthread_cond_wait
+	.type	__internal_pthread_cond_wait, @function
 	.align	16
-__pthread_cond_wait:
+__internal_pthread_cond_wait:
 .LSTARTCODE:
 	cfi_startproc
 #ifdef SHARED
@@ -392,8 +392,8 @@ __pthread_cond_wait:
 	jmp	90b
 .LcleanupEND2:
 
-	.size	__pthread_cond_wait, .-__pthread_cond_wait
-versioned_symbol (libpthread, __pthread_cond_wait, pthread_cond_wait,
+	.size	__internal_pthread_cond_wait, .-__internal_pthread_cond_wait
+versioned_symbol (libpthread, __internal_pthread_cond_wait, internal_pthread_cond_wait,
 		  GLIBC_2_3_2)
 
 

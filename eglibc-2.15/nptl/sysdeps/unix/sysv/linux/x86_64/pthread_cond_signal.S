@@ -29,10 +29,10 @@
 	.text
 
 	/* int pthread_cond_signal (pthread_cond_t *cond) */
-	.globl	__pthread_cond_signal
-	.type	__pthread_cond_signal, @function
+	.globl	__internal_pthread_cond_signal
+	.type	__internal_pthread_cond_signal, @function
 	.align	16
-__pthread_cond_signal:
+__internal_pthread_cond_signal:
 
 	/* Get internal lock.  */
 	movq	%rdi, %r8
@@ -157,6 +157,6 @@ __pthread_cond_signal:
 	cmovne	%eax, %esi
 	callq	__lll_unlock_wake
 	jmp	6b
-	.size	__pthread_cond_signal, .-__pthread_cond_signal
-versioned_symbol (libpthread, __pthread_cond_signal, pthread_cond_signal,
+	.size	__internal_pthread_cond_signal, .-__internal_pthread_cond_signal
+versioned_symbol (libpthread, __internal_pthread_cond_signal, internal_pthread_cond_signal,
 		  GLIBC_2_3_2)

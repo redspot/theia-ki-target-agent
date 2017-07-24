@@ -32,10 +32,10 @@
 
 /* int pthread_cond_timedwait (pthread_cond_t *cond, pthread_mutex_t *mutex,
 			       const struct timespec *abstime)  */
-	.globl	__pthread_cond_timedwait
-	.type	__pthread_cond_timedwait, @function
+	.globl	__internal_pthread_cond_timedwait
+	.type	__internal_pthread_cond_timedwait, @function
 	.align	16
-__pthread_cond_timedwait:
+__internal_pthread_cond_timedwait:
 .LSTARTCODE:
 	cfi_startproc
 #ifdef SHARED
@@ -159,7 +159,7 @@ __pthread_cond_timedwait:
 	jne	33f
 
 .LcleanupSTART1:
-34:	callq	__pthread_enable_asynccancel
+34:	callq	__internal_pthread_enable_asynccancel
 	movl	%eax, (%rsp)
 
 	movq	%r13, %r10
@@ -215,7 +215,7 @@ __pthread_cond_timedwait:
 62:	movq	%rax, %r14
 
 	movl	(%rsp), %edi
-	callq	__pthread_disable_asynccancel
+	callq	__internal_pthread_disable_asynccancel
 .LcleanupEND1:
 
 	/* Lock.  */
@@ -629,8 +629,8 @@ __pthread_cond_timedwait:
 	jmp	21b
 # endif
 #endif
-	.size	__pthread_cond_timedwait, .-__pthread_cond_timedwait
-versioned_symbol (libpthread, __pthread_cond_timedwait, pthread_cond_timedwait,
+	.size	__internal_pthread_cond_timedwait, .-__internal_pthread_cond_timedwait
+versioned_symbol (libpthread, __internal_pthread_cond_timedwait, internal_pthread_cond_timedwait,
 		  GLIBC_2_3_2)
 
 

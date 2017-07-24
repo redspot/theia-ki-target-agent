@@ -26,10 +26,10 @@
 
 	.text
 
-	.globl	sem_timedwait
-	.type	sem_timedwait,@function
+	.globl	internal_sem_timedwait
+	.type	internal_sem_timedwait,@function
 	.align	16
-sem_timedwait:
+internal_sem_timedwait:
 .LSTARTCODE:
 	cfi_startproc
 #ifdef SHARED
@@ -87,7 +87,7 @@ sem_timedwait:
 	addq	$1, NWAITERS(%rdi)
 
 .LcleanupSTART:
-13:	call	__pthread_enable_asynccancel
+13:	call	__internal_pthread_enable_asynccancel
 	movl	%eax, %r8d
 
 #if VALUE != 0
@@ -105,7 +105,7 @@ sem_timedwait:
 #endif
 
 	xchgq	%r8, %rdi
-	call	__pthread_disable_asynccancel
+	call	__internal_pthread_disable_asynccancel
 .LcleanupEND:
 	movq	%r8, %rdi
 
@@ -217,7 +217,7 @@ sem_timedwait:
 	movq	%rsi, 8(%rsp)
 
 .LcleanupSTART2:
-	call	__pthread_enable_asynccancel
+	call	__internal_pthread_enable_asynccancel
 	movl	%eax, 16(%rsp)
 
 	movq	%rsp, %r10
@@ -238,7 +238,7 @@ sem_timedwait:
 	movq	%rax, %r14
 
 	movl	16(%rsp), %edi
-	call	__pthread_disable_asynccancel
+	call	__internal_pthread_disable_asynccancel
 .LcleanupEND2:
 
 	testq	%r14, %r14
@@ -295,7 +295,7 @@ sem_timedwait:
 	jmp	45b
 #endif
 	cfi_endproc
-	.size	sem_timedwait,.-sem_timedwait
+	.size	internal_sem_timedwait,.-internal_sem_timedwait
 
 
 	.type	sem_timedwait_cleanup,@function

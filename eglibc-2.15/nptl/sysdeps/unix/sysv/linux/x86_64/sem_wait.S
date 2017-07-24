@@ -26,10 +26,10 @@
 
 	.text
 
-	.globl	sem_wait
-	.type	sem_wait,@function
+	.globl	internal_sem_wait
+	.type	internal_sem_wait,@function
 	.align	16
-sem_wait:
+internal_sem_wait:
 .LSTARTCODE:
 	cfi_startproc
 #ifdef SHARED
@@ -70,7 +70,7 @@ sem_wait:
 	addq	$1, NWAITERS(%rdi)
 
 .LcleanupSTART:
-6:	call	__pthread_enable_asynccancel
+6:	call	__internal_pthread_enable_asynccancel
 	movl	%eax, %r8d
 
 	xorq	%r10, %r10
@@ -86,7 +86,7 @@ sem_wait:
 	movq	%rax, %rcx
 
 	xchgq	%r8, %rdi
-	call	__pthread_disable_asynccancel
+	call	__internal_pthread_disable_asynccancel
 .LcleanupEND:
 	movq	%r8, %rdi
 
@@ -130,11 +130,11 @@ sem_wait:
 	orl	$-1, %eax
 
 	jmp 9b
-	.size	sem_wait,.-sem_wait
+	.size	internal_sem_wait,.-internal_sem_wait
 
 
-	.type	sem_wait_cleanup,@function
-sem_wait_cleanup:
+	.type	internal_sem_wait_cleanup,@function
+internal_sem_wait_cleanup:
 	movq	(%rsp), %rdi
 	LOCK
 	subq	$1, NWAITERS(%rdi)
@@ -144,7 +144,7 @@ sem_wait_cleanup:
 	hlt
 .LENDCODE:
 	cfi_endproc
-	.size	sem_wait_cleanup,.-sem_wait_cleanup
+	.size	internal_sem_wait_cleanup,.-internal_sem_wait_cleanup
 
 
 	.section .gcc_except_table,"a",@progbits
@@ -156,7 +156,7 @@ sem_wait_cleanup:
 .Lcstbegin:
 	.uleb128 .LcleanupSTART-.LSTARTCODE
 	.uleb128 .LcleanupEND-.LcleanupSTART
-	.uleb128 sem_wait_cleanup-.LSTARTCODE
+	.uleb128 internal_sem_wait_cleanup-.LSTARTCODE
 	.uleb128  0
 	.uleb128 .LcallUR-.LSTARTCODE
 	.uleb128 .LENDCODE-.LcallUR

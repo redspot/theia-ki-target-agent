@@ -24,10 +24,10 @@
 
 	.text
 
-	.globl	sem_trywait
-	.type	sem_trywait,@function
+	.globl	__new_internal_sem_trywait
+	.type	__new_internal_sem_trywait,@function
 	.align	16
-sem_trywait:
+__new_internal_sem_trywait:
 	movl	(%rdi), %eax
 2:	testl	%eax, %eax
 	jz	1f
@@ -45,4 +45,4 @@ sem_trywait:
 	movl	$EAGAIN, %fs:(%rdx)
 	orl	$-1, %eax
 	retq
-	.size	sem_trywait,.-sem_trywait
+	.size	__new_internal_sem_trywait,.-__new_internal_sem_trywait

@@ -28,10 +28,10 @@
 	.text
 
 
-	.globl	__pthread_once
-	.type	__pthread_once,@function
+	.globl	__no_pthread_once
+	.type	__no_pthread_once,@function
 	.align	16
-__pthread_once:
+__no_pthread_once:
 .LSTARTCODE:
 	cfi_startproc
 #ifdef SHARED
@@ -130,19 +130,19 @@ __pthread_once:
 	cfi_adjust_cfa_offset(-8)
 	xorl	%eax, %eax
 	retq
-	.size	__pthread_once,.-__pthread_once
+	.size	__no_pthread_once,.-__no_pthread_once
 
 
-	.globl	__pthread_once_internal
-__pthread_once_internal = __pthread_once
+	.globl	__no_pthread_once_internal
+__no_pthread_once_internal = __no_pthread_once
 
-	.globl	pthread_once
-pthread_once = __pthread_once
+	.globl	no_pthread_once
+no_pthread_once = __no_pthread_once
 
 
-	.type	clear_once_control,@function
+	.type	no_clear_once_control,@function
 	.align	16
-clear_once_control:
+no_clear_once_control:
 	cfi_adjust_cfa_offset(3 * 8)
 	movq	(%rsp), %rdi
 	movq	%rax, %r8
@@ -164,7 +164,7 @@ clear_once_control:
 	hlt
 .LENDCODE:
 	cfi_endproc
-	.size	clear_once_control,.-clear_once_control
+	.size	no_clear_once_control,.-no_clear_once_control
 
 
 	.section .gcc_except_table,"a",@progbits
@@ -176,7 +176,7 @@ clear_once_control:
 .Lcstbegin:
 	.uleb128 .LcleanupSTART-.LSTARTCODE
 	.uleb128 .LcleanupEND-.LcleanupSTART
-	.uleb128 clear_once_control-.LSTARTCODE
+	.uleb128 no_clear_once_control-.LSTARTCODE
 	.uleb128  0
 	.uleb128 .LcallUR-.LSTARTCODE
 	.uleb128 .LENDCODE-.LcallUR

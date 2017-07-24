@@ -32,9 +32,12 @@ unsigned long* ppthread_log_clock = 0;
 #define __NR_pthread_extra_log  112
 #endif
 
-#define GET_OLD_STACKP()		__asm__ __volatile__ ("movl %%esp, %0\n\t": "=r" (head->old_stackp) : ) 
-#define SET_NEW_STACKP()		__asm__ __volatile__ ("movl %0, %%esp\n\t" : : "r" (&(head->stack[DEFAULT_STACKSIZE-2048])))
-#define RESET_OLD_STACKP()	__asm__ __volatile__ ("movl %0, %%esp\n\t" : : "r" (head->old_stackp)) 
+//#define GET_OLD_STACKP()		__asm__ __volatile__ ("movl %%esp, %0\n\t": "=r" (head->old_stackp) : ) 
+//#define SET_NEW_STACKP()		__asm__ __volatile__ ("movl %0, %%esp\n\t" : : "r" (&(head->stack[DEFAULT_STACKSIZE-2048])))
+//#define RESET_OLD_STACKP()	__asm__ __volatile__ ("movl %0, %%esp\n\t" : : "r" (head->old_stackp)) 
+#define GET_OLD_STACKP()		__asm__ __volatile__ ("mov %%rsp, %0\n\t": "=r" (head->old_stackp) : ) 
+#define SET_NEW_STACKP()		__asm__ __volatile__ ("mov %0, %%rsp\n\t" : : "r" (&(head->stack[DEFAULT_STACKSIZE-2048])))
+#define RESET_OLD_STACKP()	__asm__ __volatile__ ("mov %0, %%rsp\n\t" : : "r" (head->old_stackp)) 
 
 #ifdef USE_EXTRA_DEBUG_LOG
 void pthread_extra_log_mismatch ();
