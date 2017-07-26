@@ -117,7 +117,7 @@ __internal_pthread_cond_wait:
 	jne	3f
 
 .LcleanupSTART:
-4:	callq	__pthread_enable_asynccancel
+4:	callq	__internal_pthread_enable_asynccancel
 	movl	%eax, (%rsp)
 
 	xorq	%r10, %r10
@@ -164,7 +164,7 @@ __internal_pthread_cond_wait:
 	syscall
 
 62:	movl	(%rsp), %edi
-	callq	__pthread_disable_asynccancel
+	callq	__internal_pthread_disable_asynccancel
 .LcleanupEND:
 
 	/* Lock.  */

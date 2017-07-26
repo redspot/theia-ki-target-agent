@@ -26,10 +26,10 @@
 
 	.text
 
-	.globl	internal_sem_wait
-	.type	internal_sem_wait,@function
+	.globl	__new_internal_sem_wait
+	.type	__new_internal_sem_wait,@function
 	.align	16
-internal_sem_wait:
+__new_internal_sem_wait:
 .LSTARTCODE:
 	cfi_startproc
 #ifdef SHARED
@@ -130,7 +130,7 @@ internal_sem_wait:
 	orl	$-1, %eax
 
 	jmp 9b
-	.size	internal_sem_wait,.-internal_sem_wait
+	.size	__new_internal_sem_wait,.-__new_internal_sem_wait
 
 
 	.type	internal_sem_wait_cleanup,@function
