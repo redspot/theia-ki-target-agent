@@ -15255,10 +15255,11 @@ replay_shmat(int shmid, char __user *shmaddr, int shmflg)
 	return rc;
 }
 
+// TODO - Use theia_sys_shmat() instead of sys_shmat(), currently has bug
 asmlinkage long shim_shmat (int shmid, char __user *shmaddr, int shmflg)
 SHIM_CALL_MAIN(30, record_shmat(shmid, shmaddr, shmflg),
 replay_shmat(shmid, shmaddr, shmflg),
-theia_sys_shmat(shmid, shmaddr, shmflg))
+sys_shmat(shmid, shmaddr, shmflg))
 
 static asmlinkage long
 record_shmctl(int shmid, int cmd, struct shmid_ds __user *buf)
