@@ -5448,7 +5448,8 @@ get_next_syscall_enter (struct replay_thread* prt, struct replay_group* prg, int
 				 * Certain system calls, we need to be more lax with though and 
 				 * simply wait for Pin to finish, such as exec and clone.
 				 */
-				if (is_pin_attached() && (syscall != 11 || syscall != 120)) {
+//Yang
+				if (is_pin_attached() && (syscall != 59 || syscall != 56)) {
 					MPRINT ("Pid %d -- Pin attached -- enterting syscall cannot wait due to signal, would try again but Pin is attaached. exiting with ERESTART\n", current->pid);
 					prt->rp_saved_psr = psr;
 					prt->rp_pin_restart_syscall = REPLAY_PIN_TRAP_STATUS_ENTER;
@@ -5544,7 +5545,8 @@ get_next_syscall_exit (struct replay_thread* prt, struct replay_group* prg, stru
 			if (ret == -ERESTARTSYS) {
 				/* Pin SIGTRAP interrupted a syscall exit, SIGTRAP is also used by
 				 *  Pin to reattach after exec, so we need to ignore exec and just wait */
-				if (is_pin_attached() && (psr->sysnum != 11 || psr->sysnum != 120)) {
+//Yang
+				if (is_pin_attached() && (psr->sysnum != 59 || psr->sysnum != 56)) {
 					MPRINT ("Pid %d: exiting syscall cannot wait due to signal - try again, but pin is attached, exiting with ERESTART\n", current->pid);
 					prt->rp_saved_psr = psr;
 					if (prt->rp_pin_restart_syscall != REPLAY_PIN_TRAP_STATUS_ENTER) {
@@ -16142,7 +16144,7 @@ record_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_reg
 
 	prg = current->record_thrd->rp_group;
 
-	new_syscall_enter (120);
+	new_syscall_enter (56);
 
 	if (!(clone_flags&CLONE_VM)) {
 		/* The intent here is to change the next pointer for the child - the easiest way to do this is to change
@@ -16174,8 +16176,8 @@ record_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_reg
 	MPRINT ("Pid %d records clone with flags %lx fork %d returning %ld\n", current->pid, clone_flags, (clone_flags&CLONE_VM) ? 0 : 1, rc);
 
 	rg_lock(prg);
-	new_syscall_done (120, rc);
-	new_syscall_exit (120, NULL);
+	new_syscall_done (56, rc);
+	new_syscall_exit (56, NULL);
 
 	if (rc > 0) {
 		// Create a record thread struct for the child
@@ -16269,7 +16271,7 @@ replay_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_reg
 		rc = current->replay_thrd->rp_saved_rc;
 		(*(int*)(current->replay_thrd->app_syscall_addr)) = 999;
 	} else {
-		rc = get_next_syscall_enter (current->replay_thrd, prg, 120, NULL, &psr);
+		rc = get_next_syscall_enter (current->replay_thrd, prg, 56, NULL, &psr);
 	}
 
 	if (rc > 0) {
@@ -16446,12 +16448,12 @@ void packahgv_clone (struct clone_ahgv *sys_args) {
 		if(tsk) {
 			is_child_remote = is_remote(tsk);
 			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%d|%d|%ld|%ld|endahg\n", 
-					120, sys_args->pid, current->start_time.tv_sec, ids, sys_args->new_pid, 
+					56, sys_args->pid, current->start_time.tv_sec, ids, sys_args->new_pid, 
 					tsk->start_time.tv_sec, is_child_remote, current->tgid, sec, nsec);
 		}
 		else {
 			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%d|%d|%ld|%ld|endahg\n", 
-					120, sys_args->pid, current->start_time.tv_sec, ids, sys_args->new_pid, 
+					56, sys_args->pid, current->start_time.tv_sec, ids, sys_args->new_pid, 
 					-1, -1, current->tgid, sec, nsec);
 		}
 
@@ -16550,7 +16552,7 @@ shim_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_regs 
 
 	if (current->record_thrd) return record_clone(clone_flags, stack_start, regs, stack_size, parent_tidptr, child_tidptr);
 	if (current->replay_thrd) {
-		if (test_app_syscall(120)) return replay_clone(clone_flags, stack_start, regs, stack_size, parent_tidptr, child_tidptr);
+		if (test_app_syscall(56)) return replay_clone(clone_flags, stack_start, regs, stack_size, parent_tidptr, child_tidptr);
 		// Pin calls clone instead of vfork and enforces the vfork semantics at the Pin layer.
 		// Allow Pin to do so, by calling replay_clone
 		if (is_pin_attached() && current->replay_thrd->is_pin_vfork) {
