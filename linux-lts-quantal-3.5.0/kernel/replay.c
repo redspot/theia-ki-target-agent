@@ -12478,8 +12478,10 @@ void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port
 	basic_sockaddr = (struct sockaddr*)KMALLOC(sizeof(struct sockaddr), GFP_KERNEL);
 	if (copy_from_user (basic_sockaddr, sockaddr, sizeof(struct sockaddr))) {
 		KFREE(basic_sockaddr);
-		printk("fails to copy sockaddr from userspace\n");
+		printk("get_ip_port_sockaddr[%d]: fails to copy sockaddr from userspace\n", __LINE__);
 		// TODO: what should we do?
+		*port = 0;
+		sprintf(ip, "NA");
 		return;
 	}
 	*sa_family = basic_sockaddr->sa_family;
@@ -12491,8 +12493,10 @@ void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port
 
 		if (copy_from_user (in_sockaddr, sockaddr, sizeof(struct sockaddr_in))) {
 			KFREE(in_sockaddr);
-			printk("fails to copy sockaddr from userspace\n");
+      printk("get_ip_port_sockaddr[%d]: fails to copy sockaddr from userspace\n", __LINE__);
 			// TODO: what should we do?
+      *port = 0;
+      sprintf(ip, "NA");
 			return;
 		}
 
@@ -12502,7 +12506,7 @@ void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port
 	 	cc = (unsigned char *)in_sockaddr;
 		sprintf(ip, "%u.%u.%u.%u",cc[4],cc[5],cc[6],cc[7]);
 
-		TPRINT("ip is %s, port: %lu\n", ip, *port);
+		TPRINT("get_ip_port_sockaddr: ip is %s, port: %lu\n", ip, *port);
 
 		KFREE(in_sockaddr);
 
@@ -12513,13 +12517,17 @@ void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port
 
 		if (copy_from_user (un_sockaddr, sockaddr, sizeof(struct sockaddr_un))) {
 			KFREE(un_sockaddr);
-			printk("fails to copy sockaddr from userspace\n");
+			printk("get_ip_port_sockaddr: fails to copy sockaddr from userspace\n");
 			// TODO: what should we do?
+      *port = 0;
+      sprintf(ip, "NA");
 			return;
 		}
-		*port = 0;
-		strncpy(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX);
-		TPRINT("sun_path is %s, port: %lu\n", sun_path, *port);
+    *port = 0;
+    strncpy(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX);
+    if (strlen(sun_path) == 0) 
+      sprintf(ip, "NA");
+		TPRINT("get_ip_port_sockaddr: sun_path is %s, port: %lu\n", sun_path, *port);
 		
 		KFREE(un_sockaddr);
 	}
@@ -12957,6 +12965,7 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 				get_ip_port_sockaddr((unsigned long*)a[4], pahgv_recvfrom->ip, &(pahgv_recvfrom->port), pahgv_recvfrom->sun_path, &(pahgv_recvfrom->sa_family));
 				pahgv_recvfrom->rc = rc;
 //				pahgv_recvfrom->clock = clock;
+//		TPRINT("recvfrom: pid: %d, ip is %s, port: %lu\n", pahgv_recvfrom->pid, pahgv_recvfrom->ip, pahgv_recvfrom->port);
 				packahgv_recvfrom(pahgv_recvfrom);
 				KFREE(pahgv_recvfrom);	
 				break;
