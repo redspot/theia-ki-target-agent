@@ -12484,6 +12484,7 @@ void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port
 		// TODO: what should we do?
 		*port = 0;
 		sprintf(ip, "NA");
+    sprintf(sun_path, "NA");
 		return;
 	}
 	*sa_family = basic_sockaddr->sa_family;
@@ -12499,6 +12500,7 @@ void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port
 			// TODO: what should we do?
       *port = 0;
       sprintf(ip, "NA");
+      sprintf(sun_path, "NA");
 			return;
 		}
 
@@ -12523,19 +12525,23 @@ void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port
 			// TODO: what should we do?
       *port = 0;
       sprintf(ip, "NA");
+      sprintf(sun_path, "NA");
 			return;
 		}
     *port = 0;
     strncpy(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX);
-    if (strlen(sun_path) == 0) 
+    if (strlen(sun_path) == 0) {
       sprintf(ip, "NA");
-		TPRINT("get_ip_port_sockaddr: sun_path is %s, port: %lu\n", sun_path, *port);
+      sprintf(sun_path, "NA");
+    }
+		TPRINT("get_ip_port_sockaddr: sun_path is (%s), port: %lu\n", sun_path, *port);
 		
 		KFREE(un_sockaddr);
 	}
 	else {//not support
 		*port = 0;
 		sprintf(ip, "NA");
+    sprintf(sun_path, "NA");
 	}
 	KFREE(basic_sockaddr);
 
