@@ -12484,6 +12484,7 @@ void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port
 		// TODO: what should we do?
 		*port = 0;
 		sprintf(ip, "NA");
+    sprintf(sun_path, "NA");
 		return;
 	}
 	*sa_family = basic_sockaddr->sa_family;
@@ -12499,6 +12500,7 @@ void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port
 			// TODO: what should we do?
       *port = 0;
       sprintf(ip, "NA");
+      sprintf(sun_path, "NA");
 			return;
 		}
 
@@ -12523,19 +12525,23 @@ void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port
 			// TODO: what should we do?
       *port = 0;
       sprintf(ip, "NA");
+      sprintf(sun_path, "NA");
 			return;
 		}
     *port = 0;
     strncpy(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX);
-    if (strlen(sun_path) == 0) 
+    if (strlen(sun_path) == 0) {
       sprintf(ip, "NA");
-		TPRINT("get_ip_port_sockaddr: sun_path is %s, port: %lu\n", sun_path, *port);
+      sprintf(sun_path, "NA");
+    }
+		TPRINT("get_ip_port_sockaddr: sun_path is (%s), port: %lu\n", sun_path, *port);
 		
 		KFREE(un_sockaddr);
 	}
 	else {//not support
 		*port = 0;
 		sprintf(ip, "NA");
+    sprintf(sun_path, "NA");
 	}
 	KFREE(basic_sockaddr);
 
@@ -14883,7 +14889,7 @@ void packahgv_shmget(struct shmget_ahgv *sys_args)
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%ld|%d|%lu|%d|%d|%ld|%ld|endahg\n",
-				117, SHMGET, sys_args->pid, current->start_time.tv_sec,
+				29, SHMGET, sys_args->pid, current->start_time.tv_sec,
 				sys_args->rc, sys_args->key, sys_args->size, sys_args->shmflg,
 				current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
@@ -15020,7 +15026,7 @@ void packahgv_shmat(struct shmat_ahgv *sys_args)
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%lx|%d|%lu|%d|%lx|%d|%ld|%ld|endahg\n",
-				117, SHMAT, sys_args->pid, current->start_time.tv_sec,
+				30, SHMAT, sys_args->pid, current->start_time.tv_sec,
 				sys_args->rc, sys_args->shmid, sys_args->shmaddr, sys_args->shmflg,
 				sys_args->raddr, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
