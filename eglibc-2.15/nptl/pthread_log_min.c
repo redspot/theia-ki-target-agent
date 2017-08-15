@@ -15,8 +15,12 @@
 int pthread_log_status = PTHREAD_LOG_NONE;
 
 // System calls we added for this
-#define __NR_pthread_print 	   17
-#define __NR_pthread_dumbass_link  58
+//#define __NR_pthread_print 	   17
+//#define __NR_pthread_dumbass_link  58
+
+//Yang 64port
+#define __NR_pthread_print 	   400
+#define __NR_pthread_dumbass_link  408
 
 void (*pthread_log_record_hook) (int, unsigned long, unsigned long, int);
 int  (*pthread_log_replay_hook) (unsigned long, unsigned long);

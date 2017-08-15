@@ -20,14 +20,25 @@ int pthread_log_status = PTHREAD_LOG_NONE;
 unsigned long* ppthread_log_clock = 0;
 
 // System calls we added
-#define __NR_pthread_print 	17
-#define __NR_pthread_log        31
-#define __NR_pthread_block      32
-#define __NR_pthread_init       35
-#define __NR_pthread_full       44
-#define __NR_pthread_sysign     53
-#define __NR_pthread_status     56
-#define __NR_pthread_shm_path   98
+//#define __NR_pthread_print 	17
+//#define __NR_pthread_log        31
+//#define __NR_pthread_block      32
+//#define __NR_pthread_init       35
+//#define __NR_pthread_full       44
+//#define __NR_pthread_sysign     53
+//#define __NR_pthread_status     56
+//#define __NR_pthread_shm_path   98
+
+//Yang 64port
+#define __NR_pthread_print 	    400
+#define __NR_pthread_log        401
+#define __NR_pthread_block      402
+#define __NR_pthread_init       403
+#define __NR_pthread_full       404
+#define __NR_pthread_sysign     405
+#define __NR_pthread_status     406
+#define __NR_pthread_shm_path   407
+
 #ifdef USE_EXTRA_DEBUG_LOG
 #define __NR_pthread_extra_log  112
 #endif
