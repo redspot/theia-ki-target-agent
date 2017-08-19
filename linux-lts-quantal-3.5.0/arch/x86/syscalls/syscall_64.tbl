@@ -320,6 +320,19 @@
 311	64	process_vm_writev	shim_process_vm_writev
 312	common	kcmp			shim_kcmp
 
+#theia: added syscalls
+400	common	pthread_print			sys_pthread_print
+401	common	pthread_log			sys_pthread_log
+402	common	pthread_block			sys_pthread_block
+403	common	pthread_init			sys_pthread_init
+404	common	pthread_full			sys_pthread_full
+405	common	pthread_sysign			sys_pthread_sysign
+406	common	pthread_status			sys_pthread_status
+407	common	pthread_shm_path			sys_pthread_shm_path
+408	common	pthread_dumbass_link	sys_pthread_dumbass_link
+#408	common	pthread_extra_log			sys_pthread_extra_log
+
+
 #
 # x32-specific system call numbers start at 512 to avoid cache impact
 # for native 64-bit operation.
