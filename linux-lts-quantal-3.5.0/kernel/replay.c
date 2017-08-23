@@ -6266,12 +6266,26 @@ asmlinkage long sys_pthread_sysign (void)
 #define SIMPLE_SHIM1(name, sysnum, arg0type, arg0name)			\
 	SIMPLE_RECORD1(name, sysnum, arg0type, arg0name);		\
 	SIMPLE_REPLAY (name, sysnum, arg0type arg0name);		\
-	asmlinkage long shim_##name (arg0type arg0name) SHIM_CALL(name, sysnum, arg0name);	
+	asmlinkage long shim_##name (arg0type arg0name) SHIM_CALL(name, sysnum, arg0name);
+
+#define THEIA_SHIM1(name, sysnum, arg0type, arg0name)			\
+	SIMPLE_RECORD1(name, sysnum, arg0type, arg0name);		\
+	SIMPLE_REPLAY (name, sysnum, arg0type arg0name);		\
+	asmlinkage long shim_##name (arg0type arg0name)                 \
+	SHIM_CALL_MAIN(sysnum, record_##name(arg0name), replay_##name(arg0name),	\
+		       theia_sys_##name(arg0name));
 
 #define SIMPLE_SHIM2(name, sysnum, arg0type, arg0name, arg1type, arg1name) \
 	SIMPLE_RECORD2(name, sysnum, arg0type, arg0name, arg1type, arg1name); \
 	SIMPLE_REPLAY (name, sysnum, arg0type arg0name, arg1type arg1name); \
-	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name) SHIM_CALL(name, sysnum, arg0name, arg1name);	
+	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name) SHIM_CALL(name, sysnum, arg0name, arg1name);
+
+#define THEIA_SHIM2(name, sysnum, arg0type, arg0name, arg1type, arg1name) \
+	SIMPLE_RECORD2(name, sysnum, arg0type, arg0name, arg1type, arg1name); \
+	SIMPLE_REPLAY (name, sysnum, arg0type arg0name, arg1type arg1name); \
+	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name) \
+	SHIM_CALL_MAIN(sysnum, record_##name(arg0name, arg1name), replay_##name(arg0name, arg1name), \
+        theia_sys_##name(arg0name, arg1name));
 
 #define SIMPLE_SHIM3(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name) \
 	SIMPLE_RECORD3(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name); \
@@ -9183,7 +9197,17 @@ SIMPLE_SHIM1(close, 3, int, fd);
 RET1_SHIM3(waitpid, 7, int, stat_addr, pid_t, pid, int __user *, stat_addr, int, options);
 SIMPLE_SHIM2(creat, 85, const char __user *, pathname, int, mode);
 SIMPLE_SHIM2(link, 86, const char __user *, oldname, const char __user *, newname);
-SIMPLE_SHIM1(unlink, 87, const char __user *, pathname);
+
+int theia_sys_unlink (const char __user * pathname)
+{
+	int rc;
+	rc = sys_unlink(pathname);
+	// theia_chmod_ahg(filename, mode);
+	return rc;
+}
+
+//SIMPLE_SHIM1(unlink, 87, const char __user *, pathname);
+THEIA_SHIM1(unlink, 87, const char __user *, pathname);
 
 // This should be called with the record group lock
 static int
@@ -9883,7 +9907,18 @@ RET1_REPLAY(time, 201, time_t, tloc, time_t __user * tloc);
 asmlinkage long shim_time(time_t __user * tloc) SHIM_CALL (time, 201, tloc);
 
 SIMPLE_SHIM3 (mknod, 133, const char __user *, filename, int, mode, unsigned, dev);
-SIMPLE_SHIM2(chmod, 90, const char __user *, filename, mode_t,  mode);
+
+int theia_sys_chmod (const char __user * filename, mode_t mode)
+{
+	int rc;
+	rc = sys_chmod(filename, mode);
+	// theia_chmod_ahg(filename, mode);
+	return rc;
+}
+
+//SIMPLE_SHIM2(chmod, 90, const char __user *, filename, mode_t,  mode);
+THEIA_SHIM2(chmod, 90, const char __user *, filename, mode_t,  mode);
+
 //SIMPLE_SHIM3(lchown16, 16, const char __user *, filename, old_uid_t, user, old_gid_t, group);
 //64port
 SIMPLE_SHIM3(lchown, 94, const char __user *, filename, uid_t, user, gid_t, group);
@@ -10794,7 +10829,19 @@ replay_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg)
 	return rc;
 }
 
-asmlinkage long shim_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg) SHIM_CALL(fcntl, 72, fd, cmd, arg);
+int theia_sys_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg)
+{
+	int rc;
+	rc = sys_fcntl(fd, cmd, arg);
+
+	// theia_fcntl_ahg(fd, cmd, arg);
+
+	return rc;
+}
+
+// asmlinkage long shim_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg) SHIM_CALL(fcntl, 72, fd, cmd, arg);
+asmlinkage long shim_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg)
+SHIM_CALL_MAIN(72, record_fcntl(fd, cmd, arg), replay_fcntl(fd, cmd, arg), theia_sys_fcntl(fd, cmd, arg))
 
 SIMPLE_SHIM2(setpgid, 109, pid_t, pid, pid_t, pgid);
 RET1_SHIM1(olduname, 59, struct oldold_utsname, name, struct oldold_utsname __user *, name);
