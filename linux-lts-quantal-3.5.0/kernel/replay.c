@@ -62,6 +62,8 @@
 
 #include <linux/replay_configs.h>
 
+#include <linux/fs_struct.h>
+
 //Yang
 #include <linux/relay.h>
 #include <linux/debugfs.h>
@@ -9828,6 +9830,7 @@ void theia_fchmod_ahg(unsigned int fd, mode_t mode)
 
 void theia_fchmodat_ahg(int dfd, const char __user * filename, int mode)
 {
+
 	if (theia_check_channel() == false)
 		return;
 
@@ -9837,10 +9840,26 @@ void theia_fchmodat_ahg(int dfd, const char __user * filename, int mode)
 	/* packahgv */
 	if(theia_chan) {
 		char buf[256];
+		char buf2[256];
+		char *ptr = NULL;
 		long sec, nsec;
+		int size;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
-				268, current->pid, current->start_time.tv_sec, dfd, filename, mode, current->tgid, sec, nsec);
+
+		struct path path;
+		if (dfd == -100) { // AT_FDCWD
+			get_fs_pwd(current->fs, &path);
+			ptr = d_path(&path, buf2, 256);
+			size = sprintf(buf, "startahg|%d|%d|%d|%s/%s|%d|%d|%ld|%ld|endahg\n", 
+				268, current->pid, current->start_time.tv_sec, ptr, filename, mode, current->tgid, sec, nsec);
+		}
+		else if (filename[0] == '/') {
+			size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
+				268, current->pid, current->start_time.tv_sec, filename, mode, current->tgid, sec, nsec);
+		}
+		else {
+			/* TODO: relative to dfd */
+		}
 		relay_write(theia_chan, buf, size);
 	}
 	else
