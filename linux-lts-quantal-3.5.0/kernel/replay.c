@@ -9839,7 +9839,7 @@ void theia_fchmodat_ahg(int dfd, const char __user * filename, int mode)
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
 				268, current->pid, current->start_time.tv_sec, dfd, filename, mode, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
