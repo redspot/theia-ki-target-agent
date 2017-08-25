@@ -63,6 +63,7 @@
 #include <linux/replay_configs.h>
 
 #include <linux/fs_struct.h>
+#include <linux/namei.h>
 
 //Yang
 #include <linux/relay.h>
@@ -6292,7 +6293,7 @@ asmlinkage long sys_pthread_sysign (void)
 	{								\
 		long rc;						\
 		rc = sys_##name(arg0name);				\
-		theia_##name##_ahg(arg0name);                             \
+		theia_##name##_ahg(arg0name, rc);                             \
 		return rc;						\
 	}								
 
@@ -6302,7 +6303,7 @@ asmlinkage long sys_pthread_sysign (void)
 	{								\
 		long rc;						\
 		rc = sys_##name(arg0name, arg1name);			\
-		theia_##name##_ahg(arg0name, arg1name);                   \
+		theia_##name##_ahg(arg0name, arg1name, rc);                   \
 		return rc;						\
 	}								
 
@@ -6312,7 +6313,37 @@ asmlinkage long sys_pthread_sysign (void)
 	{								\
 		long rc;						\
 		rc = sys_##name(arg0name, arg1name, arg2name);			\
-		theia_##name##_ahg(arg0name, arg1name, arg2name);                   \
+		theia_##name##_ahg(arg0name, arg1name, arg2name, rc);                   \
+		return rc;						\
+	}								
+
+#define THEIA_SIMPLE_SHIM4(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name)	\
+	static asmlinkage long						\
+	theia_sys_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name)		\
+	{								\
+		long rc;						\
+		rc = sys_##name(arg0name, arg1name, arg2name, arg3name);			\
+		theia_##name##_ahg(arg0name, arg1name, arg2name, arg3name, rc);                   \
+		return rc;						\
+	}								
+
+#define THEIA_SIMPLE_SHIM5(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name)	\
+	static asmlinkage long						\
+	theia_sys_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name)		\
+	{								\
+		long rc;						\
+		rc = sys_##name(arg0name, arg1name, arg2name, arg3name, arg4name);			\
+		theia_##name##_ahg(arg0name, arg1name, arg2name, arg3name, arg4name, rc);                   \
+		return rc;						\
+	}								
+
+#define THEIA_SIMPLE_SHIM6(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name, arg5type, arg5name)	\
+	static asmlinkage long						\
+	theia_sys_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name, arg5type arg5name)		\
+	{								\
+		long rc;						\
+		rc = sys_##name(arg0name, arg1name, arg2name, arg3name, arg4name, arg5name);			\
+		theia_##name##_ahg(arg0name, arg1name, arg2name, arg3name, arg4name, arg5name, rc);                   \
 		return rc;						\
 	}								
 
@@ -6371,15 +6402,40 @@ asmlinkage long sys_pthread_sysign (void)
 	SIMPLE_RECORD4(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name); \
 	SIMPLE_REPLAY (name, sysnum, arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name); \
 	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name) SHIM_CALL(name, sysnum, arg0name, arg1name, arg2name, arg3name);	
+
+#define THEIA_SHIM4(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name) \
+	SIMPLE_RECORD4(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name); \
+	SIMPLE_REPLAY (name, sysnum, arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name); \
+	THEIA_SIMPLE_SHIM4(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type arg3name); \
+	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name) \
+	SHIM_CALL_MAIN(sysnum, record_##name(arg0name, arg1name, arg2name, arg3name), replay_##name(arg0name, arg1name, arg2name, arg3name), \
+        theia_sys_##name(arg0name, arg1name, arg2name, arg3name));
+
 #define SIMPLE_SHIM5(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name) \
 	SIMPLE_RECORD5(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name); \
 	SIMPLE_REPLAY (name, sysnum, arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name); \
 	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name) SHIM_CALL(name, sysnum, arg0name, arg1name, arg2name, arg3name, arg4name);	
 
+#define THEIA_SHIM5(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name) \
+	SIMPLE_RECORD5(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name); \
+	SIMPLE_REPLAY (name, sysnum, arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name); \
+	THEIA_SIMPLE_SHIM5(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type arg3name, arg4type arg4name); \
+	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name) \
+	SHIM_CALL_MAIN(sysnum, record_##name(arg0name, arg1name, arg2name, arg3name, arg4name), replay_##name(arg0name, arg1name, arg2name, arg3name, arg4name), \
+        theia_sys_##name(arg0name, arg1name, arg2name, arg3name, arg4name));
+
 #define SIMPLE_SHIM6(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name, arg5type, arg5name) \
 	SIMPLE_RECORD6(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name, arg5type, arg5name); \
 	SIMPLE_REPLAY (name, sysnum, arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name, arg5type arg5name); \
 	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name, arg5type arg5name) SHIM_CALL(name, sysnum, arg0name, arg1name, arg2name, arg3name, arg4name, arg5name);
+
+#define THEIA_SHIM6(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name, arg5type, arg5name) \
+	SIMPLE_RECORD6(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name, arg5type, arg5name); \
+	SIMPLE_REPLAY (name, sysnum, arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name, arg5type arg5name); \
+	THEIA_SIMPLE_SHIM6(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type arg3name, arg4type arg4name, arg5type arg5name); \
+	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name, arg5type arg5name) \
+	SHIM_CALL_MAIN(sysnum, record_##name(arg0name, arg1name, arg2name, arg3name, arg4name, arg5name), replay_##name(arg0name, arg1name, arg2name, arg3name, arg4name, arg5name), \
+        theia_sys_##name(arg0name, arg1name, arg2name, arg3name, arg4name, arg5name));
 
 #define RET1_RECORD1(name, sysnum, type, dest, arg0type, arg0name)	\
 static asmlinkage long record_##name (arg0type arg0name)	\
@@ -9070,7 +9126,7 @@ SIMPLE_SHIM1(close, 3, int, fd);
 RET1_SHIM3(waitpid, 7, int, stat_addr, pid_t, pid, int __user *, stat_addr, int, options);
 SIMPLE_SHIM2(creat, 85, const char __user *, pathname, int, mode);
 
-void theia_link_ahg(const char __user * oldname, const char __user * newname)
+void theia_link_ahg(const char __user * oldname, const char __user * newname, long rc)
 {
 	if (theia_check_channel() == false)
 		return;
@@ -9091,7 +9147,7 @@ void theia_link_ahg(const char __user * oldname, const char __user * newname)
 		printk("theia_chan invalid\n");
 }
 
-void theia_unlink_ahg(const char __user * pathname)
+void theia_unlink_ahg(const char __user * pathname, long rc)
 {
 	if (theia_check_channel() == false)
 		return;
@@ -9112,7 +9168,7 @@ void theia_unlink_ahg(const char __user * pathname)
 		printk("theia_chan invalid\n");
 }
 
-void theia_symlink_ahg(const char __user * oldname, const char __user * newname)
+void theia_symlink_ahg(const char __user * oldname, const char __user * newname, long rc)
 {
 	if (theia_check_channel() == false)
 		return;
@@ -9786,7 +9842,7 @@ asmlinkage long shim_time(time_t __user * tloc) SHIM_CALL (time, 201, tloc);
 
 SIMPLE_SHIM3 (mknod, 133, const char __user *, filename, int, mode, unsigned, dev);
 
-void theia_chmod_ahg(const char __user * filename, mode_t mode)
+void theia_chmod_ahg(const char __user * filename, mode_t mode, long rc)
 {
 	if (theia_check_channel() == false)
 		return;
@@ -9807,7 +9863,7 @@ void theia_chmod_ahg(const char __user * filename, mode_t mode)
 		printk("theia_chan invalid\n");
 }
 
-void theia_fchmod_ahg(unsigned int fd, mode_t mode)
+void theia_fchmod_ahg(unsigned int fd, mode_t mode, long rc)
 {
 	if (theia_check_channel() == false)
 		return;
@@ -9828,9 +9884,8 @@ void theia_fchmod_ahg(unsigned int fd, mode_t mode)
 		printk("theia_chan invalid\n");
 }
 
-void theia_fchmodat_ahg(int dfd, const char __user * filename, int mode)
+void theia_fchmodat_ahg(int dfd, const char __user * filename, int mode, long rc)
 {
-
 	if (theia_check_channel() == false)
 		return;
 
@@ -9844,21 +9899,19 @@ void theia_fchmodat_ahg(int dfd, const char __user * filename, int mode)
 		char *ptr = NULL;
 		long sec, nsec;
 		int size;
+		int res;
 		get_curr_time(&sec, &nsec);
 
 		struct path path;
-		if (dfd == -100) { // AT_FDCWD
-			get_fs_pwd(current->fs, &path);
+		res = user_path_at(dfd, filename, LOOKUP_FOLLOW, &path);
+		if (res == 0) {
 			ptr = d_path(&path, buf2, 256);
-			size = sprintf(buf, "startahg|%d|%d|%d|%s/%s|%d|%d|%ld|%ld|endahg\n", 
-				268, current->pid, current->start_time.tv_sec, ptr, filename, mode, current->tgid, sec, nsec);
-		}
-		else if (filename[0] == '/') {
 			size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
-				268, current->pid, current->start_time.tv_sec, filename, mode, current->tgid, sec, nsec);
+				268, current->pid, current->start_time.tv_sec, ptr, mode, current->tgid, sec, nsec);
 		}
 		else {
-			/* TODO: relative to dfd */
+			size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
+				268, current->pid, current->start_time.tv_sec, filename, mode, current->tgid, sec, nsec);
 		}
 		relay_write(theia_chan, buf, size);
 	}
@@ -9871,7 +9924,7 @@ THEIA_SHIM2(chmod, 90, const char __user *, filename, mode_t,  mode);
 
 //SIMPLE_SHIM3(lchown16, 16, const char __user *, filename, old_uid_t, user, old_gid_t, group);
 
-void theia_lchown_ahg(const char __user * filename, uid_t user, gid_t group)
+void theia_lchown_ahg(const char __user * filename, uid_t user, gid_t group, long rc)
 {
 	if (theia_check_channel() == false)
 		return;
@@ -9892,7 +9945,7 @@ void theia_lchown_ahg(const char __user * filename, uid_t user, gid_t group)
 		printk("theia_chan invalid\n");
 }
 
-void theia_chown_ahg(const char __user * filename, uid_t user, gid_t group)
+void theia_chown_ahg(const char __user * filename, uid_t user, gid_t group, long rc)
 {
 	if (theia_check_channel() == false)
 		return;
@@ -9917,7 +9970,7 @@ THEIA_SHIM3(lchown, 94, const char __user *, filename, uid_t, user, gid_t, group
 //64port
 //RET1_SHIM2(stat, 18, struct __old_kernel_stat, statbuf, char __user *, filename, struct __old_kernel_stat __user *, statbuf);
 
-void theia_lseek_ahg(unsigned int fd, off_t offset, unsigned int origin)
+void theia_lseek_ahg(unsigned int fd, off_t offset, unsigned int origin, long rc)
 {
 	if (theia_check_channel() == false)
 		return;
@@ -10125,7 +10178,7 @@ SIMPLE_SHIM2(access, 21, const char __user *, filename, int, mode);
 SIMPLE_SHIM1(nice, 34, int, increment);
 SIMPLE_SHIM0(sync, 162);
 
-void theia_kill_ahg(int pid, int sig)
+void theia_kill_ahg(int pid, int sig, long rc)
 {
 	if (theia_check_channel() == false)
 		return;
@@ -10146,7 +10199,7 @@ void theia_kill_ahg(int pid, int sig)
 		printk("theia_chan invalid\n");
 }
 
-void theia_rename_ahg(const char __user * oldname, const char __user * newname)
+void theia_rename_ahg(const char __user * oldname, const char __user * newname, long rc)
 {
 	if (theia_check_channel() == false)
 		return;
@@ -10167,7 +10220,7 @@ void theia_rename_ahg(const char __user * oldname, const char __user * newname)
 		printk("theia_chan invalid\n");
 }
 
-void theia_mkdir_ahg(const char __user * pathname, int mode)
+void theia_mkdir_ahg(const char __user * pathname, int mode, long rc)
 {
 	if (theia_check_channel() == false)
 		return;
@@ -10188,7 +10241,42 @@ void theia_mkdir_ahg(const char __user * pathname, int mode)
 		printk("theia_chan invalid\n");
 }
 
-void theia_rmdir_ahg(const char __user * pathname)
+void theia_mkdirat_ahg(int dfd, const char __user * pathname, int mode, long rc)
+{
+	if (theia_check_channel() == false)
+		return;
+
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
+		recursive_packahgv_process();
+
+	/* packahgv */
+	if(theia_chan) {
+		char buf[256];
+		char buf2[256];
+		char *ptr = NULL;
+		long sec, nsec;
+		int size;
+		int res;
+		get_curr_time(&sec, &nsec);
+
+		struct path path;
+		res = user_path_at(dfd, pathname, LOOKUP_FOLLOW, &path);
+		if (res == 0) {
+			ptr = d_path(&path, buf2, 256);
+			size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
+				258, current->pid, current->start_time.tv_sec, ptr, mode, current->tgid, sec, nsec);
+		}
+		else {
+			size = sprintf(buf, "startahg|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
+				258, current->pid, current->start_time.tv_sec, pathname, mode, current->tgid, sec, nsec);
+		}
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+void theia_rmdir_ahg(const char __user * pathname, long rc)
 {
 	if (theia_check_channel() == false)
 		return;
@@ -10468,7 +10556,7 @@ SIMPLE_SHIM2(signal, 48, int, sig, __sighandler_t, handler);
 //SIMPLE_SHIM0(getegid16, 50);
 SIMPLE_SHIM1(acct, 163, char __user *, name)
 
-void theia_umount_ahg(const char __user * name, int flags)
+void theia_umount_ahg(const char __user * name, int flags, long rc)
 {
 	if (theia_check_channel() == false)
 		return;
@@ -10813,7 +10901,7 @@ replay_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg)
 	return rc;
 }
 
-void theia_fcntl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg)
+void theia_fcntl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long rc)
 {
 	if (theia_check_channel() == false)
 		return;
@@ -10839,7 +10927,7 @@ int theia_sys_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg)
 	int rc;
 	rc = sys_fcntl(fd, cmd, arg);
 
-	theia_fcntl_ahg(fd, cmd, arg);
+	theia_fcntl_ahg(fd, cmd, arg, rc);
 
 	return rc;
 }
@@ -10852,7 +10940,7 @@ SIMPLE_SHIM2(setpgid, 109, pid_t, pid, pid_t, pgid);
 RET1_SHIM1(olduname, 59, struct oldold_utsname, name, struct oldold_utsname __user *, name);
 SIMPLE_SHIM1(umask, 95, int, mask);
 
-void theia_chroot_ahg(const char __user * filename)
+void theia_chroot_ahg(const char __user * filename, long rc)
 {
 	if (theia_check_channel() == false)
 		return;
@@ -11440,7 +11528,7 @@ asmlinkage long shim_munmap (unsigned long addr, size_t len)
 //SHIM_CALL(munmap, 91, addr, len);
 SHIM_CALL_MAIN(11, record_munmap(addr, len), replay_munmap(addr, len), theia_sys_munmap(addr, len))
 
-void theia_truncate_ahg(const char __user *path, unsigned long length)
+void theia_truncate_ahg(const char __user *path, unsigned long length, long rc)
 {
 	if (theia_check_channel() == false)
 		return;
@@ -11461,7 +11549,7 @@ void theia_truncate_ahg(const char __user *path, unsigned long length)
 		printk("theia_chan invalid\n");
 }
 
-void theia_ftruncate_ahg(unsigned int fd, unsigned long length)
+void theia_ftruncate_ahg(unsigned int fd, unsigned long length, long rc)
 {
 	if (theia_check_channel() == false)
 		return;
@@ -19936,9 +20024,11 @@ SIMPLE_SHIM3(inotify_add_watch, 254, int, fd, const char __user *, path, u32, ma
 SIMPLE_SHIM2(inotify_rm_watch, 255, int, fd, u32, wd);
 SIMPLE_SHIM4(migrate_pages, 256, pid_t, pid, unsigned long, maxnode, const unsigned long __user *, old_nodes, const unsigned long __user *, new_nodes);
 SIMPLE_SHIM4(openat, 257, int, dfd, const char __user *, filename, int, flags, int, mode);
-SIMPLE_SHIM3(mkdirat, 258, int, dfd, const char __user *, pathname, int, mode);
+
+THEIA_SHIM3(mkdirat, 258, int, dfd, const char __user *, pathname, int, mode);
 SIMPLE_SHIM4(mknodat, 259, int, dfd, const char __user *, filename, int, mode, unsigned, dev);
 SIMPLE_SHIM5(fchownat, 260, int, dfd, const char __user *, filename, uid_t, user, gid_t, group, int, flag);
+
 SIMPLE_SHIM3(futimesat, 261, int, dfd, char __user *, filename, struct timeval __user *,utimes);
 //64port
 //RET1_SHIM4(fstatat64, 300, struct stat64, statbuf, int, dfd, char __user *, filename, struct stat64 __user *, statbuf, int, flag);
@@ -19949,6 +20039,7 @@ SIMPLE_SHIM3(unlinkat, 263, int, dfd, const char __user *, pathname, int, flag);
 SIMPLE_SHIM4(renameat, 264, int, olddfd, const char __user *, oldname, int, newdfd, const char __user *, newname);
 SIMPLE_SHIM5(linkat, 265, int, olddfd, const char __user *, oldname, int, newdfd, const char __user *, newname, int, flags);
 SIMPLE_SHIM3(symlinkat, 266, const char __user *, oldname, int, newdfd, const char __user *, newname);
+
 RET1_COUNT_SHIM4(readlinkat, 267, buf, int, dfd, const char __user *, path, char __user *, buf, int, bufsiz)
 
 THEIA_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
