@@ -8364,7 +8364,7 @@ void theia_write_ahg(unsigned int fd, long rc, u_long clock) {
 	struct write_ahgv* pahgv = NULL;
 
 	if (theia_check_channel() == false)
-		return true;
+		return;
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -9071,7 +9071,7 @@ SIMPLE_SHIM2(creat, 85, const char __user *, pathname, int, mode);
 void theia_link_ahg(const char __user * oldname, const char __user * newname)
 {
 	if (theia_check_channel() == false)
-		return true;
+		return;
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -9092,7 +9092,7 @@ void theia_link_ahg(const char __user * oldname, const char __user * newname)
 void theia_unlink_ahg(const char __user * pathname)
 {
 	if (theia_check_channel() == false)
-		return true;
+		return;
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -9113,7 +9113,7 @@ void theia_unlink_ahg(const char __user * pathname)
 void theia_symlink_ahg(const char __user * oldname, const char __user * newname)
 {
 	if (theia_check_channel() == false)
-		return true;
+		return;
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -9787,7 +9787,7 @@ SIMPLE_SHIM3 (mknod, 133, const char __user *, filename, int, mode, unsigned, de
 void theia_chmod_ahg(const char __user * filename, mode_t mode)
 {
 	if (theia_check_channel() == false)
-		return true;
+		return;
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -9808,7 +9808,7 @@ void theia_chmod_ahg(const char __user * filename, mode_t mode)
 void theia_fchmod_ahg(unsigned int fd, mode_t mode)
 {
 	if (theia_check_channel() == false)
-		return true;
+		return;
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -9829,7 +9829,7 @@ void theia_fchmod_ahg(unsigned int fd, mode_t mode)
 void theia_fchmodat_ahg(int dfd, const char __user * filename, int mode)
 {
 	if (theia_check_channel() == false)
-		return true;
+		return;
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -9855,7 +9855,7 @@ THEIA_SHIM2(chmod, 90, const char __user *, filename, mode_t,  mode);
 void theia_lchown_ahg(const char __user * filename, uid_t user, gid_t group)
 {
 	if (theia_check_channel() == false)
-		return true;
+		return;
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -9876,7 +9876,7 @@ void theia_lchown_ahg(const char __user * filename, uid_t user, gid_t group)
 void theia_chown_ahg(const char __user * filename, uid_t user, gid_t group)
 {
 	if (theia_check_channel() == false)
-		return true;
+		return;
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -9901,7 +9901,7 @@ THEIA_SHIM3(lchown, 94, const char __user *, filename, uid_t, user, gid_t, group
 void theia_lseek_ahg(unsigned int fd, off_t offset, unsigned int origin)
 {
 	if (theia_check_channel() == false)
-		return true;
+		return;
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -10109,7 +10109,7 @@ SIMPLE_SHIM0(sync, 162);
 void theia_kill_ahg(int pid, int sig)
 {
 	if (theia_check_channel() == false)
-		return true;
+		return;
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -10130,7 +10130,7 @@ void theia_kill_ahg(int pid, int sig)
 void theia_rename_ahg(const char __user * oldname, const char __user * newname)
 {
 	if (theia_check_channel() == false)
-		return true;
+		return;
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -10151,7 +10151,7 @@ void theia_rename_ahg(const char __user * oldname, const char __user * newname)
 void theia_mkdir_ahg(const char __user * pathname, int mode)
 {
 	if (theia_check_channel() == false)
-		return true;
+		return;
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -10172,7 +10172,7 @@ void theia_mkdir_ahg(const char __user * pathname, int mode)
 void theia_rmdir_ahg(const char __user * pathname)
 {
 	if (theia_check_channel() == false)
-		return true;
+		return;
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -10452,7 +10452,7 @@ SIMPLE_SHIM1(acct, 163, char __user *, name)
 void theia_umount_ahg(const char __user * name, int flags)
 {
 	if (theia_check_channel() == false)
-		return true;
+		return;
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -10797,7 +10797,7 @@ replay_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg)
 void theia_fcntl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg)
 {
 	if (theia_check_channel() == false)
-		return true;
+		return;
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -10836,7 +10836,7 @@ SIMPLE_SHIM1(umask, 95, int, mask);
 void theia_chroot_ahg(const char __user * filename)
 {
 	if (theia_check_channel() == false)
-		return true;
+		return;
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -11424,7 +11424,7 @@ SHIM_CALL_MAIN(11, record_munmap(addr, len), replay_munmap(addr, len), theia_sys
 void theia_truncate_ahg(const char __user *path, unsigned long length)
 {
 	if (theia_check_channel() == false)
-		return true;
+		return;
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -11445,7 +11445,7 @@ void theia_truncate_ahg(const char __user *path, unsigned long length)
 void theia_ftruncate_ahg(unsigned int fd, unsigned long length)
 {
 	if (theia_check_channel() == false)
-		return true;
+		return;
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
