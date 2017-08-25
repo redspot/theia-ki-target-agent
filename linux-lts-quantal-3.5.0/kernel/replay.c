@@ -10794,12 +10794,33 @@ replay_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg)
 	return rc;
 }
 
+void theia_fcntl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg)
+{
+	if (theia_check_channel() == false)
+		return true;
+
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
+		recursive_packahgv_process();
+
+	/* packahgv */
+	if(theia_chan) {
+		char buf[256];
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%d|%d|%ld|%ld|endahg\n", 
+				72, current->pid, current->start_time.tv_sec, fd, cmd, arg, current->tgid, sec, nsec);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
 int theia_sys_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg)
 {
 	int rc;
 	rc = sys_fcntl(fd, cmd, arg);
 
-	// theia_fcntl_ahg(fd, cmd, arg);
+	theia_fcntl_ahg(fd, cmd, arg);
 
 	return rc;
 }
