@@ -9168,6 +9168,38 @@ void theia_unlink_ahg(const char __user * pathname, long rc)
 		printk("theia_chan invalid\n");
 }
 
+void theia_unlinkat_ahg(int dfd, const char __user * pathname, int flag, long rc)
+{
+	if (theia_check_channel() == false)
+		return;
+
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
+		recursive_packahgv_process();
+
+	/* packahgv */
+	if(theia_chan) {
+		char buf[256];
+		char buf2[256];
+		char *ptr = NULL;
+		long sec, nsec;
+		int size;
+		int res;
+		get_curr_time(&sec, &nsec);
+
+		struct path path;
+		res = user_path_at(dfd, pathname, LOOKUP_FOLLOW, &path);
+		if (res == 0)
+			ptr = d_path(&path, buf2, 256);
+		else
+			ptr = pathname;
+		size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
+			263, current->pid, current->start_time.tv_sec, ptr, flag, current->tgid, sec, nsec);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
 void theia_symlink_ahg(const char __user * oldname, const char __user * newname, long rc)
 {
 	if (theia_check_channel() == false)
@@ -9244,6 +9276,7 @@ struct execve_ahgv {
 	char filename[204];
 	int  is_user_remote;
 	int  rc;
+	char *args;
 };
 
 void packahgv_execve (struct execve_ahgv *sys_args) {
@@ -9271,6 +9304,8 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 			fpath = sys_args->filename;
 		}
 
+		/* TODO: publish args as well */
+
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%s|%d|%d|%ld|%ld|endahg\n", 
 				59, sys_args->pid, current->start_time.tv_sec, sys_args->rc, 
 				fpath, ids, is_user_remote, current->tgid, sec, nsec);
@@ -9292,19 +9327,20 @@ void theia_execve_ahg(const char *filename, int rc) {
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
 
-//	int copied_length = 0;
-//	char *dumped_envp = VMALLOC(3000);
-//	dumped_envp[2999] = '\0';
-//	if ((copied_length = strncpy_from_user(dumped_envp, envp, 3000)) != strlen(envp)) {
-//		printk ("theia_execve_ahg: can't copy envp to ahgv, envp length %d, copied %d, envp:%s\n", strlen(envp), copied_length, envp); 
-//		KFREE(pahgv);	
-//		KFREE(dumped_envp);	
-//	}
-//	if (strstr(dumped_envp, "SSH_CONNECTION") != NULL) {
-//		pahgv->is_user_remote = 1;
-//	}
-//	else
-//		pahgv->is_user_remote = 0;
+	struct mm_struct *mm = current->mm;
+	char *args = NULL;
+	if (mm) {
+		unsigned long arg_start = mm->arg_start;
+		unsigned long arg_len   = mm->arg_end - arg_start;
+		args = (char*)vmalloc(arg_len);
+		copy_from_user((void*)args, (const void __user*)arg_start, arg_len);
+
+		int i;
+		for (i = 0; i < arg_len-1; ++i) {
+			if (args[i] == '\0') 
+				args[i] = ' ';
+		}
+	}
 
 	pahgv = (struct execve_ahgv*)KMALLOC(sizeof(struct execve_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {
@@ -9314,9 +9350,10 @@ void theia_execve_ahg(const char *filename, int rc) {
 	pahgv->pid = current->pid;
 	strncpy(pahgv->filename, filename, sizeof(pahgv->filename));
 	pahgv->rc = rc;
+	pahgv->args = args;
 	packahgv_execve(pahgv);
 	KFREE(pahgv);	
-//	KFREE(dumped_envp);	
+	vfree(args);
 }
 
 // Simply recording the fact that an execve takes place, we won't replay it
@@ -9904,15 +9941,12 @@ void theia_fchmodat_ahg(int dfd, const char __user * filename, int mode, long rc
 
 		struct path path;
 		res = user_path_at(dfd, filename, LOOKUP_FOLLOW, &path);
-		if (res == 0) {
+		if (res == 0)
 			ptr = d_path(&path, buf2, 256);
-			size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
-				268, current->pid, current->start_time.tv_sec, ptr, mode, current->tgid, sec, nsec);
-		}
-		else {
-			size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
-				268, current->pid, current->start_time.tv_sec, filename, mode, current->tgid, sec, nsec);
-		}
+		else
+			ptr = filename;
+		size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
+			268, current->pid, current->start_time.tv_sec, ptr, mode, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -10261,15 +10295,12 @@ void theia_mkdirat_ahg(int dfd, const char __user * pathname, int mode, long rc)
 
 		struct path path;
 		res = user_path_at(dfd, pathname, LOOKUP_FOLLOW, &path);
-		if (res == 0) {
+		if (res == 0)
 			ptr = d_path(&path, buf2, 256);
-			size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
-				258, current->pid, current->start_time.tv_sec, ptr, mode, current->tgid, sec, nsec);
-		}
-		else {
-			size = sprintf(buf, "startahg|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
-				258, current->pid, current->start_time.tv_sec, pathname, mode, current->tgid, sec, nsec);
-		}
+		else
+			ptr = pathname;
+		size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
+			258, current->pid, current->start_time.tv_sec, ptr, mode, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
 	}
 	else
@@ -20034,7 +20065,7 @@ SIMPLE_SHIM3(futimesat, 261, int, dfd, char __user *, filename, struct timeval _
 //RET1_SHIM4(fstatat64, 300, struct stat64, statbuf, int, dfd, char __user *, filename, struct stat64 __user *, statbuf, int, flag);
 RET1_SHIM4(newfstatat, 262, struct stat, statbuf, int, dfd, char __user *, filename, struct stat __user *, statbuf, int, flag);
 
-SIMPLE_SHIM3(unlinkat, 263, int, dfd, const char __user *, pathname, int, flag);
+THEIA_SHIM3(unlinkat, 263, int, dfd, const char __user *, pathname, int, flag);
 
 SIMPLE_SHIM4(renameat, 264, int, olddfd, const char __user *, oldname, int, newdfd, const char __user *, newname);
 SIMPLE_SHIM5(linkat, 265, int, olddfd, const char __user *, oldname, int, newdfd, const char __user *, newname, int, flags);
