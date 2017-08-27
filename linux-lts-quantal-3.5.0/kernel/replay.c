@@ -239,6 +239,77 @@ bool theia_check_channel(void) {
 	return true;
 }
 
+void theia_dump_str(char *str, int rc, int sysnum) {
+	if (theia_check_channel() == false)
+		return;
+
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
+		recursive_packahgv_process();
+
+	/* packahgv */
+	if(theia_chan) {
+		char buf[256];
+		long sec, nsec;
+		int size;
+		get_curr_time(&sec, &nsec);
+
+		size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%d|%ld|%ld|endahg\n", \
+			sysnum, current->pid, current->start_time.tv_sec, \
+			rc, str, \
+			current->tgid, sec, nsec);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+void theia_dump_str_str(const char __user *str1, const char __user *str2, int rc, int sysnum) {
+	char buf[256];
+	sprintf(buf, "%s|%s", str1, str2);
+	theia_dump_str(buf, rc, sysnum);
+}
+
+void theia_dump_str_int(const char __user *str, int val, int rc, int sysnum) {
+	char buf[256];
+	sprintf(buf, "%s|%d", str, val);
+	theia_dump_str(buf, rc, sysnum);
+}
+
+void theia_dump_str_int_int(const char __user *str, int val1, int val2, int rc, int sysnum) {
+	char buf[256];
+	sprintf(buf, "%s|%d|%d", str, val1, val2);
+	theia_dump_str(buf, rc, sysnum);
+}
+
+void theia_dump_at_str_int(int dfd, const char __user *str, int val, int rc, int sysnum) {
+	char buf[256];
+	char buf2[256];
+	char *ptr = NULL;
+	struct path path;
+	int res;
+
+	res = user_path_at(dfd, str, LOOKUP_FOLLOW, &path);
+	if (res == 0)
+		ptr = d_path(&path, buf2, 256);
+	else
+		ptr = str;
+
+	sprintf(buf, "%s|%d", ptr, val);
+	theia_dump_str(buf, rc, sysnum);
+}
+
+void theia_dump_int_int(int val1, int val2, int rc, int sysnum) {
+	char buf[256];
+	sprintf(buf, "%d|%d", val1, val2);
+	theia_dump_str(buf, rc, sysnum);
+}
+
+void theia_dump_int_int_int(int val1, int val2, int val3, int rc, int sysnum) {
+	char buf[256];
+	sprintf(buf, "%d|%d|%d", val1, val2, val3);
+	theia_dump_str(buf, rc, sysnum);
+}
+
 //SL
 void dump_user_stack(void);
 void dump_user_return_addresses(void);
@@ -6293,7 +6364,7 @@ asmlinkage long sys_pthread_sysign (void)
 	{								\
 		long rc;						\
 		rc = sys_##name(arg0name);				\
-		theia_##name##_ahg(arg0name, rc);                             \
+		theia_##name##_ahgx(arg0name, rc, sysnum);               \
 		return rc;						\
 	}								
 
@@ -6303,7 +6374,7 @@ asmlinkage long sys_pthread_sysign (void)
 	{								\
 		long rc;						\
 		rc = sys_##name(arg0name, arg1name);			\
-		theia_##name##_ahg(arg0name, arg1name, rc);                   \
+		theia_##name##_ahgx(arg0name, arg1name, rc, sysnum);     \
 		return rc;						\
 	}								
 
@@ -6313,7 +6384,7 @@ asmlinkage long sys_pthread_sysign (void)
 	{								\
 		long rc;						\
 		rc = sys_##name(arg0name, arg1name, arg2name);			\
-		theia_##name##_ahg(arg0name, arg1name, arg2name, rc);                   \
+		theia_##name##_ahgx(arg0name, arg1name, arg2name, rc, sysnum);   \
 		return rc;						\
 	}								
 
@@ -6323,7 +6394,7 @@ asmlinkage long sys_pthread_sysign (void)
 	{								\
 		long rc;						\
 		rc = sys_##name(arg0name, arg1name, arg2name, arg3name);			\
-		theia_##name##_ahg(arg0name, arg1name, arg2name, arg3name, rc);                   \
+		theia_##name##_ahgx(arg0name, arg1name, arg2name, arg3name, rc, sysnum);         \
 		return rc;						\
 	}								
 
@@ -6333,7 +6404,7 @@ asmlinkage long sys_pthread_sysign (void)
 	{								\
 		long rc;						\
 		rc = sys_##name(arg0name, arg1name, arg2name, arg3name, arg4name);			\
-		theia_##name##_ahg(arg0name, arg1name, arg2name, arg3name, arg4name, rc);                   \
+		theia_##name##_ahgx(arg0name, arg1name, arg2name, arg3name, arg4name, rc, sysnum);       \
 		return rc;						\
 	}								
 
@@ -6343,7 +6414,7 @@ asmlinkage long sys_pthread_sysign (void)
 	{								\
 		long rc;						\
 		rc = sys_##name(arg0name, arg1name, arg2name, arg3name, arg4name, arg5name);			\
-		theia_##name##_ahg(arg0name, arg1name, arg2name, arg3name, arg4name, arg5name, rc);                   \
+		theia_##name##_ahgx(arg0name, arg1name, arg2name, arg3name, arg4name, arg5name, rc, sysnum);     \
 		return rc;						\
 	}								
 
@@ -9124,103 +9195,33 @@ SIMPLE_SHIM1(close, 3, int, fd);
 #endif
 
 RET1_SHIM3(waitpid, 7, int, stat_addr, pid_t, pid, int __user *, stat_addr, int, options);
-SIMPLE_SHIM2(creat, 85, const char __user *, pathname, int, mode);
 
-void theia_link_ahg(const char __user * oldname, const char __user * newname, long rc)
+void theia_creat_ahgx(const char __user * pathname, int mode, long rc, int sysnum)
 {
-	if (theia_check_channel() == false)
-		return;
-
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
-
-	/* packahgv */
-	if(theia_chan) {
-		char buf[256];
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%s|%d|%ld|%ld|endahg\n", 
-				86, current->pid, current->start_time.tv_sec, oldname, newname, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_str_int(pathname, mode, rc, sysnum);
 }
 
-void theia_unlink_ahg(const char __user * pathname, long rc)
+void theia_link_ahgx(const char __user * oldname, const char __user * newname, long rc, int sysnum)
 {
-	if (theia_check_channel() == false)
-		return;
-
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
-
-	/* packahgv */
-	if(theia_chan) {
-		char buf[256];
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%ld|%ld|endahg\n", 
-				87, current->pid, current->start_time.tv_sec, pathname, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_str_str(oldname, newname, rc, sysnum);
 }
 
-void theia_unlinkat_ahg(int dfd, const char __user * pathname, int flag, long rc)
+void theia_unlink_ahgx(const char __user * pathname, long rc, int sysnum)
 {
-	if (theia_check_channel() == false)
-		return;
-
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
-
-	/* packahgv */
-	if(theia_chan) {
-		char buf[256];
-		char buf2[256];
-		char *ptr = NULL;
-		long sec, nsec;
-		int size;
-		int res;
-		get_curr_time(&sec, &nsec);
-
-		struct path path;
-		res = user_path_at(dfd, pathname, LOOKUP_FOLLOW, &path);
-		if (res == 0)
-			ptr = d_path(&path, buf2, 256);
-		else
-			ptr = pathname;
-		size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
-			263, current->pid, current->start_time.tv_sec, ptr, flag, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_str(pathname, rc, sysnum);
 }
 
-void theia_symlink_ahg(const char __user * oldname, const char __user * newname, long rc)
+void theia_unlinkat_ahgx(int dfd, const char __user * pathname, int flag, long rc, int sysnum)
 {
-	if (theia_check_channel() == false)
-		return;
-
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
-
-	/* packahgv */
-	if(theia_chan) {
-		char buf[256];
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%s|%d|%ld|%ld|endahg\n", 
-				88, current->pid, current->start_time.tv_sec, oldname, newname, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_at_str_int(dfd, pathname, flag, rc, sysnum);
 }
 
+void theia_symlink_ahgx(const char __user * oldname, const char __user * newname, long rc, int sysnum)
+{
+	theia_dump_str_str(oldname, newname, rc, sysnum);
+}
+
+THEIA_SHIM2(creat, 85, const char __user *, pathname, int, mode);
 THEIA_SHIM2(link, 86, const char __user *, oldname, const char __user *, newname);
 THEIA_SHIM1(unlink, 87, const char __user *, pathname);
 
@@ -9844,7 +9845,12 @@ int shim_execve(const char *filename, const char __user *const __user *__argv, c
 
 SHIM_CALL_MAIN(59, record_execve(filename, __argv, __envp, regs), replay_execve(filename, __argv, __envp, regs), theia_start_record(filename, __argv, __envp, regs))
 
-SIMPLE_SHIM1(chdir, 80, const char __user *, filename);
+void theia_chdir_ahgx(const char __user * filename, long rc, int sysnum)
+{
+	theia_dump_str(filename, rc, sysnum);
+}
+
+THEIA_SHIM1(chdir, 80, const char __user *, filename);
 
 static asmlinkage long 
 record_time(time_t __user * tloc)
@@ -9877,152 +9883,49 @@ RET1_REPLAY(time, 201, time_t, tloc, time_t __user * tloc);
 
 asmlinkage long shim_time(time_t __user * tloc) SHIM_CALL (time, 201, tloc);
 
-SIMPLE_SHIM3 (mknod, 133, const char __user *, filename, int, mode, unsigned, dev);
-
-void theia_chmod_ahg(const char __user * filename, mode_t mode, long rc)
+void theia_mknod_ahgx(const char __user * filename, int mode, unsigned dev, long rc, int sysnum)
 {
-	if (theia_check_channel() == false)
-		return;
-
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
-
-	/* packahgv */
-	if(theia_chan) {
-		char buf[256];
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
-				90, current->pid, current->start_time.tv_sec, filename, mode, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_str_int_int(filename, mode, dev, rc, sysnum);
 }
 
-void theia_fchmod_ahg(unsigned int fd, mode_t mode, long rc)
+void theia_chmod_ahgx(const char __user * filename, mode_t mode, long rc, int sysnum)
 {
-	if (theia_check_channel() == false)
-		return;
-
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
-
-	/* packahgv */
-	if(theia_chan) {
-		char buf[256];
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%ld|%ld|endahg\n", 
-				91, current->pid, current->start_time.tv_sec, fd, mode, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_str_int(filename, mode, rc, sysnum);
 }
 
-void theia_fchmodat_ahg(int dfd, const char __user * filename, int mode, long rc)
+void theia_fchmod_ahgx(unsigned int fd, mode_t mode, long rc, int sysnum)
 {
-	if (theia_check_channel() == false)
-		return;
-
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
-
-	/* packahgv */
-	if(theia_chan) {
-		char buf[256];
-		char buf2[256];
-		char *ptr = NULL;
-		long sec, nsec;
-		int size;
-		int res;
-		get_curr_time(&sec, &nsec);
-
-		struct path path;
-		res = user_path_at(dfd, filename, LOOKUP_FOLLOW, &path);
-		if (res == 0)
-			ptr = d_path(&path, buf2, 256);
-		else
-			ptr = filename;
-		size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
-			268, current->pid, current->start_time.tv_sec, ptr, mode, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_int_int(fd, mode, rc, sysnum);
 }
 
-//SIMPLE_SHIM2(chmod, 90, const char __user *, filename, mode_t,  mode);
+void theia_fchmodat_ahgx(int dfd, const char __user * filename, int mode, long rc, int sysnum)
+{
+	theia_dump_at_str_int(dfd, filename, mode, rc, sysnum);
+}
+
+THEIA_SHIM3 (mknod, 133, const char __user *, filename, int, mode, unsigned, dev);
+
 THEIA_SHIM2(chmod, 90, const char __user *, filename, mode_t,  mode);
 
 //SIMPLE_SHIM3(lchown16, 16, const char __user *, filename, old_uid_t, user, old_gid_t, group);
 
-void theia_lchown_ahg(const char __user * filename, uid_t user, gid_t group, long rc)
+void theia_lchown_ahgx(const char __user * filename, uid_t user, gid_t group, long rc, int sysnum)
 {
-	if (theia_check_channel() == false)
-		return;
-
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
-
-	/* packahgv */
-	if(theia_chan) {
-		char buf[256];
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%d|%ld|%ld|endahg\n", 
-				94, current->pid, current->start_time.tv_sec, filename, user, group, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_str_int_int(filename, user, group, rc, sysnum);
 }
 
-void theia_chown_ahg(const char __user * filename, uid_t user, gid_t group, long rc)
+void theia_chown_ahgx(const char __user * filename, uid_t user, gid_t group, long rc, int sysnum)
 {
-	if (theia_check_channel() == false)
-		return;
-
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
-
-	/* packahgv */
-	if(theia_chan) {
-		char buf[256];
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%d|%ld|%ld|endahg\n", 
-				92, current->pid, current->start_time.tv_sec, filename, user, group, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_str_int_int(filename, user, group, rc, sysnum);
 }
 //64port
 THEIA_SHIM3(lchown, 94, const char __user *, filename, uid_t, user, gid_t, group);
 //64port
 //RET1_SHIM2(stat, 18, struct __old_kernel_stat, statbuf, char __user *, filename, struct __old_kernel_stat __user *, statbuf);
 
-void theia_lseek_ahg(unsigned int fd, off_t offset, unsigned int origin, long rc)
+void theia_lseek_ahgx(unsigned int fd, off_t offset, unsigned int origin, long rc, int sysnum)
 {
-	if (theia_check_channel() == false)
-		return;
-
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
-
-	/* packahgv */
-	if(theia_chan) {
-		char buf[256];
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%d|%ld|%ld|endahg\n", 
-				8, current->pid, current->start_time.tv_sec, fd, offset, origin, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_int_int_int(fd, offset, origin, rc, sysnum);
 }
 
 THEIA_SHIM3(lseek, 8, unsigned int, fd, off_t, offset, unsigned int, origin);
@@ -10212,120 +10115,29 @@ SIMPLE_SHIM2(access, 21, const char __user *, filename, int, mode);
 SIMPLE_SHIM1(nice, 34, int, increment);
 SIMPLE_SHIM0(sync, 162);
 
-void theia_kill_ahg(int pid, int sig, long rc)
+void theia_kill_ahgx(int pid, int sig, long rc, int sysnum)
 {
-	if (theia_check_channel() == false)
-		return;
-
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
-
-	/* packahgv */
-	if(theia_chan) {
-		char buf[256];
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%ld|%ld|endahg\n", 
-				62, current->pid, current->start_time.tv_sec, pid, sig, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_int_int(pid, sig, rc, sysnum);
 }
 
-void theia_rename_ahg(const char __user * oldname, const char __user * newname, long rc)
+void theia_rename_ahgx(const char __user * oldname, const char __user * newname, long rc, int sysnum)
 {
-	if (theia_check_channel() == false)
-		return;
-
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
-
-	/* packahgv */
-	if(theia_chan) {
-		char buf[256];
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%s|%s|%d|%ld|%ld|endahg\n", 
-				82, current->pid, current->start_time.tv_sec, oldname, newname, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_str_str(oldname, newname, rc, sysnum);
 }
 
-void theia_mkdir_ahg(const char __user * pathname, int mode, long rc)
+void theia_mkdir_ahgx(const char __user * pathname, int mode, long rc, int sysnum)
 {
-	if (theia_check_channel() == false)
-		return;
-
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
-
-	/* packahgv */
-	if(theia_chan) {
-		char buf[256];
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
-				83, current->pid, current->start_time.tv_sec, pathname, mode, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_str_int(pathname, mode, rc, sysnum);
 }
 
-void theia_mkdirat_ahg(int dfd, const char __user * pathname, int mode, long rc)
+void theia_mkdirat_ahgx(int dfd, const char __user * pathname, int mode, long rc, int sysnum)
 {
-	if (theia_check_channel() == false)
-		return;
-
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
-
-	/* packahgv */
-	if(theia_chan) {
-		char buf[256];
-		char buf2[256];
-		char *ptr = NULL;
-		long sec, nsec;
-		int size;
-		int res;
-		get_curr_time(&sec, &nsec);
-
-		struct path path;
-		res = user_path_at(dfd, pathname, LOOKUP_FOLLOW, &path);
-		if (res == 0)
-			ptr = d_path(&path, buf2, 256);
-		else
-			ptr = pathname;
-		size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
-			258, current->pid, current->start_time.tv_sec, ptr, mode, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_at_str_int(dfd, pathname, mode, rc, sysnum);
 }
 
-void theia_rmdir_ahg(const char __user * pathname, long rc)
+void theia_rmdir_ahgx(const char __user * pathname, long rc, int sysnum)
 {
-	if (theia_check_channel() == false)
-		return;
-
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
-
-	/* packahgv */
-	if(theia_chan) {
-		char buf[256];
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%s|%d|%ld|%ld|endahg\n", 
-				84, current->pid, current->start_time.tv_sec, pathname, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_str(pathname, rc, sysnum);
 }
 
 THEIA_SHIM2(kill, 62, int, pid, int, sig);
@@ -10581,31 +10393,22 @@ asmlinkage unsigned long shim_brk (unsigned long abrk) SHIM_CALL(brk, 12, abrk);
 //64port
 //SIMPLE_SHIM1 (setgid16, 46, gid_t, gid);
 //SIMPLE_SHIM0(getgid16, 47);
-SIMPLE_SHIM2(signal, 48, int, sig, __sighandler_t, handler);
+
+void theia_signal_ahgx(int sig, __sighandler_t handler, long rc, int sysnum)
+{
+	theia_dump_int_int(sig, (int)handler, rc, sysnum);
+}
+
+THEIA_SHIM2(signal, 48, int, sig, __sighandler_t, handler);
+
 //64port
 //SIMPLE_SHIM0(geteuid16, 49);
 //SIMPLE_SHIM0(getegid16, 50);
 SIMPLE_SHIM1(acct, 163, char __user *, name)
 
-void theia_umount_ahg(const char __user * name, int flags, long rc)
+void theia_umount_ahgx(const char __user * name, int flags, long rc, int sysnum)
 {
-	if (theia_check_channel() == false)
-		return;
-
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
-
-	/* packahgv */
-	if(theia_chan) {
-		char buf[256];
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
-				166, current->pid, current->start_time.tv_sec, name, flags, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_str_int(name, flags, rc, sysnum);
 }
 
 
@@ -10971,25 +10774,9 @@ SIMPLE_SHIM2(setpgid, 109, pid_t, pid, pid_t, pgid);
 RET1_SHIM1(olduname, 59, struct oldold_utsname, name, struct oldold_utsname __user *, name);
 SIMPLE_SHIM1(umask, 95, int, mask);
 
-void theia_chroot_ahg(const char __user * filename, long rc)
+void theia_chroot_ahgx(const char __user * filename, long rc, int sysnum)
 {
-	if (theia_check_channel() == false)
-		return;
-
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
-
-	/* packahgv */
-	if(theia_chan) {
-		char buf[256];
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%ld|%ld|endahg\n", 
-				161, current->pid, current->start_time.tv_sec, filename, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_str(filename, rc, sysnum);
 }
 
 THEIA_SHIM1(chroot, 161, const char __user *, filename);
@@ -11559,46 +11346,14 @@ asmlinkage long shim_munmap (unsigned long addr, size_t len)
 //SHIM_CALL(munmap, 91, addr, len);
 SHIM_CALL_MAIN(11, record_munmap(addr, len), replay_munmap(addr, len), theia_sys_munmap(addr, len))
 
-void theia_truncate_ahg(const char __user *path, unsigned long length, long rc)
+void theia_truncate_ahgx(const char __user *path, unsigned long length, long rc, int sysnum)
 {
-	if (theia_check_channel() == false)
-		return;
-
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
-
-	/* packahgv */
-	if(theia_chan) {
-		char buf[256];
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|endahg\n", 
-				76, current->pid, current->start_time.tv_sec, path, length, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_str_int(path, length, rc, sysnum);
 }
 
-void theia_ftruncate_ahg(unsigned int fd, unsigned long length, long rc)
+void theia_ftruncate_ahgx(unsigned int fd, unsigned long length, long rc, int sysnum)
 {
-	if (theia_check_channel() == false)
-		return;
-
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
-
-	/* packahgv */
-	if(theia_chan) {
-		char buf[256];
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%d|%ld|%ld|endahg\n", 
-				77, current->pid, current->start_time.tv_sec, fd, length, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_int_int(fd, length, rc, sysnum);
 }
 
 THEIA_SHIM2(truncate, 76, const char __user *, path, unsigned long, length);
@@ -16421,8 +16176,20 @@ asmlinkage long shim_mprotect (unsigned long start, size_t len, unsigned long pr
 SHIM_CALL_MAIN(10, record_mprotect(start, len, prot), replay_mprotect(start, len, prot), theia_sys_mprotect(start, len, prot))
 
 RET1_SHIM3(sigprocmask, 126, old_sigset_t, oset, int, how, old_sigset_t __user *, set, old_sigset_t __user *, oset);
-SIMPLE_SHIM3(init_module, 175, void __user *, umod, unsigned long,  len, const char __user *, uargs);
-SIMPLE_SHIM2(delete_module, 176, const char __user *, name_user, unsigned int, flags);
+
+void theia_init_module_ahgx(void __user *umod, unsigned long len, const char __user * uargs, long rc, int sysnum)
+{
+	theia_dump_str_int_int(uargs, (int)umod, len, rc, sysnum);
+}
+
+void theia_delete_module_ahgx(const char __user * name_user, unsigned int flags, long rc, int sysnum)
+{
+	theia_dump_str_int(name_user, flags, rc, sysnum);
+}
+
+
+THEIA_SHIM3(init_module, 175, void __user *, umod, unsigned long,  len, const char __user *, uargs);
+THEIA_SHIM2(delete_module, 176, const char __user *, name_user, unsigned int, flags);
 
 asmlinkage long 
 record_quotactl (unsigned int cmd, const char __user *special, qid_t id, void __user *addr)
