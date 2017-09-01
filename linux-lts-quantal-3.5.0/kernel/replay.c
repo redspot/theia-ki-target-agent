@@ -263,25 +263,25 @@ void theia_dump_str(char *str, int rc, int sysnum) {
 		printk("theia_chan invalid\n");
 }
 
-void theia_dump_str_str(const char __user *str1, const char __user *str2, int rc, int sysnum) {
+void theia_dump_ss(const char __user *str1, const char __user *str2, int rc, int sysnum) {
 	char buf[256];
 	sprintf(buf, "%s|%s", str1, str2);
 	theia_dump_str(buf, rc, sysnum);
 }
 
-void theia_dump_str_int(const char __user *str, int val, int rc, int sysnum) {
+void theia_dump_sd(const char __user *str, int val, int rc, int sysnum) {
 	char buf[256];
 	sprintf(buf, "%s|%d", str, val);
 	theia_dump_str(buf, rc, sysnum);
 }
 
-void theia_dump_str_int_int(const char __user *str, int val1, int val2, int rc, int sysnum) {
+void theia_dump_sdd(const char __user *str, int val1, int val2, int rc, int sysnum) {
 	char buf[256];
 	sprintf(buf, "%s|%d|%d", str, val1, val2);
 	theia_dump_str(buf, rc, sysnum);
 }
 
-void theia_dump_at_str_int(int dfd, const char __user *str, int val, int rc, int sysnum) {
+void theia_dump_at_sd(int dfd, const char __user *str, int val, int rc, int sysnum) {
 	char buf[256];
 	char buf2[256];
 	char *ptr = NULL;
@@ -298,13 +298,19 @@ void theia_dump_at_str_int(int dfd, const char __user *str, int val, int rc, int
 	theia_dump_str(buf, rc, sysnum);
 }
 
-void theia_dump_int_int(int val1, int val2, int rc, int sysnum) {
+void theia_dump_d(int val, int rc, int sysnum) {
+	char buf[256];
+	sprintf(buf, "%d", val);
+	theia_dump_str(buf, rc, sysnum);
+}
+
+void theia_dump_dd(int val1, int val2, int rc, int sysnum) {
 	char buf[256];
 	sprintf(buf, "%d|%d", val1, val2);
 	theia_dump_str(buf, rc, sysnum);
 }
 
-void theia_dump_int_int_int(int val1, int val2, int val3, int rc, int sysnum) {
+void theia_dump_ddd(int val1, int val2, int val3, int rc, int sysnum) {
 	char buf[256];
 	sprintf(buf, "%d|%d|%d", val1, val2, val3);
 	theia_dump_str(buf, rc, sysnum);
@@ -7938,18 +7944,7 @@ void recursive_packahgv_process() {
 }
 
 void packahgv_read (struct read_ahgv *sys_args) {
-	//Yang
-	if(theia_chan) {
-		char buf[256];
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
-				0, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, 
-				sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_d(sys_args->fd, sys_args->bytes, 0);
 }
 
 void theia_read_ahg(unsigned int fd, long rc, u_long clock) {
@@ -8475,17 +8470,7 @@ struct write_ahgv {
 };
 
 void packahgv_write (struct write_ahgv *sys_args) {
-	//Yang
-	if(theia_chan) {
-		char buf[256];
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
-				1, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
-	}
-	else
-		printk("theia_chan invalid\n");
+	theia_dump_d(sys_args->fd, sys_args->bytes, 1);
 }
 
 void theia_write_ahg(unsigned int fd, long rc, u_long clock) {
@@ -9198,12 +9183,12 @@ RET1_SHIM3(waitpid, 7, int, stat_addr, pid_t, pid, int __user *, stat_addr, int,
 
 void theia_creat_ahgx(const char __user * pathname, int mode, long rc, int sysnum)
 {
-	theia_dump_str_int(pathname, mode, rc, sysnum);
+	theia_dump_sd(pathname, mode, rc, sysnum);
 }
 
 void theia_link_ahgx(const char __user * oldname, const char __user * newname, long rc, int sysnum)
 {
-	theia_dump_str_str(oldname, newname, rc, sysnum);
+	theia_dump_ss(oldname, newname, rc, sysnum);
 }
 
 void theia_unlink_ahgx(const char __user * pathname, long rc, int sysnum)
@@ -9213,12 +9198,12 @@ void theia_unlink_ahgx(const char __user * pathname, long rc, int sysnum)
 
 void theia_unlinkat_ahgx(int dfd, const char __user * pathname, int flag, long rc, int sysnum)
 {
-	theia_dump_at_str_int(dfd, pathname, flag, rc, sysnum);
+	theia_dump_at_sd(dfd, pathname, flag, rc, sysnum);
 }
 
 void theia_symlink_ahgx(const char __user * oldname, const char __user * newname, long rc, int sysnum)
 {
-	theia_dump_str_str(oldname, newname, rc, sysnum);
+	theia_dump_ss(oldname, newname, rc, sysnum);
 }
 
 THEIA_SHIM2(creat, 85, const char __user *, pathname, int, mode);
@@ -9885,22 +9870,22 @@ asmlinkage long shim_time(time_t __user * tloc) SHIM_CALL (time, 201, tloc);
 
 void theia_mknod_ahgx(const char __user * filename, int mode, unsigned dev, long rc, int sysnum)
 {
-	theia_dump_str_int_int(filename, mode, dev, rc, sysnum);
+	theia_dump_sdd(filename, mode, dev, rc, sysnum);
 }
 
 void theia_chmod_ahgx(const char __user * filename, mode_t mode, long rc, int sysnum)
 {
-	theia_dump_str_int(filename, mode, rc, sysnum);
+	theia_dump_sd(filename, mode, rc, sysnum);
 }
 
 void theia_fchmod_ahgx(unsigned int fd, mode_t mode, long rc, int sysnum)
 {
-	theia_dump_int_int(fd, mode, rc, sysnum);
+	theia_dump_dd(fd, mode, rc, sysnum);
 }
 
 void theia_fchmodat_ahgx(int dfd, const char __user * filename, int mode, long rc, int sysnum)
 {
-	theia_dump_at_str_int(dfd, filename, mode, rc, sysnum);
+	theia_dump_at_sd(dfd, filename, mode, rc, sysnum);
 }
 
 THEIA_SHIM3 (mknod, 133, const char __user *, filename, int, mode, unsigned, dev);
@@ -9911,12 +9896,12 @@ THEIA_SHIM2(chmod, 90, const char __user *, filename, mode_t,  mode);
 
 void theia_lchown_ahgx(const char __user * filename, uid_t user, gid_t group, long rc, int sysnum)
 {
-	theia_dump_str_int_int(filename, user, group, rc, sysnum);
+	theia_dump_sdd(filename, user, group, rc, sysnum);
 }
 
 void theia_chown_ahgx(const char __user * filename, uid_t user, gid_t group, long rc, int sysnum)
 {
-	theia_dump_str_int_int(filename, user, group, rc, sysnum);
+	theia_dump_sdd(filename, user, group, rc, sysnum);
 }
 //64port
 THEIA_SHIM3(lchown, 94, const char __user *, filename, uid_t, user, gid_t, group);
@@ -9925,7 +9910,7 @@ THEIA_SHIM3(lchown, 94, const char __user *, filename, uid_t, user, gid_t, group
 
 void theia_lseek_ahgx(unsigned int fd, off_t offset, unsigned int origin, long rc, int sysnum)
 {
-	theia_dump_int_int_int(fd, offset, origin, rc, sysnum);
+	theia_dump_ddd(fd, offset, origin, rc, sysnum);
 }
 
 THEIA_SHIM3(lseek, 8, unsigned int, fd, off_t, offset, unsigned int, origin);
@@ -10103,6 +10088,9 @@ asmlinkage long shim_ptrace(long request, long pid, long addr, long data)
 		}
 	}
 	SHIM_CALL(ptrace, 101, request, pid, addr, data)
+
+	/* ignore addr and data for now. retval? */
+	theia_dump_dd(request, pid, 0, 101);
 }
 
 SIMPLE_SHIM1(alarm, 37, unsigned int, seconds);
@@ -10117,22 +10105,22 @@ SIMPLE_SHIM0(sync, 162);
 
 void theia_kill_ahgx(int pid, int sig, long rc, int sysnum)
 {
-	theia_dump_int_int(pid, sig, rc, sysnum);
+	theia_dump_dd(pid, sig, rc, sysnum);
 }
 
 void theia_rename_ahgx(const char __user * oldname, const char __user * newname, long rc, int sysnum)
 {
-	theia_dump_str_str(oldname, newname, rc, sysnum);
+	theia_dump_ss(oldname, newname, rc, sysnum);
 }
 
 void theia_mkdir_ahgx(const char __user * pathname, int mode, long rc, int sysnum)
 {
-	theia_dump_str_int(pathname, mode, rc, sysnum);
+	theia_dump_sd(pathname, mode, rc, sysnum);
 }
 
 void theia_mkdirat_ahgx(int dfd, const char __user * pathname, int mode, long rc, int sysnum)
 {
-	theia_dump_at_str_int(dfd, pathname, mode, rc, sysnum);
+	theia_dump_at_sd(dfd, pathname, mode, rc, sysnum);
 }
 
 void theia_rmdir_ahgx(const char __user * pathname, long rc, int sysnum)
@@ -10396,7 +10384,7 @@ asmlinkage unsigned long shim_brk (unsigned long abrk) SHIM_CALL(brk, 12, abrk);
 
 void theia_signal_ahgx(int sig, __sighandler_t handler, long rc, int sysnum)
 {
-	theia_dump_int_int(sig, (int)handler, rc, sysnum);
+	theia_dump_dd(sig, (int)handler, rc, sysnum);
 }
 
 THEIA_SHIM2(signal, 48, int, sig, __sighandler_t, handler);
@@ -10408,7 +10396,7 @@ SIMPLE_SHIM1(acct, 163, char __user *, name)
 
 void theia_umount_ahgx(const char __user * name, int flags, long rc, int sysnum)
 {
-	theia_dump_str_int(name, flags, rc, sysnum);
+	theia_dump_sd(name, flags, rc, sysnum);
 }
 
 
@@ -11348,12 +11336,12 @@ SHIM_CALL_MAIN(11, record_munmap(addr, len), replay_munmap(addr, len), theia_sys
 
 void theia_truncate_ahgx(const char __user *path, unsigned long length, long rc, int sysnum)
 {
-	theia_dump_str_int(path, length, rc, sysnum);
+	theia_dump_sd(path, length, rc, sysnum);
 }
 
 void theia_ftruncate_ahgx(unsigned int fd, unsigned long length, long rc, int sysnum)
 {
-	theia_dump_int_int(fd, length, rc, sysnum);
+	theia_dump_dd(fd, length, rc, sysnum);
 }
 
 THEIA_SHIM2(truncate, 76, const char __user *, path, unsigned long, length);
@@ -16179,12 +16167,12 @@ RET1_SHIM3(sigprocmask, 126, old_sigset_t, oset, int, how, old_sigset_t __user *
 
 void theia_init_module_ahgx(void __user *umod, unsigned long len, const char __user * uargs, long rc, int sysnum)
 {
-	theia_dump_str_int_int(uargs, (int)umod, len, rc, sysnum);
+	theia_dump_sdd(uargs, (int)umod, len, rc, sysnum);
 }
 
 void theia_delete_module_ahgx(const char __user * name_user, unsigned int flags, long rc, int sysnum)
 {
-	theia_dump_str_int(name_user, flags, rc, sysnum);
+	theia_dump_sd(name_user, flags, rc, sysnum);
 }
 
 
