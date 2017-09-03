@@ -294,7 +294,16 @@ void theia_dump_at_sd(int dfd, const char __user *str, int val, int rc, int sysn
 	else
 		ptr = str;
 
-	sprintf(buf, "%s|%d", ptr, val);
+	if (ptr[0] == '/') {
+		sprintf(buf, "%s|%d", ptr, val);
+	}
+	else {
+		get_fs_pwd(current->fs, &path);
+		ptr = d_path(&path, buf2, 256);	
+
+		sprintf(buf, "%s/%s|%d", ptr, str, val);
+	}
+
 	theia_dump_str(buf, rc, sysnum);
 }
 
@@ -8835,11 +8844,28 @@ void packahgv_open (struct open_ahgv *sys_args) {
 
 	if(theia_chan) {
 		char buf[256];
+		char buf2[256];
+		char *pcwd = NULL;
 		long sec, nsec;
+		struct path path;
+
+		/* TODO: dump current working directory also to construct full path */
+		get_fs_pwd(current->fs, &path);
+		pcwd = d_path(&path, buf, 256);
+		
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
+		int size;
+		if (sys_args->filename[0] == '/') {
+			size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
 				2, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->filename, sys_args->flags, sys_args->mode,
 				sys_args->dev, sys_args->ino, sys_args->is_new, current->tgid, sec, nsec);
+		}
+		else {
+			size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s/%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
+				2, sys_args->pid, current->start_time.tv_sec, sys_args->fd, pcwd, sys_args->filename, sys_args->flags, sys_args->mode,
+				sys_args->dev, sys_args->ino, sys_args->is_new, current->tgid, sec, nsec);
+		}
+
 		relay_write(theia_chan, buf, size);
 	}
 	else
