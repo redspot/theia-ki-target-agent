@@ -10163,12 +10163,16 @@ SIMPLE_SHIM1(dup, 32, unsigned int, fildes);
 
 //Yang
 struct pipe_ahgv {
-	int							pid;
-	u_long					retval;
-  int	            pfd1;
-  int	            pfd2;
-	u_long					inode1;
-	u_long					inode2;
+	int    pid;
+	u_long retval;
+	int    pfd1;
+	int    pfd2;
+	u_long inode1;
+	u_long inode2;
+	u_long dev1;
+	u_long dev2;
+	u_long ino1;
+	u_long ino2;
 };
 
 void packahgv_pipe (struct pipe_ahgv *sys_args) {
@@ -10177,6 +10181,7 @@ void packahgv_pipe (struct pipe_ahgv *sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
+		/* TODO: publish both ends' data: dev1, dev2, ino1, ino2 */
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%d|%d|%lx|%lx|%d|%ld|%ld|endahg\n", 
 				22, sys_args->pid, current->start_time.tv_sec, sys_args->retval, sys_args->pfd1, sys_args->pfd2, 
 				sys_args->inode1, sys_args->inode2, current->tgid, sec, nsec);
@@ -10189,6 +10194,8 @@ void packahgv_pipe (struct pipe_ahgv *sys_args) {
 void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
 	int ret;
 	struct pipe_ahgv* pahgv = NULL;
+	struct file* file = NULL;
+	struct inode* inode;
 
 	if (theia_check_channel() == false)
 		return;
@@ -10205,8 +10212,34 @@ void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
 	pahgv->retval = retval;
 	pahgv->pfd1 = pfd1;
 	pahgv->pfd2 = pfd2;
-	pahgv->inode1 = 0; //TODO:need to handle
-	pahgv->inode2 = 0;
+
+	if (pfd1 >= 0)
+		file = fget(pfd1);
+
+	if (!file) {
+		pahgv->dev1 = 0;
+		pahgv->ino1 = 0;		
+	}
+	else {
+		inode = file->f_dentry->d_inode;
+		pahgv->dev1 = inode->i_sb->s_dev;
+		pahgv->ino1 = inode->i_ino;
+	}
+
+	file = NULL;
+	if (pfd2 >= 0)
+		file = fget(pfd2);
+
+	if (!file) {
+		pahgv->dev2 = 0;
+		pahgv->ino2 = 0;		
+	}
+	else {
+		inode = file->f_dentry->d_inode;
+		pahgv->dev2 = inode->i_sb->s_dev;
+		pahgv->ino2 = inode->i_ino;
+	}
+	
 	packahgv_pipe(pahgv);
 	KFREE(pahgv);
 }
