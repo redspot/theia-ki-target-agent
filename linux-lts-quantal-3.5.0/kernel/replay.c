@@ -206,7 +206,15 @@ struct dentry	*theia_dir = NULL;
 //static size_t write_count;
 //static int suspended;
 
+// let's reuse vmalloced buffer for storing filepath and more
+char *theia_buf1 = NULL;
+char *theia_buf2 = NULL;
+
 bool theia_check_channel(void) {
+
+	if (!theia_buf1) theia_buf1 = vmalloc(4096);
+	if (!theia_buf2) theia_buf2 = vmalloc(4096);
+
 	mm_segment_t old_fs = get_fs();                                                
 	set_fs(KERNEL_DS);
 
@@ -248,81 +256,142 @@ void theia_dump_str(char *str, int rc, int sysnum) {
 
 	/* packahgv */
 	if(theia_chan) {
-		char buf[256];
 		long sec, nsec;
 		int size;
 		get_curr_time(&sec, &nsec);
 
-		size = sprintf(buf, "startahg|%d|%d|%d|%d|%s|%d|%ld|%ld|endahg\n", \
+		/* str will be theia_buf1 */
+		size = sprintf(theia_buf2, "startahg|%d|%d|%d|%d|%s|%d|%ld|%ld|endahg\n", \
 			sysnum, current->pid, current->start_time.tv_sec, \
 			rc, str, \
 			current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
+		relay_write(theia_chan, theia_buf2, size);
 	}
 	else
 		printk("theia_chan invalid\n");
 }
 
 void theia_dump_ss(const char __user *str1, const char __user *str2, int rc, int sysnum) {
-	char buf[256];
-	sprintf(buf, "%s|%s", str1, str2);
-	theia_dump_str(buf, rc, sysnum);
+	char *pcwd = NULL;
+	struct path path;
+
+	if (str1[0] == '/' && str2[0] == '/') {
+		sprintf(theia_buf1, "%s|%s", str1, str2);
+	}
+	else {
+		if (current->fs) {
+			get_fs_pwd(current->fs, &path);
+			pcwd = d_path(&path, theia_buf2, 4096);	
+			if (IS_ERR(pcwd))
+				pcwd = ".";
+		}
+		else {
+			pcwd = ".";
+		}
+
+		if (!pcwd) {
+			sprintf(theia_buf1, "%s|%s", str1, str2);
+		}
+		else if (str1[0] == '/') {
+			sprintf(theia_buf1, "%s|%s/%s", str1, pcwd, str2);
+		}
+		else if (str2[0] == '/') {
+			sprintf(theia_buf1, "%s/%s|%s", pcwd, str1, str2);
+		}
+		else {
+			sprintf(theia_buf1, "%s/%s|%s/%s", pcwd, str1, pcwd, str2);
+		}
+	}
+	theia_dump_str(theia_buf1, rc, sysnum);
 }
 
 void theia_dump_sd(const char __user *str, int val, int rc, int sysnum) {
-	char buf[256];
-	sprintf(buf, "%s|%d", str, val);
-	theia_dump_str(buf, rc, sysnum);
+	char *pcwd = NULL;
+	struct path path;
+
+	if (str[0] == '/') {
+		sprintf(theia_buf1, "%s|%d", str, val);
+	}
+	else {
+		if (current->fs) {
+			get_fs_pwd(current->fs, &path);
+			pcwd = d_path(&path, theia_buf2, 4096);	
+			if (IS_ERR(pcwd))
+				pcwd = ".";
+		}
+		else {
+			pcwd = ".";
+		}
+
+		sprintf(theia_buf1, "%s/%s|%d", pcwd, str, val);
+	}
+
+	theia_dump_str(theia_buf1, rc, sysnum);
 }
 
 void theia_dump_sdd(const char __user *str, int val1, int val2, int rc, int sysnum) {
-	char buf[256];
-	sprintf(buf, "%s|%d|%d", str, val1, val2);
-	theia_dump_str(buf, rc, sysnum);
+	char *pcwd = NULL;
+	struct path path;
+
+	if (str[0] == '/') {
+		sprintf(theia_buf1, "%s|%d|%d", str, val1, val2);
+	}
+	else {
+		if (current->fs) {
+			get_fs_pwd(current->fs, &path);
+			pcwd = d_path(&path, theia_buf2, 4096);	
+			if (IS_ERR(pcwd))
+				pcwd = ".";
+		}
+		else {
+			pcwd = ".";
+		}
+
+		sprintf(theia_buf1, "%s/%s|%d|%d", pcwd, str, val1, val2);
+	}
+
+	theia_dump_str(theia_buf1, rc, sysnum);
 }
 
 void theia_dump_at_sd(int dfd, const char __user *str, int val, int rc, int sysnum) {
-	char buf[256];
-	char buf2[256];
 	char *ptr = NULL;
 	struct path path;
 	int res;
 
 	res = user_path_at(dfd, str, LOOKUP_FOLLOW, &path);
 	if (res == 0)
-		ptr = d_path(&path, buf2, 256);
+		ptr = d_path(&path, theia_buf2, 4096);
 	else
 		ptr = str;
 
 	if (ptr[0] == '/') {
-		sprintf(buf, "%s|%d", ptr, val);
+		sprintf(theia_buf1, "%s|%d", ptr, val);
 	}
 	else {
-		get_fs_pwd(current->fs, &path);
-		ptr = d_path(&path, buf2, 256);	
+		if (current->fs) {
+			get_fs_pwd(current->fs, &path);
+			ptr = d_path(&path, theia_buf2, 4096);	
+			if (IS_ERR(ptr))
+				ptr = ".";
+		}
+		else {
+			ptr = ".";
+		}
 
-		sprintf(buf, "%s/%s|%d", ptr, str, val);
+		sprintf(theia_buf1, "%s/%s|%d", ptr, str, val);
 	}
 
-	theia_dump_str(buf, rc, sysnum);
-}
-
-void theia_dump_d(int val, int rc, int sysnum) {
-	char buf[256];
-	sprintf(buf, "%d", val);
-	theia_dump_str(buf, rc, sysnum);
+	theia_dump_str(theia_buf1, rc, sysnum);
 }
 
 void theia_dump_dd(int val1, int val2, int rc, int sysnum) {
-	char buf[256];
-	sprintf(buf, "%d|%d", val1, val2);
-	theia_dump_str(buf, rc, sysnum);
+	sprintf(theia_buf1, "%d|%d", val1, val2);
+	theia_dump_str(theia_buf1, rc, sysnum);
 }
 
 void theia_dump_ddd(int val1, int val2, int val3, int rc, int sysnum) {
-	char buf[256];
-	sprintf(buf, "%d|%d|%d", val1, val2, val3);
-	theia_dump_str(buf, rc, sysnum);
+	sprintf(theia_buf1, "%d|%d|%d", val1, val2, val3);
+	theia_dump_str(theia_buf1, rc, sysnum);
 }
 
 //SL
@@ -6379,7 +6448,7 @@ asmlinkage long sys_pthread_sysign (void)
 	{								\
 		long rc;						\
 		rc = sys_##name(arg0name);				\
-		theia_##name##_ahgx(arg0name, rc, sysnum);               \
+		if (theia_logging_toggle) theia_##name##_ahgx(arg0name, rc, sysnum);               \
 		return rc;						\
 	}								
 
@@ -6389,7 +6458,7 @@ asmlinkage long sys_pthread_sysign (void)
 	{								\
 		long rc;						\
 		rc = sys_##name(arg0name, arg1name);			\
-		theia_##name##_ahgx(arg0name, arg1name, rc, sysnum);     \
+		if (theia_logging_toggle) theia_##name##_ahgx(arg0name, arg1name, rc, sysnum);     \
 		return rc;						\
 	}								
 
@@ -6399,7 +6468,7 @@ asmlinkage long sys_pthread_sysign (void)
 	{								\
 		long rc;						\
 		rc = sys_##name(arg0name, arg1name, arg2name);			\
-		theia_##name##_ahgx(arg0name, arg1name, arg2name, rc, sysnum);   \
+		if (theia_logging_toggle) theia_##name##_ahgx(arg0name, arg1name, arg2name, rc, sysnum);   \
 		return rc;						\
 	}								
 
@@ -6409,7 +6478,7 @@ asmlinkage long sys_pthread_sysign (void)
 	{								\
 		long rc;						\
 		rc = sys_##name(arg0name, arg1name, arg2name, arg3name);			\
-		theia_##name##_ahgx(arg0name, arg1name, arg2name, arg3name, rc, sysnum);         \
+		if (theia_logging_toggle) theia_##name##_ahgx(arg0name, arg1name, arg2name, arg3name, rc, sysnum);         \
 		return rc;						\
 	}								
 
@@ -6419,7 +6488,7 @@ asmlinkage long sys_pthread_sysign (void)
 	{								\
 		long rc;						\
 		rc = sys_##name(arg0name, arg1name, arg2name, arg3name, arg4name);			\
-		theia_##name##_ahgx(arg0name, arg1name, arg2name, arg3name, arg4name, rc, sysnum);       \
+		if (theia_logging_toggle) theia_##name##_ahgx(arg0name, arg1name, arg2name, arg3name, arg4name, rc, sysnum);       \
 		return rc;						\
 	}								
 
@@ -6429,7 +6498,7 @@ asmlinkage long sys_pthread_sysign (void)
 	{								\
 		long rc;						\
 		rc = sys_##name(arg0name, arg1name, arg2name, arg3name, arg4name, arg5name);			\
-		theia_##name##_ahgx(arg0name, arg1name, arg2name, arg3name, arg4name, arg5name, rc, sysnum);     \
+		if (theia_logging_toggle) theia_##name##_ahgx(arg0name, arg1name, arg2name, arg3name, arg4name, arg5name, rc, sysnum);     \
 		return rc;						\
 	}								
 
@@ -7953,7 +8022,18 @@ void recursive_packahgv_process() {
 }
 
 void packahgv_read (struct read_ahgv *sys_args) {
-	theia_dump_d(sys_args->fd, sys_args->bytes, 0);
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
+				0, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, 
+				sec, nsec);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
 }
 
 void theia_read_ahg(unsigned int fd, long rc, u_long clock) {
@@ -8479,7 +8559,17 @@ struct write_ahgv {
 };
 
 void packahgv_write (struct write_ahgv *sys_args) {
-	theia_dump_d(sys_args->fd, sys_args->bytes, 1);
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
+				1, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, sec, nsec);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
 }
 
 void theia_write_ahg(unsigned int fd, long rc, u_long clock) {
@@ -8843,30 +8933,34 @@ void packahgv_open (struct open_ahgv *sys_args) {
 	//Yang
 
 	if(theia_chan) {
-		char buf[256];
-		char buf2[256];
 		char *pcwd = NULL;
-		long sec, nsec;
 		struct path path;
-
-		/* TODO: dump current working directory also to construct full path */
-		get_fs_pwd(current->fs, &path);
-		pcwd = d_path(&path, buf, 256);
-		
-		get_curr_time(&sec, &nsec);
+		long sec, nsec;
 		int size;
+
+		get_curr_time(&sec, &nsec);
+
 		if (sys_args->filename[0] == '/') {
-			size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
-				2, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->filename, sys_args->flags, sys_args->mode,
-				sys_args->dev, sys_args->ino, sys_args->is_new, current->tgid, sec, nsec);
+			size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%d|%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
+					2, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->filename, sys_args->flags, sys_args->mode,
+					sys_args->dev, sys_args->ino, sys_args->is_new, current->tgid, sec, nsec);
 		}
 		else {
-			size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s/%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
-				2, sys_args->pid, current->start_time.tv_sec, sys_args->fd, pcwd, sys_args->filename, sys_args->flags, sys_args->mode,
-				sys_args->dev, sys_args->ino, sys_args->is_new, current->tgid, sec, nsec);
-		}
+			if (current->fs) {
+				get_fs_pwd(current->fs, &path);
+				pcwd = d_path(&path, theia_buf2, 4096);	
+				if (IS_ERR(pcwd))
+					pcwd = ".";
+			}
+			else {
+				pcwd = ".";
+			}
 
-		relay_write(theia_chan, buf, size);
+			size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%d|%s/%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
+					2, sys_args->pid, current->start_time.tv_sec, sys_args->fd, pcwd, sys_args->filename, sys_args->flags, sys_args->mode,
+					sys_args->dev, sys_args->ino, sys_args->is_new, current->tgid, sec, nsec);
+		}
+		relay_write(theia_chan, theia_buf1, size);
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -9219,7 +9313,26 @@ void theia_link_ahgx(const char __user * oldname, const char __user * newname, l
 
 void theia_unlink_ahgx(const char __user * pathname, long rc, int sysnum)
 {
-	theia_dump_str(pathname, rc, sysnum);
+	char *pcwd = NULL;
+	struct path path;
+
+	if (pathname[0] == '/') {
+		theia_dump_str(pathname, rc, sysnum);
+	}
+	else {
+		if (current->fs) {
+			get_fs_pwd(current->fs, &path);
+			pcwd = d_path(&path, theia_buf2, 4096);	
+			if (IS_ERR(pcwd))
+				pcwd = ".";
+		}
+		else {
+			pcwd = ".";
+		}
+
+		sprintf(theia_buf1, "%s/%s", pcwd, pathname);
+		theia_dump_str(theia_buf1, rc, sysnum);
+	}
 }
 
 void theia_unlinkat_ahgx(int dfd, const char __user * pathname, int flag, long rc, int sysnum)
@@ -9858,7 +9971,7 @@ SHIM_CALL_MAIN(59, record_execve(filename, __argv, __envp, regs), replay_execve(
 
 void theia_chdir_ahgx(const char __user * filename, long rc, int sysnum)
 {
-	theia_dump_str(filename, rc, sysnum);
+	theia_unlink_ahgx(filename, rc, sysnum);
 }
 
 THEIA_SHIM1(chdir, 80, const char __user *, filename);
@@ -9958,13 +10071,15 @@ struct mount_ahgv {
 void packahgv_mount (struct mount_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
-		char buf[256];
 		long sec, nsec;
+		int size;
+
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%s|%s|%s|%lu|%d|%d|%ld|%ld|endahg\n", 
+
+		size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%s|%s|%s|%lu|%d|%d|%ld|%ld|endahg\n", 
 				165, sys_args->pid, current->start_time.tv_sec, sys_args->devname, sys_args->dirname, sys_args->type, 
 				sys_args->flags, sys_args->rc, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
+		relay_write(theia_chan, theia_buf1, size);
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -10114,9 +10229,6 @@ asmlinkage long shim_ptrace(long request, long pid, long addr, long data)
 		}
 	}
 	SHIM_CALL(ptrace, 101, request, pid, addr, data)
-
-	/* ignore addr and data for now. retval? */
-	theia_dump_dd(request, pid, 0, 101);
 }
 
 SIMPLE_SHIM1(alarm, 37, unsigned int, seconds);
@@ -10151,7 +10263,7 @@ void theia_mkdirat_ahgx(int dfd, const char __user * pathname, int mode, long rc
 
 void theia_rmdir_ahgx(const char __user * pathname, long rc, int sysnum)
 {
-	theia_dump_str(pathname, rc, sysnum);
+	theia_unlink_ahgx(pathname, rc, sysnum);
 }
 
 THEIA_SHIM2(kill, 62, int, pid, int, sig);
@@ -10823,7 +10935,7 @@ SIMPLE_SHIM1(umask, 95, int, mask);
 
 void theia_chroot_ahgx(const char __user * filename, long rc, int sysnum)
 {
-	theia_dump_str(filename, rc, sysnum);
+	theia_unlink_ahgx(filename, rc, sysnum);
 }
 
 THEIA_SHIM1(chroot, 161, const char __user *, filename);
@@ -16226,7 +16338,8 @@ RET1_SHIM3(sigprocmask, 126, old_sigset_t, oset, int, how, old_sigset_t __user *
 
 void theia_init_module_ahgx(void __user *umod, unsigned long len, const char __user * uargs, long rc, int sysnum)
 {
-	theia_dump_sdd(uargs, (int)umod, len, rc, sysnum);
+	/* let's ignore uargs for now */
+	theia_dump_dd((int)umod, len, rc, sysnum);
 }
 
 void theia_delete_module_ahgx(const char __user * name_user, unsigned int flags, long rc, int sysnum)
