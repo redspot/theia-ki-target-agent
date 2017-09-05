@@ -60,7 +60,12 @@
 #include "../ipc/util.h" // For shm utility functions
 #include <asm/user_64.h>
 
+#include <linux/stacktrace.h>
+
 #include <linux/replay_configs.h>
+
+#include <linux/fs_struct.h>
+#include <linux/namei.h>
 
 //Yang
 #include <linux/relay.h>
@@ -107,6 +112,9 @@ EXPORT_SYMBOL(theia_recording_toggle);
 
 //#define THEIA_TRACK_SHM_OPEN 0
 // #define THEIA_TRACK_SHMAT 1
+
+#define THEIA_USER_RET_ADDR 1
+#undef THEIA_USER_RET_ADDR
 
 //#define REPLAY_PARANOID
 
@@ -203,9 +211,199 @@ struct dentry	*theia_dir = NULL;
 //static size_t write_count;
 //static int suspended;
 
+// let's reuse vmalloced buffer for storing filepath and more
+char *theia_buf1   = NULL;
+char *theia_buf2   = NULL;
+char *theia_retbuf = NULL;
+
+bool theia_check_channel(void) {
+
+	if (!theia_buf1)   theia_buf1   = vmalloc(4096);
+	if (!theia_buf2)   theia_buf2   = vmalloc(4096);
+	if (!theia_retbuf) theia_retbuf = vmalloc(4096);
+
+	mm_segment_t old_fs = get_fs();                                                
+	set_fs(KERNEL_DS);
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return false;
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return false;
+		}
+	}
+
+	if(!check_and_update_controlfile()) {
+		set_fs(old_fs);                                                              
+		return false;
+	}
+	if(theia_logging_toggle == 0) {
+		set_fs(old_fs);                                                              
+		return false;
+	} 
+
+	set_fs(old_fs);                                                              
+
+	return true;
+}
+
+void theia_dump_str(char *str, int rc, int sysnum) {
+	if (theia_check_channel() == false)
+		return;
+
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
+		recursive_packahgv_process();
+
+	/* packahgv */
+	if(theia_chan) {
+		long sec, nsec;
+		int size;
+		get_curr_time(&sec, &nsec);
+
+		/* str will be theia_buf1 */
+		size = sprintf(theia_buf2, "startahg|%d|%d|%d|%d|%s|%d|%ld|%ld|endahg\n", \
+			sysnum, current->pid, current->start_time.tv_sec, \
+			rc, str, \
+			current->tgid, sec, nsec);
+		relay_write(theia_chan, theia_buf2, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+void theia_dump_ss(const char __user *str1, const char __user *str2, int rc, int sysnum) {
+	char *pcwd = NULL;
+	struct path path;
+
+	if (str1[0] == '/' && str2[0] == '/') {
+		sprintf(theia_buf1, "%s|%s", str1, str2);
+	}
+	else {
+		if (current->fs) {
+			get_fs_pwd(current->fs, &path);
+			pcwd = d_path(&path, theia_buf2, 4096);	
+			if (IS_ERR(pcwd))
+				pcwd = ".";
+		}
+		else {
+			pcwd = ".";
+		}
+
+		if (!pcwd) {
+			sprintf(theia_buf1, "%s|%s", str1, str2);
+		}
+		else if (str1[0] == '/') {
+			sprintf(theia_buf1, "%s|%s/%s", str1, pcwd, str2);
+		}
+		else if (str2[0] == '/') {
+			sprintf(theia_buf1, "%s/%s|%s", pcwd, str1, str2);
+		}
+		else {
+			sprintf(theia_buf1, "%s/%s|%s/%s", pcwd, str1, pcwd, str2);
+		}
+	}
+	theia_dump_str(theia_buf1, rc, sysnum);
+}
+
+void theia_dump_sd(const char __user *str, int val, int rc, int sysnum) {
+	char *pcwd = NULL;
+	struct path path;
+
+	if (str[0] == '/') {
+		sprintf(theia_buf1, "%s|%d", str, val);
+	}
+	else {
+		if (current->fs) {
+			get_fs_pwd(current->fs, &path);
+			pcwd = d_path(&path, theia_buf2, 4096);	
+			if (IS_ERR(pcwd))
+				pcwd = ".";
+		}
+		else {
+			pcwd = ".";
+		}
+
+		sprintf(theia_buf1, "%s/%s|%d", pcwd, str, val);
+	}
+
+	theia_dump_str(theia_buf1, rc, sysnum);
+}
+
+void theia_dump_sdd(const char __user *str, int val1, int val2, int rc, int sysnum) {
+	char *pcwd = NULL;
+	struct path path;
+
+	if (str[0] == '/') {
+		sprintf(theia_buf1, "%s|%d|%d", str, val1, val2);
+	}
+	else {
+		if (current->fs) {
+			get_fs_pwd(current->fs, &path);
+			pcwd = d_path(&path, theia_buf2, 4096);	
+			if (IS_ERR(pcwd))
+				pcwd = ".";
+		}
+		else {
+			pcwd = ".";
+		}
+
+		sprintf(theia_buf1, "%s/%s|%d|%d", pcwd, str, val1, val2);
+	}
+
+	theia_dump_str(theia_buf1, rc, sysnum);
+}
+
+void theia_dump_at_sd(int dfd, const char __user *str, int val, int rc, int sysnum) {
+	char *ptr = NULL;
+	struct path path;
+	int res;
+
+	res = user_path_at(dfd, str, LOOKUP_FOLLOW, &path);
+	if (res == 0)
+		ptr = d_path(&path, theia_buf2, 4096);
+	else
+		ptr = str;
+
+	if (ptr[0] == '/') {
+		sprintf(theia_buf1, "%s|%d", ptr, val);
+	}
+	else {
+		if (current->fs) {
+			get_fs_pwd(current->fs, &path);
+			ptr = d_path(&path, theia_buf2, 4096);	
+			if (IS_ERR(ptr))
+				ptr = ".";
+		}
+		else {
+			ptr = ".";
+		}
+
+		sprintf(theia_buf1, "%s/%s|%d", ptr, str, val);
+	}
+
+	theia_dump_str(theia_buf1, rc, sysnum);
+}
+
+void theia_dump_dd(int val1, int val2, int rc, int sysnum) {
+	sprintf(theia_buf1, "%d|%d", val1, val2);
+	theia_dump_str(theia_buf1, rc, sysnum);
+}
+
+void theia_dump_ddd(int val1, int val2, int val3, int rc, int sysnum) {
+	sprintf(theia_buf1, "%d|%d|%d", val1, val2, val3);
+	theia_dump_str(theia_buf1, rc, sysnum);
+}
+
 //SL
 void dump_user_stack(void);
-void dump_user_return_addresses(void);
+void dump_user_return_addresses(char *buffer, size_t bufsize);
 
 struct black_pid {
 	int pid[3];
@@ -2497,97 +2695,54 @@ get_pt_regs(struct task_struct* tsk)
 	return (struct pt_regs *) regs;
 }
 
-// #define STACK_INSPECT_SIZE 250
-#define STACK_INSPECT_SIZE 10000
-//#define NO_VMA_REPORT       10
-#define NO_VMA_REPORT       50
 
+#define NO_STACK_ENTRIES 100
 // SL: to dump return addresses
-void dump_user_return_addresses(void) {
-        u_long __user * p;
-        // u_long bp, old_bp, ret, sp0, sp, spp, ip;
-        u_long ip, sp, sp0, bp, addr;
-        int i, j, res; 
+void dump_user_return_addresses(char* buffer, size_t bufsize) {
+	struct stack_trace trace;
+	unsigned long entries[NO_STACK_ENTRIES];
+	int i;
+	
+	struct mm_struct *mm = current->mm;
+	struct vm_area_struct *vma;
+	char ret_str[50];
 
-        struct mm_struct *mm = current->mm;
-        struct vm_area_struct *vma = NULL;
+	trace.nr_entries  = 0;
+	trace.max_entries = NO_STACK_ENTRIES;
+	trace.skip        = 0;
+	trace.entries     = entries;
 
-        struct vm_area_struct *vma_reports[NO_VMA_REPORT];
-        int vma_idx = 0;
+	save_stack_trace_user(&trace);
 
-        sp0 = current->thread.sp0; // stored user registers
-        ip  = *((u_long*)(sp0 - 4*5));  // eip
-        sp  = *((u_long*)(sp0 - 4*2));  // oldesp 
-        // bp  = *((u_long*)(sp0 - 4*12)); // ebp (not that meaningful due to FPO)
-        // can retrieve other registers...
+	int idx = 0;
+	char *ptr;
+	buffer[0] = '\0';
+	for (i = trace.nr_entries-1; i >= 0; --i) {
+		vma = find_vma(mm, trace.entries[i]);
+		if (!vma)
+			continue;
 
-//        printk ("ip: 0x%08lx, sp: 0x%08lx, start_stack: 0x%08lx\n", ip, sp, mm->start_stack);
+		if (vma->vm_file) {
+			//				ptr = vma->vm_file->f_path.dentry->d_iname;
+			/*
+			   sprintf(ret_str, "%x-%x-%x", vma->vm_file->f_path.dentry->d_inode->i_sb->s_dev, 
+			   vma->vm_file->f_path.dentry->d_inode->i_ino,
+			   trace.entries[i]);
+			 */
+			sprintf(ret_str, "%s=%x", vma->vm_file->f_path.dentry->d_iname,
+					trace.entries[i]);
+			ptr = ret_str;
+		}
+		else {
+			sprintf(ret_str, "[ANONYMOUS]=%x", trace.entries[i]);
+			ptr = ret_str;
+		}
 
-        // check ip
-        for (vma = current->mm->mmap; vma; vma = vma->vm_next) {
-            if (vma->vm_flags & VM_EXEC) { // for every executable vm area
-                if (ip >= vma->vm_start && ip < vma->vm_end) {
-                    vma_reports[vma_idx++] = vma;
-                    break;
-                }
-            }
-        }
-
-        // SL: Let's analyze stack to find possible return addresses 
-        //      (values pointing to executable vm area)
-        p  = (u_long __user *) sp;
-
-	for (i = 0; i < STACK_INSPECT_SIZE && p < mm->start_stack; i++) {
-		get_user (addr, p);
-
-                if (addr < mm->start_code || 
-                    (addr >= mm->start_data && addr < mm->end_data) || 
-                    addr > mm->start_stack) { 
-                    // addr would be either a value or a pointer to data
-                    p++;
-                    continue;
-                }
-
-                /*
-                if (vma_idx && addr >= vma_reports[vma_idx-1]->vm_start && addr < vma_reports[vma_idx-1]->vm_end) {
-                    p++;
-                    continue;
-                }
-                */
-                for (j = 0; j < vma_idx; ++j) {
-                    if (addr >= vma_reports[j]->vm_start && addr < vma_reports[j]->vm_end)
-                        break;
-                }
-                if (j != vma_idx) {
-                    p++;
-                    continue;
-                }
-
-                for (vma = current->mm->mmap; vma; vma = vma->vm_next) {
-                    if (vma->vm_flags & VM_EXEC) { // for every executable vm area
-                        if (addr >= vma->vm_start && addr < vma->vm_end) {
-                            vma_reports[vma_idx++] = vma;
-                            break;
-                        }
-                    }
-                }
-		p++;
-
-                if (vma_idx == NO_VMA_REPORT || vma_reports[vma_idx-1]->vm_start == mm->start_code)
-                    break;
+		if (strlen(buffer) + strlen(ptr) > bufsize-1)
+			break;
+		strcat(buffer, ptr);
+		strcat(buffer, ";");
 	}
-
-        printk("Executable VMA Trace:\n");
-        for (i = 0; i < vma_idx; ++i) {
-            if (vma_reports[i]->vm_file) {
-                printk("0x%08lx [0x%08lx] [%s]\n", vma_reports[i]->vm_start, 
-                       vma_reports[i]->vm_file->f_path.dentry->d_inode,
-                       vma_reports[i]->vm_file->f_path.dentry->d_iname);
-            }
-            else {
-                printk("0x%08lx [0x00000000] [ANONYMOUS]\n", vma_reports[i]->vm_start); 
-            }
-        }
 
         return;
 }
@@ -6251,6 +6406,66 @@ asmlinkage long sys_pthread_sysign (void)
 		return rc;						\
 	}								
 
+#define THEIA_SIMPLE_SHIM1(name, sysnum, arg0type, arg0name)		\
+	static asmlinkage long						\
+	theia_sys_##name (arg0type arg0name)				\
+	{								\
+		long rc;						\
+		rc = sys_##name(arg0name);				\
+		if (theia_logging_toggle) theia_##name##_ahgx(arg0name, rc, sysnum);               \
+		return rc;						\
+	}								
+
+#define THEIA_SIMPLE_SHIM2(name, sysnum, arg0type, arg0name, arg1type, arg1name)	\
+	static asmlinkage long						\
+	theia_sys_##name (arg0type arg0name, arg1type arg1name)		\
+	{								\
+		long rc;						\
+		rc = sys_##name(arg0name, arg1name);			\
+		if (theia_logging_toggle) theia_##name##_ahgx(arg0name, arg1name, rc, sysnum);     \
+		return rc;						\
+	}								
+
+#define THEIA_SIMPLE_SHIM3(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name)	\
+	static asmlinkage long						\
+	theia_sys_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name)		\
+	{								\
+		long rc;						\
+		rc = sys_##name(arg0name, arg1name, arg2name);			\
+		if (theia_logging_toggle) theia_##name##_ahgx(arg0name, arg1name, arg2name, rc, sysnum);   \
+		return rc;						\
+	}								
+
+#define THEIA_SIMPLE_SHIM4(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name)	\
+	static asmlinkage long						\
+	theia_sys_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name)		\
+	{								\
+		long rc;						\
+		rc = sys_##name(arg0name, arg1name, arg2name, arg3name);			\
+		if (theia_logging_toggle) theia_##name##_ahgx(arg0name, arg1name, arg2name, arg3name, rc, sysnum);         \
+		return rc;						\
+	}								
+
+#define THEIA_SIMPLE_SHIM5(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name)	\
+	static asmlinkage long						\
+	theia_sys_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name)		\
+	{								\
+		long rc;						\
+		rc = sys_##name(arg0name, arg1name, arg2name, arg3name, arg4name);			\
+		if (theia_logging_toggle) theia_##name##_ahgx(arg0name, arg1name, arg2name, arg3name, arg4name, rc, sysnum);       \
+		return rc;						\
+	}								
+
+#define THEIA_SIMPLE_SHIM6(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name, arg5type, arg5name)	\
+	static asmlinkage long						\
+	theia_sys_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name, arg5type arg5name)		\
+	{								\
+		long rc;						\
+		rc = sys_##name(arg0name, arg1name, arg2name, arg3name, arg4name, arg5name);			\
+		if (theia_logging_toggle) theia_##name##_ahgx(arg0name, arg1name, arg2name, arg3name, arg4name, arg5name, rc, sysnum);     \
+		return rc;						\
+	}								
+
 #define SIMPLE_REPLAY(name, sysnum, args...)		\
   static asmlinkage long				\
   replay_##name (args)					\
@@ -6266,31 +6481,80 @@ asmlinkage long sys_pthread_sysign (void)
 #define SIMPLE_SHIM1(name, sysnum, arg0type, arg0name)			\
 	SIMPLE_RECORD1(name, sysnum, arg0type, arg0name);		\
 	SIMPLE_REPLAY (name, sysnum, arg0type arg0name);		\
-	asmlinkage long shim_##name (arg0type arg0name) SHIM_CALL(name, sysnum, arg0name);	
+	asmlinkage long shim_##name (arg0type arg0name) SHIM_CALL(name, sysnum, arg0name);
+
+#define THEIA_SHIM1(name, sysnum, arg0type, arg0name)			\
+	SIMPLE_RECORD1(name, sysnum, arg0type, arg0name);		\
+	SIMPLE_REPLAY (name, sysnum, arg0type arg0name);		\
+	THEIA_SIMPLE_SHIM1(name, sysnum, arg0type, arg0name);		\
+	asmlinkage long shim_##name (arg0type arg0name)                 \
+	SHIM_CALL_MAIN(sysnum, record_##name(arg0name), replay_##name(arg0name),	\
+		       theia_sys_##name(arg0name));
 
 #define SIMPLE_SHIM2(name, sysnum, arg0type, arg0name, arg1type, arg1name) \
 	SIMPLE_RECORD2(name, sysnum, arg0type, arg0name, arg1type, arg1name); \
 	SIMPLE_REPLAY (name, sysnum, arg0type arg0name, arg1type arg1name); \
-	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name) SHIM_CALL(name, sysnum, arg0name, arg1name);	
+	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name) SHIM_CALL(name, sysnum, arg0name, arg1name);
+
+#define THEIA_SHIM2(name, sysnum, arg0type, arg0name, arg1type, arg1name) \
+	SIMPLE_RECORD2(name, sysnum, arg0type, arg0name, arg1type, arg1name); \
+	SIMPLE_REPLAY (name, sysnum, arg0type arg0name, arg1type arg1name); \
+	THEIA_SIMPLE_SHIM2(name, sysnum, arg0type, arg0name, arg1type, arg1name); \
+	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name) \
+	SHIM_CALL_MAIN(sysnum, record_##name(arg0name, arg1name), replay_##name(arg0name, arg1name), \
+        theia_sys_##name(arg0name, arg1name));
 
 #define SIMPLE_SHIM3(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name) \
 	SIMPLE_RECORD3(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name); \
 	SIMPLE_REPLAY (name, sysnum, arg0type arg0name, arg1type arg1name, arg2type arg2name); \
 	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name) SHIM_CALL(name, sysnum, arg0name, arg1name, arg2name);	
 
+#define THEIA_SHIM3(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name) \
+	SIMPLE_RECORD3(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name); \
+	SIMPLE_REPLAY (name, sysnum, arg0type arg0name, arg1type arg1name, arg2type arg2name); \
+	THEIA_SIMPLE_SHIM3(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name); \
+	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name) \
+	SHIM_CALL_MAIN(sysnum, record_##name(arg0name, arg1name, arg2name), replay_##name(arg0name, arg1name, arg2name), \
+        theia_sys_##name(arg0name, arg1name, arg2name));
+
 #define SIMPLE_SHIM4(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name) \
 	SIMPLE_RECORD4(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name); \
 	SIMPLE_REPLAY (name, sysnum, arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name); \
 	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name) SHIM_CALL(name, sysnum, arg0name, arg1name, arg2name, arg3name);	
+
+#define THEIA_SHIM4(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name) \
+	SIMPLE_RECORD4(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name); \
+	SIMPLE_REPLAY (name, sysnum, arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name); \
+	THEIA_SIMPLE_SHIM4(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type arg3name); \
+	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name) \
+	SHIM_CALL_MAIN(sysnum, record_##name(arg0name, arg1name, arg2name, arg3name), replay_##name(arg0name, arg1name, arg2name, arg3name), \
+        theia_sys_##name(arg0name, arg1name, arg2name, arg3name));
+
 #define SIMPLE_SHIM5(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name) \
 	SIMPLE_RECORD5(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name); \
 	SIMPLE_REPLAY (name, sysnum, arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name); \
 	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name) SHIM_CALL(name, sysnum, arg0name, arg1name, arg2name, arg3name, arg4name);	
 
+#define THEIA_SHIM5(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name) \
+	SIMPLE_RECORD5(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name); \
+	SIMPLE_REPLAY (name, sysnum, arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name); \
+	THEIA_SIMPLE_SHIM5(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type arg3name, arg4type arg4name); \
+	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name) \
+	SHIM_CALL_MAIN(sysnum, record_##name(arg0name, arg1name, arg2name, arg3name, arg4name), replay_##name(arg0name, arg1name, arg2name, arg3name, arg4name), \
+        theia_sys_##name(arg0name, arg1name, arg2name, arg3name, arg4name));
+
 #define SIMPLE_SHIM6(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name, arg5type, arg5name) \
 	SIMPLE_RECORD6(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name, arg5type, arg5name); \
 	SIMPLE_REPLAY (name, sysnum, arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name, arg5type arg5name); \
 	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name, arg5type arg5name) SHIM_CALL(name, sysnum, arg0name, arg1name, arg2name, arg3name, arg4name, arg5name);
+
+#define THEIA_SHIM6(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name, arg5type, arg5name) \
+	SIMPLE_RECORD6(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name, arg5type, arg5name); \
+	SIMPLE_REPLAY (name, sysnum, arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name, arg5type arg5name); \
+	THEIA_SIMPLE_SHIM6(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type arg3name, arg4type arg4name, arg5type arg5name); \
+	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name, arg5type arg5name) \
+	SHIM_CALL_MAIN(sysnum, record_##name(arg0name, arg1name, arg2name, arg3name, arg4name, arg5name), replay_##name(arg0name, arg1name, arg2name, arg3name, arg4name, arg5name), \
+        theia_sys_##name(arg0name, arg1name, arg2name, arg3name, arg4name, arg5name));
 
 #define RET1_RECORD1(name, sysnum, type, dest, arg0type, arg0name)	\
 static asmlinkage long record_##name (arg0type arg0name)	\
@@ -7738,76 +8002,17 @@ void packahgv_read (struct read_ahgv *sys_args) {
 
 void theia_read_ahg(unsigned int fd, long rc, u_long clock) {
 	int ret;
-  struct read_ahgv* pahgv = NULL;
-	
-	
-//	printk("theia_logging_toggle: %d\n", theia_logging_toggle);
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
+	struct read_ahgv* pahgv = NULL;
 
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return;
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+	if (theia_check_channel() == false)
 		return;
-	}
-
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { 
-//    set_fs(old_fs);                                                              
-//		return;
-//  } 
-
-	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-	
-
-//	printk("from read: pid %d (%d), ppid 1: %d (%d), ppid 2: %d (%d), ppid 3: %d (%d), ppid 4: %d (%d), ppid 5: %d (%d)\n", 
-//		current->pid, current->tgid,
-//		current->parent->pid, current->parent->tgid,
-//		current->parent->parent->pid,current->parent->parent->tgid,
-//		current->parent->parent->parent->pid, current->parent->parent->parent->tgid,
-//		current->parent->parent->parent->parent->pid, current->parent->parent->parent->parent->tgid,
-//		current->parent->parent->parent->parent->parent->pid, current->parent->parent->parent->parent->parent->tgid);
-
-  //check if the process is new; if so, send an entry of process                             
-/*
-  if(is_process_new(current->pid, current->comm)) {                              
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
 
-//	printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
-// Yang: regardless of the return value, passes the failed syscall also
-//	if(rc >= 0) 
+	//	printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
+	// Yang: regardless of the return value, passes the failed syscall also
+	//	if(rc >= 0) 
 	{
 		pahgv = (struct read_ahgv*)KMALLOC(sizeof(struct read_ahgv), GFP_KERNEL);
 		if(pahgv == NULL) {
@@ -7817,13 +8022,13 @@ void theia_read_ahg(unsigned int fd, long rc, u_long clock) {
 		pahgv->pid = current->pid;
 		pahgv->fd = (int)fd;
 		pahgv->bytes = rc;
-//		pahgv->clock = clock;
+		//		pahgv->clock = clock;
 		packahgv_read(pahgv);
 		KFREE(pahgv);	
 	}
 
 }
-	
+
 static asmlinkage long
 record_read (unsigned int fd, char __user * buf, size_t count)
 {
@@ -8333,58 +8538,10 @@ void packahgv_write (struct write_ahgv *sys_args) {
 
 void theia_write_ahg(unsigned int fd, long rc, u_long clock) {
 	int ret;
-  struct write_ahgv* pahgv = NULL;
+	struct write_ahgv* pahgv = NULL;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return;
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+	if (theia_check_channel() == false)
 		return;
-	}
-
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-//    set_fs(old_fs);                                                              
-//		return;
-//  } 
-	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-
-  //check if the process is new; if so, send an entry of process                             
-/*
-  if(is_process_new(current->pid, current->comm)) {                              
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -8740,13 +8897,39 @@ void packahgv_open (struct open_ahgv *sys_args) {
 	//Yang
 
 	if(theia_chan) {
-		char buf[256];
+		char *pcwd = NULL;
+		struct path path;
 		long sec, nsec;
+		int size;
+
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
-				2, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->filename, sys_args->flags, sys_args->mode,
-				sys_args->dev, sys_args->ino, sys_args->is_new, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
+
+#ifdef THEIA_USER_RET_ADDR
+		dump_user_return_addresses(theia_retbuf, 4096);
+		printk("THEIA:open: %s\n", theia_retbuf);
+#endif
+
+		if (sys_args->filename[0] == '/') {
+			size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%d|%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
+					2, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->filename, sys_args->flags, sys_args->mode,
+					sys_args->dev, sys_args->ino, sys_args->is_new, current->tgid, sec, nsec);
+		}
+		else {
+			if (current->fs) {
+				get_fs_pwd(current->fs, &path);
+				pcwd = d_path(&path, theia_buf2, 4096);	
+				if (IS_ERR(pcwd))
+					pcwd = ".";
+			}
+			else {
+				pcwd = ".";
+			}
+
+			size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%d|%s/%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
+					2, sys_args->pid, current->start_time.tv_sec, sys_args->fd, pcwd, sys_args->filename, sys_args->flags, sys_args->mode,
+					sys_args->dev, sys_args->ino, sys_args->is_new, current->tgid, sec, nsec);
+		}
+		relay_write(theia_chan, theia_buf1, size);
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -8757,58 +8940,11 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, 
 	int ret;
 	struct file* file;
 	struct inode* inode;
-  struct open_ahgv* pahgv = NULL;
+	struct open_ahgv* pahgv = NULL;
 	int copied_length = 0;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return;
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+	if (theia_check_channel() == false)
 		return;
-	}
-
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-//    set_fs(old_fs);                                                              
-//		return;
-//  } 
-	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-
-  //check if the process is new; if so, send an entry of process                             
-/*
-  if(is_process_new(current->pid, current->comm)) {                              
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -9025,58 +9161,10 @@ void packahgv_close (struct close_ahgv *sys_args) {
 
 void theia_close_ahg(int fd) {
 	int ret;
-  struct close_ahgv* pahgv = NULL;
+	struct close_ahgv* pahgv = NULL;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return; 
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+	if (theia_check_channel() == false)
 		return;
-	}
-
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-//    set_fs(old_fs);                                                              
-//		return;
-//  } 
-	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-
-  //check if the process is new; if so, send an entry of process                             
-/*
-  if(is_process_new(current->pid, current->comm)) {                              
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -9181,9 +9269,54 @@ SIMPLE_SHIM1(close, 3, int, fd);
 #endif
 
 RET1_SHIM3(waitpid, 7, int, stat_addr, pid_t, pid, int __user *, stat_addr, int, options);
-SIMPLE_SHIM2(creat, 85, const char __user *, pathname, int, mode);
-SIMPLE_SHIM2(link, 86, const char __user *, oldname, const char __user *, newname);
-SIMPLE_SHIM1(unlink, 87, const char __user *, pathname);
+
+void theia_creat_ahgx(const char __user * pathname, int mode, long rc, int sysnum)
+{
+	theia_dump_sd(pathname, mode, rc, sysnum);
+}
+
+void theia_link_ahgx(const char __user * oldname, const char __user * newname, long rc, int sysnum)
+{
+	theia_dump_ss(oldname, newname, rc, sysnum);
+}
+
+void theia_unlink_ahgx(const char __user * pathname, long rc, int sysnum)
+{
+	char *pcwd = NULL;
+	struct path path;
+
+	if (pathname[0] == '/') {
+		theia_dump_str(pathname, rc, sysnum);
+	}
+	else {
+		if (current->fs) {
+			get_fs_pwd(current->fs, &path);
+			pcwd = d_path(&path, theia_buf2, 4096);	
+			if (IS_ERR(pcwd))
+				pcwd = ".";
+		}
+		else {
+			pcwd = ".";
+		}
+
+		sprintf(theia_buf1, "%s/%s", pcwd, pathname);
+		theia_dump_str(theia_buf1, rc, sysnum);
+	}
+}
+
+void theia_unlinkat_ahgx(int dfd, const char __user * pathname, int flag, long rc, int sysnum)
+{
+	theia_dump_at_sd(dfd, pathname, flag, rc, sysnum);
+}
+
+void theia_symlink_ahgx(const char __user * oldname, const char __user * newname, long rc, int sysnum)
+{
+	theia_dump_ss(oldname, newname, rc, sysnum);
+}
+
+THEIA_SHIM2(creat, 85, const char __user *, pathname, int, mode);
+THEIA_SHIM2(link, 86, const char __user *, oldname, const char __user *, newname);
+THEIA_SHIM1(unlink, 87, const char __user *, pathname);
 
 // This should be called with the record group lock
 static int
@@ -9237,6 +9370,7 @@ struct execve_ahgv {
 	char filename[204];
 	int  is_user_remote;
 	int  rc;
+	char *args;
 };
 
 void packahgv_execve (struct execve_ahgv *sys_args) {
@@ -9258,11 +9392,18 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 */
 		is_user_remote = 0;
 
+#ifdef THEIA_USER_RET_ADDR
+		dump_user_return_addresses(theia_retbuf, 4096);
+		printk("THEIA:execve: %s\n", theia_retbuf);
+#endif
+
   		char *fpathbuf = (char*)vmalloc(PATH_MAX);
 	 	char *fpath    = get_task_fullpath(current, fpathbuf, PATH_MAX);
 		if (!fpath) {
 			fpath = sys_args->filename;
 		}
+
+		/* TODO: publish args as well */
 
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%s|%d|%d|%ld|%ld|endahg\n", 
 				59, sys_args->pid, current->start_time.tv_sec, sys_args->rc, 
@@ -9277,76 +9418,28 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 // void theia_execve_ahg(const char *filename, const char __user *const __user *envp) {
 void theia_execve_ahg(const char *filename, int rc) {
 	int ret;
-  struct execve_ahgv* pahgv = NULL;
+	struct execve_ahgv* pahgv = NULL;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return; 
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return; 
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+	if (theia_check_channel() == false)
 		return;
-	}
-
-
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-//    set_fs(old_fs);                                                              
-//		return;
-//  } 
-	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-
-  //check if the process is new; if so, send an entry of process                             
-/*
-  if(is_process_new(current->pid, current->comm)) {                              
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
 
-//	int copied_length = 0;
-//	char *dumped_envp = VMALLOC(3000);
-//	dumped_envp[2999] = '\0';
-//	if ((copied_length = strncpy_from_user(dumped_envp, envp, 3000)) != strlen(envp)) {
-//		printk ("theia_execve_ahg: can't copy envp to ahgv, envp length %d, copied %d, envp:%s\n", strlen(envp), copied_length, envp); 
-//		KFREE(pahgv);	
-//		KFREE(dumped_envp);	
-//	}
-//	if (strstr(dumped_envp, "SSH_CONNECTION") != NULL) {
-//		pahgv->is_user_remote = 1;
-//	}
-//	else
-//		pahgv->is_user_remote = 0;
+	struct mm_struct *mm = current->mm;
+	char *args = NULL;
+	if (mm) {
+		unsigned long arg_start = mm->arg_start;
+		unsigned long arg_len   = mm->arg_end - arg_start;
+		args = (char*)vmalloc(arg_len);
+		copy_from_user((void*)args, (const void __user*)arg_start, arg_len);
+
+		int i;
+		for (i = 0; i < arg_len-1; ++i) {
+			if (args[i] == '\0') 
+				args[i] = ' ';
+		}
+	}
 
 	pahgv = (struct execve_ahgv*)KMALLOC(sizeof(struct execve_ahgv), GFP_KERNEL);
 	if(pahgv == NULL) {
@@ -9356,9 +9449,10 @@ void theia_execve_ahg(const char *filename, int rc) {
 	pahgv->pid = current->pid;
 	strncpy(pahgv->filename, filename, sizeof(pahgv->filename));
 	pahgv->rc = rc;
+	pahgv->args = args;
 	packahgv_execve(pahgv);
 	KFREE(pahgv);	
-//	KFREE(dumped_envp);	
+	vfree(args);
 }
 
 // Simply recording the fact that an execve takes place, we won't replay it
@@ -9849,7 +9943,12 @@ int shim_execve(const char *filename, const char __user *const __user *__argv, c
 
 SHIM_CALL_MAIN(59, record_execve(filename, __argv, __envp, regs), replay_execve(filename, __argv, __envp, regs), theia_start_record(filename, __argv, __envp, regs))
 
-SIMPLE_SHIM1(chdir, 80, const char __user *, filename);
+void theia_chdir_ahgx(const char __user * filename, long rc, int sysnum)
+{
+	theia_unlink_ahgx(filename, rc, sysnum);
+}
+
+THEIA_SHIM1(chdir, 80, const char __user *, filename);
 
 static asmlinkage long 
 record_time(time_t __user * tloc)
@@ -9882,14 +9981,53 @@ RET1_REPLAY(time, 201, time_t, tloc, time_t __user * tloc);
 
 asmlinkage long shim_time(time_t __user * tloc) SHIM_CALL (time, 201, tloc);
 
-SIMPLE_SHIM3 (mknod, 133, const char __user *, filename, int, mode, unsigned, dev);
-SIMPLE_SHIM2(chmod, 90, const char __user *, filename, mode_t,  mode);
+void theia_mknod_ahgx(const char __user * filename, int mode, unsigned dev, long rc, int sysnum)
+{
+	theia_dump_sdd(filename, mode, dev, rc, sysnum);
+}
+
+void theia_chmod_ahgx(const char __user * filename, mode_t mode, long rc, int sysnum)
+{
+	theia_dump_sd(filename, mode, rc, sysnum);
+}
+
+void theia_fchmod_ahgx(unsigned int fd, mode_t mode, long rc, int sysnum)
+{
+	theia_dump_dd(fd, mode, rc, sysnum);
+}
+
+void theia_fchmodat_ahgx(int dfd, const char __user * filename, int mode, long rc, int sysnum)
+{
+	theia_dump_at_sd(dfd, filename, mode, rc, sysnum);
+}
+
+THEIA_SHIM3 (mknod, 133, const char __user *, filename, int, mode, unsigned, dev);
+
+THEIA_SHIM2(chmod, 90, const char __user *, filename, mode_t,  mode);
+
 //SIMPLE_SHIM3(lchown16, 16, const char __user *, filename, old_uid_t, user, old_gid_t, group);
+
+void theia_lchown_ahgx(const char __user * filename, uid_t user, gid_t group, long rc, int sysnum)
+{
+	theia_dump_sdd(filename, user, group, rc, sysnum);
+}
+
+void theia_chown_ahgx(const char __user * filename, uid_t user, gid_t group, long rc, int sysnum)
+{
+	theia_dump_sdd(filename, user, group, rc, sysnum);
+}
 //64port
-SIMPLE_SHIM3(lchown, 94, const char __user *, filename, uid_t, user, gid_t, group);
+THEIA_SHIM3(lchown, 94, const char __user *, filename, uid_t, user, gid_t, group);
 //64port
 //RET1_SHIM2(stat, 18, struct __old_kernel_stat, statbuf, char __user *, filename, struct __old_kernel_stat __user *, statbuf);
-SIMPLE_SHIM3(lseek, 8, unsigned int, fd, off_t, offset, unsigned int, origin);
+
+void theia_lseek_ahgx(unsigned int fd, off_t offset, unsigned int origin, long rc, int sysnum)
+{
+	theia_dump_ddd(fd, offset, origin, rc, sysnum);
+}
+
+THEIA_SHIM3(lseek, 8, unsigned int, fd, off_t, offset, unsigned int, origin);
+
 SIMPLE_SHIM0(getpid, 39);
 
 //Yang
@@ -9907,13 +10045,20 @@ struct mount_ahgv {
 void packahgv_mount (struct mount_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
-		char buf[256];
 		long sec, nsec;
+		int size;
+
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%s|%s|%s|%lu|%d|%d|%ld|%ld|endahg\n", 
+
+#ifdef THEIA_USER_RET_ADDR
+		dump_user_return_addresses(theia_retbuf, 4096);
+		printk("THEIA:mount: %s\n", theia_retbuf);
+#endif
+
+		size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%s|%s|%s|%lu|%d|%d|%ld|%ld|endahg\n", 
 				165, sys_args->pid, current->start_time.tv_sec, sys_args->devname, sys_args->dirname, sys_args->type, 
 				sys_args->flags, sys_args->rc, current->tgid, sec, nsec);
-		relay_write(theia_chan, buf, size);
+		relay_write(theia_chan, theia_buf1, size);
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -9921,57 +10066,11 @@ void packahgv_mount (struct mount_ahgv *sys_args) {
 
 void theia_mount_ahg(char __user *dev_name, char __user *dir_name, char __user *type, unsigned long flags, int rc, u_long clock) {
 	int ret;
-  struct mount_ahgv* pahgv = NULL;
+	struct mount_ahgv* pahgv = NULL;
 	int copied_length = 0;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return;
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+	if (theia_check_channel() == false)
 		return;
-	}
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { 
-//    set_fs(old_fs);                                                              
-//		return;
-//  } 
-	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-
-  //check if the process is new; if so, send an entry of process                             
-/*
-  if(is_process_new(current->pid, current->comm)) {                              
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -10118,22 +10217,53 @@ SIMPLE_SHIM0(pause, 34);
 SIMPLE_SHIM2(utime, 132, char __user *, filename, struct utimbuf __user *, times);
 
 SIMPLE_SHIM2(access, 21, const char __user *, filename, int, mode);
-SIMPLE_SHIM1 (nice, 34, int, increment);
+SIMPLE_SHIM1(nice, 34, int, increment);
 SIMPLE_SHIM0(sync, 162);
-SIMPLE_SHIM2(kill, 62, int, pid, int, sig);
-SIMPLE_SHIM2(rename, 82, const char __user *, oldname, const char __user *, newname);
-SIMPLE_SHIM2(mkdir, 83, const char __user *, pathname, int, mode);
-SIMPLE_SHIM1(rmdir, 84, const char __user *, pathname);
+
+void theia_kill_ahgx(int pid, int sig, long rc, int sysnum)
+{
+	theia_dump_dd(pid, sig, rc, sysnum);
+}
+
+void theia_rename_ahgx(const char __user * oldname, const char __user * newname, long rc, int sysnum)
+{
+	theia_dump_ss(oldname, newname, rc, sysnum);
+}
+
+void theia_mkdir_ahgx(const char __user * pathname, int mode, long rc, int sysnum)
+{
+	theia_dump_sd(pathname, mode, rc, sysnum);
+}
+
+void theia_mkdirat_ahgx(int dfd, const char __user * pathname, int mode, long rc, int sysnum)
+{
+	theia_dump_at_sd(dfd, pathname, mode, rc, sysnum);
+}
+
+void theia_rmdir_ahgx(const char __user * pathname, long rc, int sysnum)
+{
+	theia_unlink_ahgx(pathname, rc, sysnum);
+}
+
+THEIA_SHIM2(kill, 62, int, pid, int, sig);
+THEIA_SHIM2(rename, 82, const char __user *, oldname, const char __user *, newname);
+THEIA_SHIM2(mkdir, 83, const char __user *, pathname, int, mode);
+THEIA_SHIM1(rmdir, 84, const char __user *, pathname);
+
 SIMPLE_SHIM1(dup, 32, unsigned int, fildes);
 
 //Yang
 struct pipe_ahgv {
-	int							pid;
-	u_long					retval;
-  int	            pfd1;
-  int	            pfd2;
-	u_long					inode1;
-	u_long					inode2;
+	int    pid;
+	u_long retval;
+	int    pfd1;
+	int    pfd2;
+	u_long inode1;
+	u_long inode2;
+	u_long dev1;
+	u_long dev2;
+	u_long ino1;
+	u_long ino2;
 };
 
 void packahgv_pipe (struct pipe_ahgv *sys_args) {
@@ -10142,6 +10272,7 @@ void packahgv_pipe (struct pipe_ahgv *sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
+		/* TODO: publish both ends' data: dev1, dev2, ino1, ino2 */
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%d|%d|%lx|%lx|%d|%ld|%ld|endahg\n", 
 				22, sys_args->pid, current->start_time.tv_sec, sys_args->retval, sys_args->pfd1, sys_args->pfd2, 
 				sys_args->inode1, sys_args->inode2, current->tgid, sec, nsec);
@@ -10153,58 +10284,12 @@ void packahgv_pipe (struct pipe_ahgv *sys_args) {
 
 void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
 	int ret;
-  struct pipe_ahgv* pahgv = NULL;
+	struct pipe_ahgv* pahgv = NULL;
+	struct file* file = NULL;
+	struct inode* inode;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return; 
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return; 
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+	if (theia_check_channel() == false)
 		return;
-	}
-
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-//    set_fs(old_fs);                                                              
-//		return;
-//  } 
-	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-
-  //check if the process is new; if so, send an entry of process                             
-/*
-  if(is_process_new(current->pid, current->comm)) {                              
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -10218,8 +10303,34 @@ void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
 	pahgv->retval = retval;
 	pahgv->pfd1 = pfd1;
 	pahgv->pfd2 = pfd2;
-	pahgv->inode1 = 0; //TODO:need to handle
-	pahgv->inode2 = 0;
+
+	if (pfd1 >= 0)
+		file = fget(pfd1);
+
+	if (!file) {
+		pahgv->dev1 = 0;
+		pahgv->ino1 = 0;		
+	}
+	else {
+		inode = file->f_dentry->d_inode;
+		pahgv->dev1 = inode->i_sb->s_dev;
+		pahgv->ino1 = inode->i_ino;
+	}
+
+	file = NULL;
+	if (pfd2 >= 0)
+		file = fget(pfd2);
+
+	if (!file) {
+		pahgv->dev2 = 0;
+		pahgv->ino2 = 0;		
+	}
+	else {
+		inode = file->f_dentry->d_inode;
+		pahgv->dev2 = inode->i_sb->s_dev;
+		pahgv->ino2 = inode->i_ino;
+	}
+	
 	packahgv_pipe(pahgv);
 	KFREE(pahgv);
 }
@@ -10420,12 +10531,26 @@ asmlinkage unsigned long shim_brk (unsigned long abrk) SHIM_CALL(brk, 12, abrk);
 //64port
 //SIMPLE_SHIM1 (setgid16, 46, gid_t, gid);
 //SIMPLE_SHIM0(getgid16, 47);
-SIMPLE_SHIM2(signal, 48, int, sig, __sighandler_t, handler);
+
+void theia_signal_ahgx(int sig, __sighandler_t handler, long rc, int sysnum)
+{
+	theia_dump_dd(sig, (int)handler, rc, sysnum);
+}
+
+THEIA_SHIM2(signal, 48, int, sig, __sighandler_t, handler);
+
 //64port
 //SIMPLE_SHIM0(geteuid16, 49);
 //SIMPLE_SHIM0(getegid16, 50);
 SIMPLE_SHIM1(acct, 163, char __user *, name)
-SIMPLE_SHIM2(umount, 166, char __user *, name, int, flags);
+
+void theia_umount_ahgx(const char __user * name, int flags, long rc, int sysnum)
+{
+	theia_dump_sd(name, flags, rc, sysnum);
+}
+
+
+THEIA_SHIM2(umount, 166, char __user *, name, int, flags);
 
 struct ioctl_ahgv {
 	int							pid;
@@ -10454,56 +10579,10 @@ void packahgv_ioctl (struct ioctl_ahgv *sys_args) {
 
 void theia_ioctl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long rc, u_long clock) {
 	int ret;
-  struct ioctl_ahgv* pahgv = NULL;
+	struct ioctl_ahgv* pahgv = NULL;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return;
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+	if (theia_check_channel() == false)
 		return;
-	}
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { 
-//    set_fs(old_fs);                                                              
-//		return;
-//  } 
-	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-
-  //check if the process is new; if so, send an entry of process                             
-/*
-  if(is_process_new(current->pid, current->comm)) {                              
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -10794,12 +10873,52 @@ replay_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg)
 	return rc;
 }
 
-asmlinkage long shim_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg) SHIM_CALL(fcntl, 72, fd, cmd, arg);
+void theia_fcntl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long rc)
+{
+	if (theia_check_channel() == false)
+		return;
+
+	if(is_process_new2(current->pid, current->start_time.tv_sec))
+		recursive_packahgv_process();
+
+	/* packahgv */
+	if(theia_chan) {
+		char buf[256];
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%d|%d|%ld|%ld|endahg\n", 
+				72, current->pid, current->start_time.tv_sec, fd, cmd, arg, current->tgid, sec, nsec);
+		relay_write(theia_chan, buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+int theia_sys_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg)
+{
+	int rc;
+	rc = sys_fcntl(fd, cmd, arg);
+
+	theia_fcntl_ahg(fd, cmd, arg, rc);
+
+	return rc;
+}
+
+// asmlinkage long shim_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg) SHIM_CALL(fcntl, 72, fd, cmd, arg);
+asmlinkage long shim_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg)
+SHIM_CALL_MAIN(72, record_fcntl(fd, cmd, arg), replay_fcntl(fd, cmd, arg), theia_sys_fcntl(fd, cmd, arg))
 
 SIMPLE_SHIM2(setpgid, 109, pid_t, pid, pid_t, pgid);
 RET1_SHIM1(olduname, 59, struct oldold_utsname, name, struct oldold_utsname __user *, name);
 SIMPLE_SHIM1(umask, 95, int, mask);
-SIMPLE_SHIM1(chroot, 161, const char __user *, filename);
+
+void theia_chroot_ahgx(const char __user * filename, long rc, int sysnum)
+{
+	theia_unlink_ahgx(filename, rc, sysnum);
+}
+
+THEIA_SHIM1(chroot, 161, const char __user *, filename);
+
 RET1_SHIM2(ustat, 136, struct ustat, ubuf, unsigned, dev, struct ustat __user *, ubuf);
 SIMPLE_SHIM2(dup2, 33, unsigned int, oldfd, unsigned int, newfd);
 SIMPLE_SHIM0(getppid, 110);
@@ -11188,7 +11307,9 @@ replay_getgroups16 (int gidsetsize, gid_t __user *grouplist)
 //64port
 //SIMPLE_SHIM2(setgroups16, 81, int, gidsetsize, gid_t __user *, grouplist);
 /* old_select is redirected to shim_select */
-SIMPLE_SHIM2(symlink, 88, const char __user *, oldname, const char __user *, newname);
+
+THEIA_SHIM2(symlink, 88, const char __user *, oldname, const char __user *, newname);
+
 //64port
 //RET1_SHIM2(lstat, 84, struct __old_kernel_stat, statbuf, char __user *, filename, struct __old_kernel_stat __user *, statbuf);
 RET1_COUNT_SHIM3(readlink, 89, buf, const char __user *, path, char __user *, buf, int, bufsiz);
@@ -11325,59 +11446,10 @@ void packahgv_munmap (struct munmap_ahgv *sys_args) {
 
 void theia_munmap_ahg(unsigned long addr, size_t len, long rc, u_long clock) {
 	int ret;
-  struct munmap_ahgv* pahgv = NULL;
+	struct munmap_ahgv* pahgv = NULL;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return;
-		}
-	}
-
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+	if (theia_check_channel() == false)
 		return;
-	}
-
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-//    set_fs(old_fs);                                                              
-//		return;
-//  } 
-	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-
-  //check if the process is new; if so, send an entry of process                             
-/*
-  if(is_process_new(current->pid, current->comm)) {                              
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -11412,9 +11484,21 @@ asmlinkage long shim_munmap (unsigned long addr, size_t len)
 //SHIM_CALL(munmap, 91, addr, len);
 SHIM_CALL_MAIN(11, record_munmap(addr, len), replay_munmap(addr, len), theia_sys_munmap(addr, len))
 
-SIMPLE_SHIM2(truncate, 76, const char __user *, path, unsigned long, length);
-SIMPLE_SHIM2(ftruncate, 77, unsigned int, fd, unsigned long, length);
-SIMPLE_SHIM2(fchmod, 91, unsigned int, fd, mode_t, mode);
+void theia_truncate_ahgx(const char __user *path, unsigned long length, long rc, int sysnum)
+{
+	theia_dump_sd(path, length, rc, sysnum);
+}
+
+void theia_ftruncate_ahgx(unsigned int fd, unsigned long length, long rc, int sysnum)
+{
+	theia_dump_dd(fd, length, rc, sysnum);
+}
+
+THEIA_SHIM2(truncate, 76, const char __user *, path, unsigned long, length);
+THEIA_SHIM2(ftruncate, 77, unsigned int, fd, unsigned long, length);
+
+THEIA_SHIM2(fchmod, 91, unsigned int, fd, mode_t, mode);
+
 //SIMPLE_SHIM3(fchown16, 95, unsigned int, fd, old_uid_t, user, old_gid_t, group);
 //64port
 //SIMPLE_SHIM3(fchown16, 95, unsigned int, fd, uid_t, user, gid_t, group);
@@ -12587,6 +12671,12 @@ void packahgv_connect(struct connect_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = 0;
+
+#ifdef THEIA_USER_RET_ADDR
+		dump_user_return_addresses(theia_retbuf, 4096);
+		printk("THEIA:connect: %s\n", theia_retbuf);
+#endif
+
 		if(sys_args->sa_family == AF_LOCAL){
 			size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
 					42, sys_args->pid, current->start_time.tv_sec, 
@@ -12817,54 +12907,8 @@ void packahgv_recvmsg(struct recvmsg_ahgv *sys_args) {
 void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long clock) {
 	int ret;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return;
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+	if (theia_check_channel() == false)
 		return;
-	}
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { 
-//    set_fs(old_fs);                                                              
-//		return;
-//  } 
-	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-
-  //check if the process is new; if so, send an entry of process                             
-/*
-  if(is_process_new(current->pid, current->comm)) {                              
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -13011,430 +13055,154 @@ void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long 
 }
 
 void theia_connect_ahg(long rc, int fd, struct sockaddr __user *uservaddr, int addrlen) {
+	struct connect_ahgv* pahgv_connect = NULL;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return;
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+	if (theia_check_channel() == false)
 		return;
-	}
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { 
-//    set_fs(old_fs);                                                              
-//		return;
-//  } 
-	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-
-  //check if the process is new; if so, send an entry of process                             
-/*
-  if(is_process_new(current->pid, current->comm)) {                              
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
 
-	struct connect_ahgv* pahgv_connect = NULL;
 
-  pahgv_connect = (struct connect_ahgv*)KMALLOC(sizeof(struct connect_ahgv), GFP_KERNEL);
-  if(pahgv_connect == NULL) {
-    printk ("theia_connect_ahg: failed to KMALLOC.\n");
-    return;
-  }
-  pahgv_connect->pid = current->pid;
-  pahgv_connect->rc = rc;
-  pahgv_connect->sock_fd = fd;
-  get_ip_port_sockaddr((unsigned long*)uservaddr, pahgv_connect->ip, &(pahgv_connect->port), pahgv_connect->sun_path, &(pahgv_connect->sa_family));
-  packahgv_connect(pahgv_connect);
-  KFREE(pahgv_connect);	
+	pahgv_connect = (struct connect_ahgv*)KMALLOC(sizeof(struct connect_ahgv), GFP_KERNEL);
+	if(pahgv_connect == NULL) {
+		printk ("theia_connect_ahg: failed to KMALLOC.\n");
+		return;
+	}
+	pahgv_connect->pid = current->pid;
+	pahgv_connect->rc = rc;
+	pahgv_connect->sock_fd = fd;
+	get_ip_port_sockaddr((unsigned long*)uservaddr, pahgv_connect->ip, &(pahgv_connect->port), pahgv_connect->sun_path, &(pahgv_connect->sa_family));
+	packahgv_connect(pahgv_connect);
+	KFREE(pahgv_connect);	
 
-  return;
+	return;
 }
 
 void theia_accept_ahg(long rc, int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen) {
+	struct accept_ahgv* pahgv_accept = NULL;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return;
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+	if (theia_check_channel() == false)
 		return;
-	}
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { 
-//    set_fs(old_fs);                                                              
-//		return;
-//  } 
-	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-
-  //check if the process is new; if so, send an entry of process                             
-/*
-  if(is_process_new(current->pid, current->comm)) {                              
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
 
-	struct accept_ahgv* pahgv_accept = NULL;
 
-  pahgv_accept = (struct accept_ahgv*)KMALLOC(sizeof(struct accept_ahgv), GFP_KERNEL);
-  if(pahgv_accept == NULL) {
-    printk ("theia_accept_ahg: failed to KMALLOC.\n");
-    return;
-  }
-  pahgv_accept->pid = current->pid;
-  pahgv_accept->rc = rc;
-  pahgv_accept->sock_fd = fd;
-  get_ip_port_sockaddr((unsigned long*)upeer_sockaddr, pahgv_accept->ip, &(pahgv_accept->port), pahgv_accept->sun_path, &(pahgv_accept->sa_family));
-  packahgv_accept(pahgv_accept);
-  KFREE(pahgv_accept);	
+	pahgv_accept = (struct accept_ahgv*)KMALLOC(sizeof(struct accept_ahgv), GFP_KERNEL);
+	if(pahgv_accept == NULL) {
+		printk ("theia_accept_ahg: failed to KMALLOC.\n");
+		return;
+	}
+	pahgv_accept->pid = current->pid;
+	pahgv_accept->rc = rc;
+	pahgv_accept->sock_fd = fd;
+	get_ip_port_sockaddr((unsigned long*)upeer_sockaddr, pahgv_accept->ip, &(pahgv_accept->port), pahgv_accept->sun_path, &(pahgv_accept->sa_family));
+	packahgv_accept(pahgv_accept);
+	KFREE(pahgv_accept);	
 
-  return;
+	return;
 }
 
 void theia_sendto_ahg(long rc, int fd, void __user *buff, size_t len, unsigned int flags, struct sockaddr __user *addr, int addr_len) {
+	struct sendto_ahgv* pahgv_sendto = NULL;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return;
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+	if (theia_check_channel() == false)
 		return;
-	}
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { 
-//    set_fs(old_fs);                                                              
-//		return;
-//  } 
-	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-
-  //check if the process is new; if so, send an entry of process                             
-/*
-  if(is_process_new(current->pid, current->comm)) {                              
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
 
-	struct sendto_ahgv* pahgv_sendto = NULL;
 
-  pahgv_sendto = (struct sendto_ahgv*)KMALLOC(sizeof(struct sendto_ahgv), GFP_KERNEL);
-  if(pahgv_sendto == NULL) {
-    printk ("theia_sendto_ahg: failed to KMALLOC.\n");
-    return;
-  }
-  pahgv_sendto->pid = current->pid;
-  pahgv_sendto->sock_fd = fd;
-  pahgv_sendto->rc = rc;
-  get_ip_port_sockaddr((unsigned long*)addr, pahgv_sendto->ip, &(pahgv_sendto->port), pahgv_sendto->sun_path, &(pahgv_sendto->sa_family));
-  packahgv_sendto(pahgv_sendto);
-  KFREE(pahgv_sendto);	
+	pahgv_sendto = (struct sendto_ahgv*)KMALLOC(sizeof(struct sendto_ahgv), GFP_KERNEL);
+	if(pahgv_sendto == NULL) {
+		printk ("theia_sendto_ahg: failed to KMALLOC.\n");
+		return;
+	}
+	pahgv_sendto->pid = current->pid;
+	pahgv_sendto->sock_fd = fd;
+	pahgv_sendto->rc = rc;
+	get_ip_port_sockaddr((unsigned long*)addr, pahgv_sendto->ip, &(pahgv_sendto->port), pahgv_sendto->sun_path, &(pahgv_sendto->sa_family));
+	packahgv_sendto(pahgv_sendto);
+	KFREE(pahgv_sendto);	
 
-  return;
+	return;
 }
 
 void theia_recvfrom_ahg(long rc, int fd, void __user *ubuf, size_t size, unsigned int flags, struct sockaddr __user *addr, int __user *addr_len) {
+	struct recvfrom_ahgv* pahgv_recvfrom = NULL;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return;
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+	if (theia_check_channel() == false)
 		return;
-	}
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { 
-//    set_fs(old_fs);                                                              
-//		return;
-//  } 
-	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-
-  //check if the process is new; if so, send an entry of process                             
-/*
-  if(is_process_new(current->pid, current->comm)) {                              
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
 
-  struct recvfrom_ahgv* pahgv_recvfrom = NULL;
 
-  pahgv_recvfrom = (struct recvfrom_ahgv*)KMALLOC(sizeof(struct recvfrom_ahgv), GFP_KERNEL);
-  if(pahgv_recvfrom == NULL) {
-    printk ("theia_recvfrom_ahg: failed to KMALLOC.\n");
-    return;
-  }
-  pahgv_recvfrom->pid = current->pid;
-  pahgv_recvfrom->sock_fd = fd;
-  get_ip_port_sockaddr((unsigned long*)addr, pahgv_recvfrom->ip, &(pahgv_recvfrom->port), pahgv_recvfrom->sun_path, &(pahgv_recvfrom->sa_family));
-  pahgv_recvfrom->rc = rc;
-  //				pahgv_recvfrom->clock = clock;
-  packahgv_recvfrom(pahgv_recvfrom);
-  KFREE(pahgv_recvfrom);	
+	pahgv_recvfrom = (struct recvfrom_ahgv*)KMALLOC(sizeof(struct recvfrom_ahgv), GFP_KERNEL);
+	if(pahgv_recvfrom == NULL) {
+		printk ("theia_recvfrom_ahg: failed to KMALLOC.\n");
+		return;
+	}
+	pahgv_recvfrom->pid = current->pid;
+	pahgv_recvfrom->sock_fd = fd;
+	get_ip_port_sockaddr((unsigned long*)addr, pahgv_recvfrom->ip, &(pahgv_recvfrom->port), pahgv_recvfrom->sun_path, &(pahgv_recvfrom->sa_family));
+	pahgv_recvfrom->rc = rc;
+	//				pahgv_recvfrom->clock = clock;
+	packahgv_recvfrom(pahgv_recvfrom);
+	KFREE(pahgv_recvfrom);	
 
-  return;
+	return;
 }
 
 void theia_sendmsg_ahg(long rc, int fd, struct msghdr __user *msg, unsigned int flags) {
+	struct sendmsg_ahgv* pahgv_sendmsg = NULL;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return;
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+	if (theia_check_channel() == false)
 		return;
-	}
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { 
-//    set_fs(old_fs);                                                              
-//		return;
-//  } 
-	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-
-  //check if the process is new; if so, send an entry of process                             
-/*
-  if(is_process_new(current->pid, current->comm)) {                              
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
 
-	struct sendmsg_ahgv* pahgv_sendmsg = NULL;
 
-  pahgv_sendmsg = (struct sendmsg_ahgv*)KMALLOC(sizeof(struct sendmsg_ahgv), GFP_KERNEL);
-  if(pahgv_sendmsg == NULL) {
-    printk ("theia_sendmsg_ahg: failed to KMALLOC.\n");
-    return;
-  }
-  pahgv_sendmsg->pid = current->pid;
-  pahgv_sendmsg->sock_fd = fd;
-  pahgv_sendmsg->rc = rc;
-  //				pahgv_sendmsg->clock = clock;
-  packahgv_sendmsg(pahgv_sendmsg);
-  KFREE(pahgv_sendmsg);	
+	pahgv_sendmsg = (struct sendmsg_ahgv*)KMALLOC(sizeof(struct sendmsg_ahgv), GFP_KERNEL);
+	if(pahgv_sendmsg == NULL) {
+		printk ("theia_sendmsg_ahg: failed to KMALLOC.\n");
+		return;
+	}
+	pahgv_sendmsg->pid = current->pid;
+	pahgv_sendmsg->sock_fd = fd;
+	pahgv_sendmsg->rc = rc;
+	//				pahgv_sendmsg->clock = clock;
+	packahgv_sendmsg(pahgv_sendmsg);
+	KFREE(pahgv_sendmsg);	
 
-  return;
+	return;
 }
 
 void theia_recvmsg_ahg(long rc, int fd, struct msghdr __user *msg, unsigned int flags) {
+	struct recvmsg_ahgv* pahgv_recvmsg = NULL;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return;
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+	if (theia_check_channel() == false)
 		return;
-	}
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { 
-//    set_fs(old_fs);                                                              
-//		return;
-//  } 
-	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-
-  //check if the process is new; if so, send an entry of process                             
-/*
-  if(is_process_new(current->pid, current->comm)) {                              
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
 
-	struct recvmsg_ahgv* pahgv_recvmsg = NULL;
 
-  pahgv_recvmsg = (struct recvmsg_ahgv*)KMALLOC(sizeof(struct recvmsg_ahgv), GFP_KERNEL);
-  if(pahgv_recvmsg == NULL) {
-    printk ("theia_recvmsg_ahg: failed to KMALLOC.\n");
-    return;
-  }
-  pahgv_recvmsg->pid = current->pid;
-  pahgv_recvmsg->sock_fd = fd;
-  pahgv_recvmsg->rc = rc;
-  //				pahgv_recvmsg->clock = clock;
-  packahgv_recvmsg(pahgv_recvmsg);
-  KFREE(pahgv_recvmsg);	
+	pahgv_recvmsg = (struct recvmsg_ahgv*)KMALLOC(sizeof(struct recvmsg_ahgv), GFP_KERNEL);
+	if(pahgv_recvmsg == NULL) {
+		printk ("theia_recvmsg_ahg: failed to KMALLOC.\n");
+		return;
+	}
+	pahgv_recvmsg->pid = current->pid;
+	pahgv_recvmsg->sock_fd = fd;
+	pahgv_recvmsg->rc = rc;
+	//				pahgv_recvmsg->clock = clock;
+	packahgv_recvmsg(pahgv_recvmsg);
+	KFREE(pahgv_recvmsg);	
 
-  return;
+	return;
 }
 
 int theia_sys_socketcall(int call, unsigned long __user * args) {
@@ -14899,38 +14667,10 @@ void packahgv_shmget(struct shmget_ahgv *sys_args)
 }
 
 void theia_shmget_ahg(long rc, key_t key, size_t size, int flag) {
-
 	int ret;
 
-	mm_segment_t old_fs = get_fs();
-	set_fs(KERNEL_DS);
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return;
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);
+	if (theia_check_channel() == false)
 		return;
-	}
-
-	if(theia_logging_toggle == 0) {
-		set_fs(old_fs);
-		return;
-	}
-
-	set_fs(old_fs);
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -15036,46 +14776,19 @@ void packahgv_shmat(struct shmat_ahgv *sys_args)
 }
 
 void theia_shmat_ahg(long rc, int shmid, char __user *shmaddr, int shmflg) {
-
 	int ret;
 	unsigned long raddr;
+	struct shmget_ahgv* pahgv_shmget = NULL;
+	struct shmat_ahgv* pahgv_shmat = NULL;
+
 	get_user(raddr, (unsigned long __user *) rc);
 
-	mm_segment_t old_fs = get_fs();
-	set_fs(KERNEL_DS);
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return;
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);
+	if (theia_check_channel() == false)
 		return;
-	}
-
-	if(theia_logging_toggle == 0) {
-		set_fs(old_fs);
-		return;
-	}
-
-	set_fs(old_fs);
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
 
-	struct shmget_ahgv* pahgv_shmget = NULL;
-	struct shmat_ahgv* pahgv_shmat = NULL;
 
 	pahgv_shmat = (struct shmat_ahgv*)KMALLOC(sizeof(struct shmat_ahgv), GFP_KERNEL);
 	if(pahgv_shmat == NULL) {
@@ -15624,63 +15337,15 @@ sys_msgctl(msqid, cmd, buf))
 void theia_ipc_ahg(long rc, uint call, int first, u_long second,
 	u_long third, void __user *ptr, long fifth, u_long clock) {
 
+	struct shmget_ahgv* pahgv_shmget = NULL;
+	struct shmat_ahgv* pahgv_shmat = NULL;
 	int ret;
 
-	mm_segment_t old_fs = get_fs();
-	set_fs(KERNEL_DS);
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return;
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);
+	if (theia_check_channel() == false)
 		return;
-	}
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);
-//  if(ret < 0) {
-//    set_fs(old_fs);
-//		return;
-//  }
-	if(theia_logging_toggle == 0) {
-		set_fs(old_fs);
-		return;
-	}
-
-
-  //check if the process is new; if so, send an entry of process
-/*
-  if(is_process_new(current->pid, current->comm)) {
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);
-
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
-
-	struct shmget_ahgv* pahgv_shmget = NULL;
-	struct shmat_ahgv* pahgv_shmat = NULL;
-
 
 	// Yang: regardless of the return value, passes the failed syscall also
 	switch(call) {
@@ -16471,56 +16136,10 @@ void packahgv_clone (struct clone_ahgv *sys_args) {
 
 void theia_clone_ahg(long new_pid) {
 	int ret;
-  struct clone_ahgv* pahgv = NULL;
+	struct clone_ahgv* pahgv = NULL;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return;
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+	if (theia_check_channel() == false)
 		return;
-	}
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { 
-//    set_fs(old_fs);                                                              
-//		return;
-//  } 
-	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-
-  //check if the process is new; if so, send an entry of process                             
-/*
-  if(is_process_new(current->pid, current->comm)) {                              
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -16607,11 +16226,18 @@ void packahgv_mprotect (struct mprotect_ahgv *sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
+
+#ifdef THEIA_USER_RET_ADDR
+		dump_user_return_addresses(theia_retbuf, 4096);
+		printk("THEIA:mprotect: %s\n", theia_retbuf);
+#endif
+
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%lx|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
 				10, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->retval, sys_args->address, sys_args->length, 
 				sys_args->protection, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
+
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -16619,57 +16245,10 @@ void packahgv_mprotect (struct mprotect_ahgv *sys_args) {
 
 void theia_mprotect_ahg(u_long address, u_long len, uint16_t prot, long rc) {
 	int ret;
-  struct mprotect_ahgv* pahgv = NULL;
+	struct mprotect_ahgv* pahgv = NULL;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return;
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+	if (theia_check_channel() == false)
 		return;
-	}
-
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-//    set_fs(old_fs);                                                              
-//		return;
-//  } 
-	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-
-  //check if the process is new; if so, send an entry of process                             
-/*
-  if(is_process_new(current->pid, current->comm)) {                              
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -16748,8 +16327,21 @@ asmlinkage long shim_mprotect (unsigned long start, size_t len, unsigned long pr
 SHIM_CALL_MAIN(10, record_mprotect(start, len, prot), replay_mprotect(start, len, prot), theia_sys_mprotect(start, len, prot))
 
 RET1_SHIM3(sigprocmask, 126, old_sigset_t, oset, int, how, old_sigset_t __user *, set, old_sigset_t __user *, oset);
-SIMPLE_SHIM3(init_module, 175, void __user *, umod, unsigned long,  len, const char __user *, uargs);
-SIMPLE_SHIM2(delete_module, 176, const char __user *, name_user, unsigned int, flags);
+
+void theia_init_module_ahgx(void __user *umod, unsigned long len, const char __user * uargs, long rc, int sysnum)
+{
+	/* let's ignore uargs for now */
+	theia_dump_dd((int)umod, len, rc, sysnum);
+}
+
+void theia_delete_module_ahgx(const char __user * name_user, unsigned int flags, long rc, int sysnum)
+{
+	theia_dump_sd(name_user, flags, rc, sysnum);
+}
+
+
+THEIA_SHIM3(init_module, 175, void __user *, umod, unsigned long,  len, const char __user *, uargs);
+THEIA_SHIM2(delete_module, 176, const char __user *, name_user, unsigned int, flags);
 
 asmlinkage long 
 record_quotactl (unsigned int cmd, const char __user *special, qid_t id, void __user *addr)
@@ -18722,57 +18314,10 @@ void packahgv_mmap (struct mmap_ahgv *sys_args) {
 void theia_mmap_ahg(int fd, u_long address, u_long len, uint16_t prot, 
 u_long flags, u_long pgoff, long rc, u_long clock) {
 	int ret;
-  struct mmap_ahgv* pahgv = NULL;
+	struct mmap_ahgv* pahgv = NULL;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return; 
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return; 
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+	if (theia_check_channel() == false)
 		return;
-	}
-
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-//    set_fs(old_fs);                                                              
-//		return;
-//  } 
-	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-
-  //check if the process is new; if so, send an entry of process                             
-/*
-  if(is_process_new(current->pid, current->comm)) {                              
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -19417,7 +18962,7 @@ replay_getresgid (gid_t __user *rgid, gid_t __user *egid, gid_t __user *sgid)
 
 asmlinkage long shim_getresgid (gid_t __user *rgid, gid_t __user *egid, gid_t __user *sgid) SHIM_CALL(getresgid, 120, rgid, egid, sgid);
 
-SIMPLE_SHIM3(chown, 92, const char __user *, filename, uid_t, user, gid_t, group);
+THEIA_SHIM3(chown, 92, const char __user *, filename, uid_t, user, gid_t, group);
 
 //Yang
 struct setuid_ahgv {
@@ -19450,56 +18995,10 @@ void packahgv_setuid (struct setuid_ahgv *sys_args) {
 
 void theia_setuid_ahg(uid_t uid, int rc, u_long clock) {
 	int ret;
-  struct setuid_ahgv* pahgv = NULL;
+	struct setuid_ahgv* pahgv = NULL;
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-			return;
-		}
-	}
-	if(theia_chan == NULL) {
-		theia_chan = create_channel(subbuf_size, n_subbufs);
-		if (!theia_chan) {
-			debugfs_remove(theia_dir);
-			return;
-		}
-	}
-
-	if(!check_and_update_controlfile()) {
-		set_fs(old_fs);                                                              
+	if (theia_check_channel() == false)
 		return;
-	}
-//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
-//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
-//  if(ret < 0) { 
-//    set_fs(old_fs);                                                              
-//		return;
-//  } 
-	if(theia_logging_toggle == 0) {
-    set_fs(old_fs);                                                              
-		return;
-  } 
-
-
-  //check if the process is new; if so, send an entry of process                             
-/*
-  if(is_process_new(current->pid, current->comm)) {                              
-    char *entry = (char*)kmalloc(50, GFP_KERNEL);
-		sprintf(entry, "%d_%s", current->pid, current->comm);
-		if(glb_process_list == NULL) {
-			glb_process_list = ds_list_create (NULL, 0, 0);
-		}
-    ds_list_insert (glb_process_list, entry);                                                
-		
-		recursive_packahgv_process();
-  }
-*/
-	set_fs(old_fs);                                                              
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
@@ -20475,21 +19974,26 @@ SIMPLE_SHIM3(inotify_add_watch, 254, int, fd, const char __user *, path, u32, ma
 SIMPLE_SHIM2(inotify_rm_watch, 255, int, fd, u32, wd);
 SIMPLE_SHIM4(migrate_pages, 256, pid_t, pid, unsigned long, maxnode, const unsigned long __user *, old_nodes, const unsigned long __user *, new_nodes);
 SIMPLE_SHIM4(openat, 257, int, dfd, const char __user *, filename, int, flags, int, mode);
-SIMPLE_SHIM3(mkdirat, 258, int, dfd, const char __user *, pathname, int, mode);
+
+THEIA_SHIM3(mkdirat, 258, int, dfd, const char __user *, pathname, int, mode);
 SIMPLE_SHIM4(mknodat, 259, int, dfd, const char __user *, filename, int, mode, unsigned, dev);
 SIMPLE_SHIM5(fchownat, 260, int, dfd, const char __user *, filename, uid_t, user, gid_t, group, int, flag);
+
 SIMPLE_SHIM3(futimesat, 261, int, dfd, char __user *, filename, struct timeval __user *,utimes);
 //64port
 //RET1_SHIM4(fstatat64, 300, struct stat64, statbuf, int, dfd, char __user *, filename, struct stat64 __user *, statbuf, int, flag);
 RET1_SHIM4(newfstatat, 262, struct stat, statbuf, int, dfd, char __user *, filename, struct stat __user *, statbuf, int, flag);
 
-SIMPLE_SHIM3(unlinkat, 263, int, dfd, const char __user *, pathname, int, flag);
+THEIA_SHIM3(unlinkat, 263, int, dfd, const char __user *, pathname, int, flag);
 
 SIMPLE_SHIM4(renameat, 264, int, olddfd, const char __user *, oldname, int, newdfd, const char __user *, newname);
 SIMPLE_SHIM5(linkat, 265, int, olddfd, const char __user *, oldname, int, newdfd, const char __user *, newname, int, flags);
 SIMPLE_SHIM3(symlinkat, 266, const char __user *, oldname, int, newdfd, const char __user *, newname);
+
 RET1_COUNT_SHIM4(readlinkat, 267, buf, int, dfd, const char __user *, path, char __user *, buf, int, bufsiz)
-SIMPLE_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
+
+THEIA_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
+
 SIMPLE_SHIM3(faccessat, 269, int, dfd, const char __user *, filename, int, mode);
 
 static asmlinkage long 
