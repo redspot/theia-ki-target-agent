@@ -60,6 +60,8 @@
 #include "../ipc/util.h" // For shm utility functions
 #include <asm/user_64.h>
 
+#include <linux/stacktrace.h>
+
 #include <linux/replay_configs.h>
 
 #include <linux/fs_struct.h>
@@ -110,6 +112,9 @@ EXPORT_SYMBOL(theia_recording_toggle);
 
 //#define THEIA_TRACK_SHM_OPEN 0
 // #define THEIA_TRACK_SHMAT 1
+
+#define THEIA_USER_RET_ADDR 1
+#undef THEIA_USER_RET_ADDR
 
 //#define REPLAY_PARANOID
 
@@ -207,13 +212,15 @@ struct dentry	*theia_dir = NULL;
 //static int suspended;
 
 // let's reuse vmalloced buffer for storing filepath and more
-char *theia_buf1 = NULL;
-char *theia_buf2 = NULL;
+char *theia_buf1   = NULL;
+char *theia_buf2   = NULL;
+char *theia_retbuf = NULL;
 
 bool theia_check_channel(void) {
 
-	if (!theia_buf1) theia_buf1 = vmalloc(4096);
-	if (!theia_buf2) theia_buf2 = vmalloc(4096);
+	if (!theia_buf1)   theia_buf1   = vmalloc(4096);
+	if (!theia_buf2)   theia_buf2   = vmalloc(4096);
+	if (!theia_retbuf) theia_retbuf = vmalloc(4096);
 
 	mm_segment_t old_fs = get_fs();                                                
 	set_fs(KERNEL_DS);
@@ -396,7 +403,7 @@ void theia_dump_ddd(int val1, int val2, int val3, int rc, int sysnum) {
 
 //SL
 void dump_user_stack(void);
-void dump_user_return_addresses(void);
+void dump_user_return_addresses(char *buffer, size_t bufsize);
 
 struct black_pid {
 	int pid[3];
@@ -2688,97 +2695,54 @@ get_pt_regs(struct task_struct* tsk)
 	return (struct pt_regs *) regs;
 }
 
-// #define STACK_INSPECT_SIZE 250
-#define STACK_INSPECT_SIZE 10000
-//#define NO_VMA_REPORT       10
-#define NO_VMA_REPORT       50
 
+#define NO_STACK_ENTRIES 100
 // SL: to dump return addresses
-void dump_user_return_addresses(void) {
-        u_long __user * p;
-        // u_long bp, old_bp, ret, sp0, sp, spp, ip;
-        u_long ip, sp, sp0, bp, addr;
-        int i, j, res; 
+void dump_user_return_addresses(char* buffer, size_t bufsize) {
+	struct stack_trace trace;
+	unsigned long entries[NO_STACK_ENTRIES];
+	int i;
+	
+	struct mm_struct *mm = current->mm;
+	struct vm_area_struct *vma;
+	char ret_str[50];
 
-        struct mm_struct *mm = current->mm;
-        struct vm_area_struct *vma = NULL;
+	trace.nr_entries  = 0;
+	trace.max_entries = NO_STACK_ENTRIES;
+	trace.skip        = 0;
+	trace.entries     = entries;
 
-        struct vm_area_struct *vma_reports[NO_VMA_REPORT];
-        int vma_idx = 0;
+	save_stack_trace_user(&trace);
 
-        sp0 = current->thread.sp0; // stored user registers
-        ip  = *((u_long*)(sp0 - 4*5));  // eip
-        sp  = *((u_long*)(sp0 - 4*2));  // oldesp 
-        // bp  = *((u_long*)(sp0 - 4*12)); // ebp (not that meaningful due to FPO)
-        // can retrieve other registers...
+	int idx = 0;
+	char *ptr;
+	buffer[0] = '\0';
+	for (i = trace.nr_entries-1; i >= 0; --i) {
+		vma = find_vma(mm, trace.entries[i]);
+		if (!vma)
+			continue;
 
-//        printk ("ip: 0x%08lx, sp: 0x%08lx, start_stack: 0x%08lx\n", ip, sp, mm->start_stack);
+		if (vma->vm_file) {
+			//				ptr = vma->vm_file->f_path.dentry->d_iname;
+			/*
+			   sprintf(ret_str, "%x-%x-%x", vma->vm_file->f_path.dentry->d_inode->i_sb->s_dev, 
+			   vma->vm_file->f_path.dentry->d_inode->i_ino,
+			   trace.entries[i]);
+			 */
+			sprintf(ret_str, "%s=%x", vma->vm_file->f_path.dentry->d_iname,
+					trace.entries[i]);
+			ptr = ret_str;
+		}
+		else {
+			sprintf(ret_str, "[ANONYMOUS]=%x", trace.entries[i]);
+			ptr = ret_str;
+		}
 
-        // check ip
-        for (vma = current->mm->mmap; vma; vma = vma->vm_next) {
-            if (vma->vm_flags & VM_EXEC) { // for every executable vm area
-                if (ip >= vma->vm_start && ip < vma->vm_end) {
-                    vma_reports[vma_idx++] = vma;
-                    break;
-                }
-            }
-        }
-
-        // SL: Let's analyze stack to find possible return addresses 
-        //      (values pointing to executable vm area)
-        p  = (u_long __user *) sp;
-
-	for (i = 0; i < STACK_INSPECT_SIZE && p < mm->start_stack; i++) {
-		get_user (addr, p);
-
-                if (addr < mm->start_code || 
-                    (addr >= mm->start_data && addr < mm->end_data) || 
-                    addr > mm->start_stack) { 
-                    // addr would be either a value or a pointer to data
-                    p++;
-                    continue;
-                }
-
-                /*
-                if (vma_idx && addr >= vma_reports[vma_idx-1]->vm_start && addr < vma_reports[vma_idx-1]->vm_end) {
-                    p++;
-                    continue;
-                }
-                */
-                for (j = 0; j < vma_idx; ++j) {
-                    if (addr >= vma_reports[j]->vm_start && addr < vma_reports[j]->vm_end)
-                        break;
-                }
-                if (j != vma_idx) {
-                    p++;
-                    continue;
-                }
-
-                for (vma = current->mm->mmap; vma; vma = vma->vm_next) {
-                    if (vma->vm_flags & VM_EXEC) { // for every executable vm area
-                        if (addr >= vma->vm_start && addr < vma->vm_end) {
-                            vma_reports[vma_idx++] = vma;
-                            break;
-                        }
-                    }
-                }
-		p++;
-
-                if (vma_idx == NO_VMA_REPORT || vma_reports[vma_idx-1]->vm_start == mm->start_code)
-                    break;
+		if (strlen(buffer) + strlen(ptr) > bufsize-1)
+			break;
+		strcat(buffer, ptr);
+		strcat(buffer, ";");
 	}
-
-        printk("Executable VMA Trace:\n");
-        for (i = 0; i < vma_idx; ++i) {
-            if (vma_reports[i]->vm_file) {
-                printk("0x%08lx [0x%08lx] [%s]\n", vma_reports[i]->vm_start, 
-                       vma_reports[i]->vm_file->f_path.dentry->d_inode,
-                       vma_reports[i]->vm_file->f_path.dentry->d_iname);
-            }
-            else {
-                printk("0x%08lx [0x00000000] [ANONYMOUS]\n", vma_reports[i]->vm_start); 
-            }
-        }
 
         return;
 }
@@ -8940,6 +8904,11 @@ void packahgv_open (struct open_ahgv *sys_args) {
 
 		get_curr_time(&sec, &nsec);
 
+#ifdef THEIA_USER_RET_ADDR
+		dump_user_return_addresses(theia_retbuf, 4096);
+		printk("THEIA:open: %s\n", theia_retbuf);
+#endif
+
 		if (sys_args->filename[0] == '/') {
 			size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%d|%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
 					2, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->filename, sys_args->flags, sys_args->mode,
@@ -9422,6 +9391,11 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 			is_user_remote = is_remote(current);
 */
 		is_user_remote = 0;
+
+#ifdef THEIA_USER_RET_ADDR
+		dump_user_return_addresses(theia_retbuf, 4096);
+		printk("THEIA:execve: %s\n", theia_retbuf);
+#endif
 
   		char *fpathbuf = (char*)vmalloc(PATH_MAX);
 	 	char *fpath    = get_task_fullpath(current, fpathbuf, PATH_MAX);
@@ -10075,6 +10049,11 @@ void packahgv_mount (struct mount_ahgv *sys_args) {
 		int size;
 
 		get_curr_time(&sec, &nsec);
+
+#ifdef THEIA_USER_RET_ADDR
+		dump_user_return_addresses(theia_retbuf, 4096);
+		printk("THEIA:mount: %s\n", theia_retbuf);
+#endif
 
 		size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%s|%s|%s|%lu|%d|%d|%ld|%ld|endahg\n", 
 				165, sys_args->pid, current->start_time.tv_sec, sys_args->devname, sys_args->dirname, sys_args->type, 
@@ -12692,6 +12671,12 @@ void packahgv_connect(struct connect_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = 0;
+
+#ifdef THEIA_USER_RET_ADDR
+		dump_user_return_addresses(theia_retbuf, 4096);
+		printk("THEIA:connect: %s\n", theia_retbuf);
+#endif
+
 		if(sys_args->sa_family == AF_LOCAL){
 			size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
 					42, sys_args->pid, current->start_time.tv_sec, 
@@ -16241,11 +16226,18 @@ void packahgv_mprotect (struct mprotect_ahgv *sys_args) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
+
+#ifdef THEIA_USER_RET_ADDR
+		dump_user_return_addresses(theia_retbuf, 4096);
+		printk("THEIA:mprotect: %s\n", theia_retbuf);
+#endif
+
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%lx|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
 				10, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->retval, sys_args->address, sys_args->length, 
 				sys_args->protection, current->tgid, sec, nsec);
 		relay_write(theia_chan, buf, size);
+
 	}
 	else
 		printk("theia_chan invalid\n");
