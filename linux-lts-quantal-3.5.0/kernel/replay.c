@@ -93,6 +93,10 @@
 #include "../kernel/replay_graph/replayfs_syscall_cache.h"
 #include "../kernel/replay_graph/replayfs_perftimer.h"
 
+//SL
+void dump_user_stack(void);
+void dump_user_return_addresses(char *buffer, size_t bufsize);
+
 
 /* For debugging failing fs operations */
 int debug_flag = 0;
@@ -114,7 +118,7 @@ EXPORT_SYMBOL(theia_recording_toggle);
 // #define THEIA_TRACK_SHMAT 1
 
 #define THEIA_USER_RET_ADDR 1
-#undef THEIA_USER_RET_ADDR
+// #undef THEIA_USER_RET_ADDR
 
 //#define REPLAY_PARANOID
 
@@ -258,6 +262,11 @@ void theia_dump_str(char *str, int rc, int sysnum) {
 	if (theia_check_channel() == false)
 		return;
 
+#ifdef THEIA_USER_RET_ADDR
+		dump_user_return_addresses(theia_retbuf, 4096);
+		printk("THEIA:%d: %s\n", sysnum, theia_retbuf);
+#endif
+
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
 
@@ -400,10 +409,6 @@ void theia_dump_ddd(int val1, int val2, int val3, int rc, int sysnum) {
 	sprintf(theia_buf1, "%d|%d|%d", val1, val2, val3);
 	theia_dump_str(theia_buf1, rc, sysnum);
 }
-
-//SL
-void dump_user_stack(void);
-void dump_user_return_addresses(char *buffer, size_t bufsize);
 
 struct black_pid {
 	int pid[3];
@@ -2705,7 +2710,7 @@ void dump_user_return_addresses(char* buffer, size_t bufsize) {
 	
 	struct mm_struct *mm = current->mm;
 	struct vm_area_struct *vma;
-	char ret_str[50];
+	char ret_str[1024];
 
 	trace.nr_entries  = 0;
 	trace.max_entries = NO_STACK_ENTRIES;
@@ -2716,25 +2721,25 @@ void dump_user_return_addresses(char* buffer, size_t bufsize) {
 
 	int idx = 0;
 	char *ptr;
+	char *path = NULL;
 	buffer[0] = '\0';
-	for (i = trace.nr_entries-1; i >= 0; --i) {
+//	for (i = trace.nr_entries-1; i >= 0; --i) {
+	for (i = 0; i < trace.nr_entries; ++i) {
 		vma = find_vma(mm, trace.entries[i]);
 		if (!vma)
 			continue;
 
 		if (vma->vm_file) {
 			//				ptr = vma->vm_file->f_path.dentry->d_iname;
-			/*
-			   sprintf(ret_str, "%x-%x-%x", vma->vm_file->f_path.dentry->d_inode->i_sb->s_dev, 
-			   vma->vm_file->f_path.dentry->d_inode->i_ino,
-			   trace.entries[i]);
-			 */
-			sprintf(ret_str, "%s=%x", vma->vm_file->f_path.dentry->d_iname,
-					trace.entries[i]);
+//			sprintf(ret_str, "%x,%x=%x", vma->vm_file->f_path.dentry->d_inode->i_sb->s_dev, 
+//			vma->vm_file->f_path.dentry->d_inode->i_ino, trace.entries[i]);
+//			sprintf(ret_str, "%s=%x", vma->vm_file->f_path.dentry->d_iname,
+			path = d_path(&(vma->vm_file->f_path), theia_buf2, 4096);
+			sprintf(ret_str, "%s=%lx", path, trace.entries[i]);
 			ptr = ret_str;
 		}
 		else {
-			sprintf(ret_str, "[ANONYMOUS]=%x", trace.entries[i]);
+			sprintf(ret_str, "[ANONYMOUS]=%lx", trace.entries[i]);
 			ptr = ret_str;
 		}
 
@@ -7857,8 +7862,8 @@ void packahgv_process(struct task_struct *tsk) {
 		get_ids(ids);
 		get_curr_time(&sec, &nsec);
 		int size = 0;
-//		int is_user_remote = is_remote(tsk);
-		int is_user_remote = 0;
+		int is_user_remote = is_remote(tsk);
+//		int is_user_remote = 0;
 		rcu_read_lock();
 		struct task_struct *ptsk = pid_task(find_vpid(tsk->real_parent->pid), PIDTYPE_PID);	
 		rcu_read_unlock();
@@ -9381,8 +9386,8 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 		get_curr_time(&sec, &nsec);
 		char ids[50];
 		get_ids(ids);
-//		int is_user_remote = is_remote(current);
-		int is_user_remote;
+		int is_user_remote = is_remote(current);
+//		int is_user_remote;
 /*
 		struct task_struct *tsk = pid_task(find_vpid(current->real_parent->pid), PIDTYPE_PID);	
 		if (tsk)
