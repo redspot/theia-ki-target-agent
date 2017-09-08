@@ -95,8 +95,10 @@
 
 //SL
 void dump_user_stack(void);
-void dump_user_return_addresses(char *buffer, size_t bufsize);
+void get_user_callstack(char *buffer, size_t bufsize);
 
+void theia_dump_str(char *str, int rc, int sysum);
+void theia_dump_user_callstack();
 
 /* For debugging failing fs operations */
 int debug_flag = 0;
@@ -218,13 +220,11 @@ struct dentry	*theia_dir = NULL;
 // let's reuse vmalloced buffer for storing filepath and more
 char *theia_buf1   = NULL;
 char *theia_buf2   = NULL;
-char *theia_retbuf = NULL;
 
 bool theia_check_channel(void) {
 
 	if (!theia_buf1)   theia_buf1   = vmalloc(4096);
 	if (!theia_buf2)   theia_buf2   = vmalloc(4096);
-	if (!theia_retbuf) theia_retbuf = vmalloc(4096);
 
 	mm_segment_t old_fs = get_fs();                                                
 	set_fs(KERNEL_DS);
@@ -258,17 +258,31 @@ bool theia_check_channel(void) {
 	return true;
 }
 
+// dump user callstack
+void theia_dump_user_callstack() {
+	get_user_callstack(theia_buf2, 4096);
+
+	if(theia_chan) {
+		long sec, nsec;
+		int size;
+
+		size = sprintf(theia_buf1, "startahg|700|%s|endahg\n", theia_buf2);
+		relay_write(theia_chan, theia_buf1, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
 void theia_dump_str(char *str, int rc, int sysnum) {
 	if (theia_check_channel() == false)
 		return;
 
-#ifdef THEIA_USER_RET_ADDR
-		dump_user_return_addresses(theia_retbuf, 4096);
-		printk("THEIA:%d: %s\n", sysnum, theia_retbuf);
-#endif
-
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
+
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();
+#endif
 
 	/* packahgv */
 	if(theia_chan) {
@@ -2703,7 +2717,7 @@ get_pt_regs(struct task_struct* tsk)
 
 #define NO_STACK_ENTRIES 100
 // SL: to dump return addresses
-void dump_user_return_addresses(char* buffer, size_t bufsize) {
+void get_user_callstack(char* buffer, size_t bufsize) {
 	struct stack_trace trace;
 	unsigned long entries[NO_STACK_ENTRIES];
 	int i;
@@ -7991,6 +8005,11 @@ void recursive_packahgv_process() {
 }
 
 void packahgv_read (struct read_ahgv *sys_args) {
+#ifdef THEIA_USER_RET_ADDR
+//      too many events are generated and system hangs
+//	theia_dump_user_callstack();
+#endif
+
 	//Yang
 	if(theia_chan) {
 		char buf[256];
@@ -8528,6 +8547,11 @@ struct write_ahgv {
 };
 
 void packahgv_write (struct write_ahgv *sys_args) {
+#ifdef THEIA_USER_RET_ADDR
+//      too many events are generated and system hangs
+//	theia_dump_user_callstack();
+#endif
+
 	//Yang
 	if(theia_chan) {
 		char buf[256];
@@ -8901,6 +8925,10 @@ struct open_ahgv {
 void packahgv_open (struct open_ahgv *sys_args) {
 	//Yang
 
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();
+#endif
+
 	if(theia_chan) {
 		char *pcwd = NULL;
 		struct path path;
@@ -8908,11 +8936,6 @@ void packahgv_open (struct open_ahgv *sys_args) {
 		int size;
 
 		get_curr_time(&sec, &nsec);
-
-#ifdef THEIA_USER_RET_ADDR
-		dump_user_return_addresses(theia_retbuf, 4096);
-		printk("THEIA:open: %s\n", theia_retbuf);
-#endif
 
 		if (sys_args->filename[0] == '/') {
 			size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%d|%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
@@ -9379,6 +9402,9 @@ struct execve_ahgv {
 };
 
 void packahgv_execve (struct execve_ahgv *sys_args) {
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();	
+#endif
 	//Yang
 	if(theia_chan) {
 		char buf[1024];
@@ -9396,11 +9422,6 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 			is_user_remote = is_remote(current);
 */
 		is_user_remote = 0;
-
-#ifdef THEIA_USER_RET_ADDR
-		dump_user_return_addresses(theia_retbuf, 4096);
-		printk("THEIA:execve: %s\n", theia_retbuf);
-#endif
 
   		char *fpathbuf = (char*)vmalloc(PATH_MAX);
 	 	char *fpath    = get_task_fullpath(current, fpathbuf, PATH_MAX);
@@ -10048,17 +10069,16 @@ struct mount_ahgv {
 
 
 void packahgv_mount (struct mount_ahgv *sys_args) {
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();
+#endif
+
 	//Yang
 	if(theia_chan) {
 		long sec, nsec;
 		int size;
 
 		get_curr_time(&sec, &nsec);
-
-#ifdef THEIA_USER_RET_ADDR
-		dump_user_return_addresses(theia_retbuf, 4096);
-		printk("THEIA:mount: %s\n", theia_retbuf);
-#endif
 
 		size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%s|%s|%s|%lu|%d|%d|%ld|%ld|endahg\n", 
 				165, sys_args->pid, current->start_time.tv_sec, sys_args->devname, sys_args->dirname, sys_args->type, 
@@ -10272,6 +10292,10 @@ struct pipe_ahgv {
 };
 
 void packahgv_pipe (struct pipe_ahgv *sys_args) {
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();
+#endif
+
 	//Yang
 	if(theia_chan) {
 		char buf[256];
@@ -10567,6 +10591,10 @@ struct ioctl_ahgv {
 };
 
 void packahgv_ioctl (struct ioctl_ahgv *sys_args) {
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();
+#endif
+
 	//Yang
 	if(theia_chan) {
 		char buf[256];
@@ -11435,6 +11463,10 @@ struct munmap_ahgv {
 };
 
 void packahgv_munmap (struct munmap_ahgv *sys_args) {
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();
+#endif
+
 	//Yang
 	if(theia_chan) {
 		char buf[256];
@@ -12670,17 +12702,16 @@ struct connect_ahgv {
 };
 
 void packahgv_connect(struct connect_ahgv *sys_args) {
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();
+#endif
+
 	//Yang
 	if(theia_chan) {
 		char buf[512];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = 0;
-
-#ifdef THEIA_USER_RET_ADDR
-		dump_user_return_addresses(theia_retbuf, 4096);
-		printk("THEIA:connect: %s\n", theia_retbuf);
-#endif
 
 		if(sys_args->sa_family == AF_LOCAL){
 			size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
@@ -12710,6 +12741,9 @@ struct accept_ahgv {
 };
 
 void packahgv_accept(struct accept_ahgv *sys_args) {
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();
+#endif
 	//Yang
 	if(theia_chan) {
 		char buf[256];
@@ -12748,6 +12782,10 @@ struct send_ahgv {
 };
 
 void packahgv_send(struct send_ahgv *sys_args) {
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();
+#endif
+
 	//Yang
 	if(theia_chan) {
 		char buf[256];
@@ -12774,6 +12812,10 @@ struct sendto_ahgv {
 };
 
 void packahgv_sendto(struct sendto_ahgv *sys_args) {
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();
+#endif
+
 	//Yang
 	if(theia_chan) {
 		char buf[512];
@@ -12809,6 +12851,10 @@ struct recv_ahgv {
 };
 
 void packahgv_recv(struct recv_ahgv *sys_args) {
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();
+#endif
+
 	//Yang
 	if(theia_chan) {
 		char buf[256];
@@ -12835,6 +12881,10 @@ struct recvfrom_ahgv {
 };
 
 void packahgv_recvfrom(struct recvfrom_ahgv *sys_args) {
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();
+#endif
+
 	//Yang
 	if(theia_chan) {
 		char buf[512];
@@ -12869,6 +12919,10 @@ struct sendmsg_ahgv {
 };
 
 void packahgv_sendmsg(struct sendmsg_ahgv *sys_args) {
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();
+#endif
+
 	//Yang
 	if(theia_chan) {
 		char buf[256];
@@ -12894,6 +12948,10 @@ struct recvmsg_ahgv {
 };
 
 void packahgv_recvmsg(struct recvmsg_ahgv *sys_args) {
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();
+#endif
+
 	//Yang
 	if(theia_chan) {
 		char buf[256];
@@ -14657,6 +14715,10 @@ struct shmget_ahgv {
 
 void packahgv_shmget(struct shmget_ahgv *sys_args)
 {
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();
+#endif
+
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
@@ -14766,6 +14828,10 @@ struct shmat_ahgv {
 
 void packahgv_shmat(struct shmat_ahgv *sys_args)
 {
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();
+#endif
+
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
@@ -16097,6 +16163,10 @@ struct clone_ahgv {
 };
 
 void packahgv_clone (struct clone_ahgv *sys_args) {
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();
+#endif
+
 	//Yang
 	if(theia_chan) {
 		char buf[256];
@@ -16225,17 +16295,15 @@ struct mprotect_ahgv {
 };
 
 void packahgv_mprotect (struct mprotect_ahgv *sys_args) {
-	//Yang
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();
+#endif
 
+	//Yang
 	if(theia_chan) {
 		char buf[256];
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-
-#ifdef THEIA_USER_RET_ADDR
-		dump_user_return_addresses(theia_retbuf, 4096);
-		printk("THEIA:mprotect: %s\n", theia_retbuf);
-#endif
 
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%lx|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
 				10, sys_args->pid, current->start_time.tv_sec, 
@@ -18301,6 +18369,10 @@ struct mmap_ahgv {
 };
 
 void packahgv_mmap (struct mmap_ahgv *sys_args) {
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();
+#endif
+
 	//Yang
 	if(theia_chan) {
 		char buf[256];
@@ -18979,6 +19051,10 @@ struct setuid_ahgv {
 
 
 void packahgv_setuid (struct setuid_ahgv *sys_args) {
+#ifdef THEIA_USER_RET_ADDR
+	theia_dump_user_callstack();
+#endif
+
 	//Yang
 	if(theia_chan) {
 		char buf[256];
