@@ -220,11 +220,13 @@ struct dentry	*theia_dir = NULL;
 // let's reuse vmalloced buffer for storing filepath and more
 char *theia_buf1   = NULL;
 char *theia_buf2   = NULL;
+char *theia_retbuf = NULL;
 
 bool theia_check_channel(void) {
 
 	if (!theia_buf1)   theia_buf1   = vmalloc(4096);
 	if (!theia_buf2)   theia_buf2   = vmalloc(4096);
+	if (!theia_retbuf) theia_retbuf = vmalloc(4096);
 
 	mm_segment_t old_fs = get_fs();                                                
 	set_fs(KERNEL_DS);
@@ -260,19 +262,20 @@ bool theia_check_channel(void) {
 
 // dump user callstack
 void theia_dump_user_callstack() {
-	get_user_callstack(theia_buf2, 4096);
+	get_user_callstack(theia_retbuf, 4096);
 
 	if(theia_chan) {
 		long sec, nsec;
 		int size;
 
-		size = sprintf(theia_buf1, "startahg|700|%s|endahg\n", theia_buf2);
-		relay_write(theia_chan, theia_buf1, size);
+		size = sprintf(theia_buf2, "startahg|700|%s|endahg\n", theia_retbuf);
+		relay_write(theia_chan, theia_buf2, size);
 	}
 	else
 		printk("theia_chan invalid\n");
 }
 
+/* str == theia_buf1 */
 void theia_dump_str(char *str, int rc, int sysnum) {
 	if (theia_check_channel() == false)
 		return;
