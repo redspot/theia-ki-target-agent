@@ -120,7 +120,7 @@ EXPORT_SYMBOL(theia_recording_toggle);
 // #define THEIA_TRACK_SHMAT 1
 
 #define THEIA_USER_RET_ADDR 1
-// #undef THEIA_USER_RET_ADDR
+#undef THEIA_USER_RET_ADDR
 
 //#define REPLAY_PARANOID
 
@@ -2727,7 +2727,8 @@ void get_user_callstack(char* buffer, size_t bufsize) {
 	
 	struct mm_struct *mm = current->mm;
 	struct vm_area_struct *vma;
-	char ret_str[1024];
+//	char ret_str[1024];
+	char *ret_str = theia_buf2;
 
 	trace.nr_entries  = 0;
 	trace.max_entries = NO_STACK_ENTRIES;
@@ -9405,12 +9406,13 @@ struct execve_ahgv {
 };
 
 void packahgv_execve (struct execve_ahgv *sys_args) {
-#ifdef THEIA_USER_RET_ADDR
+//#ifdef THEIA_USER_RET_ADDR
 	theia_dump_user_callstack();	
-#endif
+//#endif
 	//Yang
 	if(theia_chan) {
-		char buf[1024];
+//		char buf[1024];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		char ids[50];
@@ -12604,7 +12606,7 @@ void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port
 	basic_sockaddr = (struct sockaddr*)KMALLOC(sizeof(struct sockaddr), GFP_KERNEL);
 	if (copy_from_user (basic_sockaddr, sockaddr, sizeof(struct sockaddr))) {
 		KFREE(basic_sockaddr);
-		printk("get_ip_port_sockaddr[%d]: fails to copy sockaddr from userspace\n", __LINE__);
+//		printk("get_ip_port_sockaddr[%d]: fails to copy sockaddr from userspace\n", __LINE__);
 		// TODO: what should we do?
 		*port = 0;
 		sprintf(ip, "NA");
@@ -12620,7 +12622,7 @@ void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port
 
 		if (copy_from_user (in_sockaddr, sockaddr, sizeof(struct sockaddr_in))) {
 			KFREE(in_sockaddr);
-      printk("get_ip_port_sockaddr[%d]: fails to copy sockaddr from userspace\n", __LINE__);
+//      printk("get_ip_port_sockaddr[%d]: fails to copy sockaddr from userspace\n", __LINE__);
 			// TODO: what should we do?
       *port = 0;
       sprintf(ip, "NA");
@@ -12634,7 +12636,7 @@ void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port
 	 	cc = (unsigned char *)in_sockaddr;
 		sprintf(ip, "%u.%u.%u.%u",cc[4],cc[5],cc[6],cc[7]);
 
-		TPRINT("get_ip_port_sockaddr: ip is %s, port: %lu\n", ip, *port);
+//		TPRINT("get_ip_port_sockaddr: ip is %s, port: %lu\n", ip, *port);
 
 		KFREE(in_sockaddr);
 
@@ -12645,7 +12647,7 @@ void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port
 
 		if (copy_from_user (un_sockaddr, sockaddr, sizeof(struct sockaddr_un))) {
 			KFREE(un_sockaddr);
-			printk("get_ip_port_sockaddr: fails to copy sockaddr from userspace\n");
+//			printk("get_ip_port_sockaddr: fails to copy sockaddr from userspace\n");
 			// TODO: what should we do?
       *port = 0;
       sprintf(ip, "NA");
@@ -12658,7 +12660,7 @@ void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port
       sprintf(ip, "NA");
       sprintf(sun_path, "NA");
     }
-		TPRINT("get_ip_port_sockaddr: sun_path is (%s), port: %lu\n", sun_path, *port);
+//		TPRINT("get_ip_port_sockaddr: sun_path is (%s), port: %lu\n", sun_path, *port);
 		
 		KFREE(un_sockaddr);
 	}
@@ -18427,7 +18429,8 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 	int ret;
 	struct mmap_pgoff_retvals* recbuf = NULL;
 
-	char vm_file_path[PATH_MAX];
+//	char vm_file_path[PATH_MAX];
+	char *vm_file_path = theia_buf2;
 	char *path = NULL;
 	bool is_shmem = false;
 	memset(vm_file_path, '\0', PATH_MAX);
