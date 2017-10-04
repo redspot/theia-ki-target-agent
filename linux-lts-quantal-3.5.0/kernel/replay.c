@@ -268,7 +268,7 @@ void theia_dump_user_callstack() {
 		long sec, nsec;
 		int size;
 
-		size = sprintf(theia_buf2, "startahg|700|%s|endahg\n", theia_retbuf);
+		size = sprintf(theia_buf2, "startahg|700|%d|%s|endahg\n", current->pid, theia_retbuf);
 		relay_write(theia_chan, theia_buf2, size);
 	}
 	else
@@ -956,7 +956,7 @@ atomic_t vmalloc_cnt = ATOMIC_INIT(0);
 /* Variables configurable via /proc file system */
 unsigned int syslog_recs = 2000;
 unsigned int replay_debug = 1;
-unsigned int replay_min_debug = 0;
+unsigned int replay_min_debug = 1;
 unsigned long argsalloc_size = (512*1024);
 // If the replay clock is greater than this value, MPRINT out the syscalls made by pin
 unsigned long pin_debug_clock = LONG_MAX;
@@ -4093,7 +4093,8 @@ int fork_replay_theia (char __user* logdir, const char* filename, const char __u
 
 	sprintf (ckpt, "%s/ckpt", prg->rg_logdir);
 	char libpath_contents[200];
-	sprintf(libpath_contents, "LD_LIBRARY_PATH=/lib/theia_libs:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib");
+	sprintf(libpath_contents, "LD_LIBRARY_PATH=/home/yang/theia-es/eglibc-2.15/prefix:/lib/theia_libs:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib");
+//	sprintf(libpath_contents, "LD_LIBRARY_PATH=$LD_LIBRARY_PATH");
 	char* libpath = KMALLOC (strlen(libpath_contents), GFP_KERNEL);
 	strcpy(libpath, libpath_contents);
 	argbuf = copy_args (args, env, &argbuflen, libpath_contents, strlen(libpath_contents));
@@ -7105,15 +7106,15 @@ record_restart_syscall(struct restart_block* restart)
 #ifdef TIME_TRICK
 		int shift_clock = 1;
 #endif
-		new_syscall_enter (168);
+		new_syscall_enter (219);
 
 		rc = restart->fn (restart); 
 #ifdef TIME_TRICK
 		if (rc <= 0)  
 			shift_clock = 0;
-		cnew_syscall_done (168, rc, -1, shift_clock);
+		cnew_syscall_done (219, rc, -1, shift_clock);
 #else
-		new_syscall_done (168, rc);
+		new_syscall_done (219, rc);
 #endif
 		if (rc > 0) {
 			pretvals = ARGSKMALLOC(sizeof(int)+restart->poll.nfds*sizeof(short), GFP_KERNEL);
@@ -7142,7 +7143,7 @@ record_restart_syscall(struct restart_block* restart)
 #endif
 		}
 
-		new_syscall_exit (168, pretvals);
+		new_syscall_exit (219, pretvals);
 #ifdef TIME_TRICK
 		if (rc == 0) {
 			if (restart->poll.has_timeout) {
@@ -8391,7 +8392,7 @@ record_read (unsigned int fd, char __user * buf, size_t count)
 		record_cache_file_unlock (current->record_thrd->rp_cache_files, fd);
 	}
 
-	new_syscall_exit (3, pretval);				
+	new_syscall_exit (0, pretval);				
 
 	perftimer_stop(read_in_timer);
 	return rc;							
@@ -9484,6 +9485,20 @@ void theia_execve_ahg(const char *filename, int rc) {
 	vfree(args);
 }
 
+void print_value(u_long address, int num_of_bytes)
+{
+  int n = num_of_bytes, i = 0;
+  unsigned char* byte_array = (unsigned char*)address;
+
+  while (i < n)
+  {
+    printk("%02X",(unsigned)byte_array[i]);
+    i++;
+  }
+  printk("\n");
+  return;
+}
+
 // Simply recording the fact that an execve takes place, we won't replay it
 static int 
 record_execve(const char *filename, const char __user *const __user *__argv, const char __user *const __user *__envp, struct pt_regs *regs) 
@@ -9522,7 +9537,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 	char __user * cptr;
 
 	MPRINT ("Record pid %d performing execve of %s\n", current->pid, filename);
-	new_syscall_enter (11);
+	new_syscall_enter (59);
 
 	current->record_thrd->random_values.cnt = 0;
 
@@ -9579,7 +9594,10 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 	//Yang
 	theia_execve_ahg(filename, rc);
 
-	new_syscall_done (11, rc);
+	new_syscall_done (59, rc);
+printk("Yang record_execve after new_syscall_done, ip: %lx, sp: %lx, r11: %lx, rc %d\n", regs->ip, regs->sp, regs->r11, rc);
+print_value(regs->sp, 128);
+print_value(regs->sp+128, 16);
 	if (rc >= 0) {
 		prt->rp_user_log_addr = 0; // User log address no longer valid since new address space entirely
 #ifdef USE_EXTRA_DEBUG_LOG
@@ -9588,6 +9606,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 		// Our rule is that we record a split if there is an exec with more than one thread in the group.   Not sure this is best
 		// but I don't know what is better
 		if (prt->rp_next_thread != prt) {
+printk("Yang prt->rp_next_thread != prt, rc %d\n", rc);
 			__u64 parent_rg_id = prt->rp_group->rg_id;
 			DPRINT ("New record group\n");
 
@@ -9657,7 +9676,8 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 			}
 			pretval->is_new_group = 1;
 			pretval->data.new_group.log_id = precg->rg_id;
-			new_syscall_exit (11, pretval); 
+printk("Yang record_execve before new_syscall_exit, rc %d\n", rc);
+			new_syscall_exit (59, pretval); 
 			write_and_free_kernel_log (prt);
 //Yang
 //			ahg_write_and_free_kernel_log (prt);
@@ -9696,8 +9716,8 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 			argbuf = NULL;
 
 			// Write out first log record (exec) for the new group - the code below will finish the job
-			new_syscall_enter (11);
-			new_syscall_done (11, 0);
+			new_syscall_enter (59);
+			new_syscall_done (59, 0);
 		} else {
 #ifdef CACHE_READS
 			close_record_cache_files(prt->rp_cache_files); // This is conservative - some files may not have been closed on exec - but it is correct
@@ -9719,7 +9739,8 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 		rg_unlock(prt->rp_group);
 	}
 	if (argbuf) KFREE (argbuf);
-	new_syscall_exit (11, pretval);
+	new_syscall_exit (59, pretval);
+printk("Yang record_execve after new_syscall_exit, rc %d\n", rc);
 	return rc;
 }
 
@@ -11039,9 +11060,9 @@ record_gettimeofday (struct timeval __user *tv, struct timezone __user *tz)
 	int fake_time = 0;
 	long long time_diff;
 	int is_shift = 0;
-	long current_clock = new_syscall_enter (78);
+	long current_clock = new_syscall_enter (96);
 #else 
-	new_syscall_enter (78);
+	new_syscall_enter (96);
 #endif
 	rc = sys_gettimeofday (tv, tz);
 	//note: now we need to put TIME_TRICK here as we update the flag in new_syscall_done
@@ -11068,10 +11089,10 @@ record_gettimeofday (struct timeval __user *tv, struct timezone __user *tz)
 	}
 	if (DET_TIME_DEBUG) printk ("Pid %d gettimeofday finally returns %lu, %lu\n", current->pid, tv->tv_sec, tv->tv_usec);
 	atomic_set (&prg->rg_det_time.flag, 0); //all time queries don't need to update the det time
-	cnew_syscall_done (78, rc, -1, 0);
+	cnew_syscall_done (96, rc, -1, 0);
 	mutex_unlock (&prg->rg_time_mutex);
 #else
-	new_syscall_done (78, rc);
+	new_syscall_done (96, rc);
 #endif
 
 	if (rc == 0) {
@@ -11151,7 +11172,7 @@ record_gettimeofday (struct timeval __user *tv, struct timezone __user *tz)
 
 	}
 
-	new_syscall_exit (78, pretvals);
+	new_syscall_exit (96, pretvals);
 
 	return rc;
 }
@@ -11288,11 +11309,11 @@ record_getgroups16 (int gidsetsize, gid_t __user *grouplist)
 //64port
 	gid_t* pretval = NULL;
 
-	new_syscall_enter (80);
+	new_syscall_enter (115);
 	//rc = sys_getgroups16 (gidsetsize, grouplist);
 //64port
 	rc = sys_getgroups (gidsetsize, grouplist);
-	new_syscall_done (80, rc);
+	new_syscall_done (115, rc);
 	if (gidsetsize > 0 && rc > 0) {
 		//pretval = ARGSKMALLOC(sizeof(old_gid_t)*rc, GFP_KERNEL);
 //64port
@@ -11311,7 +11332,7 @@ record_getgroups16 (int gidsetsize, gid_t __user *grouplist)
 			return -EFAULT;
 		}
 	}
-	new_syscall_exit (80, pretval);
+	new_syscall_exit (115, pretval);
 
 	return rc;
 }
@@ -15509,6 +15530,7 @@ int theia_sys_ipc(uint call, int first, u_long second,
 	return rc;
 }
 
+//obsolete: 32bit abi
 static asmlinkage long
 record_ipc (uint call, int first, u_long second, u_long third, void __user *ptr, long fifth)
 {
@@ -16490,6 +16512,7 @@ asmlinkage long shim_quotactl (unsigned int cmd, const char __user *special, qid
 SIMPLE_SHIM1(getpgid, 121, pid_t, pid);
 SIMPLE_SHIM1(fchdir, 81, unsigned int, fd);
 
+//obsolete: 32bit abi
 static asmlinkage long 
 record_bdflush (int func, long data)
 {									
@@ -16539,7 +16562,7 @@ record_sysfs (int option, unsigned long arg1, unsigned long arg2)
 									
 	new_syscall_enter (139);				
 	rc = sys_sysfs (option, arg1, arg2);
-	new_syscall_done (135, rc);
+	new_syscall_done (139, rc);
 	if (rc >= 0 && option == 2) {
 		len = strlen_user ((char __user *) arg2)+1;
 		if (len <= 0) {
@@ -17043,7 +17066,7 @@ record_mremap (unsigned long addr, unsigned long old_len, unsigned long new_len,
 	unsigned long rc;
 
 	rg_lock(current->record_thrd->rp_group);
-	new_syscall_enter (163);
+	new_syscall_enter (25);
 	rc = sys_mremap (addr, old_len, new_len, flags, new_addr);
 	new_syscall_done (25, rc);
 	new_syscall_exit (25, NULL);
@@ -17140,6 +17163,7 @@ asmlinkage unsigned long shim_mremap (unsigned long addr, unsigned long old_len,
 static asmlinkage long
 //record_getresuid16 (old_uid_t __user *ruid, old_uid_t __user *euid, old_uid_t __user *suid) 
 //64port
+//obsolete: 32bit abi
 record_getresuid16 (uid_t __user *ruid, uid_t __user *euid, uid_t __user *suid) 
 {
 	long rc;
@@ -18167,15 +18191,15 @@ record_vfork (unsigned long clone_flags, unsigned long stack_start, struct pt_re
 {
 	long rc;
 
-	new_syscall_enter (190);
+	new_syscall_enter (58);
 
 	/* On clone, we reset the user log.  On, vfork we do not do this because the parent and child share one
            address space.  This sharing will get fixed on exec. */
 
 	rc = do_fork (clone_flags, stack_start, regs, stack_size, parent_tidptr, child_tidptr);		
 	MPRINT ("Pid %d records vfork returning %ld\n", current->pid, rc);
-	new_syscall_done (190, rc);
-	new_syscall_exit (190, NULL);
+	new_syscall_done (58, rc);
+	new_syscall_exit (58, NULL);
 	
 	return rc;
 }
@@ -19673,9 +19697,9 @@ static asmlinkage long record_clock_gettime (const clockid_t which_clock, struct
 	struct record_group* prg = current->record_thrd->rp_group;
 	long long time_diff;
 	int is_shift = 0;
-	unsigned long current_clock = new_syscall_enter (265);
+	unsigned long current_clock = new_syscall_enter (228);
 #else
-	new_syscall_enter (265);					
+	new_syscall_enter (228);					
 #endif
 
 	rc = sys_clock_gettime (which_clock, tp);	
@@ -19726,10 +19750,10 @@ static asmlinkage long record_clock_gettime (const clockid_t which_clock, struct
 	}
 	if (DET_TIME_DEBUG) printk ("Pid %d clock_gettime finally returns %lu, %lu\n", current->pid, tp->tv_sec, tp->tv_nsec);
 	atomic_set (&prg->rg_det_time.flag, 0);
-	cnew_syscall_done (265, rc, -1, 0);
+	cnew_syscall_done (228, rc, -1, 0);
 	mutex_unlock (&prg->rg_time_mutex);
 #else
-	new_syscall_done (265, rc);			
+	new_syscall_done (228, rc);			
 #endif
 	if (rc >= 0 && tp) {
 #ifdef TIME_TRICK
@@ -19769,7 +19793,7 @@ static asmlinkage long record_clock_gettime (const clockid_t which_clock, struct
 #endif
 	}								
 									
-	new_syscall_exit (265, pretval);				
+	new_syscall_exit (228, pretval);				
 	return rc;							
 }
 
@@ -19890,7 +19914,7 @@ record_get_mempolicy (int __user *policy, unsigned long __user *nmask, unsigned 
 
 	new_syscall_enter (239);
 	rc = sys_get_mempolicy (policy, nmask, maxnode, addr, flags);
-	new_syscall_done (275, rc);
+	new_syscall_done (239, rc);
 	if (rc >= 0) {
 		unsigned long copy = ALIGN(maxnode-1, 64) / 8;
 		pretvals = ARGSKMALLOC(sizeof(u_long) + sizeof(int) + copy, GFP_KERNEL);
