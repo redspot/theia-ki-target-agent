@@ -268,8 +268,9 @@ void show_regs(struct pt_regs *regs)
 		unsigned int code_len = code_bytes;
 		unsigned char c;
 		u8 *ip;
-
-		printk(KERN_DEFAULT "Stack:\n");
+u_long cur_rsp;
+__asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
+		printk(KERN_DEFAULT "Stack: cur_rsp: %lx\n", cur_rsp);
 		show_stack_log_lvl(NULL, regs, (unsigned long *)sp,
 				   0, KERN_DEFAULT);
 
@@ -293,6 +294,8 @@ void show_regs(struct pt_regs *regs)
 				printk(KERN_CONT "%02x ", c);
 		}
 	}
+//Yang
+  dump_stack();
 	printk(KERN_CONT "\n");
 }
 

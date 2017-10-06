@@ -61,11 +61,13 @@
 #include <asm/user_64.h>
 
 #include <linux/stacktrace.h>
+#include <asm/stacktrace.h>
 
 #include <linux/replay_configs.h>
 
 #include <linux/fs_struct.h>
 #include <linux/namei.h>
+#include <linux/nmi.h>
 
 //Yang
 #include <linux/relay.h>
@@ -2702,7 +2704,7 @@ void set_tls_desc(struct task_struct *p, int idx, const struct user_desc *info, 
 void fill_user_desc(struct user_desc *info, int idx, const struct desc_struct *desc); /* In tls.c */
 
 struct pt_regs* 
-get_pt_regs(struct task_struct* tsk)
+get_pt_regs_old(struct task_struct* tsk)
 {
 	u_long regs;
 
@@ -2715,6 +2717,16 @@ get_pt_regs(struct task_struct* tsk)
 	regs += THREAD_SIZE;
 	regs -= (8 + sizeof(struct pt_regs));
 	return (struct pt_regs *) regs;
+}
+
+struct pt_regs* 
+get_pt_regs(struct task_struct* tsk)
+{
+	if (tsk == NULL) {
+    return task_pt_regs(current);
+	} else {
+    return task_pt_regs(tsk);
+	}
 }
 
 
@@ -4017,9 +4029,9 @@ int fork_replay_theia (char __user* logdir, const char* filename, const char __u
 	struct timespec tp;
 #endif
 
-	MPRINT ("in fork_replay for pid %d\n", current->pid);
+	MPRINT ("in fork_replay_theia for pid %d\n", current->pid);
 	if (current->record_thrd || current->replay_thrd) {
-		printk ("fork_replay: pid %d cannot start a new recording while already recording or replaying\n", current->pid);
+		printk ("fork_replay_theia: pid %d cannot start a new recording while already recording or replaying\n", current->pid);
 		return -EINVAL;
 	}
 
@@ -4046,10 +4058,10 @@ int fork_replay_theia (char __user* logdir, const char* filename, const char __u
 		VFREE (slab);
 		destroy_record_group(prg);
 		current->record_thrd = NULL;
-		printk ("Pid %d fork_replay: error adding argsalloc_node\n", current->pid);
+		printk ("Pid %d fork_replay_theia: error adding argsalloc_node\n", current->pid);
 		return -ENOMEM;
 	}
-	MPRINT ("fork_replay added new slab %p to record_thread %p\n", slab, current->record_thrd);
+	MPRINT ("fork_replay_theia added new slab %p to record_thread %p\n", slab, current->record_thrd);
 #ifdef LOG_COMPRESS_1
 	slab = VMALLOC (argsalloc_size);
 	if (slab == NULL) return -ENOMEM;
@@ -4057,17 +4069,17 @@ int fork_replay_theia (char __user* logdir, const char* filename, const char __u
 		VFREE (slab);
 		destroy_record_group(prg);
 		current->record_thrd = NULL;
-		printk ("Pid %d fork_replay: error adding clog_node\n", current->pid);
+		printk ("Pid %d fork_replay_theia: error adding clog_node\n", current->pid);
 		return -ENOMEM;
 	}
-	MPRINT ("fork_replay added new slab %p to record_thread %p (clog)\n", slab, current->record_thrd);
+	MPRINT ("fork_replay_theia added new slab %p to record_thread %p (clog)\n", slab, current->record_thrd);
 #endif
 #ifdef LOG_COMPRESS
 	init_evs ();
 #endif
 
 	current->replay_thrd = NULL;
-	MPRINT ("Record-Pid %d, tsk %p, prp %p\n", current->pid, current, current->record_thrd);
+	MPRINT ("in fork_replay_theia: Record-Pid %d, tsk %p, prp %p\n", current->pid, current, current->record_thrd);
 
 	if (linker) {
 		strncpy (current->record_thrd->rp_group->rg_linker, linker, MAX_LOGDIR_STRLEN);
@@ -4076,7 +4088,7 @@ int fork_replay_theia (char __user* logdir, const char* filename, const char __u
 
 	if (fd >= 0) {
 		retval = sys_close (fd);
-		if (retval < 0) printk ("fork_replay: unable to close fd %d, rc=%ld\n", fd, retval);
+		if (retval < 0) printk ("fork_replay_theia: unable to close fd %d, rc=%ld\n", fd, retval);
 	}
 
 	if (pipe_fd >= 0) {
@@ -4094,7 +4106,7 @@ int fork_replay_theia (char __user* logdir, const char* filename, const char __u
 
 	sprintf (ckpt, "%s/ckpt", prg->rg_logdir);
 	char libpath_contents[200];
-	sprintf(libpath_contents, "LD_LIBRARY_PATH=/home/yang/theia-es/eglibc-2.15/prefix:/lib/theia_libs:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib");
+	sprintf(libpath_contents, "LD_LIBRARY_PATH=/home/yang/theia-es/eglibc-2.15/prefix/lib:/lib/theia_libs:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/lib:/usr/lib:/lib");
 //	sprintf(libpath_contents, "LD_LIBRARY_PATH=$LD_LIBRARY_PATH");
 	char* libpath = KMALLOC (strlen(libpath_contents), GFP_KERNEL);
 	strcpy(libpath, libpath_contents);
@@ -4129,16 +4141,64 @@ int fork_replay_theia (char __user* logdir, const char* filename, const char __u
 	}
 
 	retval = record_execve (filename, args, env, get_pt_regs (NULL));
-	if (retval) printk ("fork_replay: execve returns %ld\n", retval);
+	if (retval) printk ("fork_replay_execve: execve returns %ld\n", retval);
 	return retval;
 }
+
+void show_kernel_stack(u_long *sp) {
+
+	unsigned long *irq_stack_end;
+	unsigned long *irq_stack;
+	unsigned long *stack;
+	int cpu;
+	int i;
+
+	preempt_disable();
+	cpu = smp_processor_id();
+
+	irq_stack_end	= (unsigned long *)(per_cpu(irq_stack_ptr, cpu));
+	irq_stack	= (unsigned long *)(per_cpu(irq_stack_ptr, cpu) - IRQ_STACK_SIZE);
+
+	/*
+	 * Debugging aid: "show_stack(NULL, NULL);" prints the
+	 * back trace for this cpu:
+	 */
+	if (sp == NULL) {
+		if (current)
+			sp = (unsigned long *)current->thread.sp;
+		else
+			sp = (unsigned long *)&sp;
+	}
+
+	stack = sp;
+  printk("kernel stack: sp: %lx\n", sp);
+	for (i = 0; i < kstack_depth_to_print; i++) {
+		if (stack >= irq_stack && stack <= irq_stack_end) {
+			if (stack == irq_stack_end) {
+				stack = (unsigned long *) (irq_stack_end[-1]);
+				printk(KERN_CONT " <EOI> ");
+			}
+		} else {
+		if (((long) stack & (THREAD_SIZE-1)) == 0)
+			break;
+		}
+		if (i && ((i % STACKSLOTS_PER_LINE) == 0))
+			printk(KERN_CONT "\n");
+		printk(KERN_CONT " %016lx", *stack++);
+		touch_nmi_watchdog();
+	}
+	preempt_enable();
+
+	printk(KERN_CONT "\n");
+
+}
+
 /* This function forks off a separate process which replays the foreground task.*/
 int fork_replay (char __user* logdir, const char __user *const __user *args,
 		const char __user *const __user *env, char* linker, int save_mmap, int fd,
 		int pipe_fd)
 {
 	mm_segment_t old_fs;
-	struct record_group* prg;
 	long retval;
 	char ckpt[MAX_LOGDIR_STRLEN+10];
 	const char __user * pc;
@@ -4150,8 +4210,17 @@ int fork_replay (char __user* logdir, const char __user *const __user *args,
 	struct timeval tv;
 	struct timespec tp;
 #endif
+	struct record_group* prg;
+
+u_long cur_rsp;
 
 	MPRINT ("in fork_replay for pid %d\n", current->pid);
+
+//show_regs(get_pt_regs(NULL));
+__asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
+printk("Yang verify: addr cur_rsp: %lx, cur_rsp: %lx\n", &cur_rsp, cur_rsp);
+show_kernel_stack((u_long*)cur_rsp);
+
 	if (current->record_thrd || current->replay_thrd) {
 		printk ("fork_replay: pid %d cannot start a new recording while already recording or replaying\n", current->pid);
 		return -EINVAL;
@@ -4173,7 +4242,11 @@ int fork_replay (char __user* logdir, const char __user *const __user *args,
 	}
 	prg->rg_save_mmap_flag = save_mmap;
 
-	// allocate a slab for retparams
+//show_regs(get_pt_regs(NULL));
+__asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
+show_kernel_stack((u_long*)cur_rsp);
+
+// allocate a slab for retparams
 	slab = VMALLOC (argsalloc_size);
 	if (slab == NULL) return -ENOMEM;
 	if (add_argsalloc_node(current->record_thrd, slab, argsalloc_size)) {
@@ -4201,7 +4274,7 @@ int fork_replay (char __user* logdir, const char __user *const __user *args,
 #endif
 
 	current->replay_thrd = NULL;
-	MPRINT ("Record-Pid %d, tsk %p, prp %p\n", current->pid, current, current->record_thrd);
+	MPRINT ("Record-Pid %d, tsk %p, prp %p, record_group size %lu, record_thread size %lu\n", current->pid, current, current->record_thrd, sizeof(struct record_group), sizeof(struct record_thread));
 
 	if (linker) {
 		strncpy (current->record_thrd->rp_group->rg_linker, linker, MAX_LOGDIR_STRLEN);
@@ -4226,9 +4299,13 @@ int fork_replay (char __user* logdir, const char __user *const __user *args,
 	}
 
 
+//show_regs(get_pt_regs(NULL));
+__asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
+show_kernel_stack((u_long*)cur_rsp);
+
 	sprintf (ckpt, "%s/ckpt", prg->rg_logdir);
 	char libpath_contents[200];
-	sprintf(libpath_contents, "LD_LIBRARY_PATH=/lib/theia_libs:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib");
+	sprintf(libpath_contents, "LD_LIBRARY_PATH=/home/yang/theia-es/eglibc-2.15/prefix/lib:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib");
 	char* libpath = KMALLOC (strlen(libpath_contents), GFP_KERNEL);
 	strcpy(libpath, libpath_contents);
 	argbuf = copy_args (args, env, &argbuflen, libpath_contents, strlen(libpath_contents));
@@ -4269,8 +4346,21 @@ int fork_replay (char __user* logdir, const char __user *const __user *args,
 		printk("hardcoded libpath is (%s)", prg->rg_libpath);
 //		return -EINVAL;
 	}
+printk("prg->rg_libpath is (%s)", prg->rg_libpath);
 
+//show_regs(get_pt_regs(NULL));
+__asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
+show_kernel_stack((u_long*)cur_rsp);
+
+
+printk("Yang before entering record_execve in fork_replay\n");
 	retval = record_execve (filename, args, env, get_pt_regs (NULL));
+
+//show_regs(get_pt_regs(NULL));
+__asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
+show_kernel_stack((u_long*)cur_rsp);
+
+printk("Yang after entering record_execve in fork_replay\n");
 	if (retval) printk ("fork_replay: execve returns %ld\n", retval);
 	return retval;
 }
@@ -7718,6 +7808,7 @@ struct read_ahgv {
 
 
 bool check_and_update_controlfile() {
+
 	int ret = 0, file_size = 0;
 	struct black_pid* pblackpid;
 	loff_t pos = 0;
@@ -9514,7 +9605,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 	void* clog_slab;
 #endif
 	char ckpt[MAX_LOGDIR_STRLEN+10];
-	long rc, retval;
+long rc = 0, retval;
 	char* argbuf, *newbuf;
 	int argbuflen, present;
 	char** env;
@@ -9524,6 +9615,12 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 	struct timespec tp;
 #endif
 
+u_long cur_rsp;
+
+printk("Yang just start record_execve\n");
+//show_regs(get_pt_regs(NULL));
+__asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
+show_kernel_stack((u_long*)cur_rsp);
 /*
 	const char *whitelist1;                                                             
 	whitelist1 = "/usr/lib/firefox/firefox";
@@ -9589,8 +9686,15 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 		rc = do_execve(filename, __argv, (const char __user *const __user *) env, regs);
 		set_fs(old_fs);
 		libpath_env_free (env);
-	} else {
+	} else 
+  {
+printk("Yang before do_execve\n");
+__asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
+show_kernel_stack((u_long*)cur_rsp);
 		rc = do_execve(filename, __argv, __envp, regs);
+printk("Yang after do_execve\n");
+__asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
+show_kernel_stack((u_long*)cur_rsp);
 	}
 
 	//Yang
@@ -9742,6 +9846,9 @@ printk("Yang record_execve before new_syscall_exit, rc %d\n", rc);
 	}
 	if (argbuf) KFREE (argbuf);
 	new_syscall_exit (59, pretval);
+//show_regs(get_pt_regs(NULL));
+__asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
+show_kernel_stack((u_long*)cur_rsp);
 printk("Yang record_execve after new_syscall_exit, rc %d\n", rc);
 	return rc;
 }
@@ -9952,7 +10059,8 @@ int theia_start_record(const char *filename, const char __user *const __user *__
     printk("/dev/spec0 ready ! filename: %s\n", filename);
     //should be ready to add the process to record_group
 
-    linker = "/lib/theia_libs/ld-linux.so.2";
+    //linker = "/lib/theia_libs/ld-linux.so.2";
+    linker = "/home/yang/theia-es/eglibc-2.15/prefix/lib/ld-linux-x86-64.so.2";
 
     int save_mmap;
     save_mmap = 1; 
