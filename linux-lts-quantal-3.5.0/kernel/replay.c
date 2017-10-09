@@ -8495,9 +8495,9 @@ replay_read (unsigned int fd, char __user * buf, size_t count)
 {
 	char *retparams = NULL;
 #ifndef LOG_COMPRESS
-	long retval, rc = get_next_syscall (3, &retparams);
+	long retval, rc = get_next_syscall (0, &retparams);
 #else
-	long retval, rc = cget_next_syscall (3, &retparams, NULL, (long)count, NULL);
+	long retval, rc = cget_next_syscall (0, &retparams, NULL, (long)count, NULL);
 #endif
 	int cache_fd;
 
@@ -9873,7 +9873,7 @@ replay_execve(const char *filename, const char __user *const __user *__argv, con
 	u_long clock, app_syscall_addr;
 	__u64 logid;
 
-	retval = get_next_syscall_enter (prt, prg, 11, (char **) &retparams, &psr);  // Need to split enter/exit because of vfork/exec wait
+	retval = get_next_syscall_enter (prt, prg, 59, (char **) &retparams, &psr);  // Need to split enter/exit because of vfork/exec wait
 	if (retval >= 0) {
 
 #ifdef CACHE_READS
@@ -11298,9 +11298,9 @@ replay_gettimeofday (struct timeval __user *tv, struct timezone __user *tz)
 	long long time_diff;
 	struct record_group* prg = current->replay_thrd->rp_group->rg_rec_group;
 	u_char syscall_flag = 0;
-	long rc = cget_next_syscall (78, (char **) &retparams, &syscall_flag, 0, &start_clock);
+	long rc = cget_next_syscall (96, (char **) &retparams, &syscall_flag, 0, &start_clock);
 #else
-	long rc = get_next_syscall (78, (char **) &retparams);
+	long rc = get_next_syscall (96, (char **) &retparams);
 #endif
 
 #ifdef LOG_COMPRESS_1
@@ -11455,7 +11455,7 @@ replay_getgroups16 (int gidsetsize, gid_t __user *grouplist)
 	//old_gid_t* retparams = NULL;
 //64port
 	gid_t* retparams = NULL;
-	long rc = get_next_syscall (80, (char **) &retparams);
+	long rc = get_next_syscall (115, (char **) &retparams);
 	if (retparams) {
 		//if (copy_to_user (grouplist, retparams, sizeof(old_gid_t)*rc)) printk ("Pid %d cannot copy groups to user\n", current->pid);
 		//argsconsume(current->replay_thrd->rp_record_thread, sizeof(old_gid_t)*rc);
@@ -18114,7 +18114,7 @@ replay_pwrite64(unsigned int fd, const char __user *buf, size_t count, loff_t po
 	ssize_t rc;
 	char *pretparams = NULL;
 
-	rc = get_next_syscall (181, &pretparams);
+	rc = get_next_syscall (18, &pretparams);
 	DPRINT ("Pid %d replays write returning %d\n", current->pid,rc);
 
 	return rc;
@@ -18416,7 +18416,7 @@ replay_vfork (unsigned long clone_flags, unsigned long stack_start, struct pt_re
 		rc = prt->rp_saved_rc;
 		(*(int*)(prt->app_syscall_addr)) = 999;
 	} else {
-		rc = get_next_syscall_enter (prt, prg, 190, NULL, &psr);
+		rc = get_next_syscall_enter (prt, prg, 58, NULL, &psr);
 		prt->rp_saved_rc = rc;
 	}
 
@@ -19917,9 +19917,9 @@ static asmlinkage long replay_clock_gettime (const clockid_t which_clock, struct
 	u_long start_clock;
 	u_char syscall_flag = 0;
 	struct record_group* prg = current->replay_thrd->rp_group->rg_rec_group;
-	long rc = cget_next_syscall (265, (char **) &retparams, &syscall_flag, 0, &start_clock);	
+	long rc = cget_next_syscall (228, (char **) &retparams, &syscall_flag, 0, &start_clock);	
 #else
-	long rc = get_next_syscall (265, (char **) &retparams);	
+	long rc = get_next_syscall (228, (char **) &retparams);	
 #endif
 
 #ifdef LOG_COMPRESS_1
@@ -21202,8 +21202,8 @@ static ssize_t write_log_data (struct file* file, loff_t* ppos, struct record_th
 //  }
 	MPRINT ("Ancillary data written is %lu\n", data_len);
 	copyed = vfs_write(file, (char *) &data_len, sizeof(data_len), ppos);
-	if (copyed != sizeof(count)) {
-		printk ("write_log_data: tried to write ancillary data length, got rc %d\n", copyed);
+	if (copyed != sizeof(data_len)) {
+		printk ("write_log_data: tried to write ancillary data length, got rc %d, sizeof(count): %d, sizeof(data_len): %d\n", copyed, sizeof(count), sizeof(data_len));
 		KFREE (pvec);
 		return -EINVAL;
   }
