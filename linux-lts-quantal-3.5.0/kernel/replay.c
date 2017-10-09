@@ -394,10 +394,14 @@ void theia_dump_at_sd(int dfd, const char __user *str, int val, int rc, int sysn
 	int res;
 
 	res = user_path_at(dfd, str, LOOKUP_FOLLOW, &path);
-	if (res == 0)
+	if (res == 0) {
 		ptr = d_path(&path, theia_buf2, 4096);
-	else
+		if (IS_ERR(ptr))
+                    ptr = str;
+        }
+	else {
 		ptr = str;
+        }
 
 	if (ptr[0] == '/') {
 		sprintf(theia_buf1, "%s|%d", ptr, val);
@@ -2765,6 +2769,8 @@ void get_user_callstack(char* buffer, size_t bufsize) {
 //			vma->vm_file->f_path.dentry->d_inode->i_ino, trace.entries[i]);
 //			sprintf(ret_str, "%s=%x", vma->vm_file->f_path.dentry->d_iname,
 			path = d_path(&(vma->vm_file->f_path), theia_buf2, 4096);
+			if (IS_ERR(path))
+				path = "[NOFILE]";
 			sprintf(ret_str, "%s=%lx", path, trace.entries[i]);
 			ptr = ret_str;
 		}
@@ -20194,7 +20200,9 @@ SIMPLE_SHIM2(inotify_rm_watch, 255, int, fd, u32, wd);
 SIMPLE_SHIM4(migrate_pages, 256, pid_t, pid, unsigned long, maxnode, const unsigned long __user *, old_nodes, const unsigned long __user *, new_nodes);
 SIMPLE_SHIM4(openat, 257, int, dfd, const char __user *, filename, int, flags, int, mode);
 
-THEIA_SHIM3(mkdirat, 258, int, dfd, const char __user *, pathname, int, mode);
+SIMPLE_SHIM3(mkdirat, 258, int, dfd, const char __user *, pathname, int, mode);
+//THEIA_SHIM3(mkdirat, 258, int, dfd, const char __user *, pathname, int, mode);
+
 SIMPLE_SHIM4(mknodat, 259, int, dfd, const char __user *, filename, int, mode, unsigned, dev);
 SIMPLE_SHIM5(fchownat, 260, int, dfd, const char __user *, filename, uid_t, user, gid_t, group, int, flag);
 
@@ -20203,7 +20211,8 @@ SIMPLE_SHIM3(futimesat, 261, int, dfd, char __user *, filename, struct timeval _
 //RET1_SHIM4(fstatat64, 300, struct stat64, statbuf, int, dfd, char __user *, filename, struct stat64 __user *, statbuf, int, flag);
 RET1_SHIM4(newfstatat, 262, struct stat, statbuf, int, dfd, char __user *, filename, struct stat __user *, statbuf, int, flag);
 
-THEIA_SHIM3(unlinkat, 263, int, dfd, const char __user *, pathname, int, flag);
+SIMPLE_SHIM3(unlinkat, 263, int, dfd, const char __user *, pathname, int, flag);
+// THEIA_SHIM3(unlinkat, 263, int, dfd, const char __user *, pathname, int, flag);
 
 SIMPLE_SHIM4(renameat, 264, int, olddfd, const char __user *, oldname, int, newdfd, const char __user *, newname);
 SIMPLE_SHIM5(linkat, 265, int, olddfd, const char __user *, oldname, int, newdfd, const char __user *, newname, int, flags);
@@ -20211,7 +20220,8 @@ SIMPLE_SHIM3(symlinkat, 266, const char __user *, oldname, int, newdfd, const ch
 
 RET1_COUNT_SHIM4(readlinkat, 267, buf, int, dfd, const char __user *, path, char __user *, buf, int, bufsiz)
 
-THEIA_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
+SIMPLE_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
+//THEIA_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
 
 SIMPLE_SHIM3(faccessat, 269, int, dfd, const char __user *, filename, int, mode);
 
