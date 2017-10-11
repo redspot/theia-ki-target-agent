@@ -126,7 +126,8 @@ int main (int argc, char* argv[])
 
     if (libdir) {
 	strcpy (ldpath, libdir);
-	strcat (ldpath, "/ld-linux.so.2");
+//	strcat (ldpath, "/ld-linux.so.2");
+	strcat (ldpath, "/ld-2.15.so");
 	libdir = ldpath;
     }
 
