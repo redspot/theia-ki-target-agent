@@ -199,14 +199,14 @@ create_elf_tables(struct linux_binprm *bprm, struct elfhdr *exec,
 		u_long* pul = (u_long *) k_rand_bytes;
 		int i;
 		get_random_bytes(k_rand_bytes, sizeof(k_rand_bytes));
-		for (i = 0; i < 4; i++) {
+		for (i = 0; i < 16/sizeof(u_long); i++) {
 			record_randomness (*pul);
 			pul++;
 		}
 	} else if (current->replay_thrd) {
 		u_long* pul = (u_long *) k_rand_bytes;
 		int i;
-		for (i = 0; i < 4; i++) {
+		for (i = 0; i < 16/sizeof(u_long); i++) {
 			*pul = replay_randomness();
 			pul++;
 		}
@@ -588,7 +588,7 @@ out:
 
 static unsigned long randomize_stack_top(unsigned long stack_top)
 {
-	unsigned int random_variable = 0;
+	unsigned long random_variable = 0;
 
 	if ((current->flags & PF_RANDOMIZE) &&
 		!(current->personality & ADDR_NO_RANDOMIZE)) {
