@@ -37,3 +37,6 @@ TODO.html
 autom4te*.cache
 
 rtkaio
+
+build/*
+prefix/*

@@ -116,6 +116,20 @@ EXPORT_SYMBOL(theia_logging_toggle);
 bool theia_recording_toggle = 0;
 EXPORT_SYMBOL(theia_recording_toggle);
 
+//we use pid (and more) to identify the replay process
+
+struct theia_replay_register_data_type {
+  int           pid;
+	int           pin;
+	char          logdir[MAX_LOGDIR_STRLEN+1];
+	char          *linker;
+	int           fd;
+	int           follow_splits;
+	int	          save_mmap;
+};
+struct theia_replay_register_data_type theia_replay_register_data;
+EXPORT_SYMBOL(theia_replay_register_data);
+
 // static unsigned int no_new_proc = 0;
 
 //#define THEIA_TRACK_SHM_OPEN 0
@@ -4112,7 +4126,7 @@ int fork_replay_theia (char __user* logdir, const char* filename, const char __u
 
 	sprintf (ckpt, "%s/ckpt", prg->rg_logdir);
 	char libpath_contents[200];
-	sprintf(libpath_contents, "LD_LIBRARY_PATH=/home/theia/theia-es/eglibc-2.15/prefix/lib:/lib/theia_libs:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/lib:/usr/lib:/lib");
+	sprintf(libpath_contents, "LD_LIBRARY_PATH=/home/yang/theia-es/eglibc-2.15/prefix/lib:/lib/theia_libs:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/lib:/usr/lib:/lib");
 //	sprintf(libpath_contents, "LD_LIBRARY_PATH=$LD_LIBRARY_PATH");
 	char* libpath = KMALLOC (strlen(libpath_contents), GFP_KERNEL);
 	strcpy(libpath, libpath_contents);
@@ -4311,7 +4325,7 @@ show_kernel_stack((u_long*)cur_rsp);
 
 	sprintf (ckpt, "%s/ckpt", prg->rg_logdir);
 	char libpath_contents[200];
-	sprintf(libpath_contents, "LD_LIBRARY_PATH=/home/theia/theia-es/eglibc-2.15/prefix/lib:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib");
+	sprintf(libpath_contents, "LD_LIBRARY_PATH=/home/yang/theia-es/eglibc-2.15/prefix/lib:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib");
 	char* libpath = KMALLOC (strlen(libpath_contents), GFP_KERNEL);
 	strcpy(libpath, libpath_contents);
 	argbuf = copy_args (args, env, &argbuflen, libpath_contents, strlen(libpath_contents));
@@ -4503,7 +4517,8 @@ replay_ckpt_wakeup (int attach_pin, char* logdir, char* linker, int fd, int foll
 	set_fs(KERNEL_DS);
 	rc = replay_execve (execname, (const char* const *) args, (const char* const *) env, get_pt_regs (NULL));
 	set_fs(old_fs);
-	if (rc < 0) printk ("replay_ckpt_wakeup: replay_execve of <%s> returns %ld\n", args[0], rc);
+//	if (rc < 0) 
+    printk ("replay_ckpt_wakeup: replay_execve of <%s> returns %ld\n", args[0], rc);
 	return rc;
 }
 EXPORT_SYMBOL(replay_ckpt_wakeup);
@@ -9632,7 +9647,7 @@ show_kernel_stack((u_long*)cur_rsp);
 	whitelist1 = "/usr/lib/firefox/firefox";
 
 	if(strcmp(filename, whitelist1) == 0) {
-		printk("theia_start_record, ignore %s\n", filename);
+		printk("theia_start_execve, ignore %s\n", filename);
 		rc = do_execve(filename, __argv, __envp, regs);                                 
 		theia_execve_ahg(filename);
 		return rc;
@@ -9994,14 +10009,17 @@ int theia_sys_execve(const char *filename, const char __user *const __user *__ar
 	return rc;
 }
 
-int theia_start_record(const char *filename, const char __user *const __user *__argv, const char __user *const __user *__envp, struct pt_regs *regs) {
+int theia_start_execve(const char *filename, const char __user *const __user *__argv, const char __user *const __user *__envp, struct pt_regs *regs) {
   // white list according to the filename
   int ret;
   int fd;
-  long rc;
+  long rc = 0;
+
+printk("in theia_start_execve: filename %s\n", filename);
 
 //	printk("is_remote: %d\n", is_remote(current));
 
+/* get_task_fullpath prototype */
 /*
   char *buf = (char*)vmalloc(PATH_MAX);
   char *path = get_task_fullpath(current, buf, PATH_MAX);
@@ -10010,104 +10028,142 @@ int theia_start_record(const char *filename, const char __user *const __user *__
   vfree(buf); buf = NULL;
 */
 
-  mm_segment_t old_fs = get_fs();                                                
-  set_fs(KERNEL_DS);
-
-	const struct cred *cred = current_cred();
-//  printk("theia_start_record, execve filename: %s (uid:%d), in whitelist !\n", filename, cred->uid); 
-
-	//record toggle
-//	ret = sys_access(toggle_record_file, 0/*F_OK*/);                                       
-//	if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
-//		set_fs(old_fs);                                                              
-//    rc = do_execve(filename, __argv, __envp, regs);                                 
-//    theia_execve_ahg(filename, ssh_conn);
-//    KFREE(ssh_conn);
-//    return rc;
-//	} 
-	if(theia_recording_toggle == 0) {
-		set_fs(old_fs);                                                              
-    rc = do_execve(filename, __argv, __envp, regs);                                 
-    theia_execve_ahg(filename, rc);
-    return rc;
-	}
-
-  const char *whitelist1;                                                             
-  whitelist1 = "/home/yang/tests/hello";                                              
+/* whitelist prototype */
+//  const char *whitelist1;                                                             
+//  whitelist1 = "/home/yang/tests/hello";                                              
 //  whitelist1 = "./abcd";                                              
 
 //  if(strcmp(filename, whitelist1) != 0) { //we only record the whitelisted processes
-//    printk("theia_start_record, execve filename: %s, not in whitelist\n", filename);
+//    printk("theia_start_execve, execve filename: %s, not in whitelist\n", filename);
 //    rc = do_execve(filename, __argv, __envp, regs);                                 
 //    theia_execve_ahg(filename, ssh_conn);
 //    KFREE(ssh_conn);
 //    return rc;
 //  }                                                                                   
 
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+	if(theia_recording_toggle == 0 
+    && theia_replay_register_data.pid == 0) {
+    goto out_norm;
+	}
+
   const char *devfile;
   devfile = "/dev/spec0";
   ret = sys_access(devfile, 0/*F_OK*/);
   if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.
-    printk("/dev/spec0 not ready yet. ret %d\n", ret);
+    printk("/dev/spec0 not accessible yet. ret %d\n", ret);
+    goto out_norm;
+  }
+  fd = sys_open ("/dev/spec0", O_RDWR, 0777 /*mode should be ignored anyway*/);
+  if (fd < 0) {
+    printk("/dev/spec0 not open yet. ret %d\n", ret);
+    goto out_norm;
+  }
+
+  if(theia_recording_toggle == 1) {
+    char* linker;
+    printk("/dev/spec0 ready ! filename: %s\n", filename);
+    //should be ready to add the process to record_group
+    linker = "/home/yang/theia-es/eglibc-2.15/prefix/lib/ld-linux-x86-64.so.2";
+    int save_mmap = 1;
+
+    set_fs(old_fs);
+    fork_replay_theia (NULL /*logdir*/, filename, __argv, __envp, linker, save_mmap, fd, -1 /*pipe_fd*/);
+    
+    printk("fork_replay_theia returns. %s\n", filename);
+    goto out;
+  }
+
+  // a process is registered to be replayed, we call replay_ckpt_wakeup_theia().
+  if(theia_replay_register_data.pid == current->pid) {
+    set_fs(old_fs);
+    //attach_pin should come along with setting theia_replay_toggle
+//    replay_ckpt_wakeup_theia(attach_pin, logdir, linker, 
+//      fd, follow_splits, save_mmap);
+    printk("Received theia_replay_register_data: \n pid %d, pin %d, logdir %s, linker %s, fd %d, follow_splits %d, save_mmap %d\n", 
+            theia_replay_register_data.pid,
+            theia_replay_register_data.pin,
+            theia_replay_register_data.logdir,
+            theia_replay_register_data.linker,
+            theia_replay_register_data.fd,
+            theia_replay_register_data.follow_splits,
+            theia_replay_register_data.save_mmap);
+
+    printk("replay_ckpt_wakeup_theia returns. %s\n", filename);
+//    goto out;
+    goto out_norm;
+  }
+  
+  goto out_norm;
+
+out:
+  return rc;
+
+out_norm:
     set_fs(old_fs);
     rc = do_execve(filename, __argv, __envp, regs);                                 
     theia_execve_ahg(filename, rc);
     return rc;
-  }
+  
+}
+
+
 
 //  fd = sys_open ("/tmp/test.txt", O_RDWR, 0664 /*mode should be ignored anyway*/);
-//  printk("[theia_start_record]open /tmp/test.txt fd %d\n", fd);
+//  printk("[theia_start_execve]open /tmp/test.txt fd %d\n", fd);
 //  sys_close(fd);
   
-  else {
-//    long rc;
-    char* linker;
-    printk("/dev/spec0 ready ! filename: %s\n", filename);
-    //should be ready to add the process to record_group
-
-    //linker = "/lib/theia_libs/ld-linux.so.2";
-    linker = "/home/theia/theia-es/eglibc-2.15/prefix/lib/ld-linux-x86-64.so.2";
-
-    int save_mmap;
-    save_mmap = 1; 
-
-    int fd = sys_open ("/dev/spec0", O_RDWR, 0777 /*mode should be ignored anyway*/);
-    if (fd < 0) {
-      printk("[theia_start_record]open /dev/spec0 failed\n");
-      set_fs(old_fs);
-      rc = do_execve(filename, __argv, __envp, regs);                                 
-      theia_execve_ahg(filename, rc);
-      return rc;
-    }
-
-//Yang: i think pipe is not needed here as we dont have parent process to send to..
-//    int pipe_fds[2];
-//    rc = pipe(pipe_fds);                                                             
-//    if (rc) {                                                                        
-//      printk("[theia_start_record]pipe_fds fails, %ld\n", rc);
-//      return do_execve(filename, __argv, __envp, regs);
-//    } 
-//    rc = sys_fcntl(pipe_fds[0], 4, 1 /*F_SETFL, FD_CLOEXEC*/);                                  
-//    if (rc) {                                                                        
-//      printk("[theia_start_record]fcntl pipe_fds[0] fails, %ld\n", rc);
-//      return do_execve(filename, __argv, __envp, regs);
-//    }                                                                                
+//  else {
+////    long rc;
+//    char* linker;
+//    printk("/dev/spec0 ready ! filename: %s\n", filename);
+//    //should be ready to add the process to record_group
 //
-//    rc = sys_fcntl(pipe_fds[1], 4, 1 /*F_SETFL, FD_CLOEXEC*/);                                  
-//    if (rc) {                                                                        
-//      printk("[theia_start_record]fcntl pipe_fds[1] fails, %ld\n", rc);
-//      return do_execve(filename, __argv, __envp, regs);
-//    }                                                                                
-    set_fs(old_fs);
-    fork_replay_theia (NULL /*logdir*/, filename, __argv, __envp, linker, save_mmap, fd, -1 /*pipe_fd*/);
-  }
+//    //linker = "/lib/theia_libs/ld-linux.so.2";
+//    linker = "/home/yang/theia-es/eglibc-2.15/prefix/lib/ld-linux-x86-64.so.2";
+//
+//    int save_mmap;
+//    save_mmap = 1; 
+//
+//    int fd = sys_open ("/dev/spec0", O_RDWR, 0777 /*mode should be ignored anyway*/);
+//    if (fd < 0) {
+//      printk("[theia_start_execve]open /dev/spec0 failed\n");
+//      set_fs(old_fs);
+//      rc = do_execve(filename, __argv, __envp, regs);                                 
+//      theia_execve_ahg(filename, rc);
+//      return rc;
+//    }
+//
+////Yang: i think pipe is not needed here as we dont have parent process to send to..
+////    int pipe_fds[2];
+////    rc = pipe(pipe_fds);                                                             
+////    if (rc) {                                                                        
+////      printk("[theia_start_execve]pipe_fds fails, %ld\n", rc);
+////      return do_execve(filename, __argv, __envp, regs);
+////    } 
+////    rc = sys_fcntl(pipe_fds[0], 4, 1 /*F_SETFL, FD_CLOEXEC*/);                                  
+////    if (rc) {                                                                        
+////      printk("[theia_start_execve]fcntl pipe_fds[0] fails, %ld\n", rc);
+////      return do_execve(filename, __argv, __envp, regs);
+////    }                                                                                
+////
+////    rc = sys_fcntl(pipe_fds[1], 4, 1 /*F_SETFL, FD_CLOEXEC*/);                                  
+////    if (rc) {                                                                        
+////      printk("[theia_start_execve]fcntl pipe_fds[1] fails, %ld\n", rc);
+////      return do_execve(filename, __argv, __envp, regs);
+////    }                                                                                
+//    set_fs(old_fs);
+//    fork_replay_theia (NULL /*logdir*/, filename, __argv, __envp, linker, save_mmap, fd, -1 /*pipe_fd*/);
+//  }
 
-}
+//}
 
 int shim_execve(const char *filename, const char __user *const __user *__argv, const char __user *const __user *__envp, struct pt_regs *regs) 
 //SHIM_CALL_MAIN(11, record_execve(filename, __argv, __envp, regs), replay_execve(filename, __argv, __envp, regs), theia_sys_execve(filename, __argv, __envp, regs))
 
-SHIM_CALL_MAIN(59, record_execve(filename, __argv, __envp, regs), replay_execve(filename, __argv, __envp, regs), theia_start_record(filename, __argv, __envp, regs))
+SHIM_CALL_MAIN(59, record_execve(filename, __argv, __envp, regs), replay_execve(filename, __argv, __envp, regs), theia_start_execve(filename, __argv, __envp, regs))
 
 void theia_chdir_ahgx(const char __user * filename, long rc, int sysnum)
 {
@@ -22061,6 +22117,9 @@ static int __init replay_init(void)
 	glb_blackpid.pid[1] = 0;
 	glb_blackpid.pid[2] = 0;
 
+  //theia_replay_register init
+  theia_replay_register_data.pid = 0;
+  
 
 	/* Read monitors */
 	//read_btwn_timer = perftimer_create("Between Reads", "Read");
