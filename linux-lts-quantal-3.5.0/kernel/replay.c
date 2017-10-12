@@ -4112,7 +4112,7 @@ int fork_replay_theia (char __user* logdir, const char* filename, const char __u
 
 	sprintf (ckpt, "%s/ckpt", prg->rg_logdir);
 	char libpath_contents[200];
-	sprintf(libpath_contents, "LD_LIBRARY_PATH=/home/yang/theia-es/eglibc-2.15/prefix/lib:/lib/theia_libs:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/lib:/usr/lib:/lib");
+	sprintf(libpath_contents, "LD_LIBRARY_PATH=/home/theia/theia-es/eglibc-2.15/prefix/lib:/lib/theia_libs:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/lib:/usr/lib:/lib");
 //	sprintf(libpath_contents, "LD_LIBRARY_PATH=$LD_LIBRARY_PATH");
 	char* libpath = KMALLOC (strlen(libpath_contents), GFP_KERNEL);
 	strcpy(libpath, libpath_contents);
@@ -4311,7 +4311,7 @@ show_kernel_stack((u_long*)cur_rsp);
 
 	sprintf (ckpt, "%s/ckpt", prg->rg_logdir);
 	char libpath_contents[200];
-	sprintf(libpath_contents, "LD_LIBRARY_PATH=/home/yang/theia-es/eglibc-2.15/prefix/lib:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib");
+	sprintf(libpath_contents, "LD_LIBRARY_PATH=/home/theia/theia-es/eglibc-2.15/prefix/lib:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib");
 	char* libpath = KMALLOC (strlen(libpath_contents), GFP_KERNEL);
 	strcpy(libpath, libpath_contents);
 	argbuf = copy_args (args, env, &argbuflen, libpath_contents, strlen(libpath_contents));
@@ -10066,7 +10066,7 @@ int theia_start_record(const char *filename, const char __user *const __user *__
     //should be ready to add the process to record_group
 
     //linker = "/lib/theia_libs/ld-linux.so.2";
-    linker = "/home/yang/theia-es/eglibc-2.15/prefix/lib/ld-linux-x86-64.so.2";
+    linker = "/home/theia/theia-es/eglibc-2.15/prefix/lib/ld-linux-x86-64.so.2";
 
     int save_mmap;
     save_mmap = 1; 
