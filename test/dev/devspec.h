@@ -6,6 +6,7 @@
 #define SPEC_DEV "/dev/spec0"
 
 #define ROLLED_BACK 1
+#define MAX_LOGDIR_STRLEN 80
 
 struct record_data {
 	u_long                           app_syscall_addr;
@@ -25,6 +26,26 @@ struct wakeup_data {
 	int           fd;
 	int           follow_splits;
 	int	      save_mmap;
+};
+
+struct replay_register_user_data {
+  int           pid;
+	int           pin;
+	char __user   *logdir;
+	char __user   *linker;
+	int           fd;
+	int           follow_splits;
+	int	          save_mmap;
+};
+
+struct theia_replay_register_data_type {
+  int           pid;
+	int           pin;
+	char          logdir[MAX_LOGDIR_STRLEN+1];
+	char          *linker;
+	int           fd;
+	int           follow_splits;
+	int	          save_mmap;
 };
 	
 struct get_used_addr_data {
@@ -71,5 +92,6 @@ struct filemap_entry_data {
 #define THEIA_LOGGING_OFF _IO('u', 16)
 #define THEIA_RECORDING_ON _IO('u', 17)
 #define THEIA_RECORDING_OFF _IO('u', 18)
+#define THEIA_REPLAY_REGISTER _IOR('u', 19, struct replay_register_user_data)
 
 #endif

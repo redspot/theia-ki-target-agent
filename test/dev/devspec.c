@@ -20,6 +20,7 @@ MODULE_LICENSE("GPL");
 
 extern bool theia_logging_toggle;
 extern bool theia_recording_toggle;
+extern struct theia_replay_register_data_type theia_replay_register_data;
 
 /* Debugging stuff */
 //#define DPRINT printk
@@ -44,10 +45,11 @@ spec_psdev_release(struct inode * inode, struct file * file)
 static long
 spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
 {
-  	int len = _IOC_SIZE(cmd), retval;
-	struct ckpt_proc *pckpt_proc, *new_ckpt_proc;
-        struct record_data rdata;
-        struct wakeup_data wdata;
+  int len = _IOC_SIZE(cmd), retval;
+  struct ckpt_proc *pckpt_proc, *new_ckpt_proc;
+  struct record_data rdata;
+  struct wakeup_data wdata;
+  struct replay_register_user_data replay_data;
 	struct get_used_addr_data udata;
 	struct filemap_num_data fndata;
 	struct filemap_entry_data fedata;
@@ -73,6 +75,41 @@ spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
 	case THEIA_RECORDING_OFF:
 		theia_recording_toggle = 0;
 		return 0;
+
+  case THEIA_REPLAY_REGISTER:
+    {
+      if (len != sizeof(replay_data)) {
+        printk ("ioctl THEIA_REPLAY_REGISTER fails, len %d\n", len);
+        return -EINVAL;
+      }
+      if (copy_from_user (&replay_data, (void *) data, sizeof(replay_data)))
+        return -EFAULT;
+      retval = strncpy_from_user(theia_replay_register_data.logdir, replay_data.logdir, MAX_LOGDIR_STRLEN);
+      if (retval < 0 || retval >= MAX_LOGDIR_STRLEN) {
+        printk ("ioctl THEIA_REPLAY_REGISTER fails, strcpy returns %d\n", retval);
+        return -EINVAL;
+      }
+      if (replay_data.linker) {
+        tmp = getname(replay_data.linker);
+        if (tmp == NULL) {
+          printk ("THEIA_REPLAY_REGISTER: cannot get linker name\n");
+          return -EFAULT;
+        } 
+      } else {
+        tmp = NULL;
+      }
+      theia_replay_register_data.linker = tmp;
+      theia_replay_register_data.pid = replay_data.pid;
+      theia_replay_register_data.pin = replay_data.pin;
+      theia_replay_register_data.fd = replay_data.fd;
+      theia_replay_register_data.follow_splits = replay_data.follow_splits;
+      theia_replay_register_data.save_mmap = replay_data.save_mmap;
+
+      printk("THEIA_REPLAY_REGISTER is sent in. %d, logdir %s,linker %s\n", theia_replay_register_data.pid, theia_replay_register_data.logdir, theia_replay_register_data.linker);
+      //FIXME:Yang: Do we have a leakage here? Need to find a garbage collection location after replay is done.
+      //		if (tmp) putname (tmp);
+      return 0;
+    }
 
 	case SPECI_REPLAY_FORK:
 		if (len != sizeof(rdata)) {

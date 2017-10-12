@@ -1,6 +1,5 @@
 *.a
 *.o
-.deps
 filemap
 theia_toggle
 getstats
@@ -14,5 +13,6 @@ parseulog
 replay_pause
 reset_ndx
 resume
+theia_replay
 *.output
 *.out

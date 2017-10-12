@@ -179,3 +179,17 @@ int theia_recording_off(int fd_spec) {
 	return ioctl (fd_spec, THEIA_RECORDING_OFF);
 }
 
+int theia_replay_register(int fd_spec, int pin, int follow_splits, 
+  int save_mmap, char* logdir, char* linker)
+{
+  struct replay_register_user_data replay_data;
+  replay_data.pid = getpid();
+  replay_data.pin = pin;
+  replay_data.logdir = logdir;
+  replay_data.linker = linker;
+  replay_data.fd = fd_spec;
+  replay_data.follow_splits = follow_splits;
+  replay_data.save_mmap = save_mmap;
+	return ioctl (fd_spec, THEIA_REPLAY_REGISTER, &replay_data);
+}
+
