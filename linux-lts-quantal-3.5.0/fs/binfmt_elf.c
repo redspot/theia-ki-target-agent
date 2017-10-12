@@ -199,14 +199,14 @@ create_elf_tables(struct linux_binprm *bprm, struct elfhdr *exec,
 		u_long* pul = (u_long *) k_rand_bytes;
 		int i;
 		get_random_bytes(k_rand_bytes, sizeof(k_rand_bytes));
-		for (i = 0; i < 16/sizeof(u_long); i++) {
+		for (i = 0; i < sizeof(k_rand_bytes)/sizeof(u_long); i++) {
 			record_randomness (*pul);
 			pul++;
 		}
 	} else if (current->replay_thrd) {
 		u_long* pul = (u_long *) k_rand_bytes;
 		int i;
-		for (i = 0; i < 16/sizeof(u_long); i++) {
+		for (i = 0; i < sizeof(k_rand_bytes)/sizeof(u_long); i++) {
 			*pul = replay_randomness();
 			pul++;
 		}
