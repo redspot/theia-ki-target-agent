@@ -314,5 +314,14 @@
 #define __NR_process_vm_readv 310
 #define __NR_process_vm_writev 311
 #define __NR_kcmp 312
+#define __NR_pthread_print 400
+#define __NR_pthread_log 401
+#define __NR_pthread_block 402
+#define __NR_pthread_init 403
+#define __NR_pthread_full 404
+#define __NR_pthread_sysign 405
+#define __NR_pthread_status 406
+#define __NR_pthread_shm_path 407
+#define __NR_pthread_dumbass_link 408
 
 #endif /* _ASM_X86_UNISTD_64_H */
