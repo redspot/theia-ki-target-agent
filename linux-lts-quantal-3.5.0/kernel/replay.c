@@ -10079,9 +10079,6 @@ printk("in theia_start_execve: filename %s\n", filename);
   // a process is registered to be replayed, we call replay_ckpt_wakeup_theia().
   if(theia_replay_register_data.pid == current->pid) {
     set_fs(old_fs);
-    //attach_pin should come along with setting theia_replay_toggle
-//    replay_ckpt_wakeup_theia(attach_pin, logdir, linker, 
-//      fd, follow_splits, save_mmap);
     printk("Received theia_replay_register_data: \n pid %d, pin %d, logdir %s, linker %s, fd %d, follow_splits %d, save_mmap %d\n", 
             theia_replay_register_data.pid,
             theia_replay_register_data.pin,
@@ -10091,9 +10088,18 @@ printk("in theia_start_execve: filename %s\n", filename);
             theia_replay_register_data.follow_splits,
             theia_replay_register_data.save_mmap);
 
-    printk("replay_ckpt_wakeup_theia returns. %s\n", filename);
-//    goto out;
-    goto out_norm;
+    theia_replay_register_data.pid = 0; // we clear this process in case it has more execve;
+    //attach_pin should come along with setting theia_replay_toggle
+    replay_ckpt_wakeup(theia_replay_register_data.pin,
+                             theia_replay_register_data.logdir,
+                             theia_replay_register_data.linker,
+                             theia_replay_register_data.fd,
+                             theia_replay_register_data.follow_splits,
+                             theia_replay_register_data.save_mmap);
+
+    printk("replay_ckpt_wakeup returns. %s\n", filename);
+    goto out;
+//    goto out_norm;
   }
   
   goto out_norm;
