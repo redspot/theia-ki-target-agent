@@ -10,6 +10,7 @@
 #include <assert.h>
 
 #include <sys/types.h>
+#include <sys/syscall.h>
 
 
 int main(int argc, char *argv[]) 
@@ -142,7 +143,7 @@ int main(int argc, char *argv[])
   }
 
 //2. execvp to start   
-  rc = execvp("dumb", argv);
+  rc = syscall(59, "dumb", argv, __environ);
   return 0;
 
 }
