@@ -6080,7 +6080,7 @@ long check_clock_before_syscall (int syscall)
 		// Pin calls clone instead of vfork and enforces the vfork semantics at
 		// the Pin layer, we need to know this so that we can call replay_clone
 		// in place of the vfork
-		if (syscall == 190) {
+		if (syscall == 58) {
 			prt->is_pin_vfork = 1;
 		}
 	}
