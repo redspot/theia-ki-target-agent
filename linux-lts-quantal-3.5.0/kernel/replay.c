@@ -5,7 +5,6 @@
 
 #include <linux/kernel.h>
 #include <linux/syscalls.h>
-//#include <asm-generic/syscalls.h>
 #include <asm/syscalls.h>
 #include <linux/mm.h>
 #include <linux/highmem.h>
@@ -208,15 +207,8 @@ unsigned int record_x = 1;
 unsigned int replay_pause_tool = 0;
 //xdou
 
-//#define KFREE(x) my_kfree(x, __LINE__)
-//#define KMALLOC(size, flags) my_kmalloc(size, flags, __LINE__)
-
 #define ARGSKMALLOC(size, flags) argsalloc(size)
 #define ARGSKFREE(ptr, size) argsfree(ptr, size)
-
-//Yang
-//#define AHG_ARGSKMALLOC(size, flags) ahg_argsalloc(size)
-//#define AHG_ARGSKFREE(ptr, size) ahg_argsfree(ptr, size)
 
 #define new_syscall_exit(sysnum, retparam) _new_syscall_exit(sysnum, retparam, NULL)
 #define ahg_new_syscall_exit(sysnum, retparam, ahgparam) _new_syscall_exit(sysnum, retparam, ahgparam)
@@ -1289,8 +1281,6 @@ struct record_thread {
 #endif
 	struct list_head rp_argsalloc_list;	// kernel linked list head pointing to linked list of argsalloc_nodes
 
-//Yang
-//	struct list_head ahg_argsalloc_list;	// This is for THEIA AHG
 #ifdef LOG_COMPRESS_1
 	struct list_head rp_clog_list; 		// the linked list for compressed log, written to another file
 #endif
@@ -2496,8 +2486,6 @@ new_record_thread (struct record_group* prg, u_long recpid, struct record_cache_
 #endif
 
 	INIT_LIST_HEAD(&prp->rp_argsalloc_list);
-//Yang
-//	INIT_LIST_HEAD(&prp->ahg_argsalloc_list);
 
 #ifdef TRACE_READ_WRITE
 	memset(prp->recorded_filemap_valid, 0, sizeof(char) * RECORD_FILE_SLOTS);
@@ -2778,10 +2766,6 @@ void get_user_callstack(char* buffer, size_t bufsize) {
 			continue;
 
 		if (vma->vm_file) {
-			//				ptr = vma->vm_file->f_path.dentry->d_iname;
-//			sprintf(ret_str, "%x,%x=%x", vma->vm_file->f_path.dentry->d_inode->i_sb->s_dev, 
-//			vma->vm_file->f_path.dentry->d_inode->i_ino, trace.entries[i]);
-//			sprintf(ret_str, "%s=%x", vma->vm_file->f_path.dentry->d_iname,
 			path = d_path(&(vma->vm_file->f_path), theia_buf2, 4096);
 			if (IS_ERR(path))
 				path = "[NOFILE]";
@@ -3177,24 +3161,6 @@ static int add_argsalloc_node (struct record_thread* prect, void* slab, size_t s
 	return 0;
 }
 
-//Yang
-/* Adds another slab for args/retparams for theia-ahg; if no slab exists, create one */
-/*
-static int ahg_add_argsalloc_node (struct record_thread* prect, void* slab, size_t size) { 
-	struct argsalloc_node* new_node;
-	new_node = new_argsalloc_node(slab, size);
-	if (new_node == NULL) {
-		printk("Pid %d ahg_add_argsalloc_node: could not create new argsalloc_node\n", prect->rp_record_pid);
-		return -1;
-	}
-
-	// Add to front of the list
-	MPRINT ("Pid %d ahg_add_argsalloc_node: adding an args slab to record_thread\n", prect->rp_record_pid);
-	list_add(&new_node->list, &prect->ahg_argsalloc_list);
-	return 0;
-}
-*/
-
 #ifdef LOG_COMPRESS_1
 static int add_compress_node (struct record_thread* prect, void* slab, size_t size, struct list_head *rp_list) { 
 	struct clog_node* new_node;
@@ -3215,51 +3181,6 @@ static int inline add_clog_node (struct record_thread* prect, void* slab, size_t
 	return add_compress_node (prect, slab, size, &prect->rp_clog_list);
 }
 #endif
-
-//Yang
-/*
-static void* ahg_argsalloc (size_t size)
-{
-	struct record_thread* prect = current->record_thrd;
-	struct argsalloc_node* node;
-	size_t asize;
-	void* ptr;
-
-	node = list_first_entry(&prect->ahg_argsalloc_list, struct argsalloc_node, list);
-
-	// check to see if we've allocated a slab and if we have enough space left in the slab
-	if (unlikely(list_empty(&prect->ahg_argsalloc_list) || ((node->head + node->size - node->pos) < size))) {
-		int rc;
-		void* slab;
-
-		MPRINT ("Pid %d ahg_argsalloc: not enough space left in slab, allocating new slab\n", current->pid);
-		
-		asize = (size > argsalloc_size) ? size : argsalloc_size;
-		slab = VMALLOC(asize);
-		if (slab == NULL) {
-			printk ("Pid %d ahg_argsalloc: couldn't alloc slab with size %u\n", current->pid, asize);
-			return NULL;
-		}
-		rc = ahg_add_argsalloc_node(current->record_thrd, slab, asize);
-		if (rc) {
-			printk("Pid %d ahg_argalloc: problem adding argsalloc_node\n", current->pid);
-			VFREE(slab);
-			return NULL;
-		}
-		// get the new first node of the linked list
-		node = list_first_entry(&prect->ahg_argsalloc_list, struct argsalloc_node, list);
-		ptr = node->pos;
-		node->pos += size;
-		return ptr;
-	}
-
-	// return pointer and then advance
-	ptr = node->pos;
-	node->pos += size;
-
-	return ptr;
-}
-*/
 
 static void* argsalloc (size_t size)
 {
@@ -3459,31 +3380,6 @@ static inline struct clog_node* clog_mark_done_replay (void) {
  * The only use case for this is in case of an error (like copying from user)
  * and the allocated memory needs to be freed
  */
-//Yang
-//static void ahg_argsfree (const void* ptr, size_t size)
-//{
-//	struct record_thread* prect;
-//	struct argsalloc_node* ra_node;
-//	prect = current->record_thrd;
-//	ra_node = list_first_entry(&prect->ahg_argsalloc_list, struct argsalloc_node, list);
-//	
-//	if (ptr == NULL) 
-//		return;
-//	
-//	if (ra_node->head == ra_node->pos)
-//		return;
-//
-//	// simply rollback allocation (there is the rare case where allocation has
-//	// created a new slab, but in that case we simply roll back the allocation 
-//	// and keep the slab since calling argsfree itself is rare)
-//	if ((ra_node->pos - size) >= ra_node->head) {
-//		ra_node->pos -= size;
-//		return;
-//	} else {
-//		printk("Pid %d ahg_argsfree: unhandled case\n", current->pid);
-//		return;
-//	}
-//}
 static void argsfree (const void* ptr, size_t size)
 {
 	struct record_thread* prect;
@@ -3510,20 +3406,6 @@ static void argsfree (const void* ptr, size_t size)
 }
 
 // Free all allocated data values at once
-//Yang
-/*
-static void ahg_argsfreeall (struct record_thread* prect)
-{
-	struct argsalloc_node* node;
-	struct argsalloc_node* next_node;
-
-	list_for_each_entry_safe (node, next_node, &prect->ahg_argsalloc_list, list) {
-		VFREE(node->head);
-		list_del(&node->list);
-		KFREE(node);	
-	}
-}
-*/
 static void argsfreeall (struct record_thread* prect)
 {
 	struct argsalloc_node* node;
@@ -3824,52 +3706,6 @@ get_libpath (const char __user* const __user* env)
 
 	return NULL;
 }
-
-/*
-static char* 
-get_ssh_conn(const char __user* const __user* env)
-{
-	const char __user *const __user *up;
-	const char __user * pc;
-	char tokbuf[15];
-	char* retbuf;
-	u_long len;
-
-	up = env;
-	do {
-		if (get_user (pc, up)) {
-			printk ("copy_args: invalid env value\n");
-			return NULL;
-		}
-		if (pc == 0) break; // No more args
-		if (strncpy_from_user (tokbuf, pc, sizeof(tokbuf)) != sizeof(tokbuf)) {
-			up++;
-			continue;
-		}
-		if (memcmp(tokbuf,"SSH_CONNECTION=", sizeof(tokbuf))) {
-			up++;
-			continue;
-		}
-		len = strnlen_user(pc, 4096);
-		if (len > 4096) {
-			printk ("get_ssh_conn: path too long\n");
-			return NULL;
-		}
-		retbuf = KMALLOC (len, GFP_KERNEL);
-		if (retbuf == NULL) {
-			printk ("get_ssh_conn cannot allocate buffer\n");
-			return NULL;
-		}
-		if (copy_from_user (retbuf, pc, len)) {
-			printk ("get_ssh_conn cannot copy path from user\n");
-			return NULL;
-		}
-		return retbuf;
-	} while (1);
-
-	return NULL;
-}
-*/
 
 // Checks to see if matching libpath is present in arg/env buffer - returns 0 if true, index if no match, -1 if not present
 static int
@@ -4534,14 +4370,6 @@ new_syscall_enter (long sysnum)
 	u_long new_clock, start_clock;
 	u_long* p;
 
-//Yang: get userspace return address
-//printk("Userspace return address is %lx, pid: %d\n",current->thread.ip, current->pid);
-//printk("current_text_addr is %lx\n",(u_long)(current_text_addr()));
-
-//SL: dump userspace return addresses
-// dump_user_return_addresses();
-// dump_user_stack();
-
 #ifdef MCPRINT
 	if (replay_min_debug || replay_debug) {
 		MPRINT ("Pid %d add syscall %ld enter\n", current->pid, sysnum);
@@ -4558,9 +4386,6 @@ new_syscall_enter (long sysnum)
 		// one syscall_result array in record_thread, so the next system call might
 		// overwrite this log before the writout occurs
 		write_and_free_kernel_log (prt);
-//Yang
-//		ahg_write_and_free_kernel_log (prt);
-
 		prt->rp_in_ptr = 0;
 	}
 
@@ -4575,12 +4400,6 @@ new_syscall_enter (long sysnum)
 		p = ARGSKMALLOC(sizeof(u_long), GFP_KERNEL);
 		if (unlikely (p == NULL)) return -ENOMEM;
 		*p = start_clock;
-//Yang
-/*
-		p = AHG_ARGSKMALLOC(sizeof(u_long), GFP_KERNEL);
-		if (unlikely (p == NULL)) return -ENOMEM;
-		*p = start_clock;
-*/
 #ifdef LOG_COMPRESS_1
 		// compression for start_clock
 		encodeValue ((unsigned int) start_clock, 32, 4, clog_alloc (4));
@@ -4634,12 +4453,6 @@ new_syscall_done (long sysnum, long retval)
 		p = ARGSKMALLOC(sizeof(long), GFP_KERNEL);
 		if (unlikely (p == NULL)) return -ENOMEM;
 		*p = retval;
-//Yang
-/*
-		p = AHG_ARGSKMALLOC(sizeof(long), GFP_KERNEL);
-		if (unlikely (p == NULL)) return -ENOMEM;
-		*p = retval;
-*/
 	} 
 
 	new_clock = atomic_add_return (1, prt->rp_precord_clock);
@@ -4649,12 +4462,6 @@ new_syscall_done (long sysnum, long retval)
 		ulp = ARGSKMALLOC(sizeof(u_long), GFP_KERNEL);
 		if (unlikely (ulp == NULL)) return -ENOMEM;
 		*ulp = stop_clock;
-//Yang
-/*
-		ulp = AHG_ARGSKMALLOC(sizeof(u_long), GFP_KERNEL);
-		if (unlikely (ulp == NULL)) return -ENOMEM;
-		*ulp = stop_clock;
-*/
 	}
 	prt->rp_expected_clock = new_clock;
 
@@ -4801,12 +4608,7 @@ record_signal_delivery (int signr, siginfo_t* info, struct k_sigaction* ka)
 	struct repsignal_context* pcontext;
 	struct pthread_log_head* phead = (struct pthread_log_head __user *) prt->rp_user_log_addr;
 	int ignore_flag, need_fake_calls = 1;
-
-//	printk("SLSL: 0\n");
-	
 	int sysnum = syscall_get_nr(current, get_pt_regs(NULL));
-
-//	printk("SLSL: 1\n");
 
 	if (prt->rp_ignore_flag_addr) {
 		get_user (ignore_flag, prt->rp_ignore_flag_addr);
@@ -4814,13 +4616,9 @@ record_signal_delivery (int signr, siginfo_t* info, struct k_sigaction* ka)
 		ignore_flag = 0;
 	}
 
-//	printk("SLSL: 2\n");	
-
         MPRINT ("Pid %d recording signal delivery signr %d fatal %d - clock is currently %d ignore flag %d sysnum %d psr->sysnum %d handler %p\n", 
 		current->pid, signr, sig_fatal(current, signr), atomic_read(prt->rp_precord_clock), ignore_flag, sysnum, psr->sysnum, ka->sa.sa_handler);
 
-//	printk("SLSL: 3\n");	
-	
 	// Note that a negative sysnum means we entered kernel via trap, interrupt, etc.  It is not safe to deliver a signal here, even in the ignore region because
 	// We might be in a user-level critical section where we are adding to the log.  Instead, defer and deliver later if possible.
 	if (ignore_flag && sysnum >= 0) {
@@ -4966,30 +4764,6 @@ int replay_has_pending_signal (void) {
 	}
 	return 0;
 }
-
-//Yang
-/*
-static void
-ahg_write_and_free_kernel_log(struct record_thread *prect)
-{
-	int fd = 0;
-	struct syscall_result* write_psr;
-	loff_t pos;
-	struct file* file = NULL;
-
-	mm_segment_t old_fs = get_fs();
-	set_fs(KERNEL_DS);
-	file = ahg_init_log_write (prect, &pos, &fd);
-	if (file) {
-		write_psr = &prect->rp_log[0];
-		write_log_data (file, &pos, prect, write_psr, prect->rp_in_ptr, true);
-		term_log_write (file, fd);
-	}
-	set_fs(old_fs);
-
-	ahg_argsfreeall (prect);
-}
-*/
 
 static void
 write_and_free_kernel_log(struct record_thread *prect)
@@ -7098,8 +6872,6 @@ recplay_exit_middle(void)
 		write_and_free_kernel_log_async(prt);
 #else
 		write_and_free_kernel_log(prt); // Write out remaining records
-//Yang
-//		ahg_write_and_free_kernel_log(prt); // Write out remaining records
 #endif
 		// write out mmaps if the last record thread to exit the record group
 		if (atomic_dec_and_test(&prt->rp_group->rg_record_threads)) {
@@ -7751,31 +7523,6 @@ void get_ids(char* ids) {
 		cred->gid, cred->egid, cred->sgid, cred->fsgid);
 }
 
-/*
-int get_task_fullpath(struct task_struct *tsk, char *buf, size_t buflen) {
-	struct mm_struct *mm = tsk->mm;
-        int ret = 0;
-	if (!mm)
-		return -1;
-
-	struct vm_area_struct *vma;
-	down_read(&mm->mmap_sem);
-	vma = find_vma(mm, mm->start_code);
-	if (vma && vma->vm_file) {
-		char vmfpath[PATH_MAX];
-		char *path = d_path(&(vma->vm_file->f_path), vmfpath, PATH_MAX);	
-		printk("SL: fullpath: %s\n", path);
-		strncpy(buf, path, buflen);
-		ret = 0;
-	}
-        else
-		ret = -1;
-	up_read(&mm->mmap_sem);
-
-	return ret;
-}
-*/
-
 char* get_file_fullpath(struct file *opened_file, char *buf, size_t buflen) {
 	char *path = NULL;
 	int ret = 0;
@@ -7783,8 +7530,6 @@ char* get_file_fullpath(struct file *opened_file, char *buf, size_t buflen) {
 	if (opened_file) {
 		path = d_path(&(opened_file->f_path), buf, buflen);	
 		if (!IS_ERR(path)) {
-//			printk("SL: file fullpath: %s\n", path);
-
 			if (path[0] == '\0')
 				path = NULL;
 		}
@@ -7810,8 +7555,6 @@ char* get_task_fullpath(struct task_struct *tsk, char *buf, size_t buflen) {
 	if (exe_file) {
 		path = d_path(&(exe_file->f_path), buf, buflen);	
 		if (!IS_ERR(path)) {
-//			printk("SL: fullpath: %s\n", path);
-
 			if (path[0] == '\0')
 				path = NULL;
 		}
@@ -7904,29 +7647,6 @@ bool check_and_update_controlfile() {
 	return true;
 }
 
-/*
-bool is_process_new(pid_t pid, char* comm) {
-	if(glb_process_list == NULL) {
-		return true;
-	}
-	ds_list_iter_t* i = ds_list_iter_create(glb_process_list);
-	char cur_proc[50];
-	sprintf(cur_proc, "%d_%s", pid, comm);
-//	printk("number of elements in list: %d\n", ds_list_count(glb_process_list));
-	while(true) {
-		char* entry = ds_list_iter_next(i);
-		if(entry == NULL)
-			break;
-		if(strcmp(cur_proc, entry) == 0) {
-			ds_list_iter_destroy(i);
-			return false;
-		}
-	}
-	ds_list_iter_destroy(i);
-	return true;
-}
-*/
-
 bool is_process_new2(pid_t pid, int sec) {
 	u64 key;
 	void *ret;
@@ -7941,7 +7661,6 @@ bool is_process_new2(pid_t pid, int sec) {
 	ret = btree_lookup64(&theia_process_tree, key);
 	if (ret == NULL) {
 		btree_insert64(&theia_process_tree, key, (void*)1, GFP_KERNEL);
-//		printk("no_new_proc: %lu, %d, %d\n", ++no_new_proc, pid, sec);
 	}
 	mutex_unlock(&theia_process_tree_mutex);
 
@@ -7958,13 +7677,6 @@ void remove_process_from_tree(pid_t pid, int sec) {
 	mutex_lock(&theia_process_tree_mutex);
 	ret = btree_remove64(&theia_process_tree, key);
 	mutex_unlock(&theia_process_tree_mutex);
-
-/*
-	if (ret) {
-		--no_new_proc;
-		printk("exit: %d, %d\n", current->pid, current->start_time.tv_sec);
-	}
-*/
 }
 
 bool is_opened_inode(struct inode *inode) {
@@ -8113,17 +7825,6 @@ void recursive_packahgv_process() {
 	for (i = stack_top-1; i >= 0; --i) {
 		packahgv_process(tsk_stack[i]);
 	}
-
-/*
-	printk("tsk_stack: ");
-	for (i = 0; i < stack_top; ++i) {
-		printk("%d ", tsk_stack[i]->pid);
-	}
-	if (tsk)
-		printk("[%d]", tsk->pid);
-	printk("\n");
-*/
-
 }
 
 void packahgv_read (struct read_ahgv *sys_args) {
@@ -8654,7 +8355,6 @@ int theia_sys_read(unsigned int fd, char __user * buf, size_t count) {
 }
 
 asmlinkage ssize_t shim_read (unsigned int fd, char __user * buf, size_t count) 
-//SHIM_CALL (read, 3, fd, buf, count);
 SHIM_CALL_MAIN(0, record_read(fd, buf, count), replay_read(fd, buf, count), theia_sys_read(fd, buf, count))
 #else
 RET1_COUNT_SHIM3(read, 0, buf, unsigned int, fd, char __user *, buf, size_t, count);
@@ -9145,12 +8845,6 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, 
 				return;
 			}
 		}
-
-#if 0
-		if (is_opened_inode(inode)) { /* already published */
-			pahgv->is_new = false;
-		}
-#endif
 	}
 
 //Yang: temp avoiding the "Text file busy" for spec cpu2006
@@ -9263,17 +8957,6 @@ int theia_sys_open(const char __user * filename, int flags, int mode) {
 
 	rc = sys_open(filename, flags, mode);
 
-// Yang: regardless of the return value, passes the failed syscall also
-//	if (rc >= 0) 
-
-	//handle shm_open
-//	char filename_knl[50] = "";
-//	strncpy_from_user(filename_knl, filename, 50);
-//	if(strstr(filename_knl, "/dev/shm") != NULL) {
-//		//bookkeep the fd
-//		shr_fds
-//	}
-
 	if (ret_access != 0) //it's a new file
 		theia_open_ahg(filename, flags, mode, rc, true);
 	else
@@ -9283,7 +8966,6 @@ int theia_sys_open(const char __user * filename, int flags, int mode) {
 }
 
 asmlinkage long shim_open (const char __user * filename, int flags, int mode)
-//SHIM_CALL (open, 5, filename, flags, mode);
 SHIM_CALL_MAIN(2, record_open(filename, flags, mode), replay_open(filename, flags, mode), theia_sys_open(filename, flags, mode))
 #else
 SIMPLE_SHIM3(open, 2, const char __user *, filename, int, flags, int, mode);
@@ -9412,7 +9094,6 @@ int theia_sys_close(int fd) {
 
 
 asmlinkage long shim_close (int fd) 
-//SHIM_CALL (close, 6, fd);
 SHIM_CALL_MAIN(3, record_close(fd), replay_close(fd), theia_sys_close(fd))
 #else
 SIMPLE_SHIM1(close, 3, int, fd);
@@ -9529,7 +9210,6 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 //#endif
 	//Yang
 	if(theia_chan) {
-//		char buf[1024];
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
@@ -9677,24 +9357,6 @@ show_kernel_stack((u_long*)cur_rsp);
 	// Have to copy arguments out before address space goes away - we will likely need them later
 	argbuf = copy_args (__argv, __envp, &argbuflen, NULL, 0);
 
-/*
-        // why not fullpath? (up to PATH_MAX)
-	get_user(cptr, __argv);
-	if (cptr) {
-		printk("fullpath: %s\n", cptr);
-	}
-
-	// perhaps arguments are helpful
-	int i;
-	for (i = 1;;++i) {
-		get_user(cptr, __argv+i);
-		if (cptr)
-			printk("arg %d: %s\n", i, cptr);
-		else
-			break;
-	}
-*/
-
 	// Hack to support multiple glibcs - make sure that LD_LIBRARY_PATH is in there
 	present = is_libpath_present (current->record_thrd->rp_group, argbuf);
 	if (present) {
@@ -9811,8 +9473,6 @@ printk("Yang prt->rp_next_thread != prt, rc %d\n", rc);
 printk("Yang record_execve before new_syscall_exit, rc %d\n", rc);
 			new_syscall_exit (59, pretval); 
 			write_and_free_kernel_log (prt);
-//Yang
-//			ahg_write_and_free_kernel_log (prt);
 
 			if (atomic_dec_and_test(&prt->rp_group->rg_record_threads)) {
 				rg_lock (prt->rp_group);
@@ -10022,30 +9682,6 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
 
 printk("in theia_start_execve: filename %s\n", filename);
 
-//	printk("is_remote: %d\n", is_remote(current));
-
-/* get_task_fullpath prototype */
-/*
-  char *buf = (char*)vmalloc(PATH_MAX);
-  char *path = get_task_fullpath(current, buf, PATH_MAX);
-  if (path)
-	  printk("SL2: fullpath: %s\n", path);
-  vfree(buf); buf = NULL;
-*/
-
-/* whitelist prototype */
-//  const char *whitelist1;                                                             
-//  whitelist1 = "/home/yang/tests/hello";                                              
-//  whitelist1 = "./abcd";                                              
-
-//  if(strcmp(filename, whitelist1) != 0) { //we only record the whitelisted processes
-//    printk("theia_start_execve, execve filename: %s, not in whitelist\n", filename);
-//    rc = do_execve(filename, __argv, __envp, regs);                                 
-//    theia_execve_ahg(filename, ssh_conn);
-//    KFREE(ssh_conn);
-//    return rc;
-//  }                                                                                   
-
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
 
@@ -10120,60 +9756,7 @@ out_norm:
   
 }
 
-
-
-//  fd = sys_open ("/tmp/test.txt", O_RDWR, 0664 /*mode should be ignored anyway*/);
-//  printk("[theia_start_execve]open /tmp/test.txt fd %d\n", fd);
-//  sys_close(fd);
-  
-//  else {
-////    long rc;
-//    char* linker;
-//    printk("/dev/spec0 ready ! filename: %s\n", filename);
-//    //should be ready to add the process to record_group
-//
-//    //linker = "/lib/theia_libs/ld-linux.so.2";
-//    linker = "/home/yang/theia-es/eglibc-2.15/prefix/lib/ld-linux-x86-64.so.2";
-//
-//    int save_mmap;
-//    save_mmap = 1; 
-//
-//    int fd = sys_open ("/dev/spec0", O_RDWR, 0777 /*mode should be ignored anyway*/);
-//    if (fd < 0) {
-//      printk("[theia_start_execve]open /dev/spec0 failed\n");
-//      set_fs(old_fs);
-//      rc = do_execve(filename, __argv, __envp, regs);                                 
-//      theia_execve_ahg(filename, rc);
-//      return rc;
-//    }
-//
-////Yang: i think pipe is not needed here as we dont have parent process to send to..
-////    int pipe_fds[2];
-////    rc = pipe(pipe_fds);                                                             
-////    if (rc) {                                                                        
-////      printk("[theia_start_execve]pipe_fds fails, %ld\n", rc);
-////      return do_execve(filename, __argv, __envp, regs);
-////    } 
-////    rc = sys_fcntl(pipe_fds[0], 4, 1 /*F_SETFL, FD_CLOEXEC*/);                                  
-////    if (rc) {                                                                        
-////      printk("[theia_start_execve]fcntl pipe_fds[0] fails, %ld\n", rc);
-////      return do_execve(filename, __argv, __envp, regs);
-////    }                                                                                
-////
-////    rc = sys_fcntl(pipe_fds[1], 4, 1 /*F_SETFL, FD_CLOEXEC*/);                                  
-////    if (rc) {                                                                        
-////      printk("[theia_start_execve]fcntl pipe_fds[1] fails, %ld\n", rc);
-////      return do_execve(filename, __argv, __envp, regs);
-////    }                                                                                
-//    set_fs(old_fs);
-//    fork_replay_theia (NULL /*logdir*/, filename, __argv, __envp, linker, save_mmap, fd, -1 /*pipe_fd*/);
-//  }
-
-//}
-
 int shim_execve(const char *filename, const char __user *const __user *__argv, const char __user *const __user *__envp, struct pt_regs *regs) 
-//SHIM_CALL_MAIN(11, record_execve(filename, __argv, __envp, regs), replay_execve(filename, __argv, __envp, regs), theia_sys_execve(filename, __argv, __envp, regs))
-
 SHIM_CALL_MAIN(59, record_execve(filename, __argv, __envp, regs), replay_execve(filename, __argv, __envp, regs), theia_start_execve(filename, __argv, __envp, regs))
 
 void theia_chdir_ahgx(const char __user * filename, long rc, int sysnum)
@@ -10234,12 +9817,6 @@ void theia_fchmodat_ahgx(int dfd, const char __user * filename, int mode, long r
 	theia_dump_at_sd(dfd, filename, mode, rc, sysnum);
 }
 
-THEIA_SHIM3 (mknod, 133, const char __user *, filename, int, mode, unsigned, dev);
-
-THEIA_SHIM2(chmod, 90, const char __user *, filename, mode_t,  mode);
-
-//SIMPLE_SHIM3(lchown16, 16, const char __user *, filename, old_uid_t, user, old_gid_t, group);
-
 void theia_lchown_ahgx(const char __user * filename, uid_t user, gid_t group, long rc, int sysnum)
 {
 	theia_dump_sdd(filename, user, group, rc, sysnum);
@@ -10249,16 +9826,19 @@ void theia_chown_ahgx(const char __user * filename, uid_t user, gid_t group, lon
 {
 	theia_dump_sdd(filename, user, group, rc, sysnum);
 }
-//64port
-THEIA_SHIM3(lchown, 94, const char __user *, filename, uid_t, user, gid_t, group);
-//64port
-//RET1_SHIM2(stat, 18, struct __old_kernel_stat, statbuf, char __user *, filename, struct __old_kernel_stat __user *, statbuf);
 
 void theia_lseek_ahgx(unsigned int fd, off_t offset, unsigned int origin, long rc, int sysnum)
 {
 	theia_dump_ddd(fd, offset, origin, rc, sysnum);
 }
 
+//64port
+THEIA_SHIM3 (mknod, 133, const char __user *, filename, int, mode, unsigned, dev);
+THEIA_SHIM2(chmod, 90, const char __user *, filename, mode_t,  mode);
+THEIA_SHIM2(fchmod, 91, unsigned int, fd, mode_t, mode);
+THEIA_SHIM3(chown, 92, const char __user *, filename, uid_t, user, gid_t, group);
+SIMPLE_SHIM3(fchown, 93, unsigned int, fd, uid_t, user, gid_t, group);
+THEIA_SHIM3(lchown, 94, const char __user *, filename, uid_t, user, gid_t, group);
 THEIA_SHIM3(lseek, 8, unsigned int, fd, off_t, offset, unsigned int, origin);
 
 SIMPLE_SHIM0(getpid, 39);
@@ -10373,16 +9953,6 @@ SIMPLE_REPLAY(mount, 165, char __user *dev_name, char __user *dir_name, char __u
 asmlinkage long shim_mount (char __user *dev_name, char __user *dir_name, char __user * type, unsigned long flags, void __user *data) 
 SHIM_CALL_MAIN(165, record_mount(dev_name, dir_name, type, flags, data), replay_mount(dev_name, dir_name, type, flags, data), theia_sys_mount(dev_name, dir_name, type, flags, data))
 
-
-
-
-//SIMPLE_SHIM5(mount, 21, char __user *, dev_name, char __user *, dir_name, char __user *, type, unsigned long, flags, void __user *, data);
-SIMPLE_SHIM1(oldumount, 22, char __user *, name);
-//64port
-//SIMPLE_SHIM1(setuid16, 23, uid_t, uid);
-//SIMPLE_SHIM0(getuid16, 24);
-SIMPLE_SHIM1(stime, 25, time_t __user*, tptr);
-
 static asmlinkage long 
 record_ptrace(long request, long pid, long addr, long data)
 {
@@ -10442,14 +10012,12 @@ asmlinkage long shim_ptrace(long request, long pid, long addr, long data)
 	SHIM_CALL(ptrace, 101, request, pid, addr, data)
 }
 
-SIMPLE_SHIM1(alarm, 37, unsigned int, seconds);
 //64port
-//RET1_SHIM2(fstat, 28, struct __old_kernel_stat, statbuf, unsigned int, fd, struct __old_kernel_stat __user *, statbuf);
-SIMPLE_SHIM0(pause, 34);
-SIMPLE_SHIM2(utime, 132, char __user *, filename, struct utimbuf __user *, times);
-
 SIMPLE_SHIM2(access, 21, const char __user *, filename, int, mode);
-SIMPLE_SHIM1(nice, 34, int, increment);
+SIMPLE_SHIM1(dup, 32, unsigned int, fildes);
+SIMPLE_SHIM0(pause, 34);
+SIMPLE_SHIM1(alarm, 37, unsigned int, seconds);
+SIMPLE_SHIM2(utime, 132, char __user *, filename, struct utimbuf __user *, times);
 SIMPLE_SHIM0(sync, 162);
 
 void theia_kill_ahgx(int pid, int sig, long rc, int sysnum)
@@ -10481,8 +10049,6 @@ THEIA_SHIM2(kill, 62, int, pid, int, sig);
 THEIA_SHIM2(rename, 82, const char __user *, oldname, const char __user *, newname);
 THEIA_SHIM2(mkdir, 83, const char __user *, pathname, int, mode);
 THEIA_SHIM1(rmdir, 84, const char __user *, pathname);
-
-SIMPLE_SHIM1(dup, 32, unsigned int, fildes);
 
 //Yang
 struct pipe_ahgv {
@@ -10655,7 +10221,6 @@ int theia_sys_pipe(int __user *fildes) {
 }
 
 asmlinkage long shim_pipe (int __user *fildes) 
-//SHIM_CALL(pipe, 22, fildes);
 SHIM_CALL_MAIN(22, record_pipe(fildes), replay_pipe(fildes), theia_sys_pipe(fildes))
 
 RET1_SHIM1(times, 100, struct tms, tbuf, struct tms __user *, tbuf);
@@ -10763,21 +10328,12 @@ replay_brk (unsigned long brk)
 }
 
 asmlinkage unsigned long shim_brk (unsigned long abrk) SHIM_CALL(brk, 12, abrk);
-//SIMPLE_SHIM1 (setgid16, 46, old_gid_t, gid);
-//64port
-//SIMPLE_SHIM1 (setgid16, 46, gid_t, gid);
-//SIMPLE_SHIM0(getgid16, 47);
 
 void theia_signal_ahgx(int sig, __sighandler_t handler, long rc, int sysnum)
 {
 	theia_dump_dd(sig, (int)handler, rc, sysnum);
 }
 
-THEIA_SHIM2(signal, 48, int, sig, __sighandler_t, handler);
-
-//64port
-//SIMPLE_SHIM0(geteuid16, 49);
-//SIMPLE_SHIM0(getegid16, 50);
 SIMPLE_SHIM1(acct, 163, char __user *, name)
 
 void theia_umount_ahgx(const char __user * name, int flags, long rc, int sysnum)
@@ -11056,7 +10612,6 @@ int theia_sys_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg) {
 }
 
 asmlinkage long shim_ioctl (unsigned int fd, unsigned int cmd, unsigned long arg) 
-//SHIM_CALL(ioctl, 54, fd, cmd, arg);
 SHIM_CALL_MAIN(16, record_ioctl(fd, cmd, arg), replay_ioctl(fd, cmd, arg), theia_sys_ioctl(fd, cmd, arg));
 
 static asmlinkage long 
@@ -11144,12 +10699,9 @@ int theia_sys_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg)
 	return rc;
 }
 
-// asmlinkage long shim_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg) SHIM_CALL(fcntl, 72, fd, cmd, arg);
 asmlinkage long shim_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg)
 SHIM_CALL_MAIN(72, record_fcntl(fd, cmd, arg), replay_fcntl(fd, cmd, arg), theia_sys_fcntl(fd, cmd, arg))
 
-SIMPLE_SHIM2(setpgid, 109, pid_t, pid, pid_t, pgid);
-RET1_SHIM1(olduname, 59, struct oldold_utsname, name, struct oldold_utsname __user *, name);
 SIMPLE_SHIM1(umask, 95, int, mask);
 
 void theia_chroot_ahgx(const char __user * filename, long rc, int sysnum)
@@ -11161,9 +10713,6 @@ THEIA_SHIM1(chroot, 161, const char __user *, filename);
 
 RET1_SHIM2(ustat, 136, struct ustat, ubuf, unsigned, dev, struct ustat __user *, ubuf);
 SIMPLE_SHIM2(dup2, 33, unsigned int, oldfd, unsigned int, newfd);
-SIMPLE_SHIM0(getppid, 110);
-SIMPLE_SHIM0(getpgrp, 111);
-SIMPLE_SHIM0(setsid, 112);
 
 //asmlinkage int sys_sigaction(int sig, const struct old_sigaction __user *act, struct old_sigaction __user *oact); /* No prototype for sys_sigaction */
 //64port
@@ -11201,15 +10750,7 @@ asmlinkage int sys_sigaction(int sig, const struct sigaction __user *act, struct
 
 SIMPLE_SHIM0(sgetmask, 68);
 SIMPLE_SHIM1(ssetmask, 69, int, newmask);
-//SIMPLE_SHIM2(setreuid16, 70, old_uid_t, ruid, old_uid_t, euid);
-//64port
-//SIMPLE_SHIM2(setreuid16, 70, uid_t, ruid, uid_t, euid);
-//SIMPLE_SHIM2(setregid16, 71, old_gid_t, rgid, old_gid_t, egid);
-//64port
-//SIMPLE_SHIM2(setregid16, 71, gid_t, rgid, gid_t, egid);
 asmlinkage int sys_sigsuspend(int history0, int history1, old_sigset_t mask); /* No prototype for sys_sigsuspend */
-//64port
-//SIMPLE_SHIM3(sigsuspend, 72, int, history0, int, history1, old_sigset_t, mask);
 RET1_SHIM1(sigpending, 73, old_sigset_t, set, old_sigset_t __user *, set);
 SIMPLE_SHIM2(sethostname, 170, char __user *, name, int, len);
 SIMPLE_RECORD2(setrlimit, 160, unsigned int, resource, struct rlimit __user *, rlim);
@@ -11741,16 +11282,11 @@ void theia_ftruncate_ahgx(unsigned int fd, unsigned long length, long rc, int sy
 THEIA_SHIM2(truncate, 76, const char __user *, path, unsigned long, length);
 THEIA_SHIM2(ftruncate, 77, unsigned int, fd, unsigned long, length);
 
-THEIA_SHIM2(fchmod, 91, unsigned int, fd, mode_t, mode);
-
-//SIMPLE_SHIM3(fchown16, 95, unsigned int, fd, old_uid_t, user, old_gid_t, group);
-//64port
-//SIMPLE_SHIM3(fchown16, 95, unsigned int, fd, uid_t, user, gid_t, group);
-SIMPLE_SHIM2(getpriority, 140, int, which, int, who);
-SIMPLE_SHIM3(setpriority, 141, int, which, int, who, int, niceval);
 RET1_SHIM2(statfs, 137, struct statfs, buf, const char __user *, path, struct statfs __user *, buf);
 RET1_SHIM2(fstatfs, 138, struct statfs, buf, unsigned int, fd, struct statfs __user *, buf)
-SIMPLE_SHIM3(ioperm,173, unsigned long, from, unsigned long, num, int, turn_on);
+SIMPLE_SHIM2(getpriority, 140, int, which, int, who);
+SIMPLE_SHIM3(setpriority, 141, int, which, int, who, int, niceval);
+SIMPLE_SHIM3(ioperm, 173, unsigned long, from, unsigned long, num, int, turn_on);
 
 /* Copied from net/socket.c */
 /* Argument list sizes for sys_socketcall */
@@ -16786,12 +16322,6 @@ replay_sysfs (int option, unsigned long arg1, unsigned long arg2)
 asmlinkage long shim_sysfs (int option, unsigned long arg1, unsigned long arg2) SHIM_CALL(sysfs, 139, option, arg1, arg2);
 
 SIMPLE_SHIM1(personality, 135, u_long, parm);
-//SIMPLE_SHIM1(setfsuid16, 138, old_uid_t, uid);
-//64port
-//SIMPLE_SHIM1(setfsuid16, 138, uid_t, uid);
-//SIMPLE_SHIM1(setfsgid16, 139, old_gid_t, gid);
-//64port
-//SIMPLE_SHIM1(setfsgid16, 139, gid_t, gid);
 RET1_SHIM5(llseek, 140, loff_t, result, unsigned int, fd, unsigned long, offset_high, unsigned long, offset_low, loff_t __user *, result, unsigned int, origin);
 RET1_COUNT_SHIM3(getdents, 78, dirent, unsigned int, fd, struct linux_dirent __user *, dirent, unsigned int, count);
 
@@ -17339,87 +16869,6 @@ replay_mremap (unsigned long addr, unsigned long old_len, unsigned long new_len,
 
 asmlinkage unsigned long shim_mremap (unsigned long addr, unsigned long old_len, unsigned long new_len, unsigned long flags, unsigned long new_addr) SHIM_CALL(mremap, 25, addr, old_len, new_len, flags, new_addr);
 
-//SIMPLE_SHIM3(setresuid16, 164, old_uid_t, ruid, old_uid_t, euid, old_uid_t, suid);
-//64port
-//SIMPLE_SHIM3(setresuid16, 164, uid_t, ruid, uid_t, euid, uid_t, suid);
-
-static asmlinkage long
-//record_getresuid16 (old_uid_t __user *ruid, old_uid_t __user *euid, old_uid_t __user *suid) 
-//64port
-//obsolete: 32bit abi
-record_getresuid16 (uid_t __user *ruid, uid_t __user *euid, uid_t __user *suid) 
-{
-	long rc;
-	//old_uid_t* pretval = NULL;
-//64port
-	uid_t* pretval = NULL;
-
-	new_syscall_enter (165);
-	//rc = sys_getresuid16 (ruid, euid, suid);
-//64port
-	rc = sys_getresuid (ruid, euid, suid);
-	new_syscall_done (165, rc);
-	if (rc >= 0) {
-		//pretval = ARGSKMALLOC(sizeof(old_uid_t)*3, GFP_KERNEL);
-//64port
-		pretval = ARGSKMALLOC(sizeof(uid_t)*3, GFP_KERNEL);
-		if (pretval == NULL) {
-			printk("record_getresuid16: can't allocate buffer\n");
-			return -ENOMEM;
-		}
-//		if (copy_from_user (pretval, ruid, sizeof(old_uid_t)) ||
-//		    copy_from_user (pretval+1, euid, sizeof(old_uid_t)) ||
-//		    copy_from_user (pretval+2, suid, sizeof(old_uid_t))) {
-//			ARGSKFREE (pretval, sizeof(old_uid_t)*3);
-//64port
-		if (copy_from_user (pretval, ruid, sizeof(uid_t)) ||
-		    copy_from_user (pretval+1, euid, sizeof(uid_t)) ||
-		    copy_from_user (pretval+2, suid, sizeof(uid_t))) {
-			ARGSKFREE (pretval, sizeof(uid_t)*3);
-			return -EFAULT;
-		}
-	}
-	new_syscall_exit (165, pretval);
-
-	return rc;
-}
-
-static asmlinkage long
-//replay_getresuid16 (old_uid_t __user *ruid, old_uid_t __user *euid, old_uid_t __user *suid) 
-//64port
-replay_getresuid16 (uid_t __user *ruid, uid_t __user *euid, uid_t __user *suid) 
-{
-	//old_uid_t* retparams = NULL;
-//64port
-	uid_t* retparams = NULL;
-	long rc = get_next_syscall (165, (char **) &retparams);
-	if (rc >= 0) {
-		if (retparams) {
-//			if (copy_to_user (ruid, retparams, sizeof(old_uid_t)) ||
-//			    copy_to_user (euid, retparams+1, sizeof(old_uid_t)) ||
-//			    copy_to_user (suid, retparams+2, sizeof(old_uid_t))) {
-//64port
-			if (copy_to_user (ruid, retparams, sizeof(uid_t)) ||
-			    copy_to_user (euid, retparams+1, sizeof(uid_t)) ||
-			    copy_to_user (suid, retparams+2, sizeof(uid_t))) {
-				printk ("replay_getresuid16: pid %d cannot copy uids to user\n", current->pid);
-			}
-			//argsconsume(current->replay_thrd->rp_record_thread, 3*sizeof(old_uid_t));
-//64port
-			argsconsume(current->replay_thrd->rp_record_thread, 3*sizeof(uid_t));
-		} else {
-			printk ("getresuid16 has return values but non-negative rc?\n");
-		}
-	}
-	return rc;
-}
-
-//asmlinkage long shim_getresuid16 (old_uid_t __user *ruid, old_uid_t __user *euid, old_uid_t __user *suid) SHIM_CALL(getresuid16, 165, ruid, euid, suid);
-//64port
-//asmlinkage long shim_getresuid16 (uid_t __user *ruid, uid_t __user *euid, uid_t __user *suid) SHIM_CALL(getresuid16, 165, ruid, euid, suid);
-
-// I believe vm86 is deterministic, so don't intercept it
-
 static asmlinkage long 
 record_poll (struct pollfd __user *ufds, unsigned int nfds, long timeout_msecs)
 {
@@ -17541,84 +16990,6 @@ replay_poll (struct pollfd __user *ufds, unsigned int nfds, long timeout_msecs)
 }
 
 asmlinkage long shim_poll (struct pollfd __user *ufds, unsigned int nfds, long timeout_msecs) SHIM_CALL(poll, 7, ufds, nfds, timeout_msecs);
-
-//SIMPLE_SHIM3(setresgid16, 170, old_gid_t, rgid, old_gid_t, egid, old_gid_t, sgid);
-//64port
-//SIMPLE_SHIM3(setresgid16, 170, gid_t, rgid, gid_t, egid, gid_t, sgid);
-
-static asmlinkage long
-//record_getresgid16 (old_gid_t __user *rgid, old_gid_t __user *egid, old_gid_t __user *sgid) 
-//64port
-record_getresgid16 (gid_t __user *rgid, gid_t __user *egid, gid_t __user *sgid) 
-{
-	long rc;
-	//old_gid_t* pretval = NULL;
-//64port
-	gid_t* pretval = NULL;
-
-	new_syscall_enter (171);
-	//rc = sys_getresgid16 (rgid, egid, sgid);
-//64port
-	rc = sys_getresgid (rgid, egid, sgid);
-	new_syscall_done (171, rc);
-	if (rc >= 0) {
-		//pretval = ARGSKMALLOC(sizeof(old_gid_t)*3, GFP_KERNEL);
-//64port
-		pretval = ARGSKMALLOC(sizeof(gid_t)*3, GFP_KERNEL);
-		if (pretval == NULL) {
-			printk("record_getresgid16: can't allocate buffer\n");
-			return -ENOMEM;
-		}
-//		if (copy_from_user (pretval, rgid, sizeof(old_gid_t)) ||
-//		    copy_from_user (pretval+1, egid, sizeof(old_gid_t)) ||
-//		    copy_from_user (pretval+2, sgid, sizeof(old_gid_t))) {
-//			ARGSKFREE (pretval, sizeof(old_gid_t)*3);
-//64port
-		if (copy_from_user (pretval, rgid, sizeof(gid_t)) ||
-		    copy_from_user (pretval+1, egid, sizeof(gid_t)) ||
-		    copy_from_user (pretval+2, sgid, sizeof(gid_t))) {
-			ARGSKFREE (pretval, sizeof(gid_t)*3);
-			return -EFAULT;
-		}
-	}
-	new_syscall_exit (171, pretval);
-
-	return rc;
-}
-
-static asmlinkage long
-//replay_getresgid16 (old_gid_t __user *rgid, old_gid_t __user *egid, old_gid_t __user *sgid) 
-//64port
-replay_getresgid16 (gid_t __user *rgid, gid_t __user *egid, gid_t __user *sgid) 
-{
-//	old_gid_t* retparams = NULL;
-//64port
-	gid_t* retparams = NULL;
-	long rc = get_next_syscall (171, (char **) &retparams);
-	if (rc >= 0) {
-		if (retparams) {
-//			if (copy_to_user (rgid, retparams, sizeof(old_gid_t)) ||
-//			    copy_to_user (egid, retparams+1, sizeof(old_gid_t)) ||
-//			    copy_to_user (sgid, retparams+2, sizeof(old_gid_t))) {
-//64port
-			if (copy_to_user (rgid, retparams, sizeof(gid_t)) ||
-			    copy_to_user (egid, retparams+1, sizeof(gid_t)) ||
-			    copy_to_user (sgid, retparams+2, sizeof(gid_t))) {
-				printk ("replay_getresgid16: pid %d cannot copy gids to user\n", current->pid);
-			}
-			//argsconsume(current->replay_thrd->rp_record_thread, 3*sizeof(old_gid_t));
-//64port
-			argsconsume(current->replay_thrd->rp_record_thread, 3*sizeof(gid_t));
-		} else {
-			printk ("getresgid16 has return values but non-negative rc?\n");
-		}
-	}
-	return rc;
-}
-
-//asmlinkage long shim_getresgid16 (old_gid_t __user *rgid, old_gid_t __user *egid, old_gid_t __user *sgid) SHIM_CALL(getresgid16, 171, rgid, egid, sgid);
-//64port
-//asmlinkage long shim_getresgid16 (gid_t __user *rgid, gid_t __user *egid, gid_t __user *sgid) SHIM_CALL(getresgid16, 171, rgid, egid, sgid);
 
 asmlinkage long 
 record_prctl (int option, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5)
@@ -18194,13 +17565,7 @@ replay_pwrite64(unsigned int fd, const char __user *buf, size_t count, loff_t po
 }
 
 asmlinkage long shim_pread64(unsigned int fd, char __user *buf, size_t count, loff_t pos) SHIM_CALL(pread64, 17, fd, buf, count, pos);
-
-//RET1_COUNT_SHIM4(pread64, 180, buf, unsigned int, fd, char __user *, buf, size_t, count, loff_t, pos);
 asmlinkage long shim_pwrite64(unsigned int fd, const char __user *buf, size_t count, loff_t pos) SHIM_CALL(pwrite64, 18, fd, buf, count, pos);
-//SIMPLE_SHIM4(pwrite64, 181, unsigned int, fd, const char __user *, buf, size_t, count, loff_t, pos);
-//SIMPLE_SHIM3(chown16, 182, const char __user *, filename, old_uid_t, user, old_gid_t, group);
-//64port
-//SIMPLE_SHIM3(chown16, 182, const char __user *, filename, uid_t, user, gid_t, group);
 
 static asmlinkage long 
 record_getcwd (char __user *buf, unsigned long size) 
@@ -18303,10 +17668,8 @@ replay_capget (cap_user_header_t header, cap_user_data_t dataptr)
 }
 
 asmlinkage long shim_capget (cap_user_header_t header, cap_user_data_t dataptr) SHIM_CALL(capget, 125, header, dataptr)
-
 RET1_SHIM2(capset, 126, struct __user_cap_header_struct, header, cap_user_header_t, header, const cap_user_data_t, data);
-/* sigaltstack should be deterministic, so do not intercept */
-RET1_SHIM4(sendfile, 40, off_t, offset, int, out_fd, int, in_fd, off_t __user *, offset, size_t, count);
+RET1_SHIM4(sendfile64, 40, off_t, offset, int, out_fd, int, in_fd, off_t __user *, offset, size_t, count);
 
 void 
 record_vfork_handler (struct task_struct* tsk)
@@ -18893,41 +18256,8 @@ int theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, un
 }
 
 asmlinkage long shim_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff) 
-//SHIM_CALL(mmap_pgoff, 192, addr, len, prot, flags, fd, pgoff);
 SHIM_CALL_MAIN(9, record_mmap_pgoff(addr, len, prot, flags, fd, pgoff), replay_mmap_pgoff(addr, len, prot, flags, fd, pgoff), theia_sys_mmap(addr, len, prot, flags, fd, pgoff))
 
-//64port
-//SIMPLE_SHIM2(truncate64, 193, const char __user *, path, loff_t, length);
-//SIMPLE_SHIM2(ftruncate64, 194, unsigned int, fd, loff_t, length);
-
-//64port
-//static asmlinkage long
-//record_stat64(char __user *filename, struct stat64 __user *statbuf) {
-//	long rc;
-//	struct stat64 *pretval = NULL;
-//
-//	new_syscall_enter (195);
-//	rc = sys_stat64 (filename, statbuf);
-//	new_syscall_done (195, rc);
-//	if (rc >= 0 && statbuf) {
-//
-//		pretval = ARGSKMALLOC (sizeof(struct stat64), GFP_KERNEL);
-//
-//		if (pretval == NULL) {
-//			printk ("record_stat64: can't allocate buffer\n");
-//			return -ENOMEM;
-//		}
-//		if (copy_from_user (pretval, statbuf, sizeof (struct stat64))) {
-//			printk ("record_stat64: can't copy to buffer\n");
-//			ARGSKFREE(pretval, sizeof(struct stat64));
-//			pretval = NULL;
-//			rc = -EFAULT;
-//		}
-//	}
-//
-//	new_syscall_exit (195, pretval);
-//	return rc;
-//}
 static asmlinkage long
 record_newstat(char __user *filename, struct stat __user *statbuf) {
 	long rc;
@@ -18956,46 +18286,10 @@ record_newstat(char __user *filename, struct stat __user *statbuf) {
 	return rc;
 }
 
-//RET1_REPLAY (stat64, 195, struct stat64, statbuf, char __user *filename, struct stat64 __user *statbuf);
 //64port
 RET1_REPLAY (newstat, 4, struct stat, statbuf, char __user *filename, struct stat __user *statbuf);
-
-//asmlinkage long shim_stat64(char __user *filename, struct stat64 __user *statbuf) SHIM_CALL(stat64, 195, filename, statbuf);
-//64port
 asmlinkage long shim_newstat(char __user *filename, struct stat __user *statbuf) SHIM_CALL(newstat, 4, filename, statbuf);
 
-//RET1_SHIM2(stat64, 195, struct stat64, statbuf, char __user *, filename, struct stat64 __user *, statbuf);
-//RET1_SHIM2(lstat64, 196, struct stat64, statbuf, char __user *, filename, struct stat64 __user *, statbuf);
-//RET1_SHIM2(fstat64, 197, struct stat64, statbuf, unsigned long, fd, struct stat64 __user *, statbuf);
-
-//64port
-//static asmlinkage long
-//record_lstat64(char __user *filename, struct stat64 __user *statbuf) {
-//	long rc;
-//	struct stat64 *pretval = NULL;
-//
-//	new_syscall_enter (196);
-//	rc = sys_lstat64 (filename, statbuf);
-//	new_syscall_done (196, rc);
-//	if (rc >= 0 && statbuf) {
-//
-//		pretval = ARGSKMALLOC (sizeof(struct stat64), GFP_KERNEL);
-//
-//		if (pretval == NULL) {
-//			printk ("record_stat64: can't allocate buffer\n");
-//			return -ENOMEM;
-//		}
-//		if (copy_from_user (pretval, statbuf, sizeof (struct stat64))) {
-//			printk ("record_stat64: can't copy to buffer\n");
-//			ARGSKFREE(pretval, sizeof(struct stat64));
-//			pretval = NULL;
-//			rc = -EFAULT;
-//		}
-//	}
-//
-//	new_syscall_exit (196, pretval);
-//	return rc;
-//}
 static asmlinkage long
 record_newlstat(char __user *filename, struct stat __user *statbuf) {
 	long rc;
@@ -19024,43 +18318,12 @@ record_newlstat(char __user *filename, struct stat __user *statbuf) {
 	return rc;
 }
 
-//RET1_REPLAY (lstat64, 196, struct stat64, statbuf, char __user *filename, struct stat64 __user *statbuf);
 //64port
 RET1_REPLAY (newlstat, 6, struct stat, statbuf, char __user *filename, struct stat __user *statbuf);
-
-//asmlinkage long shim_lstat64(char __user *filename, struct stat64 __user *statbuf) SHIM_CALL(lstat64, 196, filename, statbuf);
-//64port
 asmlinkage long shim_newlstat(char __user *filename, struct stat __user *statbuf) SHIM_CALL(newlstat, 6, filename, statbuf);
 
 
 //64port
-//static asmlinkage long
-//record_fstat64(int fd, struct stat64 __user *statbuf) {
-//	long rc;
-//	struct stat64 *pretval = NULL;
-//
-//	new_syscall_enter (197);
-//	rc = sys_fstat64 (fd, statbuf);
-//	new_syscall_done (197, rc);
-//	if (rc >= 0 && statbuf) {
-//
-//		pretval = ARGSKMALLOC (sizeof(struct stat64), GFP_KERNEL);
-//
-//		if (pretval == NULL) {
-//			printk ("record_fstat64: can't allocate buffer\n");
-//			return -ENOMEM;
-//		}
-//		if (copy_from_user (pretval, statbuf, sizeof (struct stat64))) {
-//			printk ("record_fstat64: can't copy to buffer\n");
-//			ARGSKFREE(pretval, sizeof(struct stat64));
-//			pretval = NULL;
-//			rc = -EFAULT;
-//		}
-//	}
-//
-//	new_syscall_exit (197, pretval);
-//	return rc;
-//}
 static asmlinkage long
 record_newfstat(int fd, struct stat __user *statbuf) {
 	long rc;
@@ -19090,20 +18353,21 @@ printk("[%s|%d] in record_newfstat: sizeof stat: %d\n", __func__, __LINE__, size
 	return rc;
 }
 
-//RET1_REPLAY (fstat64, 197, struct stat64, statbuf, int fd, struct stat64 __user *statbuf);
 //64port
 RET1_REPLAY (newfstat, 5, struct stat, statbuf, int fd, struct stat __user *statbuf);
 
-//asmlinkage long shim_fstat64(int fd, struct stat64 __user *statbuf) SHIM_CALL(fstat64, 197, fd, statbuf);
 //64port
 asmlinkage long shim_newfstat(int fd, struct stat64 __user *statbuf) SHIM_CALL(newfstat, 5, fd, statbuf);
 
 //64port
-//SIMPLE_SHIM3(lchown32, 198, const char __user *, filename, uid_t, user, gid_t, group);
 SIMPLE_SHIM0(getuid, 102);
 SIMPLE_SHIM0(getgid, 104);
 SIMPLE_SHIM0(geteuid, 107);
 SIMPLE_SHIM0(getegid, 108);
+SIMPLE_SHIM2(setpgid, 109, pid_t, pid, pid_t, pgid);
+SIMPLE_SHIM0(getppid, 110);
+SIMPLE_SHIM0(getpgrp, 111);
+SIMPLE_SHIM0(setsid, 112);
 SIMPLE_SHIM2(setreuid, 113, uid_t, ruid, uid_t, euid);
 SIMPLE_SHIM2(setregid, 114, gid_t, rgid, gid_t, egid);
 
@@ -19148,7 +18412,6 @@ replay_getgroups (int gidsetsize, gid_t __user *grouplist)
 asmlinkage long shim_getgroups (int gidsetsize, gid_t __user *grouplist) SHIM_CALL(getgroups, 115, gidsetsize, grouplist);
 
 SIMPLE_SHIM2(setgroups, 116, int, gidsetsize, gid_t __user *, grouplist);
-SIMPLE_SHIM3(fchown, 93, unsigned int, fd, uid_t, user, gid_t, group);
 SIMPLE_SHIM3(setresuid, 117, uid_t, ruid, uid_t, euid, uid_t, suid);
 
 static asmlinkage long
@@ -19250,8 +18513,6 @@ replay_getresgid (gid_t __user *rgid, gid_t __user *egid, gid_t __user *sgid)
 }
 
 asmlinkage long shim_getresgid (gid_t __user *rgid, gid_t __user *egid, gid_t __user *sgid) SHIM_CALL(getresgid, 120, rgid, egid, sgid);
-
-THEIA_SHIM3(chown, 92, const char __user *, filename, uid_t, user, gid_t, group);
 
 //Yang
 struct setuid_ahgv {
@@ -19432,75 +18693,6 @@ asmlinkage long shim_madvise (unsigned long start, size_t len_in, int behavior) 
 
 RET1_COUNT_SHIM3(getdents64, 217, dirent, unsigned int, fd, struct linux_dirent64 __user *, dirent, unsigned int, count);
 
-//64port
-//static asmlinkage long 
-//record_fcntl64 (unsigned int fd, unsigned int cmd, unsigned long arg)
-//{
-//	char* recbuf = NULL;
-//	long rc;
-//
-//	new_syscall_enter (221);
-//	rc = sys_fcntl64 (fd, cmd, arg);
-//	new_syscall_done (221, rc);
-//	if (rc >= 0) {
-//		if (cmd == F_GETLK) {
-//			recbuf = ARGSKMALLOC(sizeof(u_long) + sizeof(struct flock), GFP_KERNEL);
-//			if (!recbuf) {
-//				printk ("record_fcntl: can't allocate return buffer\n");
-//				return -ENOMEM;
-//			}
-//			*(u_long *) recbuf = sizeof(struct flock);
-//			if (copy_from_user(recbuf + sizeof(u_long), (struct flock __user *)arg, sizeof(struct flock))) {
-//				printk("record_fcntl64: faulted on readback\n");
-//				KFREE(recbuf);
-//				return -EFAULT;
-//			}
-//		} else if (cmd == F_GETLK64) {
-//			recbuf = ARGSKMALLOC(sizeof(u_long) + sizeof(struct flock64), GFP_KERNEL);
-//			if (!recbuf) {
-//				printk ("record_fcntl64: can't allocate return buffer\n");
-//				return -ENOMEM;
-//			}
-//			*((u_long *) recbuf) = sizeof(struct flock64);
-//			if (copy_from_user(recbuf + sizeof(u_long), (struct flock64 __user *)arg, sizeof(struct flock64))) {
-//				printk("record_fcntl64: faulted on readback\n");
-//				KFREE(recbuf);
-//				return -EFAULT;
-//			}
-//		} else if (cmd == F_GETOWN_EX) {
-//			recbuf = ARGSKMALLOC(sizeof(u_long) + sizeof(struct f_owner_ex), GFP_KERNEL);
-//			if (!recbuf) {
-//				printk ("record_fcntl64: can't allocate return buffer\n");
-//				return -ENOMEM;
-//			}
-//			*((u_long *) recbuf) = sizeof(struct f_owner_ex);
-//			if (copy_from_user(recbuf + sizeof(u_long), (struct f_owner_ex __user *)arg, sizeof(struct f_owner_ex))) {
-//				printk("record_fcntl64: faulted on readback\n");
-//				KFREE(recbuf);
-//				return -EFAULT;
-//			}
-//		}
-//	}
-//	new_syscall_exit (221, recbuf);
-//
-//	return rc;
-//}
-//
-//static asmlinkage long 
-//replay_fcntl64 (unsigned int fd, unsigned int cmd, unsigned long arg)
-//{
-//	char* retparams = NULL;
-//	long rc = get_next_syscall (221, &retparams);
-//	if (retparams) {
-//		u_long bytes = *((u_long *) retparams);
-//		if (copy_to_user((void __user *)arg, retparams + sizeof(u_long), bytes)) return syscall_mismatch();
-//		argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + bytes);
-//	}
-//	return rc;
-//}
-//
-//asmlinkage long shim_fcntl64 (unsigned int fd, unsigned int cmd, unsigned long arg) SHIM_CALL(fcntl64, 221, fd, cmd, arg);
-
 SIMPLE_SHIM0(gettid, 186);
 SIMPLE_SHIM3(readahead, 187, int, fd, loff_t, offset, size_t, count);
 SIMPLE_SHIM5(setxattr, 188, const char __user *, path, const char __user *, name, const void __user *, value, size_t, size, int, flags);
@@ -19516,8 +18708,6 @@ SIMPLE_SHIM2(removexattr, 197, const char __user *, path, const char __user *, n
 SIMPLE_SHIM2(lremovexattr, 198, const char __user *, path, const char __user *, name);
 SIMPLE_SHIM2(fremovexattr, 199, int, fd, const char __user *, name);
 SIMPLE_SHIM2(tkill, 200, int, pid, int, sig);
-
-RET1_SHIM4(sendfile64, 239, loff_t, offset, int, out_fd, int, in_fd, loff_t __user *, offset, size_t, count);
 
 #ifdef TIME_TRICK
 static inline long 
@@ -20084,11 +19274,8 @@ asmlinkage long shim_clock_gettime (const clockid_t which_clock, struct timespec
 #endif
 RET1_SHIM2(clock_getres, 229, struct timespec, tp, const clockid_t, which_clock, struct timespec __user *, tp);
 RET1_SHIM4(clock_nanosleep, 230, struct timespec, rmtp, const clockid_t, which_clock, int, flags, const struct timespec __user *, rqtp, struct timespec __user *, rmtp);
-RET1_SHIM3(statfs64, 268, struct statfs64, buf, const char __user *, path, size_t, sz, struct statfs64 __user *, buf);
-RET1_SHIM3(fstatfs64, 269, struct statfs64, buf, unsigned int, fd, size_t, sz, struct statfs64 __user *, buf);
 SIMPLE_SHIM3(tgkill, 234, int, tgid, int, pid, int, sig);
 SIMPLE_SHIM2(utimes, 235, char __user *, filename, struct timeval __user *, utimes);
-SIMPLE_SHIM4(fadvise64_64, 272, int, fd, loff_t, offset, loff_t, len, int, advice);
 SIMPLE_SHIM6(mbind, 237, unsigned long, start, unsigned long, len, unsigned long, mode, unsigned long __user *, nmask, unsigned long, maxnode, unsigned, flags);
 
 static asmlinkage long 
@@ -20276,7 +19463,6 @@ SIMPLE_SHIM5(fchownat, 260, int, dfd, const char __user *, filename, uid_t, user
 
 SIMPLE_SHIM3(futimesat, 261, int, dfd, char __user *, filename, struct timeval __user *,utimes);
 //64port
-//RET1_SHIM4(fstatat64, 300, struct stat64, statbuf, int, dfd, char __user *, filename, struct stat64 __user *, statbuf, int, flag);
 RET1_SHIM4(newfstatat, 262, struct stat, statbuf, int, dfd, char __user *, filename, struct stat __user *, statbuf, int, flag);
 
 SIMPLE_SHIM3(unlinkat, 263, int, dfd, const char __user *, pathname, int, flag);
@@ -20289,8 +19475,6 @@ SIMPLE_SHIM3(symlinkat, 266, const char __user *, oldname, int, newdfd, const ch
 RET1_COUNT_SHIM4(readlinkat, 267, buf, int, dfd, const char __user *, path, char __user *, buf, int, bufsiz)
 
 SIMPLE_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
-//THEIA_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
-
 SIMPLE_SHIM3(faccessat, 269, int, dfd, const char __user *, filename, int, mode);
 
 static asmlinkage long 
@@ -20520,8 +19704,8 @@ replay_splice (int fd_in, loff_t __user *off_in, int fd_out, loff_t __user *off_
 
 asmlinkage long shim_splice (int fd_in, loff_t __user *off_in, int fd_out, loff_t __user *off_out, size_t len, unsigned int flags) SHIM_CALL(splice, 275, fd_in, off_in, fd_out, off_out, len, flags);
 
-SIMPLE_SHIM4(sync_file_range, 277, int, fd, loff_t, offset, loff_t, nbytes, unsigned int, flags);
 SIMPLE_SHIM4(tee, 276, int, fdin, int, fdout, size_t, len, unsigned int, flags);
+SIMPLE_SHIM4(sync_file_range, 277, int, fd, loff_t, offset, loff_t, nbytes, unsigned int, flags);
 SIMPLE_SHIM4(vmsplice, 278, int, fd, const struct iovec __user *, iov, unsigned long, nr_segs, unsigned int, flags);
 
 static asmlinkage long 
@@ -21266,18 +20450,9 @@ static ssize_t write_log_data (struct file* file, loff_t* ppos, struct record_th
 
 	/* Now write ancillary data - count of bytes goes first */
 	data_len = 0;
-/*
-  if (isAhg) {
-    list_for_each_entry_reverse (node, &prect->ahg_argsalloc_list, list) {
-      data_len += node->pos - node->head;
-    }
-  }
-  else {
-*/
     list_for_each_entry_reverse (node, &prect->rp_argsalloc_list, list) {
       data_len += node->pos - node->head;
     }
-//  }
 	MPRINT ("Ancillary data written is %lu\n", data_len);
 	copyed = vfs_write(file, (char *) &data_len, sizeof(data_len), ppos);
 	if (copyed != sizeof(data_len)) {
@@ -21285,20 +20460,6 @@ static ssize_t write_log_data (struct file* file, loff_t* ppos, struct record_th
 		KFREE (pvec);
 		return -EINVAL;
   }
-/*
-  if (isAhg) {
-    list_for_each_entry_reverse (node, &prect->ahg_argsalloc_list, list) {
-      MPRINT ("Pid %d ahg argssize write buffer slab size %d\n", current->pid, node->pos - node->head);
-      pvec[kcnt].iov_base = node->head;
-      pvec[kcnt].iov_len = node->pos - node->head;
-      if (++kcnt == UIO_MAXIOV) {
-        copyed = vfs_writev (file, pvec, kcnt, ppos);
-        kcnt = 0;
-      }
-    }
-  }
-  else {
-*/
     list_for_each_entry_reverse (node, &prect->rp_argsalloc_list, list) {
       MPRINT ("Pid %d argssize write buffer slab size %d\n", current->pid, node->pos - node->head);
       pvec[kcnt].iov_base = node->head;
@@ -21308,9 +20469,6 @@ static ssize_t write_log_data (struct file* file, loff_t* ppos, struct record_th
         kcnt = 0;
       }
     }
-//  }
-
-
 	vfs_writev (file, pvec, kcnt, ppos); // Write any remaining data before exit
 	
 	DPRINT ("Wrote %d bytes to the file for sysnum %d\n", copyed, psr->sysnum);
