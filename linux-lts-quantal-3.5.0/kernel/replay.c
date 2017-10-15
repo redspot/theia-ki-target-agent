@@ -3270,6 +3270,8 @@ static void* argsalloc (size_t size)
 
 	node = list_first_entry(&prect->rp_argsalloc_list, struct argsalloc_node, list);
 
+printk("in argsalloc: size %lu\n", size);
+
 	// check to see if we've allocated a slab and if we have enough space left in the slab
 	if (unlikely(list_empty(&prect->rp_argsalloc_list) || ((node->head + node->size - node->pos) < size))) {
 		int rc;
@@ -3423,6 +3425,7 @@ argsconsume (struct record_thread* prect, u_long size)
 		dump_stack();
 		BUG();
 	}
+printk("in argsconsume: size %lu\n", size);
 	node->pos += size;
 }
 
@@ -5659,9 +5662,10 @@ get_next_syscall_enter (struct replay_thread* prt, struct replay_group* prg, int
 		retval = 0;
 	} else {
 		retval = *((long *) argshead(prect));
+printk("argsconsume called at %d, size: %lu\n", __LINE__, sizeof(long));
 		argsconsume(prect, sizeof(long));
 	}
-	MPRINT ("Replay Pid %d, index %ld sys %d retval %ld\n", current->pid, prt->rp_out_ptr, psr->sysnum, retval);
+	MPRINT ("Replay Pid %d, index %ld sys %d retval %lx\n", current->pid, prt->rp_out_ptr, psr->sysnum, retval);
 
 	// Pin can interrupt, so we need to save the stop clock in case we need to resume
 	prt->rp_stop_clock_save = prt->rp_expected_clock;
@@ -6080,7 +6084,7 @@ long check_clock_before_syscall (int syscall)
 		// Pin calls clone instead of vfork and enforces the vfork semantics at
 		// the Pin layer, we need to know this so that we can call replay_clone
 		// in place of the vfork
-		if (syscall == 190) {
+		if (syscall == 58) {
 			prt->is_pin_vfork = 1;
 		}
 	}
@@ -6834,6 +6838,7 @@ static asmlinkage long replay_##name (args)				\
 									\
 	if (retparams) {						\
 		if (copy_to_user (dest, retparams, size)) printk ("replay_##name: pid %d cannot copy to user\n", current->pid); \
+printk("argsconsume called at %d, size: %lu\n", __LINE__, size); \
 		argsconsume (current->replay_thrd->rp_record_thread, size); \
 	}								\
 									\
@@ -14830,9 +14835,9 @@ asmlinkage long shim_syslog (int type, char __user *buf, int len) SHIM_CALL(sysl
 
 RET1_SHIM3(setitimer, 38, struct itimerval, ovalue, int, which, struct itimerval __user *, value, struct itimerval __user *, ovalue);
 RET1_SHIM2(getitimer, 36, struct itimerval, value, int, which, struct itimerval __user *, value);
-RET1_SHIM2(newstat, 106, struct stat, statbuf, char __user *, filename, struct stat __user *, statbuf);
-RET1_SHIM2(newlstat, 107, struct stat, statbuf, char __user *, filename, struct stat __user *, statbuf);
-RET1_SHIM2(newfstat, 108, struct stat, statbuf, unsigned int, fd, struct stat __user *, statbuf);
+//RET1_SHIM2(newstat, 106, struct stat, statbuf, char __user *, filename, struct stat __user *, statbuf);
+//RET1_SHIM2(newlstat, 107, struct stat, statbuf, char __user *, filename, struct stat __user *, statbuf);
+//RET1_SHIM2(newfstat, 108, struct stat, statbuf, unsigned int, fd, struct stat __user *, statbuf);
 RET1_SHIM1(uname, 63, struct old_utsname, name, struct old_utsname __user *, name);
 // I believe ptregs_iopl is deterministic, so don't intercept it
 SIMPLE_SHIM0(vhangup, 153);
@@ -17713,7 +17718,7 @@ record_arch_prctl (int code, unsigned long addr)
         }
 			}
 	}
-	new_syscall_exit (158, NULL);
+	new_syscall_exit (158, pretval);
 
 	return rc;
 }
@@ -18924,7 +18929,7 @@ SHIM_CALL_MAIN(9, record_mmap_pgoff(addr, len, prot, flags, fd, pgoff), replay_m
 //	return rc;
 //}
 static asmlinkage long
-record_stat(char __user *filename, struct stat __user *statbuf) {
+record_newstat(char __user *filename, struct stat __user *statbuf) {
 	long rc;
 	struct stat *pretval = NULL;
 
@@ -18953,11 +18958,11 @@ record_stat(char __user *filename, struct stat __user *statbuf) {
 
 //RET1_REPLAY (stat64, 195, struct stat64, statbuf, char __user *filename, struct stat64 __user *statbuf);
 //64port
-RET1_REPLAY (stat, 4, struct stat, statbuf, char __user *filename, struct stat __user *statbuf);
+RET1_REPLAY (newstat, 4, struct stat, statbuf, char __user *filename, struct stat __user *statbuf);
 
 //asmlinkage long shim_stat64(char __user *filename, struct stat64 __user *statbuf) SHIM_CALL(stat64, 195, filename, statbuf);
 //64port
-asmlinkage long shim_stat(char __user *filename, struct stat __user *statbuf) SHIM_CALL(stat, 4, filename, statbuf);
+asmlinkage long shim_newstat(char __user *filename, struct stat __user *statbuf) SHIM_CALL(newstat, 4, filename, statbuf);
 
 //RET1_SHIM2(stat64, 195, struct stat64, statbuf, char __user *, filename, struct stat64 __user *, statbuf);
 //RET1_SHIM2(lstat64, 196, struct stat64, statbuf, char __user *, filename, struct stat64 __user *, statbuf);
@@ -18992,7 +18997,7 @@ asmlinkage long shim_stat(char __user *filename, struct stat __user *statbuf) SH
 //	return rc;
 //}
 static asmlinkage long
-record_lstat(char __user *filename, struct stat __user *statbuf) {
+record_newlstat(char __user *filename, struct stat __user *statbuf) {
 	long rc;
 	struct stat *pretval = NULL;
 
@@ -19021,11 +19026,11 @@ record_lstat(char __user *filename, struct stat __user *statbuf) {
 
 //RET1_REPLAY (lstat64, 196, struct stat64, statbuf, char __user *filename, struct stat64 __user *statbuf);
 //64port
-RET1_REPLAY (lstat, 6, struct stat, statbuf, char __user *filename, struct stat __user *statbuf);
+RET1_REPLAY (newlstat, 6, struct stat, statbuf, char __user *filename, struct stat __user *statbuf);
 
 //asmlinkage long shim_lstat64(char __user *filename, struct stat64 __user *statbuf) SHIM_CALL(lstat64, 196, filename, statbuf);
 //64port
-asmlinkage long shim_lstat(char __user *filename, struct stat __user *statbuf) SHIM_CALL(lstat, 6, filename, statbuf);
+asmlinkage long shim_newlstat(char __user *filename, struct stat __user *statbuf) SHIM_CALL(newlstat, 6, filename, statbuf);
 
 
 //64port
@@ -19057,7 +19062,7 @@ asmlinkage long shim_lstat(char __user *filename, struct stat __user *statbuf) S
 //	return rc;
 //}
 static asmlinkage long
-record_fstat(int fd, struct stat __user *statbuf) {
+record_newfstat(int fd, struct stat __user *statbuf) {
 	long rc;
 	struct stat *pretval = NULL;
 
@@ -19067,6 +19072,7 @@ record_fstat(int fd, struct stat __user *statbuf) {
 	if (rc >= 0 && statbuf) {
 
 		pretval = ARGSKMALLOC (sizeof(struct stat), GFP_KERNEL);
+printk("[%s|%d] in record_newfstat: sizeof stat: %d\n", __func__, __LINE__, sizeof(struct stat));
 
 		if (pretval == NULL) {
 			printk ("record_fstat: can't allocate buffer\n");
@@ -19086,11 +19092,11 @@ record_fstat(int fd, struct stat __user *statbuf) {
 
 //RET1_REPLAY (fstat64, 197, struct stat64, statbuf, int fd, struct stat64 __user *statbuf);
 //64port
-RET1_REPLAY (fstat, 5, struct stat, statbuf, int fd, struct stat __user *statbuf);
+RET1_REPLAY (newfstat, 5, struct stat, statbuf, int fd, struct stat __user *statbuf);
 
 //asmlinkage long shim_fstat64(int fd, struct stat64 __user *statbuf) SHIM_CALL(fstat64, 197, fd, statbuf);
 //64port
-asmlinkage long shim_fstat(int fd, struct stat64 __user *statbuf) SHIM_CALL(fstat, 5, fd, statbuf);
+asmlinkage long shim_newfstat(int fd, struct stat64 __user *statbuf) SHIM_CALL(newfstat, 5, fd, statbuf);
 
 //64port
 //SIMPLE_SHIM3(lchown32, 198, const char __user *, filename, uid_t, user, gid_t, group);
