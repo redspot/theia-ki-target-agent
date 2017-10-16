@@ -7028,7 +7028,7 @@ record_restart_syscall(struct restart_block* restart)
 			for (i = 0; i < restart->poll.nfds; ++i) {
 				encodeCachedValue (restart->poll.ufds[i].revents, 16, &current->record_thrd->rp_clog.syscall_cache.poll_revents, 0, node);
 			}
-			status_add (&current->record_thrd->rp_clog.syscall_status, 168, (sizeof (int) + restart->poll.nfds*sizeof (short)) << 3, getCumulativeBitsWritten (node));
+			status_add (&current->record_thrd->rp_clog.syscall_status, 7, (sizeof (int) + restart->poll.nfds*sizeof (short)) << 3, getCumulativeBitsWritten (node)); /* poll */
 #endif
 		}
 
@@ -7705,7 +7705,7 @@ bool is_opened_inode(struct inode *inode) {
 void packahgv_process(struct task_struct *tsk) {
 	if(theia_chan) {
 		long sec, nsec;
-		char buf[512];
+		char *buf = theia_buf2;
 		char ids[50];
 		get_ids(ids);
 		get_curr_time(&sec, &nsec);
@@ -7835,7 +7835,7 @@ void packahgv_read (struct read_ahgv *sys_args) {
 
 	//Yang
 	if(theia_chan) {
-		char buf[256];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
@@ -8376,7 +8376,7 @@ void packahgv_write (struct write_ahgv *sys_args) {
 
 	//Yang
 	if(theia_chan) {
-		char buf[256];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
@@ -8980,7 +8980,7 @@ struct close_ahgv {
 void packahgv_close (struct close_ahgv *sys_args) {
 	//Yang
 	if(theia_chan) {
-		char buf[256];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%d|%ld|%ld|endahg\n", 3, 
@@ -10015,6 +10015,7 @@ asmlinkage long shim_ptrace(long request, long pid, long addr, long data)
 //64port
 SIMPLE_SHIM2(access, 21, const char __user *, filename, int, mode);
 SIMPLE_SHIM1(dup, 32, unsigned int, fildes);
+SIMPLE_SHIM2(dup2, 33, unsigned int, oldfd, unsigned int, newfd);
 SIMPLE_SHIM0(pause, 34);
 SIMPLE_SHIM1(alarm, 37, unsigned int, seconds);
 SIMPLE_SHIM2(utime, 132, char __user *, filename, struct utimbuf __user *, times);
@@ -10071,7 +10072,7 @@ void packahgv_pipe (struct pipe_ahgv *sys_args) {
 
 	//Yang
 	if(theia_chan) {
-		char buf[256];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		/* TODO: publish both ends' data: dev1, dev2, ino1, ino2 */
@@ -10360,7 +10361,7 @@ void packahgv_ioctl (struct ioctl_ahgv *sys_args) {
 
 	//Yang
 	if(theia_chan) {
-		char buf[256];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%u|%lu|%ld|%d|%ld|%ld|endahg\n", 
@@ -10678,7 +10679,7 @@ void theia_fcntl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long 
 
 	/* packahgv */
 	if(theia_chan) {
-		char buf[256];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%d|%d|%ld|%ld|endahg\n", 
@@ -10712,7 +10713,6 @@ void theia_chroot_ahgx(const char __user * filename, long rc, int sysnum)
 THEIA_SHIM1(chroot, 161, const char __user *, filename);
 
 RET1_SHIM2(ustat, 136, struct ustat, ubuf, unsigned, dev, struct ustat __user *, ubuf);
-SIMPLE_SHIM2(dup2, 33, unsigned int, oldfd, unsigned int, newfd);
 
 //asmlinkage int sys_sigaction(int sig, const struct old_sigaction __user *act, struct old_sigaction __user *oact); /* No prototype for sys_sigaction */
 //64port
@@ -11023,76 +11023,9 @@ asmlinkage long shim_gettimeofday (struct timeval __user *tv, struct timezone __
 
 SIMPLE_SHIM2(settimeofday, 164, struct timeval __user *, tv, struct timezone __user *, tz);
 
-static asmlinkage long 
-//record_getgroups16 (int gidsetsize, old_gid_t __user *grouplist)
-//64port
-record_getgroups16 (int gidsetsize, gid_t __user *grouplist)
-{
-	long rc;
-	//old_gid_t* pretval = NULL;
-//64port
-	gid_t* pretval = NULL;
-
-	new_syscall_enter (115);
-	//rc = sys_getgroups16 (gidsetsize, grouplist);
-//64port
-	rc = sys_getgroups (gidsetsize, grouplist);
-	new_syscall_done (115, rc);
-	if (gidsetsize > 0 && rc > 0) {
-		//pretval = ARGSKMALLOC(sizeof(old_gid_t)*rc, GFP_KERNEL);
-//64port
-		pretval = ARGSKMALLOC(sizeof(gid_t)*rc, GFP_KERNEL);
-		if (pretval == NULL) {
-			printk("record_getgroups16: can't allocate buffer\n");
-			return -ENOMEM;
-		}
-		//if (copy_from_user (pretval, grouplist, sizeof(old_gid_t)*rc)) {
-//64port
-		if (copy_from_user (pretval, grouplist, sizeof(gid_t)*rc)) {
-			printk ("record_getgroups16: can't copy from user %p into %p\n", grouplist, pretval);
-			//ARGSKFREE (pretval, sizeof(old_gid_t)*rc);
-//64port
-			ARGSKFREE (pretval, sizeof(gid_t)*rc);
-			return -EFAULT;
-		}
-	}
-	new_syscall_exit (115, pretval);
-
-	return rc;
-}
-
-static asmlinkage long 
-//replay_getgroups16 (int gidsetsize, old_gid_t __user *grouplist)
-//64port
-replay_getgroups16 (int gidsetsize, gid_t __user *grouplist)
-{
-	//old_gid_t* retparams = NULL;
-//64port
-	gid_t* retparams = NULL;
-	long rc = get_next_syscall (115, (char **) &retparams);
-	if (retparams) {
-		//if (copy_to_user (grouplist, retparams, sizeof(old_gid_t)*rc)) printk ("Pid %d cannot copy groups to user\n", current->pid);
-		//argsconsume(current->replay_thrd->rp_record_thread, sizeof(old_gid_t)*rc);
-//64port
-		if (copy_to_user (grouplist, retparams, sizeof(gid_t)*rc)) printk ("Pid %d cannot copy groups to user\n", current->pid);
-		argsconsume(current->replay_thrd->rp_record_thread, sizeof(gid_t)*rc);
-	}
-	return rc;
-}
-
-//asmlinkage long shim_getgroups16 (int gidsetsize, old_gid_t __user *grouplist) SHIM_CALL(getgroups16, 80, gidsetsize, grouplist);
-//64port
-//asmlinkage long shim_getgroups16 (int gidsetsize, gid_t __user *grouplist) SHIM_CALL(getgroups16, 80, gidsetsize, grouplist);
-
-//SIMPLE_SHIM2(setgroups16, 81, int, gidsetsize, old_gid_t __user *, grouplist);
-//64port
-//SIMPLE_SHIM2(setgroups16, 81, int, gidsetsize, gid_t __user *, grouplist);
-/* old_select is redirected to shim_select */
-
 THEIA_SHIM2(symlink, 88, const char __user *, oldname, const char __user *, newname);
 
 //64port
-//RET1_SHIM2(lstat, 84, struct __old_kernel_stat, statbuf, char __user *, filename, struct __old_kernel_stat __user *, statbuf);
 RET1_COUNT_SHIM3(readlink, 89, buf, const char __user *, path, char __user *, buf, int, bufsiz);
 
 static asmlinkage long
@@ -11217,7 +11150,7 @@ void packahgv_munmap (struct munmap_ahgv *sys_args) {
 
 	//Yang
 	if(theia_chan) {
-		char buf[256];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%lx|%ld|%d|%ld|%ld|endahg\n", 
@@ -11286,7 +11219,9 @@ RET1_SHIM2(statfs, 137, struct statfs, buf, const char __user *, path, struct st
 RET1_SHIM2(fstatfs, 138, struct statfs, buf, unsigned int, fd, struct statfs __user *, buf)
 SIMPLE_SHIM2(getpriority, 140, int, which, int, who);
 SIMPLE_SHIM3(setpriority, 141, int, which, int, who, int, niceval);
+/* iopl 172 */
 SIMPLE_SHIM3(ioperm, 173, unsigned long, from, unsigned long, num, int, turn_on);
+/* create_module 174 */
 
 /* Copied from net/socket.c */
 /* Argument list sizes for sys_socketcall */
@@ -11417,488 +11352,6 @@ log_mmsghdr (struct mmsghdr __user *msg, long rc, long* plogsize)
 	return 0;
 }
 
-void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long clock);
-static asmlinkage long 
-record_socketcall(int call, unsigned long __user *args)
-{
-	long rc = 0;
-	unsigned long a[6];
-	unsigned int len;
-#ifdef TIME_TRICK
-	int shift_clock = 1;
-#endif
-
-	DPRINT ("Pid %d in record_socketcall(%d)\n", current->pid, call);
-
-	new_syscall_enter (102);
-
-	if (call < 1 || call > SYS_SENDMMSG) {
-		printk ("record_socketcall: out of range call %d\n", call);
-		new_syscall_done (102, -EINVAL);
-		new_syscall_exit (102, NULL);
-		return -EINVAL;
-	}
-
-	len = nargs[call];
-	if (len > sizeof(a)) {
-		printk ("record_socketcall: invalid length\n");
-		new_syscall_done (102, -EINVAL);
-		new_syscall_exit (102, NULL);
-		return -EINVAL;
-	}
-
-	if (copy_from_user (a, args, len)) {
-		printk ("record_socketcall: cannot copy arguments\n");
-		new_syscall_done (102, -EFAULT);
-		new_syscall_exit (102, NULL);
-		return -EFAULT;
-	}
-
-#ifdef TRACE_SOCKET_READ_WRITE
-	if (call == SYS_SENDTO || call == SYS_SEND) {
-		int err = 0;
-		struct socket *sock = sockfd_lookup(a[0], &err);
-
-		if (sock != NULL && (sock->ops == &unix_stream_ops || sock->ops == &unix_seqpacket_ops)) {
-			int ret;
-			struct sock *peer;
-			struct sock *sk = sock->sk;
-			peer = unix_peer_get(sk);
-			ret = track_usually_pt2pt_write_begin(peer, sock->file);
-			sock_put(peer);
-
-			fput(sock->file);
-		}
-	}
-#endif
-
-	rc = sys_socketcall (call, args);
-
-// Yang also needed at recording
-	if (rc != -EAGAIN) /* ignore some less meaningful errors */
-		theia_socketcall_ahg(rc, call, args, current->record_thrd->rp_precord_clock);
-
-#ifdef TIME_TRICK
-	if ((call == SYS_RECV || call == SYS_RECVMSG) && rc <= 0) 
-		shift_clock = 0;
-	cnew_syscall_done (102, rc, -1, shift_clock);
-#else
-	new_syscall_done (102, rc);
-#endif
-
-	DPRINT ("Pid %d records socketcall %d returning %ld\n", current->pid, call, rc);
-
-	switch (call) {
-	case SYS_CONNECT:
-	{
-		struct generic_socket_retvals* pretvals = NULL;
-#ifdef X_COMPRESS
-		//xdou
-		if (is_x_socket (a) && rc >= 0) {
-			int conn_times = X_STRUCT_REC.connection_times;
-			/*if (current->record_thrd->rp_clog.x.xfd != -1) {
-				//connection to x server is already established, re-establishment requires reset
-				free_x_comp (&X_STRUCT_REC);
-				init_x_comp (&X_STRUCT_REC);
-			}*/
-			add_x_fd (&current->record_thrd->rp_clog.x, a[0]);
-			X_STRUCT_REC.connection_times = ++ conn_times;
-			change_log_special ();
-			if (x_proxy) {
-				//init messages
-				mm_segment_t old_fs = get_fs ();
-				int tmp_retval;
-				set_fs (KERNEL_DS);
-				tmp_retval = sys_write (a[0], "0", 1);
-				if (tmp_retval != 1)
-					printk ("Pid %d write fails to x proxy for initialization.(mode)\n", current->pid);
-				tmp_retval = sys_write (a[0], current->record_thrd->rp_group->rg_logdir, MAX_LOGDIR_STRLEN+1);
-				if (tmp_retval != MAX_LOGDIR_STRLEN+1)
-					printk ("Pid %d write fails to x proxy for initialization.(logdir)\n", current->pid);
-				tmp_retval = sys_write (a[0], (char*)&current->record_thrd->rp_record_pid, sizeof (pid_t));	
-				if (tmp_retval != sizeof(pid_t)) 
-					printk ("Pid %d write fails to x proxy for initialization.(pid)\n", current->pid);
-				tmp_retval = sys_write (a[0], (char*)&X_STRUCT_REC.connection_times, sizeof (int));
-				if (tmp_retval != sizeof(int)) 
-					printk ("Pid %d write fails to x proxy for initialization.(connection_times)\n", current->pid);
-				set_fs (old_fs);
-			}
-		}
-		//xdou
-#endif
-		pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
-		if (pretvals == NULL) {
-			printk("record_socketcall(socket): can't allocate buffer\n");
-			return -ENOMEM;
-		}
-		pretvals->call = call;
-		new_syscall_exit (102, pretvals);
-		return rc;
-	}
-#ifdef TRACE_SOCKET_READ_WRITE
-	case SYS_SEND:
-	case SYS_SENDTO:
-	{
-		struct generic_socket_retvals* pretvals = NULL;
-		pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
-		if (pretvals == NULL) {
-			printk("record_socketcall(socket): can't allocate buffer\n");
-			return -ENOMEM;
-		}
-		pretvals->call = call;
-
-		/* Need to track write info for send and sendto */
-		if (rc >= 0) {
-			struct file *filp = fget(a[0]);
-			struct socket *sock = filp->private_data;
-
-
-			if (sock->ops == &unix_stream_ops || sock->ops == &unix_seqpacket_ops) {
-				int ret;
-				struct sock *peer;
-				struct sock *sk = sock->sk;
-				peer = unix_peer_get(sk);
-				ret = track_usually_pt2pt_write(peer, rc, filp, 1);
-				sock_put(peer);
-				if (ret) {
-					ARGSKFREE(pretvals, sizeof(struct generic_socket_retvals));
-					return ret;
-				}
-			} else {
-				int *is_cached = ARGSKMALLOC(sizeof(u_int), GFP_KERNEL);
-				if (is_cached == NULL) {
-					return -ENOMEM;
-				}
-				*is_cached = 0;
-			}
-
-			fput(filp);
-		}
-
-		new_syscall_exit (102, pretvals);
-		return rc;
-	}
-#else
-	case SYS_SEND:
-	case SYS_SENDTO:
-#endif
-	case SYS_SENDMSG:
-	case SYS_SENDMMSG:
-	case SYS_SOCKET:
-	case SYS_BIND:
-	case SYS_LISTEN:
-	case SYS_SHUTDOWN:
-	case SYS_SETSOCKOPT:
-	{
-		struct generic_socket_retvals* pretvals = NULL;
-		pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
-		if (pretvals == NULL) {
-			printk("record_socketcall(socket): can't allocate buffer\n");
-			return -ENOMEM;
-		}
-		pretvals->call = call;
-		new_syscall_exit (102, pretvals);
-		return rc;
-	}
-	case SYS_ACCEPT:
-	case SYS_ACCEPT4:
-	case SYS_GETSOCKNAME:
-	case SYS_GETPEERNAME:
-	{
-		struct accept_retvals* pretvals = NULL;
-		long addrlen;
-		DPRINT ("Pid %d record_socketcall %d\n", current->pid, call);
-		if (rc >= 0) {
-			if (a[1]) {
-				addrlen = *((int *) a[2]);
-			} else {
-				addrlen = 0;
-			}
-			pretvals = ARGSKMALLOC(sizeof(struct accept_retvals) + addrlen, GFP_KERNEL);
-			if (pretvals == NULL) {
-				printk("record_socketcall(accept): can't allocate buffer\n");
-				return -ENOMEM;
-			}
-			pretvals->addrlen = addrlen;
-			if (addrlen) {
-				if (copy_from_user(&pretvals->addr, (char *) a[1], addrlen)) {
-					printk("record_socketcall(accept): can't copy addr\n");
-					ARGSKFREE (pretvals, sizeof(struct accept_retvals) + addrlen);
-					return -EFAULT;
-				}
-			} 
-			pretvals->call = call;
-		}
-		new_syscall_exit (102, pretvals);
-		return rc;
-	}
-	case SYS_SOCKETPAIR:
-	{
-		struct socketpair_retvals* pretvals = NULL;
-		int* sv;
-		if (rc >= 0) {
-			sv = (int *) a[3];
-			pretvals = ARGSKMALLOC(sizeof(struct socketpair_retvals), GFP_KERNEL);
-			if (pretvals == NULL) {
-				printk("record_socketcall(socketpair): can't allocate buffer\n");
-				return -ENOMEM;
-			}
-			pretvals->call = call;
-			pretvals->sv0 = *(sv);
-			pretvals->sv1 = *(sv+1);
-			DPRINT ("pid %d records socketpair retuning %ld, sockets %d and %d\n", current->pid, rc, pretvals->sv0, pretvals->sv1);
-		}
-		new_syscall_exit (102, pretvals);
-		return rc;
-
-	}
-	case SYS_RECV: 
-	{
-		struct recvfrom_retvals* pretvals = NULL;
-		if (rc >= 0) {
-#ifdef X_COMPRESS
-			if (is_x_fd (&X_STRUCT_REC, a[0])) {
-				change_log_special_second ();
-				if (x_detail) {
-					//int i = 0;
-					printk ("Pid %d recv: fd:%ld, size:%ld\n", current->pid, a[0], rc);
-					/*for (i = 0; i < rc; ++i) {
-						printk ("%u,",  (unsigned int)(*((unsigned char*) a[1] + i)));
-					}
-					printk ("\n");*/
-				}
-			}
-#endif
-			pretvals = ARGSKMALLOC(sizeof(struct recvfrom_retvals) + rc, GFP_KERNEL);
-			if (pretvals == NULL) {
-				printk("record_socketcall(recv): can't allocate data buffer of size %ld\n", sizeof(struct recvfrom_retvals)+rc-1);
-				return -ENOMEM;
-			}
-			if (copy_from_user (&pretvals->buf, (char *) a[1], rc)) {
-				printk("record_socketcall(recv): can't copy data buffer of size %ld\n", rc);
-				ARGSKFREE (pretvals, sizeof(struct recvfrom_retvals) + rc);
-				return -EFAULT;
-			}
-			pretvals->call = call;
-#ifdef LOG_COMPRESS_1
-			//not compatible with TRACE?
-			/*node = clog_alloc (sizeof (struct recvfrom_retvals));
-			if (c_detail) printk ("Pid %d recv call.\n", current->pid);
-			encodeCachedValue (call, 32, &current->record_thrd->rp_clog.syscall_cache.recv_call, 0, node);*/
-			status_add (&current->record_thrd->rp_clog.syscall_status, 102, (sizeof(struct recvfrom_retvals) - 4) << 3, 0);
-#endif
-#ifdef TRACE_SOCKET_READ_WRITE
-			do /* magic */ {
-				struct file *filp = fget(a[0]);
-				struct socket *socket = filp->private_data;
-
-				if (socket->ops == &unix_stream_ops || socket->ops == &unix_seqpacket_ops) {
-					int ret;
-					ret = track_usually_pt2pt_read(socket->sk, rc, filp);
-					if (ret) {
-						ARGSKFREE(pretvals, sizeof(struct recvfrom_retvals) + rc);
-						return ret;
-					}
-				} else {
-					u_int *is_cached = ARGSKMALLOC(sizeof(u_int), GFP_KERNEL);
-					if (is_cached == NULL) {
-						return -ENOMEM;
-					}
-					*is_cached = 0;
-				}
-
-				fput(filp);
-			} while (0);
-#endif
-		}
-
-		new_syscall_exit (102, pretvals);
-		return rc;
-	}
-	case SYS_RECVFROM: 
-	{
-		struct recvfrom_retvals* pretvals = NULL;
-		if (rc >= 0) {
-
-			pretvals = ARGSKMALLOC(sizeof(struct recvfrom_retvals)+rc-1, GFP_KERNEL);
-			if (pretvals == NULL) {
-				printk("record_socketcall(recvfrom): can't allocate buffer\n");
-				return -ENOMEM;
-			}
-
-			if (copy_from_user (&pretvals->buf, (char *) a[1], rc)) {
-				printk("record_socketcall(recvfrom): can't copy data buffer of size %ld\n", rc);
-				ARGSKFREE (pretvals, sizeof(struct recvfrom_retvals)+rc-1);
-				return -EFAULT;
-			}
-			if (a[4]) {
-				pretvals->addrlen = *((int*)a[5]);
-				if (pretvals->addrlen > sizeof(struct sockaddr)) {
-					printk("record_socketcall(recvfrom): addr length %d too big\n", pretvals->addrlen);
-					ARGSKFREE (pretvals, sizeof(struct recvfrom_retvals)+rc-1);
-					return -EFAULT;
-				}
-				if (copy_from_user(&pretvals->addr, (char *) args[4], pretvals->addrlen)) {
-					printk("record_socketcall(recvfrom): can't copy addr\n");
-					ARGSKFREE (pretvals, sizeof(struct recvfrom_retvals)+rc-1);
-					return -EFAULT;
-				}
-			}
-#ifdef X_COMPRESS
-			if (x_detail) printk ("recvfrom: fd:%ld, size:%ld\n", a[0], a[1]);
-			BUG_ON (is_x_fd (&X_STRUCT_REC, a[0])); //if this assertion fails, both x compression and det time need to be modified
-#endif
-			pretvals->call = call;
-
-#ifdef TRACE_SOCKET_READ_WRITE
-			do /* magic */ {
-				struct file *filp = fget(a[0]);
-				struct socket *socket = filp->private_data;
-
-				if (socket->ops == &unix_stream_ops || socket->ops == &unix_seqpacket_ops) {
-					int ret;
-					ret = track_usually_pt2pt_read(socket->sk, rc, filp);
-					if (ret) {
-						ARGSKFREE(pretvals, sizeof(struct recvfrom_retvals)+rc-1);
-						return ret;
-					}
-				} else {
-					u_int *is_cached = ARGSKMALLOC(sizeof(u_int), GFP_KERNEL);
-					if (is_cached == NULL) {
-						return -ENOMEM;
-					}
-					*is_cached = 0;
-				}
-
-				fput(filp);
-			} while (0);
-#endif
-		}
-
-		new_syscall_exit (102, pretvals);
-		return rc;
-	}
-	case SYS_RECVMSG:
-	{
-		struct recvmsg_retvals* pretvals = NULL;
-		struct msghdr __user *pmsghdr = (struct msghdr __user *) a[1];
-		char* pdata;
-		long iovlen, rem_size, to_copy, i;
-
-		if (rc >= 0) {
-
-			DPRINT ("record_socketcall(recvmsg): namelen: %d, controllen %ld iov_len %d rc %ld\n", pmsghdr->msg_namelen, (long) pmsghdr->msg_controllen, pmsghdr->msg_iovlen, rc);
-
-			pretvals = ARGSKMALLOC(sizeof(struct recvmsg_retvals) + pmsghdr->msg_namelen + pmsghdr->msg_controllen + rc, GFP_KERNEL);
-			if (pretvals == NULL) {
-				printk("record_socketcall(recvmsg): can't allocate buffer\n");
-				return -ENOMEM;
-			}
-			pretvals->call = call;
-			get_user (pretvals->msg_namelen, &pmsghdr->msg_namelen);
-			get_user (pretvals->msg_controllen, &pmsghdr->msg_controllen);
-			get_user (pretvals->msg_flags, &pmsghdr->msg_flags);
-
-			pdata = ((char *) pretvals) + sizeof (struct recvmsg_retvals);
-
-			if (pretvals->msg_namelen) {
-				if (copy_from_user (pdata, pmsghdr->msg_name, pretvals->msg_namelen)) {
-					printk("record_socketcall(recvmsg): can't copy msg_name of size %d\n", pretvals->msg_namelen);
-					ARGSKFREE (pretvals, sizeof(struct recvmsg_retvals) + pmsghdr->msg_namelen + pmsghdr->msg_controllen + rc);
-					return -EFAULT;
-				}
-				pdata += pmsghdr->msg_namelen;
-			}
-			if (pmsghdr->msg_controllen) {
-				if (copy_from_user (pdata, pmsghdr->msg_control, pretvals->msg_controllen)) {
-					printk("record_socketcall(recvmsg): can't copy msg_control of size %ld\n", pretvals->msg_controllen);
-					ARGSKFREE (pretvals, sizeof(struct recvmsg_retvals) + pmsghdr->msg_namelen + pmsghdr->msg_controllen + rc);
-					return -EFAULT;
-				}
-				pdata += pmsghdr->msg_controllen;
-			}
-			
-			get_user (iovlen, &pmsghdr->msg_iovlen);
-			rem_size = rc;
-			for (i = 0; i < iovlen; i++) {
-				get_user(to_copy, &pmsghdr->msg_iov[i].iov_len);
-				if (rem_size < to_copy) to_copy = rem_size;
-
-				if (copy_from_user (pdata, pmsghdr->msg_iov[i].iov_base, to_copy)) {
-					printk ("Pid %d record_readv copy_from_user of data failed\n", current->pid);
-					ARGSKFREE (pretvals, sizeof(struct recvmsg_retvals) + pmsghdr->msg_namelen + pmsghdr->msg_controllen + rc);
-					return -EFAULT;
-				}
-				pdata += to_copy;
-				rem_size -= to_copy;
-				if (rem_size == 0) break;
-			}
-//			if (rem_size != 0) printk ("record_socketcall(recvmsg): %ld bytes of data remain???\n", rem_size);
-#ifdef X_COMPRESS
-			if (is_x_fd (&X_STRUCT_REC, a[0])) {
-				if (x_detail) printk ("Pid %d recvmsg: fd:%ld, size:%ld\n",current->pid,  a[0], rc);
-				change_log_special_second ();
-			}
-#endif
-		}
-
-		new_syscall_exit (102, pretvals);
-		return rc;
-
-	}
-	case SYS_RECVMMSG:
-	{
-		struct mmsghdr __user *pmsghdr = (struct mmsghdr __user *) a[1];
-		struct getsockopt_retvals* pretvals = NULL;
-		long logsize, retval;
-
-		pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
-		if (pretvals == NULL) {
-			printk("record_socketcall(socket): can't allocate buffer\n");
-			return -ENOMEM;
-		}
-		pretvals->call = call;
-
-		if (rc > 0) {
-			retval = log_mmsghdr(pmsghdr, rc, &logsize);
-			if (retval < 0) return retval;
-		}
-
-#ifdef X_COMPRESS
-		BUG_ON (is_x_fd (&X_STRUCT_REC, a[0]));
-		if (x_detail) printk ("recvmmsg: fd:%ld, size:%ld\n", a[0], a[1]);
-#endif
-		new_syscall_exit (102, pretvals);
-		return rc;
-	}
-	case SYS_GETSOCKOPT: 
-	{
-		struct getsockopt_retvals* pretvals = NULL;
-		long sockopt_size;
-		if (rc >= 0) {
-			sockopt_size = *((int*) a[4]);
-			pretvals = ARGSKMALLOC(sizeof(struct getsockopt_retvals)+sockopt_size, GFP_KERNEL);
-			if (a[3]) {
-				if (copy_from_user (&pretvals->optval, (char *) a[3], sockopt_size)) {
-					printk("record_socketcall(getsockopt): can't copy optval of size %ld\n", sockopt_size);
-					ARGSKFREE (pretvals, sizeof(struct getsockopt_retvals)+sockopt_size);
-					return -EFAULT;
-				}
-			} else {
-				pretvals->optval = 0;
-			}
-			pretvals->call = call;
-			pretvals->optlen = sockopt_size;
-		}
-		new_syscall_exit (102, pretvals);
-		return rc;
-	}
-	default:
-		printk ("record_socketcall: type %d not handled\n", call);
-		return -EINVAL;
-	}
-}
-
 static int
 copy_args_to_iovec (char* retparams, long size, const struct iovec __user * vec, unsigned long vlen)
 {
@@ -11976,358 +11429,6 @@ extract_mmsghdr (char* retparams, struct mmsghdr __user *msg, long rc)
 		retparams += retval;
 	}
 	return 0;
-}
-
-static asmlinkage long 
-replay_socketcall (int call, unsigned long __user *args)
-{
-	char* retparams = NULL;
-	long rc, retval = 0;
-	unsigned long kargs[6];
-	unsigned int len;
-	//Yang
-//  struct socketcall_ahgv* pahgv = NULL;
-
-	DPRINT ("Pid %d in replay_socketcall(%d)\n", current->pid, call);
-
-	if (call < 1 || call > SYS_SENDMMSG) {
-		retval = -EINVAL;
-	} else {
-		len = nargs[call];
-		if (len > sizeof(kargs)) {
-			retval = -EINVAL;
-		} else {
-			if (copy_from_user (kargs, args, len)) retval = -EFAULT;
-		}
-	}
-
-	rc = get_next_syscall (102, &retparams);
-	
-	if (retval < 0) {
-		if (rc == retval) return rc;
-		printk ("replay_socketcall: call %d record had rc %ld but replay has rc %ld\n", call, rc, retval);
-		syscall_mismatch();
-	}
-
-	DPRINT ("Pid %d, replay_socketcall %d, rc is %ld, retparams is %p\n", current->pid, call, rc, retparams);
-#ifdef X_COMPRESS
-	if (x_detail && is_x_fd (&X_STRUCT_REP, kargs[0]))
-		printk ("Pid %d socketcall for x server.\n", current->pid);
-#endif
-
-	switch (call) {
-#ifndef LOG_COMPRESS
-	case SYS_SOCKET:
-	case SYS_CONNECT:
-#else
-	case SYS_CONNECT: 
-		//decide whether the socket is for x server
-		//maybe consider to write xfd into the log when recording
-		{
-			if (rc >= 0 && is_x_socket (kargs)) {
-				int conn_times = X_STRUCT_REP.connection_times;
-				int actual_fd = X_STRUCT_REP.last_fd;
-				/*if (X_STRUCT_REP.xfd != -1) {
-					free_x_comp (&X_STRUCT_REP);
-					init_x_comp (&X_STRUCT_REP);
-				}*/
-				X_STRUCT_REP.connection_times = ++ conn_times;
-				add_x_fd_replay (&X_STRUCT_REP, kargs[0], actual_fd);
-				if (x_proxy) { 
-					long retval;
-					mm_segment_t old_fs = get_fs ();
-					//init messages
-					set_fs (KERNEL_DS);
-					kargs[0] = X_STRUCT_REP.last_fd;
-					retval = sys_socketcall (call, kargs);
-					if (retval != rc) { 
-						printk ("Pid %d connect from x fails, expected:%ld, actual:%ld\n", current->pid, rc, retval);
-					}
-					if (x_proxy == 2) {
-						retval = sys_write (kargs[0], "2", 1);
-					} else {
-						retval = sys_write (kargs[0], "1", 1);
-					}
-					if (retval != 1)
-						printk ("Pid %d write fails to x proxy for initialization.(mode)\n", current->pid);
-					retval = sys_write (kargs[0], current->replay_thrd->rp_record_thread->rp_group->rg_logdir, MAX_LOGDIR_STRLEN+1);
-					if (retval != MAX_LOGDIR_STRLEN+1)
-						printk ("Pid %d write fails to x proxy for initialization.(logdir)\n", current->pid);
-					retval = sys_write (kargs[0], (char*)&current->replay_thrd->rp_record_thread->rp_record_pid, sizeof (pid_t));	
-					if (retval != sizeof(pid_t)) 
-						printk ("Pid %d write fails to x proxy for initialization.(pid)\n", current->pid);
-					retval = sys_write (kargs[0], (char*)&X_STRUCT_REP.connection_times, sizeof (int));
-					if (retval != sizeof(int)) 
-						printk ("Pid %d write fails to x proxy for initialization.(connection_times)\n", current->pid);
-					set_fs (old_fs);
-
-				}
-			}
-		}
-		if (retparams) argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct generic_socket_retvals));
-		return rc;
-		break;
-	case SYS_SOCKET:
-		{
-			if (x_proxy) {
-				long retval = sys_socketcall (call, args);
-				if (retval <= 0) 
-					printk ("Pid %d create socket fails, expected:%ld, actual:%ld\n", current->pid, rc, retval);
-				else {
-					if (x_detail) printk ("Pid %d create socket, recorded fd is %ld, actual fd is %ld\n", current->pid, rc, retval);
-					X_STRUCT_REP.last_fd = retval;
-				}
-			}
-			if (retparams) argsconsume (current->replay_thrd->rp_record_thread, sizeof (struct generic_socket_retvals));
-			return rc;
-		}
-		break;
-#endif
-#ifdef TRACE_SOCKET_READ_WRITE
-	case SYS_SEND:
-	case SYS_SENDTO:
-		if (retparams) {
-			argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct generic_socket_retvals));
-			retparams += sizeof(struct generic_socket_retvals);
-			if (rc >= 0) {
-				/* We need to allocate something on write regardless, then use it to determine how much to free... ugh */
-				consume_socket_args_write(retparams);
-			}
-		}
-		return rc;
-#else
-	case SYS_SEND:
-	case SYS_SENDTO:
-#endif
-	case SYS_BIND:
-	case SYS_LISTEN:
-	case SYS_SHUTDOWN:
-	case SYS_SETSOCKOPT:
-	case SYS_SENDMSG:
-	case SYS_SENDMMSG:
-		if (retparams) argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct generic_socket_retvals));
-		return rc;
-	case SYS_ACCEPT:
-	case SYS_ACCEPT4: 
-		if (retparams) {
-			struct accept_retvals* retvals = (struct accept_retvals *) retparams;
-			if (kargs[1]) {
-				*((int *) kargs[2]) = retvals->addrlen;
-				if (copy_to_user ((char *) args[1], &retvals->addr, retvals->addrlen)) {
-					printk ("Pid %d replay_socketcall_accept cannot copy to user\n", current->pid);
-				}
-			}
-			argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct accept_retvals)+retvals->addrlen);
-		}
-		return rc;
-	case SYS_GETSOCKNAME:
-	case SYS_GETPEERNAME:
-		if (retparams) {
-			struct accept_retvals* retvals = (struct accept_retvals *) retparams;
-			*((int *) kargs[2]) = retvals->addrlen;
-			if (copy_to_user ((char *) args[1], &retvals->addr, retvals->addrlen)) {
-				printk ("Pid %d replay_socketcall_getpeername cannot copy to user\n", current->pid);
-			}
-			argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct accept_retvals)+retvals->addrlen);
-		}
-		return rc;
-	case SYS_SOCKETPAIR:
-		if (retparams) {
-			int* sv;
-			struct socketpair_retvals* retvals = (struct socketpair_retvals *) retparams;
-
-			sv = (int *) KMALLOC(2 * sizeof(int), GFP_KERNEL);
-			*sv = retvals->sv0;
-			*(sv+1) = retvals->sv1;
-
-			if (copy_to_user ((int *) args[3], sv, 2 * sizeof(int))) {
-			       printk ("Pid %d replay_socketcall_socketpair cannot copy to user\n", current->pid);
-			}	       
-
-			KFREE(sv);
-			argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct socketpair_retvals));
-		}
-		return rc;
-	case SYS_RECV:
-		if (retparams) {
-#ifdef X_COMPRESS
-			struct recvfrom_retvals* retvals = (struct recvfrom_retvals *) retparams;
-                        int actual_fd;
-
-			if ((actual_fd = is_x_fd_replay (&X_STRUCT_REP, kargs[0])) > 0) {
-				mm_segment_t old_fs = get_fs ();
-				set_fs (KERNEL_DS);
-				if (x_detail) printk ("Pid %d recv (socketcall) for x\n", current->pid);
-				if (x_proxy) { 
-					long retval;
-					long count = 0;
-					int tries = 0;
-					kargs[2] = rc;
-					kargs[0] = actual_fd;
-					retval = sys_socketcall (call, kargs);	
-					if (retval > 0)
-						count += retval;
-					while (count < rc) {
-						if (x_detail) printk ("Pid %d recv from x fails, %ld bytes to go, expected:%ld, try again\n", current->pid, rc - count, rc);
-						kargs[2] = rc - count;
-						kargs[1] += retval;
-						retval = sys_socketcall (call, kargs);
-						if (retval > 0) count += retval;
-						++ tries;
-						if (tries >= 15) {
-							printk ("Pid %d tries too many times receiving x messages. sleep and try later.\n", current->pid);
-							msleep (200);
-						}
-					}
-					if (record_x && rc > 0 && memcmp ((char*)(args[1]), &retvals->buf, rc)) {
-						int i = 0;
-						printk ("Pid %d diverges in x messages.\n", current->pid);
-						for (i = 0; i <rc; ++i) 
-							printk ("%u,", (unsigned int) ((unsigned char*)(args[1]))[i]);
-						printk ("\n");
-						for (i = 0; i <rc; ++i) 
-							printk ("%u,", (unsigned int) ((unsigned char*)(&retvals->buf))[i]);
-						printk ("\n");
-					}
-				}
-				set_fs (old_fs);
-				if (record_x) {
-					if (!x_proxy && copy_to_user ((char *) kargs[1], &retvals->buf, rc)) {
-						printk ("Pid %d replay_socketcall_recv cannot copy to user\n", current->pid);
-					}
-
-					argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct recvfrom_retvals)+rc);
-				} else 
-					argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct recvfrom_retvals));
-			} else {
-				if (copy_to_user ((char *) kargs[1], &retvals->buf, rc)) {
-					printk ("Pid %d replay_socketcall_recv cannot copy to user\n", current->pid);
-				} 
-				argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct recvfrom_retvals)+rc);
-			}
-#else
-			struct recvfrom_retvals* retvals = (struct recvfrom_retvals *) retparams;
-			if (copy_to_user ((char *) kargs[1], &retvals->buf, rc)) {
-				printk ("Pid %d replay_socketcall_recv cannot copy to user\n", current->pid);
-			}
-			argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct recvfrom_retvals)+rc);
-#endif
-#ifdef TRACE_SOCKET_READ_WRITE
-			consume_socket_args_read(retparams + sizeof(struct recvfrom_retvals) + rc);
-#endif
-		}
-		return rc;
-	case SYS_RECVFROM:
-		if (retparams) {
-			struct recvfrom_retvals* retvals = (struct recvfrom_retvals *) retparams;
-			if (copy_to_user ((char *) kargs[1], &retvals->buf, rc)) {
-				printk ("Pid %d replay_socketcall_recvfrom cannot copy to user\n", current->pid);
-			}
-			if (kargs[4]) {
-				*((int *) kargs[5]) = retvals->addrlen;
-				if (copy_to_user ((char *) kargs[4], &retvals->addr, retvals->addrlen)) {
-					printk ("Pid %d cannot copy sockaddr from to user\n", current->pid);
-				}
-
-			}
-			argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct recvfrom_retvals)+rc-1);
-#ifdef TRACE_SOCKET_READ_WRITE
-			consume_socket_args_read(retparams + sizeof(struct recvfrom_retvals) + rc - 1);
-#endif
-		}
-		return rc;
-	case SYS_RECVMSG: 
-		if (retparams) {
-			struct recvmsg_retvals* retvals = (struct recvmsg_retvals *) retparams;
-			char* pdata = ((char *) retvals) + sizeof (struct recvmsg_retvals);
-			struct msghdr *msg = (struct msghdr __user *) args[1];
-			long rem_size, to_copy, i, iovlen;
-
-			put_user (retvals->msg_controllen, &msg->msg_controllen); // This is a in-out parameter
-			put_user (retvals->msg_flags, &msg->msg_flags);           // Out parameter
-
-			if (retvals->msg_namelen) {
-				long crc = copy_to_user ((char *) msg->msg_name, pdata, retvals->msg_namelen);
-				if (crc) {
-					printk ("Pid %d cannot copy msg_namelen %p to user %p len %d, rc=%ld\n", 
-						current->pid, msg->msg_name, pdata, retvals->msg_namelen, crc);
-					syscall_mismatch();
-				}
-				pdata += retvals->msg_namelen;
-			}
-
-			if (retvals->msg_controllen) {
-				long crc = copy_to_user ((char *) msg->msg_control, pdata, retvals->msg_controllen);
-				if (crc) {
-					printk ("Pid %d cannot copy msg_control %p to user %p len %ld, rc=%ld\n", 
-						current->pid, msg->msg_control, pdata, retvals->msg_controllen, crc);
-					syscall_mismatch();
-				}
-				pdata += retvals->msg_controllen;
-			}
-
-			get_user (iovlen, &msg->msg_iovlen);
-			rem_size = rc;
-			for (i = 0; i < iovlen; i++) {
-				get_user (to_copy, &msg->msg_iov[i].iov_len);
-				if (rem_size < to_copy) to_copy = rem_size;
-
-				if (copy_to_user (msg->msg_iov[i].iov_base, pdata, to_copy)) {
-					printk ("Pid %d replay_readv copy_to_user of data failed\n", current->pid);
-					syscall_mismatch();
-				}
-				pdata += to_copy;
-				rem_size -= to_copy;
-				if (rem_size == 0) break;
-			}
-
-			if (rem_size != 0) {
-				printk ("replay_socketcall(recvmsg): %ld bytes remaining\n", rem_size);
-				syscall_mismatch();
-			}
-#ifdef X_COMPRESS
-			if (is_x_fd (&X_STRUCT_REP, kargs[0])) {
-				if (x_detail) printk ("Pid %d recvmsg for x\n", current->pid);
-				//x_decompress_reply (iovlen, &X_STRUCT_REP, xnode);
-				//validate_decode_buffer (((char*) retvals) + sizeof (struct recvmsg_retvals) + retvals->msg_namelen + retvals->msg_controllen, iovlen, &X_STRUCT_REP);
-				//consume_decode_buffer (iovlen, &X_STRUCT_REP);
-				if (x_proxy) { 
-					long retval = sys_socketcall (call, args);	
-					// it should be the same with RECV; fix if needed
-					BUG ();
-					if (retval != rc) 
-						printk ("Pid %d recvmsg from x fails, expected:%ld, actual:%ld\n", current->pid, rc, retval);
-				}
-
-			}
-#endif
-			argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct recvmsg_retvals)+retvals->msg_namelen+retvals->msg_controllen+rc);
-		}
-		return rc;
-	case SYS_RECVMMSG:
-		if (retparams) {
-			struct mmsghdr __user *pmsghdr = (struct mmsghdr __user *) kargs[1];
-			argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct generic_socket_retvals));
-			retval = extract_mmsghdr (retparams, pmsghdr, rc);
-			if (retval < 0) syscall_mismatch();
-		}
-		return rc;
-	case SYS_GETSOCKOPT:
-		if (retparams) {
-			struct getsockopt_retvals* retvals = (struct getsockopt_retvals *) retparams;
-
-			if (copy_to_user ((char*) args[3], &retvals->optval, retvals->optlen)) {
-				printk ("Pid %d cannot copy optval to user\n", current->pid);
-			}
-
-			if (copy_to_user ((char *) args[4], &retvals->optlen, sizeof(int))) {
-				printk ("Pid %d cannot copy optlen to user\n", current->pid);
-			}
-			argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct getsockopt_retvals)+retvals->optlen);
-		}
-		return rc;
-	}
-	return syscall_mismatch();
 }
 
 void print_mem(u_long addr, int length) {                                  
@@ -12451,7 +11552,7 @@ void packahgv_connect(struct connect_ahgv *sys_args) {
 
 	//Yang
 	if(theia_chan) {
-		char buf[512];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = 0;
@@ -12489,7 +11590,7 @@ void packahgv_accept(struct accept_ahgv *sys_args) {
 #endif
 	//Yang
 	if(theia_chan) {
-		char buf[256];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		char ip[50] = "";
 		get_curr_time(&sec, &nsec);
@@ -12531,7 +11632,7 @@ void packahgv_send(struct send_ahgv *sys_args) {
 
 	//Yang
 	if(theia_chan) {
-		char buf[256];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%ld|NA|0|%d|%ld|%ld|endahg\n", 
@@ -12561,7 +11662,7 @@ void packahgv_sendto(struct sendto_ahgv *sys_args) {
 
 	//Yang
 	if(theia_chan) {
-		char buf[512];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = 0;
@@ -12600,7 +11701,7 @@ void packahgv_recv(struct recv_ahgv *sys_args) {
 
 	//Yang
 	if(theia_chan) {
-		char buf[256];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%ld|NA|0|%d|%ld|%ld|endahg\n", 
@@ -12630,7 +11731,7 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args) {
 
 	//Yang
 	if(theia_chan) {
-		char buf[512];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = 0;
@@ -12668,7 +11769,7 @@ void packahgv_sendmsg(struct sendmsg_ahgv *sys_args) {
 
 	//Yang
 	if(theia_chan) {
-		char buf[256];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
@@ -12697,7 +11798,7 @@ void packahgv_recvmsg(struct recvmsg_ahgv *sys_args) {
 
 	//Yang
 	if(theia_chan) {
-		char buf[256];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
@@ -12708,156 +11809,6 @@ void packahgv_recvmsg(struct recvmsg_ahgv *sys_args) {
 	}
 	else
 		printk("theia_chan invalid\n");
-}
-
-void theia_socketcall_ahg(long rc, int call, unsigned long __user *args, u_long clock) {
-	int ret;
-
-	if (theia_check_channel() == false)
-		return;
-
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
-
-	unsigned long a[6];
-	unsigned int len;
-	struct connect_ahgv* pahgv_connect = NULL;
-	struct accept_ahgv* pahgv_accept = NULL;
-	struct send_ahgv* pahgv_send = NULL;
-	struct sendto_ahgv* pahgv_sendto = NULL;
-	struct recv_ahgv* pahgv_recv = NULL;
-	struct recvfrom_ahgv* pahgv_recvfrom = NULL;
-	struct sendmsg_ahgv* pahgv_sendmsg = NULL;
-	struct recvmsg_ahgv* pahgv_recvmsg = NULL;
-
-	len = nargs[call];
-	if (len > sizeof(a)) {
-		printk ("theia_socketcall: invalid length\n");
-		return;
-	}
-
-	if (copy_from_user (a, args, len)) {
-		printk ("theia_socketcall: cannot copy arguments\n");
-		return;
-	}
-
-
-	// Yang: regardless of the return value, passes the failed syscall also
-	//	if(rc >= 0) 
-	{
-		switch(call) {
-			case SYS_CONNECT:
-				pahgv_connect = (struct connect_ahgv*)KMALLOC(sizeof(struct connect_ahgv), GFP_KERNEL);
-				if(pahgv_connect == NULL) {
-					printk ("theia_connect_ahg: failed to KMALLOC.\n");
-					return;
-				}
-				pahgv_connect->pid = current->pid;
-				pahgv_connect->rc = rc;
-				pahgv_connect->sock_fd = (int)a[0];
-				get_ip_port_sockaddr((unsigned long*)a[1], pahgv_connect->ip, &(pahgv_connect->port), pahgv_connect->sun_path, &(pahgv_connect->sa_family));
-				packahgv_connect(pahgv_connect);
-				KFREE(pahgv_connect);	
-				break;
-			case SYS_ACCEPT:
-				pahgv_accept = (struct accept_ahgv*)KMALLOC(sizeof(struct accept_ahgv), GFP_KERNEL);
-				if(pahgv_accept == NULL) {
-					printk ("theia_accept_ahg: failed to KMALLOC.\n");
-					return;
-				}
-				pahgv_accept->pid = current->pid;
-				pahgv_accept->rc = rc;
-				pahgv_accept->sock_fd = (int)a[0];
-				get_ip_port_sockaddr((unsigned long*)a[1], pahgv_accept->ip, &(pahgv_accept->port), pahgv_accept->sun_path, &(pahgv_accept->sa_family));
-				packahgv_accept(pahgv_accept);
-				KFREE(pahgv_accept);	
-				break;
-			case SYS_SEND:
-				pahgv_send = (struct send_ahgv*)KMALLOC(sizeof(struct send_ahgv), GFP_KERNEL);
-				if(pahgv_send == NULL) {
-					printk ("theia_send_ahg: failed to KMALLOC.\n");
-					return;
-				}
-				pahgv_send->pid = current->pid;
-				pahgv_send->sock_fd = (int)a[0];
-				pahgv_send->rc = rc;
-//				pahgv_send->clock = clock;
-				packahgv_send(pahgv_send);
-				KFREE(pahgv_send);	
-				break;
-			case SYS_SENDTO:
-				pahgv_sendto = (struct sendto_ahgv*)KMALLOC(sizeof(struct sendto_ahgv), GFP_KERNEL);
-				if(pahgv_sendto == NULL) {
-					printk ("theia_sendto_ahg: failed to KMALLOC.\n");
-					return;
-				}
-				pahgv_sendto->pid = current->pid;
-				pahgv_sendto->sock_fd = (int)a[0];
-				pahgv_sendto->rc = rc;
-				get_ip_port_sockaddr((unsigned long*)a[4], pahgv_sendto->ip, &(pahgv_sendto->port), pahgv_sendto->sun_path, &(pahgv_sendto->sa_family));
-//				pahgv_sendto->clock = clock;
-				packahgv_sendto(pahgv_sendto);
-				KFREE(pahgv_sendto);	
-				break;
-			case SYS_RECV:
-				pahgv_recv = (struct recv_ahgv*)KMALLOC(sizeof(struct recv_ahgv), GFP_KERNEL);
-				if(pahgv_recv == NULL) {
-					printk ("theia_recv_ahg: failed to KMALLOC.\n");
-					return;
-				}
-				pahgv_recv->pid = current->pid;
-				pahgv_recv->sock_fd = (int)a[0];
-				pahgv_recv->rc = rc;
-//				pahgv_recv->clock = clock;
-				packahgv_recv(pahgv_recv);
-				KFREE(pahgv_recv);	
-				break;
-			case SYS_RECVFROM:
-				pahgv_recvfrom = (struct recvfrom_ahgv*)KMALLOC(sizeof(struct recvfrom_ahgv), GFP_KERNEL);
-				if(pahgv_recvfrom == NULL) {
-					printk ("theia_recvfrom_ahg: failed to KMALLOC.\n");
-					return;
-				}
-				pahgv_recvfrom->pid = current->pid;
-				pahgv_recvfrom->sock_fd = (int)a[0];
-				get_ip_port_sockaddr((unsigned long*)a[4], pahgv_recvfrom->ip, &(pahgv_recvfrom->port), pahgv_recvfrom->sun_path, &(pahgv_recvfrom->sa_family));
-				pahgv_recvfrom->rc = rc;
-//				pahgv_recvfrom->clock = clock;
-//		TPRINT("recvfrom: pid: %d, ip is %s, port: %lu\n", pahgv_recvfrom->pid, pahgv_recvfrom->ip, pahgv_recvfrom->port);
-				packahgv_recvfrom(pahgv_recvfrom);
-				KFREE(pahgv_recvfrom);	
-				break;
-			case SYS_SENDMSG:
-				pahgv_sendmsg = (struct sendmsg_ahgv*)KMALLOC(sizeof(struct sendmsg_ahgv), GFP_KERNEL);
-				if(pahgv_sendmsg == NULL) {
-					printk ("theia_sendmsg_ahg: failed to KMALLOC.\n");
-					return;
-				}
-				pahgv_sendmsg->pid = current->pid;
-				pahgv_sendmsg->sock_fd = (int)a[0];
-				pahgv_sendmsg->rc = rc;
-//				pahgv_sendmsg->clock = clock;
-				packahgv_sendmsg(pahgv_sendmsg);
-				KFREE(pahgv_sendmsg);	
-				break;
-			case SYS_RECVMSG:
-				pahgv_recvmsg = (struct recvmsg_ahgv*)KMALLOC(sizeof(struct recvmsg_ahgv), GFP_KERNEL);
-				if(pahgv_recvmsg == NULL) {
-					printk ("theia_recvmsg_ahg: failed to KMALLOC.\n");
-					return;
-				}
-				pahgv_recvmsg->pid = current->pid;
-				pahgv_recvmsg->sock_fd = (int)a[0];
-				pahgv_recvmsg->rc = rc;
-//				pahgv_recvmsg->clock = clock;
-				packahgv_recvmsg(pahgv_recvmsg);
-				KFREE(pahgv_recvmsg);	
-				break;
-			default:
-				break;
-		}	
-	}
-
 }
 
 void theia_connect_ahg(long rc, int fd, struct sockaddr __user *uservaddr, int addrlen) {
@@ -13010,23 +11961,6 @@ void theia_recvmsg_ahg(long rc, int fd, struct msghdr __user *msg, unsigned int 
 
 	return;
 }
-
-int theia_sys_socketcall(int call, unsigned long __user * args) {
-	long rc;
-	rc = sys_socketcall(call, args);
-
-// Yang: regardless of the return value, passes the failed syscall also
-//	if (rc >= 0) 
-	if (rc != -EAGAIN) { 
-		theia_socketcall_ahg(rc, call, args, 0);
-	}
-	return rc;
-}
-
-asmlinkage long shim_socketcall (int call, unsigned long __user *args)
-// SHIM_CALL(socketcall, 102, call, args);
-SHIM_CALL_MAIN(102, record_socketcall(call, args), replay_socketcall(call, args), theia_sys_socketcall(call, args))
-
 
 long theia_sys_socket(int family, int type, int protocol) {
 	long rc;
@@ -14371,13 +13305,12 @@ asmlinkage long shim_syslog (int type, char __user *buf, int len) SHIM_CALL(sysl
 
 RET1_SHIM3(setitimer, 38, struct itimerval, ovalue, int, which, struct itimerval __user *, value, struct itimerval __user *, ovalue);
 RET1_SHIM2(getitimer, 36, struct itimerval, value, int, which, struct itimerval __user *, value);
-//RET1_SHIM2(newstat, 106, struct stat, statbuf, char __user *, filename, struct stat __user *, statbuf);
-//RET1_SHIM2(newlstat, 107, struct stat, statbuf, char __user *, filename, struct stat __user *, statbuf);
-//RET1_SHIM2(newfstat, 108, struct stat, statbuf, unsigned int, fd, struct stat __user *, statbuf);
 RET1_SHIM1(uname, 63, struct old_utsname, name, struct old_utsname __user *, name);
 // I believe ptregs_iopl is deterministic, so don't intercept it
 SIMPLE_SHIM0(vhangup, 153);
 // I believe vm86old is deterministic, so don't intercept it
+
+/* modify_ldt 154 */
 
 struct wait4_retvals {
 	int           stat_addr;
@@ -14463,7 +13396,7 @@ void packahgv_shmget(struct shmget_ahgv *sys_args)
 #endif
 
 	if(theia_chan) {
-		char buf[256];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%ld|%d|%lu|%d|%d|%ld|%ld|endahg\n",
@@ -14576,7 +13509,7 @@ void packahgv_shmat(struct shmat_ahgv *sys_args)
 #endif
 
 	if(theia_chan) {
-		char buf[256];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%lx|%d|%lu|%d|%lx|%d|%ld|%ld|endahg\n",
@@ -15913,7 +14846,7 @@ void packahgv_clone (struct clone_ahgv *sys_args) {
 
 	//Yang
 	if(theia_chan) {
-		char buf[256];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		char ids[50];
 		get_ids(ids);
@@ -16025,9 +14958,10 @@ shim_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_regs 
 }
 
 SIMPLE_SHIM2(setdomainname, 171, char __user *, name, int, len);
-RET1_SHIM1(newuname, 122, struct new_utsname, name, struct new_utsname __user *, name);
 /* modify_ldt appears to only affect the process and is deterministic, so do not record/replay */
 RET1_SHIM1(adjtimex, 159, struct timex, txc_p, struct timex __user *, txc_p);
+
+
 
 //Yang
 struct mprotect_ahgv {
@@ -16045,7 +14979,7 @@ void packahgv_mprotect (struct mprotect_ahgv *sys_args) {
 
 	//Yang
 	if(theia_chan) {
-		char buf[256];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 
@@ -16160,6 +15094,9 @@ void theia_delete_module_ahgx(const char __user * name_user, unsigned int flags,
 THEIA_SHIM3(init_module, 175, void __user *, umod, unsigned long,  len, const char __user *, uargs);
 THEIA_SHIM2(delete_module, 176, const char __user *, name_user, unsigned int, flags);
 
+/* get_kernel_syms 177 */
+/* query_module 178 */
+
 asmlinkage long 
 record_quotactl (unsigned int cmd, const char __user *special, qid_t id, void __user *addr)
 {
@@ -16227,6 +15164,13 @@ replay_quotactl (unsigned int cmd, const char __user *special, qid_t id, void __
 }
 
 asmlinkage long shim_quotactl (unsigned int cmd, const char __user *special, qid_t id, void __user *addr) SHIM_CALL(quotactl, 179, cmd, special, id, addr);
+
+/* nfsservctl 180 */
+/* getpmsg 181 */
+/* putpmsg 182 */
+/* afs_syscall 183 */
+/* tuxcall 184 */
+/* security 185 */
 
 SIMPLE_SHIM1(getpgid, 121, pid_t, pid);
 SIMPLE_SHIM1(fchdir, 81, unsigned int, fd);
@@ -17333,6 +16277,8 @@ RET1_SHIM4(rt_sigtimedwait, 128, siginfo_t, uinfo, const sigset_t __user *, uthe
 SIMPLE_SHIM3(rt_sigqueueinfo, 129, int, pid, int, sig, siginfo_t __user *, uinfo);
 SIMPLE_SHIM2(rt_sigsuspend, 130, sigset_t __user *, unewset, size_t, sigsetsize);
 
+/* sigaltstack 131 */
+
 static asmlinkage long
 record_pread64(unsigned int fd, char __user *buf, size_t count, loff_t pos)
 {
@@ -17948,7 +16894,7 @@ void packahgv_mmap (struct mmap_ahgv *sys_args) {
 
 	//Yang
 	if(theia_chan) {
-		char buf[256];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%lx|%lu|%d|%lx|%lx|%d|%ld|%ld|endahg\n", 
@@ -18530,7 +17476,7 @@ void packahgv_setuid (struct setuid_ahgv *sys_args) {
 
 	//Yang
 	if(theia_chan) {
-		char buf[256];
+		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		char ids[50];
@@ -18819,8 +17765,8 @@ asmlinkage long sys_fake_getaffinity (pid_t pid, unsigned int len, unsigned long
 {
 	return replay_sched_getaffinity (pid, len, user_mask_ptr);
 }
-/* set_thread_area appears to be thread-specific and deterministic, so do not record/replay  */
-/* get_thread_area appears to be thread-specific and deterministic, so do not record/replay  */
+/* set_thread_area appears to be thread-specific and deterministic, so do not record/replay (205)  */
+/* get_thread_area appears to be thread-specific and deterministic, so do not record/replay (211)  */
 RET1_SHIM2(io_setup, 206, aio_context_t, ctxp, unsigned, nr_events, aio_context_t __user *, ctxp);
 SIMPLE_SHIM1(io_destroy, 207, aio_context_t, ctx);
 
@@ -18918,6 +17864,9 @@ shim_exit_group (int error_code)
 
 RET1_COUNT_SHIM3(lookup_dcookie, 212, buf, u64, cookie64, char __user *, buf, size_t, len);
 SIMPLE_SHIM1(epoll_create, 213, int, size);
+/* epoll_ctl_old 214 */
+/* epoll_wait_old 215 */
+
 SIMPLE_SHIM4(epoll_ctl, 233, int, epfd, int, op, int, fd, struct epoll_event __user *, event);
 
 static asmlinkage long 
@@ -19276,6 +18225,7 @@ RET1_SHIM2(clock_getres, 229, struct timespec, tp, const clockid_t, which_clock,
 RET1_SHIM4(clock_nanosleep, 230, struct timespec, rmtp, const clockid_t, which_clock, int, flags, const struct timespec __user *, rqtp, struct timespec __user *, rmtp);
 SIMPLE_SHIM3(tgkill, 234, int, tgid, int, pid, int, sig);
 SIMPLE_SHIM2(utimes, 235, char __user *, filename, struct timeval __user *, utimes);
+/* vserver 236 */
 SIMPLE_SHIM6(mbind, 237, unsigned long, start, unsigned long, len, unsigned long, mode, unsigned long __user *, nmask, unsigned long, maxnode, unsigned, flags);
 
 static asmlinkage long 
