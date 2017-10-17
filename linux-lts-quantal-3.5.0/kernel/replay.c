@@ -99,10 +99,12 @@ void dump_user_stack(void);
 void get_user_callstack(char *buffer, size_t bufsize);
 
 void theia_dump_str(char *str, int rc, int sysum);
-void theia_dump_user_callstack();
+void theia_dump_auxdata();
 
 /* For debugging failing fs operations */
 int debug_flag = 0;
+
+void get_ids(char *ids);
 
 //Yang
 
@@ -134,8 +136,17 @@ EXPORT_SYMBOL(theia_replay_register_data);
 //#define THEIA_TRACK_SHM_OPEN 0
 // #define THEIA_TRACK_SHMAT 1
 
+/* dump aux data (callstack, user ids, ...) */
+#define THEIA_AUX_DATA 1
+#undef THEIA_AUX_DATA
+
+/*
 #define THEIA_USER_RET_ADDR 1
 #undef THEIA_USER_RET_ADDR
+
+#define THEIA_USER_IDS 1
+#undef THEIA_USER_IDS
+*/
 
 //#define REPLAY_PARANOID
 
@@ -268,15 +279,17 @@ bool theia_check_channel(void) {
 	return true;
 }
 
-// dump user callstack
-void theia_dump_user_callstack() {
+// dump aux data: callstack, ids, ...
+void theia_dump_auxdata() {
+	char ids[50];
+	get_ids(ids);
 	get_user_callstack(theia_retbuf, 4096);
 
 	if(theia_chan) {
 		long sec, nsec;
 		int size;
 
-		size = sprintf(theia_buf2, "startahg|700|%d|%s|endahg\n", current->pid, theia_retbuf);
+		size = sprintf(theia_buf2, "startahg|700|%d|%s|%s|endahg\n", current->pid, theia_retbuf, ids);
 		relay_write(theia_chan, theia_buf2, size);
 	}
 	else
@@ -291,8 +304,8 @@ void theia_dump_str(char *str, int rc, int sysnum) {
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
 
-#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
 #endif
 
 	/* packahgv */
@@ -7828,9 +7841,9 @@ void recursive_packahgv_process() {
 }
 
 void packahgv_read (struct read_ahgv *sys_args) {
-#ifdef THEIA_USER_RET_ADDR
+#ifdef THEIA_AUX_DATA
 //      too many events are generated and system hangs
-//	theia_dump_user_callstack();
+//	theia_dump_auxdata();
 #endif
 
 	//Yang
@@ -8369,9 +8382,9 @@ struct write_ahgv {
 };
 
 void packahgv_write (struct write_ahgv *sys_args) {
-#ifdef THEIA_USER_RET_ADDR
+#ifdef THEIA_AUX_DATA
 //      too many events are generated and system hangs
-//	theia_dump_user_callstack();
+//	theia_dump_auxdata();
 #endif
 
 	//Yang
@@ -8747,8 +8760,8 @@ struct open_ahgv {
 void packahgv_open (struct open_ahgv *sys_args) {
 	//Yang
 
-#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
 #endif
 
 	if(theia_chan) {
@@ -9205,8 +9218,8 @@ struct execve_ahgv {
 };
 
 void packahgv_execve (struct execve_ahgv *sys_args) {
-//#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();	
+//#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();	
 //#endif
 	//Yang
 	if(theia_chan) {
@@ -9856,8 +9869,8 @@ struct mount_ahgv {
 
 
 void packahgv_mount (struct mount_ahgv *sys_args) {
-#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
 #endif
 
 	//Yang
@@ -10066,8 +10079,8 @@ struct pipe_ahgv {
 };
 
 void packahgv_pipe (struct pipe_ahgv *sys_args) {
-#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
 #endif
 
 	//Yang
@@ -10355,8 +10368,8 @@ struct ioctl_ahgv {
 };
 
 void packahgv_ioctl (struct ioctl_ahgv *sys_args) {
-#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
 #endif
 
 	//Yang
@@ -11144,8 +11157,8 @@ struct munmap_ahgv {
 };
 
 void packahgv_munmap (struct munmap_ahgv *sys_args) {
-#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
 #endif
 
 	//Yang
@@ -11546,8 +11559,8 @@ struct connect_ahgv {
 };
 
 void packahgv_connect(struct connect_ahgv *sys_args) {
-#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
 #endif
 
 	//Yang
@@ -11585,8 +11598,8 @@ struct accept_ahgv {
 };
 
 void packahgv_accept(struct accept_ahgv *sys_args) {
-#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
 #endif
 	//Yang
 	if(theia_chan) {
@@ -11626,8 +11639,8 @@ struct send_ahgv {
 };
 
 void packahgv_send(struct send_ahgv *sys_args) {
-#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
 #endif
 
 	//Yang
@@ -11656,8 +11669,8 @@ struct sendto_ahgv {
 };
 
 void packahgv_sendto(struct sendto_ahgv *sys_args) {
-#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
 #endif
 
 	//Yang
@@ -11695,8 +11708,8 @@ struct recv_ahgv {
 };
 
 void packahgv_recv(struct recv_ahgv *sys_args) {
-#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
 #endif
 
 	//Yang
@@ -11725,8 +11738,8 @@ struct recvfrom_ahgv {
 };
 
 void packahgv_recvfrom(struct recvfrom_ahgv *sys_args) {
-#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
 #endif
 
 	//Yang
@@ -11763,8 +11776,8 @@ struct sendmsg_ahgv {
 };
 
 void packahgv_sendmsg(struct sendmsg_ahgv *sys_args) {
-#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
 #endif
 
 	//Yang
@@ -11792,8 +11805,8 @@ struct recvmsg_ahgv {
 };
 
 void packahgv_recvmsg(struct recvmsg_ahgv *sys_args) {
-#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
 #endif
 
 	//Yang
@@ -13391,8 +13404,8 @@ struct shmget_ahgv {
 
 void packahgv_shmget(struct shmget_ahgv *sys_args)
 {
-#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
 #endif
 
 	if(theia_chan) {
@@ -13504,8 +13517,8 @@ struct shmat_ahgv {
 
 void packahgv_shmat(struct shmat_ahgv *sys_args)
 {
-#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
 #endif
 
 	if(theia_chan) {
@@ -14840,8 +14853,8 @@ struct clone_ahgv {
 };
 
 void packahgv_clone (struct clone_ahgv *sys_args) {
-#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
 #endif
 
 	//Yang
@@ -14973,8 +14986,8 @@ struct mprotect_ahgv {
 };
 
 void packahgv_mprotect (struct mprotect_ahgv *sys_args) {
-#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
 #endif
 
 	//Yang
@@ -16888,8 +16901,8 @@ struct mmap_ahgv {
 };
 
 void packahgv_mmap (struct mmap_ahgv *sys_args) {
-#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
 #endif
 
 	//Yang
@@ -17470,8 +17483,8 @@ struct setuid_ahgv {
 
 
 void packahgv_setuid (struct setuid_ahgv *sys_args) {
-#ifdef THEIA_USER_RET_ADDR
-	theia_dump_user_callstack();
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
 #endif
 
 	//Yang
