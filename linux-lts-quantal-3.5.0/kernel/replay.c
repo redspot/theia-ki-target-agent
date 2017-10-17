@@ -111,6 +111,8 @@ void get_ids(char *ids);
 
 const char* theia_dump_fname = "/data/ahg.dump2.1";
 void theia_file_write(char *buf, size_t size);
+static char *theia_prevbuf = NULL;
+static size_t theia_prevbuf_size = 0;
 
 static struct file* theia_filp = NULL;
 void theia_file_write(char *buf, size_t size) {
@@ -128,13 +130,55 @@ void theia_file_write(char *buf, size_t size) {
 		}
 	}
 
-	old_fs = get_fs();
-	set_fs(KERNEL_DS);
-	while (1) {
-		written = vfs_write(theia_filp, (char*)buf, size, &pos);
-		if (written > 0) break; /* sometimes vfs_write returns -27. TODO */
+	if (!theia_prevbuf) theia_prevbuf = vmalloc(4096);
+
+	if (theia_prevbuf_size == 0 && (buf[9] == '0' || buf[9] == '1')) {
+		memset(theia_prevbuf, 0, 4096);
+		memcpy(theia_prevbuf, buf, size);
+		theia_prevbuf_size = size;
+		return;
 	}
-	set_fs(old_fs);
+
+	if (theia_prevbuf_size != 0 && (buf[9] == '0' || buf[9] == '1')) {
+		int sysno1, pid1, tv_sec1, fd1, bytes1, tgid1, sec1, nsec1;
+		int sysno2, pid2, tv_sec2, fd2, bytes2, tgid2, sec2, nsec2;
+
+		sscanf(theia_prevbuf, "startahg|%d|%d|%d|%d|%d|%d|%d|%d|endahg", 
+			&sysno1, &pid1, &tv_sec1, &fd1, &bytes1, &tgid1, &sec1, &nsec1);
+		sscanf(buf, "startahg|%d|%d|%d|%d|%d|%d|%d|%d|endahg", 
+			&sysno2, &pid2, &tv_sec2, &fd2, &bytes2, &tgid2, &sec2, &nsec2);
+
+		if (sysno1 == sysno2 && pid1 == pid2 && tv_sec1 == tv_sec2 && fd1 == fd2 && tgid1 == tgid2) {
+			bytes1 += bytes2;
+			nsec1 = 777777; /* mark */
+			memset(theia_prevbuf, 0, 4096);
+			theia_prevbuf_size = sprintf(theia_prevbuf, "startahg|%d|%d|%d|%d|%d|%d|%d|%d|endahg\n", 
+				sysno1, pid1, tv_sec1, fd1, bytes1, tgid1, sec1, nsec1);	
+		}
+		else {
+			old_fs = get_fs();
+			set_fs(KERNEL_DS);
+			written = vfs_write(theia_filp, (char*)theia_prevbuf, theia_prevbuf_size, &pos);
+			set_fs(old_fs);
+			memset(theia_prevbuf, 0, 4096);
+			memcpy(theia_prevbuf, buf, size);
+			theia_prevbuf_size = size;
+		}
+	}
+	else {
+		old_fs = get_fs();
+		set_fs(KERNEL_DS);
+		written = vfs_write(theia_filp, (char*)theia_prevbuf, theia_prevbuf_size, &pos);
+		written = vfs_write(theia_filp, (char*)buf, size, &pos);
+		set_fs(old_fs);
+		memset(theia_prevbuf, 0, 4096);
+		theia_prevbuf_size = 0;
+	}
+
+//	while (1) {
+//	written = vfs_write(theia_filp, (char*)buf, size, &pos);
+//		if (written > 0) break; /* sometimes vfs_write returns -27. TODO */
+//	}
 
 //	filp_close(file, NULL);
 }
