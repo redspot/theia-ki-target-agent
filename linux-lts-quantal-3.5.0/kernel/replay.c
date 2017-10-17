@@ -106,6 +106,39 @@ int debug_flag = 0;
 
 void get_ids(char *ids);
 
+#define THEIA_DIRECT_FILE_WRITE 1
+#undef THEIA_DIRECT_FILE_WRITE
+
+const char* theia_dump_fname = "/data/ahg.dump2.1";
+void theia_file_write(char *buf, size_t size);
+
+static struct file* theia_filp = NULL;
+void theia_file_write(char *buf, size_t size) {
+	loff_t pos = 0;
+	mm_segment_t old_fs;
+	size_t written = 0;
+
+	if (theia_filp == NULL) {
+		theia_filp = filp_open(theia_dump_fname, O_RDWR|O_APPEND|O_LARGEFILE|O_CREAT, 0777);
+
+		if (IS_ERR(theia_filp)) {
+			printk("XXX: WHAT?: %d\n", PTR_ERR(theia_filp));
+			theia_filp = NULL;
+			return;
+		}
+	}
+
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+	while (1) {
+		written = vfs_write(theia_filp, (char*)buf, size, &pos);
+		if (written > 0) break; /* sometimes vfs_write returns -27. TODO */
+	}
+	set_fs(old_fs);
+
+//	filp_close(file, NULL);
+}
+
 //Yang
 
 //const char* togglefile = "/home/yang/theia-on.conf";
@@ -290,7 +323,11 @@ void theia_dump_auxdata() {
 		int size;
 
 		size = sprintf(theia_buf2, "startahg|700|%d|%s|%s|endahg\n", current->pid, theia_retbuf, ids);
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(theia_buf2, size);
+#else
 		relay_write(theia_chan, theia_buf2, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -319,7 +356,12 @@ void theia_dump_str(char *str, int rc, int sysnum) {
 			sysnum, current->pid, current->start_time.tv_sec, \
 			rc, str, \
 			current->tgid, sec, nsec);
+
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(theia_buf2, size);
+#else
 		relay_write(theia_chan, theia_buf2, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -7747,7 +7789,11 @@ void packahgv_process(struct task_struct *tsk) {
 					ids, tsk->real_parent->pid, 
 				  -1, fpath, is_user_remote, tsk->tgid, sec, nsec);
 		}
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 		vfree(fpathbuf);
 	}
 	else
@@ -7807,7 +7853,11 @@ void packahgv_process_bin(struct task_struct *tsk) {
 		curr_ptr += buf_ahg->size_fpathbuf;
 		sprintf((char*)curr_ptr, "endahg");
 
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 
 		vfree(buf_ahg);
 		vfree(fpathbuf);
@@ -7854,7 +7904,11 @@ void packahgv_read (struct read_ahgv *sys_args) {
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
 				0, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, 
 				sec, nsec);
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -8394,7 +8448,11 @@ void packahgv_write (struct write_ahgv *sys_args) {
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
 				1, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, sec, nsec);
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -8792,7 +8850,11 @@ void packahgv_open (struct open_ahgv *sys_args) {
 					2, sys_args->pid, current->start_time.tv_sec, sys_args->fd, pcwd, sys_args->filename, sys_args->flags, sys_args->mode,
 					sys_args->dev, sys_args->ino, sys_args->is_new, current->tgid, sec, nsec);
 		}
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(theia_buf1, size);
+#else
 		relay_write(theia_chan, theia_buf1, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -8998,7 +9060,11 @@ void packahgv_close (struct close_ahgv *sys_args) {
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%d|%ld|%ld|endahg\n", 3, 
 		sys_args->pid, current->start_time.tv_sec, sys_args->fd, current->tgid, sec, nsec);
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -9250,7 +9316,11 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%s|%d|%d|%ld|%ld|endahg\n", 
 				59, sys_args->pid, current->start_time.tv_sec, sys_args->rc, 
 				fpath, ids, is_user_remote, current->tgid, sec, nsec);
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 		vfree(fpathbuf);
 	}
 	else
@@ -9883,7 +9953,11 @@ void packahgv_mount (struct mount_ahgv *sys_args) {
 		size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%s|%s|%s|%lu|%d|%d|%ld|%ld|endahg\n", 
 				165, sys_args->pid, current->start_time.tv_sec, sys_args->devname, sys_args->dirname, sys_args->type, 
 				sys_args->flags, sys_args->rc, current->tgid, sec, nsec);
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(theia_buf1, size);
+#else
 		relay_write(theia_chan, theia_buf1, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -10092,7 +10166,11 @@ void packahgv_pipe (struct pipe_ahgv *sys_args) {
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%d|%d|%lx|%lx|%d|%ld|%ld|endahg\n", 
 				22, sys_args->pid, current->start_time.tv_sec, sys_args->retval, sys_args->pfd1, sys_args->pfd2, 
 				sys_args->inode1, sys_args->inode2, current->tgid, sec, nsec);
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -10381,7 +10459,11 @@ void packahgv_ioctl (struct ioctl_ahgv *sys_args) {
 				16, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->fd, sys_args->cmd, sys_args->arg, sys_args->rc, current->tgid, 
 				sec, nsec);
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -10697,7 +10779,11 @@ void theia_fcntl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long 
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%d|%d|%ld|%ld|endahg\n", 
 				72, current->pid, current->start_time.tv_sec, fd, cmd, arg, current->tgid, sec, nsec);
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -11169,7 +11255,11 @@ void packahgv_munmap (struct munmap_ahgv *sys_args) {
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%lx|%ld|%d|%ld|%ld|endahg\n", 
 				11, sys_args->pid, current->start_time.tv_sec, sys_args->rc, 
 				sys_args->addr, sys_args->len, current->tgid, sec, nsec);
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -11581,7 +11671,11 @@ void packahgv_connect(struct connect_ahgv *sys_args) {
 					sys_args->rc, sys_args->sock_fd, sys_args->ip, sys_args->port, current->tgid, sec, nsec);
 		}
 //		printk("[socketcall connect]: %s", buf);
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -11623,7 +11717,11 @@ void packahgv_accept(struct accept_ahgv *sys_args) {
 				sys_args->rc, sys_args->sock_fd, ip, sys_args->port, current->tgid, sec, nsec);
 		}
 
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -11651,7 +11749,11 @@ void packahgv_send(struct send_ahgv *sys_args) {
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%ld|NA|0|%d|%ld|%ld|endahg\n", 
 				102, SYS_SEND, sys_args->pid, current->start_time.tv_sec, sys_args->sock_fd, sys_args->rc,
 				current->tgid, sec, nsec);
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -11692,7 +11794,11 @@ void packahgv_sendto(struct sendto_ahgv *sys_args) {
 					sys_args->port, current->tgid, sec, nsec);
 
 		}
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -11720,7 +11826,11 @@ void packahgv_recv(struct recv_ahgv *sys_args) {
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%ld|NA|0|%d|%ld|%ld|endahg\n", 
 				102, SYS_RECV, sys_args->pid, current->start_time.tv_sec, sys_args->sock_fd, sys_args->rc,
 				current->tgid, sec, nsec);
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -11760,7 +11870,11 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args) {
 				sys_args->sock_fd, sys_args->rc, sys_args->ip, 
 				sys_args->port, current->tgid, sec, nsec);
 		}
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -11789,7 +11903,11 @@ void packahgv_sendmsg(struct sendmsg_ahgv *sys_args) {
 				46, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->sock_fd, sys_args->rc, current->tgid, 
 				sec, nsec);
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -11818,7 +11936,11 @@ void packahgv_recvmsg(struct recvmsg_ahgv *sys_args) {
 				47, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->sock_fd, sys_args->rc, current->tgid, 
 				sec, nsec);
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -13416,7 +13538,11 @@ void packahgv_shmget(struct shmget_ahgv *sys_args)
 				29, SHMGET, sys_args->pid, current->start_time.tv_sec,
 				sys_args->rc, sys_args->key, sys_args->size, sys_args->shmflg,
 				current->tgid, sec, nsec);
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 	} else {
 		printk("theia_chan invalid\n");
 	}
@@ -13529,7 +13655,11 @@ void packahgv_shmat(struct shmat_ahgv *sys_args)
 				30, SHMAT, sys_args->pid, current->start_time.tv_sec,
 				sys_args->rc, sys_args->shmid, sys_args->shmaddr, sys_args->shmflg,
 				sys_args->raddr, current->tgid, sec, nsec);
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 	} else {
 		printk("theia_chan invalid\n");
 	}
@@ -14893,7 +15023,11 @@ void packahgv_clone (struct clone_ahgv *sys_args) {
 					-1, -1, current->tgid, sec, nsec);
 		}
 
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -15000,8 +15134,11 @@ void packahgv_mprotect (struct mprotect_ahgv *sys_args) {
 				10, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->retval, sys_args->address, sys_args->length, 
 				sys_args->protection, current->tgid, sec, nsec);
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
-
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -16914,7 +17051,11 @@ void packahgv_mmap (struct mmap_ahgv *sys_args) {
 				9, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->fd, sys_args->address, sys_args->length, sys_args->prot_type,
 				sys_args->flag, sys_args->offset, current->tgid, sec, nsec);
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -17500,7 +17641,11 @@ void packahgv_setuid (struct setuid_ahgv *sys_args) {
 				105, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->newuid, ids, sys_args->rc, is_newuser_remote, current->tgid, 
 				sec, nsec);
+#ifdef THEIA_DIRECT_FILE_WRITE
+		theia_file_write(buf, size);
+#else
 		relay_write(theia_chan, buf, size);
+#endif
 	}
 	else
 		printk("theia_chan invalid\n");
