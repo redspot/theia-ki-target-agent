@@ -11534,7 +11534,9 @@ void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char* i
 
 	*sa_family = basic_sockaddr->sa_family;
 
-	if (basic_sockaddr->sa_family == AF_INET) {
+	switch (*sa_family) {
+	case AF_INET:
+	case AF_UNSPEC: ; /* likely */
 		struct sockaddr_in* in_sockaddr;
 		unsigned char* cc;
 		in_sockaddr = (struct sockaddr_in*)basic_sockaddr;
@@ -11544,8 +11546,8 @@ void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char* i
 		sprintf(ip, "%u.%u.%u.%u",cc[4],cc[5],cc[6],cc[7]);
 
 		TPRINT("get_ip_port_sockaddr: ip is %s, port: %lu\n", ip, *port);
-	}
-	else if (basic_sockaddr->sa_family == AF_LOCAL) { //AF_LOCAL == AF_UNIX
+		break;
+	case AF_LOCAL: ;// AF_UNIX
 		struct sockaddr_un* un_sockaddr;
 		un_sockaddr = (struct sockaddr_un*)basic_sockaddr;
 
@@ -11555,8 +11557,8 @@ void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char* i
 		if (strlen(sun_path) == 0) {
 			strcpy(sun_path, "LOCAL");
 		}
-	}
-	else if (basic_sockaddr->sa_family == AF_NETLINK) { 
+		break;
+	case AF_NETLINK: ;
 		struct sockaddr_nl* nl_sockaddr;
 		nl_sockaddr = (struct sockaddr_nl*)basic_sockaddr;
 
@@ -11564,21 +11566,14 @@ void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char* i
 		/* Port ID: 0 if dst is kernel or pid of the process owning dst socket */
 		strcpy(ip, "NETLINK");
 		strcpy(sun_path, "NETLINK");
-	}
-	else {//not support
+		break;
+	case AF_INET6: /* TODO */
+	default:
 		printk("get_ip_port_sockaddr: sa_family problem %d\n", basic_sockaddr->sa_family);
 		*port = THEIA_INVALID_PORT;
-		if (basic_sockaddr->sa_family == AF_UNSPEC) {
-			strcpy(ip, "RAW");
-			strcpy(sun_path, "RAW");
-		}
-		else {
-			strcpy(ip, "NA");
-			strcpy(sun_path, "NA");
-		}
+		strcpy(ip, "NA");
+		strcpy(sun_path, "NA");
 	}
-
-	return;
 }
 
 void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_family_t* sa_family) {
@@ -11603,7 +11598,9 @@ void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_f
 
 	*sa_family = peer_sockaddr->sa_family;
 
-	if (peer_sockaddr->sa_family == AF_INET) {
+	switch (*sa_family) {
+	case AF_INET:
+	case AF_UNSPEC: ; /* likely */
 		struct sockaddr_in* in_sockaddr;
 		unsigned char* cc;
 		in_sockaddr = (struct sockaddr_in*)peer_sockaddr;
@@ -11611,8 +11608,10 @@ void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_f
 		*port = in_sockaddr->sin_port;
 		cc = (unsigned char *)in_sockaddr;
 		sprintf(ip, "%u.%u.%u.%u",cc[4],cc[5],cc[6],cc[7]);
-	}
-	else if (peer_sockaddr->sa_family == AF_LOCAL) { //AF_LOCAL == AF_UNIX
+
+		TPRINT("get_ip_port_sockfd: ip is %s, port: %lu\n", ip, *port);
+		break;
+	case AF_LOCAL: ;// AF_UNIX
 		struct sockaddr_un* un_sockaddr;
 		un_sockaddr = (struct sockaddr_un*)peer_sockaddr;
 
@@ -11622,8 +11621,8 @@ void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_f
 		if (strlen(sun_path) == 0) {
 			strcpy(sun_path, "LOCAL");
 		}
-	}
-	else if (peer_sockaddr->sa_family == AF_NETLINK) {
+		break;
+	case AF_NETLINK: ;
 		struct sockaddr_nl* nl_sockaddr;
 		nl_sockaddr = (struct sockaddr_nl*)peer_sockaddr;
 
@@ -11631,21 +11630,14 @@ void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_f
 		/* Port ID: 0 if dst is kernel or pid of the process owning dst socket */
 		strcpy(ip, "NETLINK");
 		strcpy(sun_path, "NETLINK");
-	}
-	else {//not support
+		break;
+	case AF_INET6: /* TODO */
+	default:
 		printk("get_ip_port_sockfd: sa_family problem %d\n", peer_sockaddr->sa_family);
 		*port = THEIA_INVALID_PORT;
-		if (peer_sockaddr->sa_family == AF_UNSPEC) {
-			strcpy(ip, "RAW");
-			strcpy(sun_path, "RAW");
-		}
-		else {
-			strcpy(ip, "NA");
-			strcpy(sun_path, "NA");
-		}
+		strcpy(ip, "NA");
+		strcpy(sun_path, "NA");
 	}
-
-	return;
 }
 
 //Yang
