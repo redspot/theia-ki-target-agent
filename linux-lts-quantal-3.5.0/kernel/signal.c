@@ -51,6 +51,7 @@
 #include <linux/namei.h>
 #include <linux/replay.h>
 #include <linux/theia_channel.h>
+#include <linux/theia.h>
 #include <linux/relay.h>
 #include <linux/debugfs.h>
 #include <linux/module.h>
@@ -1307,7 +1308,7 @@ void packahgv_shrread (struct shr_read_ahgv *sys_args) {
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%d|%d|%ld|%ld|endahg\n", 
 				   500, sys_args->pid, current->start_time.tv_sec, sys_args->address, current->tgid, sys_args->clock, sec, nsec);
-		relay_write(theia_chan, buf, size);
+		theia_file_write(buf, size);
 	}
 	else
 		printk("theia_chan invalid\n");
@@ -1398,7 +1399,7 @@ void packahgv_shrwrite (struct shr_write_ahgv *sys_args) {
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%d|%d|%ld|%ld|endahg\n", 
 				   501, sys_args->pid, current->start_time.tv_sec, sys_args->address, current->tgid, sys_args->clock, sec, nsec);
-		relay_write(theia_chan, buf, size);
+		theia_file_write(buf, size);
 	}
 	else
 		printk("theia_chan invalid\n");

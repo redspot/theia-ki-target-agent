@@ -77,7 +77,7 @@
 #include <linux/time.h>
 #include <linux/theia_channel.h>
 #include <linux/theia_ahglog.h>
-
+#include <linux/theia.h> /* TODO: move stuffs to here */
 
 //xdou
 #include <linux/xcomp.h>
@@ -101,8 +101,25 @@ void get_user_callstack(char *buffer, size_t bufsize);
 void theia_dump_str(char *str, int rc, int sysum);
 void theia_dump_auxdata();
 
+#define MAX_SOCK_ADDR      128
+#define THEIA_INVALID_PORT 0
+void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char* ip, u_long* port, char* sun_path, sa_family_t* sa_family);
+void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_family_t* sa_family);
+
 /* For debugging failing fs operations */
 int debug_flag = 0;
+
+#define SUBBUF_SIZE 262144
+#define N_SUBBUFS 4
+
+//#define APP_DIR		"theia_logs"
+struct rchan	*theia_chan = NULL;
+struct dentry	*theia_dir = NULL;
+//static size_t		subbuf_size = 262144*5;
+//static size_t		n_subbufs = 8;
+//static size_t		event_n = 20;
+//static size_t write_count;
+//static int suspended;
 
 void get_ids(char *ids);
 
@@ -116,6 +133,7 @@ static size_t theia_prevbuf_size = 0;
 
 static struct file* theia_filp = NULL;
 void theia_file_write(char *buf, size_t size) {
+#ifdef THEIA_DIRECT_FILE_WRITE
 	loff_t pos = 0;
 	mm_segment_t old_fs;
 	size_t written = 0;
@@ -179,8 +197,10 @@ void theia_file_write(char *buf, size_t size) {
 //	written = vfs_write(theia_filp, (char*)buf, size, &pos);
 //		if (written > 0) break; /* sometimes vfs_write returns -27. TODO */
 //	}
-
 //	filp_close(file, NULL);
+#else
+	relay_write(theia_chan, buf, size);
+#endif
 }
 
 //Yang
@@ -300,18 +320,6 @@ unsigned int replay_pause_tool = 0;
 
 #define new_syscall_exit(sysnum, retparam) _new_syscall_exit(sysnum, retparam, NULL)
 #define ahg_new_syscall_exit(sysnum, retparam, ahgparam) _new_syscall_exit(sysnum, retparam, ahgparam)
-  
-#define SUBBUF_SIZE 262144
-#define N_SUBBUFS 4
-
-//#define APP_DIR		"theia_logs"
-struct rchan	*theia_chan = NULL;
-struct dentry	*theia_dir = NULL;
-//static size_t		subbuf_size = 262144*5;
-//static size_t		n_subbufs = 8;
-//static size_t		event_n = 20;
-//static size_t write_count;
-//static int suspended;
 
 // let's reuse vmalloced buffer for storing filepath and more
 char *theia_buf1   = NULL;
@@ -324,6 +332,14 @@ bool theia_check_channel(void) {
 	if (!theia_buf2)   theia_buf2   = vmalloc(4096);
 	if (!theia_retbuf) theia_retbuf = vmalloc(4096);
 
+#ifdef THEIA_DIRECT_FILE_WRITE
+	if(theia_logging_toggle == 0) {
+		return false;
+	}
+	else {
+		return true;
+	}
+#else
 	mm_segment_t old_fs = get_fs();                                                
 	set_fs(KERNEL_DS);
 
@@ -354,6 +370,7 @@ bool theia_check_channel(void) {
 	set_fs(old_fs);                                                              
 
 	return true;
+#endif
 }
 
 // dump aux data: callstack, ids, ...
@@ -362,19 +379,13 @@ void theia_dump_auxdata() {
 	get_ids(ids);
 	get_user_callstack(theia_retbuf, 4096);
 
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		long sec, nsec;
 		int size;
 
 		size = sprintf(theia_buf2, "startahg|700|%d|%s|%s|endahg\n", current->pid, theia_retbuf, ids);
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(theia_buf2, size);
-#else
-		relay_write(theia_chan, theia_buf2, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 /* str == theia_buf1 */
@@ -390,7 +401,7 @@ void theia_dump_str(char *str, int rc, int sysnum) {
 #endif
 
 	/* packahgv */
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		long sec, nsec;
 		int size;
 		get_curr_time(&sec, &nsec);
@@ -400,15 +411,8 @@ void theia_dump_str(char *str, int rc, int sysnum) {
 			sysnum, current->pid, current->start_time.tv_sec, \
 			rc, str, \
 			current->tgid, sec, nsec);
-
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(theia_buf2, size);
-#else
-		relay_write(theia_chan, theia_buf2, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 void theia_dump_ss(const char __user *str1, const char __user *str2, int rc, int sysnum) {
@@ -7802,7 +7806,7 @@ bool is_opened_inode(struct inode *inode) {
 }
 
 void packahgv_process(struct task_struct *tsk) {
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		long sec, nsec;
 		char *buf = theia_buf2;
 		char ids[50];
@@ -7833,19 +7837,13 @@ void packahgv_process(struct task_struct *tsk) {
 					ids, tsk->real_parent->pid, 
 				  -1, fpath, is_user_remote, tsk->tgid, sec, nsec);
 		}
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 		vfree(fpathbuf);
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 void packahgv_process_bin(struct task_struct *tsk) {
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		long sec, nsec;
 		char ids[50];
 		get_curr_time(&sec, &nsec);
@@ -7897,18 +7895,12 @@ void packahgv_process_bin(struct task_struct *tsk) {
 		curr_ptr += buf_ahg->size_fpathbuf;
 		sprintf((char*)curr_ptr, "endahg");
 
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 
 		vfree(buf_ahg);
 		vfree(fpathbuf);
 		vfree(buf);
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 #define TSK_STACK_SIZE 100
@@ -7941,21 +7933,15 @@ void packahgv_read (struct read_ahgv *sys_args) {
 #endif
 
 	//Yang
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
 				0, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, 
 				sec, nsec);
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 void theia_read_ahg(unsigned int fd, long rc, u_long clock) {
@@ -8486,20 +8472,14 @@ void packahgv_write (struct write_ahgv *sys_args) {
 #endif
 
 	//Yang
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
 				1, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, sec, nsec);
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 void theia_write_ahg(unsigned int fd, long rc, u_long clock) {
@@ -8866,7 +8846,7 @@ void packahgv_open (struct open_ahgv *sys_args) {
 	theia_dump_auxdata();
 #endif
 
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *pcwd = NULL;
 		struct path path;
 		long sec, nsec;
@@ -8894,14 +8874,8 @@ void packahgv_open (struct open_ahgv *sys_args) {
 					2, sys_args->pid, current->start_time.tv_sec, sys_args->fd, pcwd, sys_args->filename, sys_args->flags, sys_args->mode,
 					sys_args->dev, sys_args->ino, sys_args->is_new, current->tgid, sec, nsec);
 		}
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(theia_buf1, size);
-#else
-		relay_write(theia_chan, theia_buf1, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, bool is_new)
@@ -9098,20 +9072,14 @@ struct close_ahgv {
 
 void packahgv_close (struct close_ahgv *sys_args) {
 	//Yang
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%d|%ld|%ld|endahg\n", 3, 
 		sys_args->pid, current->start_time.tv_sec, sys_args->fd, current->tgid, sec, nsec);
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 void theia_close_ahg(int fd) {
@@ -9332,7 +9300,7 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 	theia_dump_auxdata();	
 //#endif
 	//Yang
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
@@ -9360,15 +9328,9 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%s|%d|%d|%ld|%ld|endahg\n", 
 				59, sys_args->pid, current->start_time.tv_sec, sys_args->rc, 
 				fpath, ids, is_user_remote, current->tgid, sec, nsec);
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 		vfree(fpathbuf);
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 // void theia_execve_ahg(const char *filename, const char __user *const __user *envp) {
@@ -9988,7 +9950,7 @@ void packahgv_mount (struct mount_ahgv *sys_args) {
 #endif
 
 	//Yang
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		long sec, nsec;
 		int size;
 
@@ -9997,14 +9959,8 @@ void packahgv_mount (struct mount_ahgv *sys_args) {
 		size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%s|%s|%s|%lu|%d|%d|%ld|%ld|endahg\n", 
 				165, sys_args->pid, current->start_time.tv_sec, sys_args->devname, sys_args->dirname, sys_args->type, 
 				sys_args->flags, sys_args->rc, current->tgid, sec, nsec);
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(theia_buf1, size);
-#else
-		relay_write(theia_chan, theia_buf1, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 void theia_mount_ahg(char __user *dev_name, char __user *dir_name, char __user *type, unsigned long flags, int rc, u_long clock) {
@@ -10202,7 +10158,7 @@ void packahgv_pipe (struct pipe_ahgv *sys_args) {
 #endif
 
 	//Yang
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
@@ -10210,14 +10166,8 @@ void packahgv_pipe (struct pipe_ahgv *sys_args) {
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%d|%d|%lx|%lx|%d|%ld|%ld|endahg\n", 
 				22, sys_args->pid, current->start_time.tv_sec, sys_args->retval, sys_args->pfd1, sys_args->pfd2, 
 				sys_args->inode1, sys_args->inode2, current->tgid, sec, nsec);
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
@@ -10495,7 +10445,7 @@ void packahgv_ioctl (struct ioctl_ahgv *sys_args) {
 #endif
 
 	//Yang
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
@@ -10503,14 +10453,8 @@ void packahgv_ioctl (struct ioctl_ahgv *sys_args) {
 				16, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->fd, sys_args->cmd, sys_args->arg, sys_args->rc, current->tgid, 
 				sec, nsec);
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 void theia_ioctl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long rc, u_long clock) {
@@ -10817,20 +10761,14 @@ void theia_fcntl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long 
 		recursive_packahgv_process();
 
 	/* packahgv */
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%d|%d|%ld|%ld|endahg\n", 
 				72, current->pid, current->start_time.tv_sec, fd, cmd, arg, current->tgid, sec, nsec);
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 int theia_sys_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg)
@@ -11292,21 +11230,15 @@ void packahgv_munmap (struct munmap_ahgv *sys_args) {
 #endif
 
 	//Yang
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%lx|%ld|%d|%ld|%ld|endahg\n", 
 				11, sys_args->pid, current->start_time.tv_sec, sys_args->rc, 
 				sys_args->addr, sys_args->len, current->tgid, sec, nsec);
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 void theia_munmap_ahg(unsigned long addr, size_t len, long rc, u_long clock) {
@@ -11586,97 +11518,132 @@ void print_mem(u_long addr, int length) {
   }                                                                              
 }  
 
-void get_ip_port_sockaddr(unsigned long __user *sockaddr, char* ip, u_long* port, char* sun_path, sa_family_t* sa_family) {
-
+void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char* ip, u_long* port, char* sun_path, sa_family_t* sa_family) {
+	char address[MAX_SOCK_ADDR];	
 	struct sockaddr* basic_sockaddr;
-	basic_sockaddr = (struct sockaddr*)KMALLOC(sizeof(struct sockaddr), GFP_KERNEL);
-	if (copy_from_user (basic_sockaddr, sockaddr, sizeof(struct sockaddr))) {
-		KFREE(basic_sockaddr);
-//		printk("get_ip_port_sockaddr[%d]: fails to copy sockaddr from userspace\n", __LINE__);
+
+	if (copy_from_user (address, sockaddr, addrlen)) {
+		printk("get_ip_port_sockaddr[%d]: fails to copy sockaddr from userspace\n", __LINE__);
 		// TODO: what should we do?
-		*port = 0;
+		*port = THEIA_INVALID_PORT;
 		sprintf(ip, "NA");
-    sprintf(sun_path, "NA");
+		sprintf(sun_path, "NA");
 		return;
 	}
+	basic_sockaddr = (struct sockaddr*)address;
+
 	*sa_family = basic_sockaddr->sa_family;
 
-	if(basic_sockaddr->sa_family == AF_INET) {
+	if (basic_sockaddr->sa_family == AF_INET) {
 		struct sockaddr_in* in_sockaddr;
 		unsigned char* cc;
-		in_sockaddr = (struct sockaddr_in*)KMALLOC(sizeof(struct sockaddr_in), GFP_KERNEL);
-
-		if (copy_from_user (in_sockaddr, sockaddr, sizeof(struct sockaddr_in))) {
-			KFREE(in_sockaddr);
-//      printk("get_ip_port_sockaddr[%d]: fails to copy sockaddr from userspace\n", __LINE__);
-			// TODO: what should we do?
-      *port = 0;
-      sprintf(ip, "NA");
-      sprintf(sun_path, "NA");
-			return;
-		}
-
-		//	print_mem((u_long)p_sockaddr, sizeof(struct sockaddr));	
+		in_sockaddr = (struct sockaddr_in*)basic_sockaddr;
 
 		*port = in_sockaddr->sin_port;
-	 	cc = (unsigned char *)in_sockaddr;
+		cc = (unsigned char *)in_sockaddr;
 		sprintf(ip, "%u.%u.%u.%u",cc[4],cc[5],cc[6],cc[7]);
 
-//		TPRINT("get_ip_port_sockaddr: ip is %s, port: %lu\n", ip, *port);
-
-		KFREE(in_sockaddr);
-
+		TPRINT("get_ip_port_sockaddr: ip is %s, port: %lu\n", ip, *port);
 	}
-	else if(basic_sockaddr->sa_family == AF_LOCAL) { //AF_LOCAL == AF_UNIX
+	else if (basic_sockaddr->sa_family == AF_LOCAL) { //AF_LOCAL == AF_UNIX
 		struct sockaddr_un* un_sockaddr;
-		un_sockaddr = (struct sockaddr_un*)KMALLOC(sizeof(struct sockaddr_un), GFP_KERNEL);
+		un_sockaddr = (struct sockaddr_un*)basic_sockaddr;
 
-		if (copy_from_user (un_sockaddr, sockaddr, sizeof(struct sockaddr_un))) {
-			KFREE(un_sockaddr);
-//			printk("get_ip_port_sockaddr: fails to copy sockaddr from userspace\n");
-			// TODO: what should we do?
-      *port = 0;
-      sprintf(ip, "NA");
-      sprintf(sun_path, "NA");
-			return;
+		*port = THEIA_INVALID_PORT;
+		strcpy(ip, "LOCAL");
+		strncpy(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX);
+		if (strlen(sun_path) == 0) {
+			strcpy(sun_path, "LOCAL");
 		}
-    *port = 0;
-    strncpy(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX);
-    if (strlen(sun_path) == 0) {
-      sprintf(ip, "NA");
-      sprintf(sun_path, "NA");
-    }
-//		TPRINT("get_ip_port_sockaddr: sun_path is (%s), port: %lu\n", sun_path, *port);
-		
-		KFREE(un_sockaddr);
+	}
+	else if (basic_sockaddr->sa_family == AF_NETLINK) { 
+		struct sockaddr_nl* nl_sockaddr;
+		nl_sockaddr = (struct sockaddr_nl*)basic_sockaddr;
+
+		*port = nl_sockaddr->nl_pid; 
+		/* Port ID: 0 if dst is kernel or pid of the process owning dst socket */
+		strcpy(ip, "NETLINK");
+		strcpy(sun_path, "NETLINK");
 	}
 	else {//not support
-		*port = 0;
-		sprintf(ip, "NA");
-    sprintf(sun_path, "NA");
+		printk("get_ip_port_sockaddr: sa_family problem %d\n", basic_sockaddr->sa_family);
+		*port = THEIA_INVALID_PORT;
+		if (basic_sockaddr->sa_family == AF_UNSPEC) {
+			strcpy(ip, "RAW");
+			strcpy(sun_path, "RAW");
+		}
+		else {
+			strcpy(ip, "NA");
+			strcpy(sun_path, "NA");
+		}
 	}
-	KFREE(basic_sockaddr);
 
-//	struct sockaddr* p_sockaddr;
-//	unsigned char* cc;
-//	p_sockaddr = (struct sockaddr*)KMALLOC(sizeof(struct sockaddr), GFP_KERNEL);
-//
-//	if (copy_from_user (p_sockaddr, sockaddr, sizeof(struct sockaddr))) {
-//		KFREE(p_sockaddr);
-//		printk("fails to copy sockaddr from userspace\n");
-//		// TODO: what should we do?
-//		return;
-//	}
-//	
-////	print_mem((u_long)p_sockaddr, sizeof(struct sockaddr));	
-//
-//	cc = (unsigned char *)p_sockaddr;
-//	*port = cc[2]*0x100+cc[3];
-//	sprintf(ip, "%u.%u.%u.%u",cc[4],cc[5],cc[6],cc[7]);
-//
-//	TPRINT("ip is %s, port: %lu\n", ip, *port);
-//	
-//	KFREE(p_sockaddr);
+	return;
+}
+
+void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_family_t* sa_family) {
+	char address[MAX_SOCK_ADDR];	
+	struct sockaddr *peer_sockaddr;
+	int len;
+	int err = 1;
+	struct socket *sock = sockfd_lookup(sockfd, &err);
+
+	if (sock != NULL) {
+		err = sock->ops->getname(sock, (struct sockaddr*)address, &len, 1);
+	}
+
+	if (err) {
+		*port = THEIA_INVALID_PORT;
+		strcpy(ip, "NA");
+		strcpy(sun_path, "NA");
+		return;
+	}
+
+	peer_sockaddr = (struct sockaddr*)address;
+
+	*sa_family = peer_sockaddr->sa_family;
+
+	if (peer_sockaddr->sa_family == AF_INET) {
+		struct sockaddr_in* in_sockaddr;
+		unsigned char* cc;
+		in_sockaddr = (struct sockaddr_in*)peer_sockaddr;
+
+		*port = in_sockaddr->sin_port;
+		cc = (unsigned char *)in_sockaddr;
+		sprintf(ip, "%u.%u.%u.%u",cc[4],cc[5],cc[6],cc[7]);
+	}
+	else if (peer_sockaddr->sa_family == AF_LOCAL) { //AF_LOCAL == AF_UNIX
+		struct sockaddr_un* un_sockaddr;
+		un_sockaddr = (struct sockaddr_un*)peer_sockaddr;
+
+		*port = THEIA_INVALID_PORT;
+		strcpy(ip, "LOCAL");
+		strncpy(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX);
+		if (strlen(sun_path) == 0) {
+			strcpy(sun_path, "LOCAL");
+		}
+	}
+	else if (peer_sockaddr->sa_family == AF_NETLINK) {
+		struct sockaddr_nl* nl_sockaddr;
+		nl_sockaddr = (struct sockaddr_nl*)peer_sockaddr;
+
+		*port = nl_sockaddr->nl_pid; 
+		/* Port ID: 0 if dst is kernel or pid of the process owning dst socket */
+		strcpy(ip, "NETLINK");
+		strcpy(sun_path, "NETLINK");
+	}
+	else {//not support
+		printk("get_ip_port_sockfd: sa_family problem %d\n", peer_sockaddr->sa_family);
+		*port = THEIA_INVALID_PORT;
+		if (peer_sockaddr->sa_family == AF_UNSPEC) {
+			strcpy(ip, "RAW");
+			strcpy(sun_path, "RAW");
+		}
+		else {
+			strcpy(ip, "NA");
+			strcpy(sun_path, "NA");
+		}
+	}
 
 	return;
 }
@@ -11698,7 +11665,7 @@ void packahgv_connect(struct connect_ahgv *sys_args) {
 #endif
 
 	//Yang
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
@@ -11715,14 +11682,8 @@ void packahgv_connect(struct connect_ahgv *sys_args) {
 					sys_args->rc, sys_args->sock_fd, sys_args->ip, sys_args->port, current->tgid, sec, nsec);
 		}
 //		printk("[socketcall connect]: %s", buf);
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 struct accept_ahgv {
@@ -11740,7 +11701,7 @@ void packahgv_accept(struct accept_ahgv *sys_args) {
 	theia_dump_auxdata();
 #endif
 	//Yang
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		char ip[50] = "";
@@ -11761,14 +11722,8 @@ void packahgv_accept(struct accept_ahgv *sys_args) {
 				sys_args->rc, sys_args->sock_fd, ip, sys_args->port, current->tgid, sec, nsec);
 		}
 
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 struct send_ahgv {
@@ -11786,21 +11741,15 @@ void packahgv_send(struct send_ahgv *sys_args) {
 #endif
 
 	//Yang
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%ld|NA|0|%d|%ld|%ld|endahg\n", 
 				102, SYS_SEND, sys_args->pid, current->start_time.tv_sec, sys_args->sock_fd, sys_args->rc,
 				current->tgid, sec, nsec);
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 struct sendto_ahgv {
@@ -11820,7 +11769,7 @@ void packahgv_sendto(struct sendto_ahgv *sys_args) {
 #endif
 
 	//Yang
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
@@ -11838,14 +11787,8 @@ void packahgv_sendto(struct sendto_ahgv *sys_args) {
 					sys_args->port, current->tgid, sec, nsec);
 
 		}
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 struct recv_ahgv {
@@ -11863,21 +11806,15 @@ void packahgv_recv(struct recv_ahgv *sys_args) {
 #endif
 
 	//Yang
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%ld|NA|0|%d|%ld|%ld|endahg\n", 
 				102, SYS_RECV, sys_args->pid, current->start_time.tv_sec, sys_args->sock_fd, sys_args->rc,
 				current->tgid, sec, nsec);
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 struct recvfrom_ahgv {
@@ -11897,7 +11834,7 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args) {
 #endif
 
 	//Yang
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
@@ -11914,14 +11851,8 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args) {
 				sys_args->sock_fd, sys_args->rc, sys_args->ip, 
 				sys_args->port, current->tgid, sec, nsec);
 		}
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 struct sendmsg_ahgv {
@@ -11939,7 +11870,7 @@ void packahgv_sendmsg(struct sendmsg_ahgv *sys_args) {
 #endif
 
 	//Yang
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
@@ -11947,14 +11878,8 @@ void packahgv_sendmsg(struct sendmsg_ahgv *sys_args) {
 				46, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->sock_fd, sys_args->rc, current->tgid, 
 				sec, nsec);
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 struct recvmsg_ahgv {
@@ -11972,7 +11897,7 @@ void packahgv_recvmsg(struct recvmsg_ahgv *sys_args) {
 #endif
 
 	//Yang
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
@@ -11980,14 +11905,8 @@ void packahgv_recvmsg(struct recvmsg_ahgv *sys_args) {
 				47, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->sock_fd, sys_args->rc, current->tgid, 
 				sec, nsec);
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 void theia_connect_ahg(long rc, int fd, struct sockaddr __user *uservaddr, int addrlen) {
@@ -12008,7 +11927,10 @@ void theia_connect_ahg(long rc, int fd, struct sockaddr __user *uservaddr, int a
 	pahgv_connect->pid = current->pid;
 	pahgv_connect->rc = rc;
 	pahgv_connect->sock_fd = fd;
-	get_ip_port_sockaddr((unsigned long*)uservaddr, pahgv_connect->ip, &(pahgv_connect->port), pahgv_connect->sun_path, &(pahgv_connect->sa_family));
+	if (uservaddr != NULL)
+		get_ip_port_sockaddr(uservaddr, addrlen, pahgv_connect->ip, &(pahgv_connect->port), pahgv_connect->sun_path, &(pahgv_connect->sa_family));
+	else
+		get_ip_port_sockfd(fd, pahgv_connect->ip, &(pahgv_connect->port), pahgv_connect->sun_path, &(pahgv_connect->sa_family));
 	packahgv_connect(pahgv_connect);
 	KFREE(pahgv_connect);	
 
@@ -12033,7 +11955,10 @@ void theia_accept_ahg(long rc, int fd, struct sockaddr __user *upeer_sockaddr, i
 	pahgv_accept->pid = current->pid;
 	pahgv_accept->rc = rc;
 	pahgv_accept->sock_fd = fd;
-	get_ip_port_sockaddr((unsigned long*)upeer_sockaddr, pahgv_accept->ip, &(pahgv_accept->port), pahgv_accept->sun_path, &(pahgv_accept->sa_family));
+	if (upeer_sockaddr != NULL)
+		get_ip_port_sockaddr(upeer_sockaddr, *upeer_addrlen, pahgv_accept->ip, &(pahgv_accept->port), pahgv_accept->sun_path, &(pahgv_accept->sa_family));
+	else
+		get_ip_port_sockfd(fd, pahgv_accept->ip, &(pahgv_accept->port), pahgv_accept->sun_path, &(pahgv_accept->sa_family));
 	packahgv_accept(pahgv_accept);
 	KFREE(pahgv_accept);	
 
@@ -12058,7 +11983,10 @@ void theia_sendto_ahg(long rc, int fd, void __user *buff, size_t len, unsigned i
 	pahgv_sendto->pid = current->pid;
 	pahgv_sendto->sock_fd = fd;
 	pahgv_sendto->rc = rc;
-	get_ip_port_sockaddr((unsigned long*)addr, pahgv_sendto->ip, &(pahgv_sendto->port), pahgv_sendto->sun_path, &(pahgv_sendto->sa_family));
+	if (addr != NULL) /* via sendto syscall */
+		get_ip_port_sockaddr(addr, addr_len, pahgv_sendto->ip, &(pahgv_sendto->port), pahgv_sendto->sun_path, &(pahgv_sendto->sa_family));
+	else /* via send syscall */
+		get_ip_port_sockfd(fd, pahgv_sendto->ip, &(pahgv_sendto->port), pahgv_sendto->sun_path, &(pahgv_sendto->sa_family));
 	packahgv_sendto(pahgv_sendto);
 	KFREE(pahgv_sendto);	
 
@@ -12082,7 +12010,10 @@ void theia_recvfrom_ahg(long rc, int fd, void __user *ubuf, size_t size, unsigne
 	}
 	pahgv_recvfrom->pid = current->pid;
 	pahgv_recvfrom->sock_fd = fd;
-	get_ip_port_sockaddr((unsigned long*)addr, pahgv_recvfrom->ip, &(pahgv_recvfrom->port), pahgv_recvfrom->sun_path, &(pahgv_recvfrom->sa_family));
+	if (addr != NULL)
+		get_ip_port_sockaddr(addr, *addr_len, pahgv_recvfrom->ip, &(pahgv_recvfrom->port), pahgv_recvfrom->sun_path, &(pahgv_recvfrom->sa_family));
+	else
+		get_ip_port_sockfd(fd, pahgv_recvfrom->ip, &(pahgv_recvfrom->port), pahgv_recvfrom->sun_path, &(pahgv_recvfrom->sa_family));
 	pahgv_recvfrom->rc = rc;
 	//				pahgv_recvfrom->clock = clock;
 	packahgv_recvfrom(pahgv_recvfrom);
@@ -13574,7 +13505,7 @@ void packahgv_shmget(struct shmget_ahgv *sys_args)
 	theia_dump_auxdata();
 #endif
 
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
@@ -13582,14 +13513,8 @@ void packahgv_shmget(struct shmget_ahgv *sys_args)
 				29, SHMGET, sys_args->pid, current->start_time.tv_sec,
 				sys_args->rc, sys_args->key, sys_args->size, sys_args->shmflg,
 				current->tgid, sec, nsec);
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
-	} else {
-		printk("theia_chan invalid\n");
-	}
+	} 
 }
 
 void theia_shmget_ahg(long rc, key_t key, size_t size, int flag) {
@@ -13691,7 +13616,7 @@ void packahgv_shmat(struct shmat_ahgv *sys_args)
 	theia_dump_auxdata();
 #endif
 
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
@@ -13699,14 +13624,8 @@ void packahgv_shmat(struct shmat_ahgv *sys_args)
 				30, SHMAT, sys_args->pid, current->start_time.tv_sec,
 				sys_args->rc, sys_args->shmid, sys_args->shmaddr, sys_args->shmflg,
 				sys_args->raddr, current->tgid, sec, nsec);
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
-	} else {
-		printk("theia_chan invalid\n");
-	}
+	} 
 }
 
 void theia_shmat_ahg(long rc, int shmid, char __user *shmaddr, int shmflg) {
@@ -15032,7 +14951,7 @@ void packahgv_clone (struct clone_ahgv *sys_args) {
 #endif
 
 	//Yang
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		char ids[50];
@@ -15067,14 +14986,8 @@ void packahgv_clone (struct clone_ahgv *sys_args) {
 					-1, -1, current->tgid, sec, nsec);
 		}
 
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 void theia_clone_ahg(long new_pid) {
@@ -15169,7 +15082,7 @@ void packahgv_mprotect (struct mprotect_ahgv *sys_args) {
 #endif
 
 	//Yang
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
@@ -15178,14 +15091,8 @@ void packahgv_mprotect (struct mprotect_ahgv *sys_args) {
 				10, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->retval, sys_args->address, sys_args->length, 
 				sys_args->protection, current->tgid, sec, nsec);
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 void theia_mprotect_ahg(u_long address, u_long len, uint16_t prot, long rc) {
@@ -17087,7 +16994,7 @@ void packahgv_mmap (struct mmap_ahgv *sys_args) {
 #endif
 
 	//Yang
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
@@ -17095,14 +17002,8 @@ void packahgv_mmap (struct mmap_ahgv *sys_args) {
 				9, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->fd, sys_args->address, sys_args->length, sys_args->prot_type,
 				sys_args->flag, sys_args->offset, current->tgid, sec, nsec);
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 void theia_mmap_ahg(int fd, u_long address, u_long len, uint16_t prot, 
@@ -17673,7 +17574,7 @@ void packahgv_setuid (struct setuid_ahgv *sys_args) {
 #endif
 
 	//Yang
-	if(theia_chan) {
+	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
@@ -17685,14 +17586,8 @@ void packahgv_setuid (struct setuid_ahgv *sys_args) {
 				105, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->newuid, ids, sys_args->rc, is_newuser_remote, current->tgid, 
 				sec, nsec);
-#ifdef THEIA_DIRECT_FILE_WRITE
 		theia_file_write(buf, size);
-#else
-		relay_write(theia_chan, buf, size);
-#endif
 	}
-	else
-		printk("theia_chan invalid\n");
 }
 
 void theia_setuid_ahg(uid_t uid, int rc, u_long clock) {
