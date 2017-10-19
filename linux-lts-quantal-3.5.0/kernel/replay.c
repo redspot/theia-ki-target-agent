@@ -7941,12 +7941,14 @@ void packahgv_read (struct read_ahgv *sys_args) {
 	struct file *file;
 	struct inode *inode;
 	u_long dev, ino;
+        int fput_needed;
 
-	file = fget(sys_args->fd); /* slow... */
+	file = fget_light(sys_args->fd, &fput_needed);
 	if (file) {
 		inode = file->f_dentry->d_inode;
 		dev = inode->i_sb->s_dev;
 		ino = inode->i_ino;
+		fput_light(file, fput_needed);
 //		sprintf(uuid_str, "%lx:%lx", inode->i_sb->s_dev, inode->i_ino);
 /*
 		if (inode->i_sb->s_dev == 7) {
@@ -8573,12 +8575,14 @@ void packahgv_write (struct write_ahgv *sys_args) {
 	struct file *file;
 	struct inode *inode;
 	u_long dev, ino;
+	int fput_needed;
 
-	file = fget(sys_args->fd); /* slow...*/
+	file = fget_light(sys_args->fd, &fput_needed); /* slow...*/
 	if (file) {
 		inode = file->f_dentry->d_inode;
 		dev = inode->i_sb->s_dev;
 		ino = inode->i_ino;
+		fput_light(file, fput_needed);
 	}
 	else {
 		dev = ino = 0;
@@ -9004,6 +9008,7 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, 
 	struct inode* inode;
 	struct open_ahgv* pahgv = NULL;
 	int copied_length = 0;
+	int fput_needed = 0;
 
 	if (theia_check_channel() == false)
 		return;
@@ -9025,7 +9030,7 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, 
 
 	file = NULL;
 	if (rc >= 0) {
-		file = fget ((unsigned int)rc);
+		file = fget_light((unsigned int)rc, &fput_needed);
 	}
 
 	if (!file) {
@@ -9045,6 +9050,7 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, 
 
 		char *fpathbuf = (char*)vmalloc(PATH_MAX);
 		char *fpath    = get_file_fullpath(file, fpathbuf, PATH_MAX);
+		fput_light(file, fput_needed);
 		if (!IS_ERR(fpath)) { /* sometimes we can't obtain fullpath */
 			strncpy(pahgv->filename, fpath, 204);
 			vfree(fpathbuf);
@@ -10281,10 +10287,12 @@ void packahgv_pipe (struct pipe_ahgv *sys_args) {
 	file2 = fget(sys_args->pfd2);
 	if (file1) {
 		inode = file1->f_dentry->d_inode;
+		fput(file1);
 		printk("XXX: %d pipe1: %lx, %lx\n", sys_args->pid, inode->i_sb->s_dev, inode->i_ino);
 	}
 	if (file2) {
 		inode = file2->f_dentry->d_inode;
+		fput(file2);
 		printk("XXX: %d pipe2: %lx, %lx\n", sys_args->pid, inode->i_sb->s_dev, inode->i_ino);
         }
 */
@@ -10309,6 +10317,7 @@ void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
 	struct pipe_ahgv* pahgv = NULL;
 	struct file* file = NULL;
 	struct inode* inode;
+	int fput_needed;
 
 	if (theia_check_channel() == false)
 		return;
@@ -10327,7 +10336,7 @@ void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
 	pahgv->pfd2 = pfd2;
 
 	if (pfd1 >= 0)
-		file = fget(pfd1);
+		file = fget_light(pfd1, &fput_needed);
 
 	if (!file) {
 		pahgv->dev1 = 0;
@@ -10337,6 +10346,7 @@ void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
 		inode = file->f_dentry->d_inode;
 		pahgv->dev1 = inode->i_sb->s_dev;
 		pahgv->ino1 = inode->i_ino;
+		fput_light(file, fput_needed);
 	}
 
 	/* seems that file obj for pfd2 is not ready at this point */
@@ -10354,6 +10364,7 @@ void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
 		inode = file->f_dentry->d_inode;
 		pahgv->dev2 = inode->i_sb->s_dev;
 		pahgv->ino2 = inode->i_ino;
+		fput(file);
 	}
 */
 	
