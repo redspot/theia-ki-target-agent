@@ -123,6 +123,9 @@ struct dentry	*theia_dir = NULL;
 
 void get_ids(char *ids);
 
+#define THEIA_INODE 1 /* publish inodeinstead of fd? */
+#undef THEIA_INODE
+
 #define THEIA_DIRECT_FILE_WRITE 1
 #undef THEIA_DIRECT_FILE_WRITE
 
@@ -7780,6 +7783,9 @@ void remove_process_from_tree(pid_t pid, int sec) {
 	mutex_lock(&theia_process_tree_mutex);
 	ret = btree_remove64(&theia_process_tree, key);
 	mutex_unlock(&theia_process_tree_mutex);
+
+#define SYS_EXIT 60
+	theia_dump_str("exit", 0, SYS_EXIT);
 }
 
 bool is_opened_inode(struct inode *inode) {
@@ -7931,15 +7937,108 @@ void packahgv_read (struct read_ahgv *sys_args) {
 //      too many events are generated and system hangs
 //	theia_dump_auxdata();
 #endif
+#ifdef THEIA_INODE
+	struct file *file;
+	struct inode *inode;
+	u_long dev, ino;
+
+	file = fget(sys_args->fd); /* slow... */
+	if (file) {
+		inode = file->f_dentry->d_inode;
+		dev = inode->i_sb->s_dev;
+		ino = inode->i_ino;
+//		sprintf(uuid_str, "%lx:%lx", inode->i_sb->s_dev, inode->i_ino);
+/*
+		if (inode->i_sb->s_dev == 7) {
+			sock = sockfd_lookup(sys_args->fd, &err);
+			if (sock) {
+				get_ip_port_sockfd(sys_args->fd, ip, &port, sun_path, &sa_family); 
+				// slow. do this during connect/accept
+				sprintf(uuid_str, "ip:%s:%d", ip, port);
+			}
+			else {
+				sprintf(uuid_str, "inode:%lx:%lx", inode->i_sb->s_dev, inode->i_ino);
+			}
+		}
+		else {
+			sprintf(uuid_str, "inode:%lx:%lx", inode->i_sb->s_dev, inode->i_ino);
+		}
+*/
+	}
+	else {
+//		strcpy(uuid_str, "NOFILEOBJ");
+		dev = ino = 0;
+	}
+#endif
+
+#if 0
+	sock = sockfd_lookup(sys_args->fd, &err);
+
+	if (sock) { /* socket */
+		get_ip_port_sockfd(sys_args->fd, ip, &port, sun_path, &sa_family);
+//		printk("XXX: %d read from ip %s, port %d\n", sys_args->pid, ip, port);
+		sprintf(uuid_str, "ip:%s:%d", ip, port);
+	}
+	else {
+		file = fget(sys_args->fd);
+		if (file) {
+			inode = file->f_dentry->d_inode;
+			sprintf(uuid_str, "inode:%lx:%lx", inode->i_sb->s_dev, inode->i_ino);
+//			char *fpath = get_file_fullpath(file, theia_retbuf, 4096);
+//			printk("XXX: %s\n", fpath);
+//			printk("XXX: %d read from %lx, %lx\n", sys_args->pid, inode->i_sb->s_dev, inode->i_ino);
+			/*
+				s_dev == 0x5: /dev/ptmx
+				s_dev == 0xb: /dev/pts/? 0xb,0x3->/dev/pts/0
+				s_dev == 0x8: pipe
+				s_dev == 0xf: tmpfs
+				s_dev == 0xfd00001...: file in disk
+			*/
+/*
+			switch (inode->i_sb->s_dev) {
+			case 0x5:
+				printk("XXX: %d read from /dev/ptmx\n", sys_args->pid);
+				break;
+			case 0xb: 
+				printk("XXX: %d read from /dev/pts/%d\n", sys_args->pid, inode->i_ino - 3);
+				break;
+			case 0x8: 
+				printk("XXX: %d read from a pipe (%lx, %lx)\n", sys_args->pid, inode->i_sb->s_dev, inode->i_ino);
+				break;
+			case 0x3: 
+				printk("XXX: %d read from a file (%lx, %lx) in proc\n", sys_args->pid, inode->i_sb->s_dev, inode->i_ino);
+				break;
+			case 0xf: 
+				printk("XXX: %d read from a file (%lx, %lx) in tmpfs\n", sys_args->pid, inode->i_sb->s_dev, inode->i_ino);
+				break;
+			case 0xfd00001: 
+				printk("XXX: %d read from a file (%lx, %lx) in disk\n", sys_args->pid, inode->i_sb->s_dev, inode->i_ino);
+				break;
+			default:
+				printk("XXX: %d read from an inode (%lx, %lx)\n", sys_args->pid, inode->i_sb->s_dev, inode->i_ino);
+			}
+*/
+		}
+		else {
+			strcpy(uuid_str, "NOFILEOBJ");
+		}
+	}
+#endif
 
 	//Yang
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
+#ifdef THEIA_INODE
+		int size = sprintf(buf, "startahg|%d|%d|%ld|%x|%x|%ld|%d|%ld|%ld|endahg\n", 
+				0, sys_args->pid, current->start_time.tv_sec, dev, ino, sys_args->bytes, current->tgid, 
+				sec, nsec);
+#else
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
 				0, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, 
 				sec, nsec);
+#endif
 		theia_file_write(buf, size);
 	}
 }
@@ -8470,14 +8569,34 @@ void packahgv_write (struct write_ahgv *sys_args) {
 //      too many events are generated and system hangs
 //	theia_dump_auxdata();
 #endif
+#ifdef THEIA_INODE
+	struct file *file;
+	struct inode *inode;
+	u_long dev, ino;
+
+	file = fget(sys_args->fd); /* slow...*/
+	if (file) {
+		inode = file->f_dentry->d_inode;
+		dev = inode->i_sb->s_dev;
+		ino = inode->i_ino;
+	}
+	else {
+		dev = ino = 0;
+	}
+#endif
 
 	//Yang
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
+#ifdef THEIA_INODE
+		int size = sprintf(buf, "startahg|%d|%d|%ld|%x|%x|%ld|%d|%ld|%ld|endahg\n", 
+				1, sys_args->pid, current->start_time.tv_sec, dev, ino, sys_args->bytes, current->tgid, sec, nsec);
+#else
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
 				1, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, sec, nsec);
+#endif
 		theia_file_write(buf, size);
 	}
 }
@@ -10144,8 +10263,6 @@ struct pipe_ahgv {
 	u_long retval;
 	int    pfd1;
 	int    pfd2;
-	u_long inode1;
-	u_long inode2;
 	u_long dev1;
 	u_long dev2;
 	u_long ino1;
@@ -10156,6 +10273,22 @@ void packahgv_pipe (struct pipe_ahgv *sys_args) {
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
+	struct file *file1, *file2;
+	struct inode *inode;
+
+/*
+	file1 = fget(sys_args->pfd1);
+	file2 = fget(sys_args->pfd2);
+	if (file1) {
+		inode = file1->f_dentry->d_inode;
+		printk("XXX: %d pipe1: %lx, %lx\n", sys_args->pid, inode->i_sb->s_dev, inode->i_ino);
+	}
+	if (file2) {
+		inode = file2->f_dentry->d_inode;
+		printk("XXX: %d pipe2: %lx, %lx\n", sys_args->pid, inode->i_sb->s_dev, inode->i_ino);
+        }
+*/
+//	printk("XXX: %d pipe: %d %lx %lx\n", sys_args->pid, sys_args->pfd1, sys_args->dev1, sys_args->ino1);
 
 	//Yang
 	if(theia_logging_toggle) {
@@ -10165,7 +10298,8 @@ void packahgv_pipe (struct pipe_ahgv *sys_args) {
 		/* TODO: publish both ends' data: dev1, dev2, ino1, ino2 */
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%d|%d|%lx|%lx|%d|%ld|%ld|endahg\n", 
 				22, sys_args->pid, current->start_time.tv_sec, sys_args->retval, sys_args->pfd1, sys_args->pfd2, 
-				sys_args->inode1, sys_args->inode2, current->tgid, sec, nsec);
+				sys_args->dev1, sys_args->ino1, current->tgid, sec, nsec); // let's focus on pipe inode (dev,ino) itself
+//				sys_args->inode1, sys_args->inode2, current->tgid, sec, nsec);
 		theia_file_write(buf, size);
 	}
 }
@@ -10205,6 +10339,9 @@ void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
 		pahgv->ino1 = inode->i_ino;
 	}
 
+	/* seems that file obj for pfd2 is not ready at this point */
+//	pahgv->dev2 = 0; pahgv->ino2 = 0;		
+/*
 	file = NULL;
 	if (pfd2 >= 0)
 		file = fget(pfd2);
@@ -10218,6 +10355,7 @@ void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
 		pahgv->dev2 = inode->i_sb->s_dev;
 		pahgv->ino2 = inode->i_ino;
 	}
+*/
 	
 	packahgv_pipe(pahgv);
 	KFREE(pahgv);
@@ -10287,22 +10425,22 @@ static asmlinkage long replay_pipe (int __user *fildes)	{
 int theia_sys_pipe(int __user *fildes) {
 	long rc;
 	int* pretval = NULL;
+
 	rc = sys_pipe(fildes);
+
+	if (rc == 0) {
 		pretval = KMALLOC(2*sizeof(int), GFP_KERNEL);
-		if (pretval == NULL) {
-			printk("theia_sys_pipe: can't allocate buffer\n");
-			return -ENOMEM;
-		}
 		if (copy_from_user (pretval, fildes, 2*sizeof(int))) {
-			KFREE (pretval);
+			KFREE(pretval);
 			return -EFAULT;
 		}
+		theia_pipe_ahg((u_long)rc, *pretval, *(pretval+sizeof(int)));
+		KFREE(pretval);
+	}
+	else {
+		theia_pipe_ahg((u_long)rc, -1, -1);
+	}
 
-// Yang: regardless of the return value, passes the failed syscall also
-//	if (rc >= 0) 
-		{ 
-			theia_pipe_ahg((u_long)rc, *pretval, *(pretval+sizeof(int)));
-		}
 	return rc;
 }
 
@@ -11545,7 +11683,7 @@ void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char* i
 		cc = (unsigned char *)in_sockaddr;
 		sprintf(ip, "%u.%u.%u.%u",cc[4],cc[5],cc[6],cc[7]);
 
-		TPRINT("get_ip_port_sockaddr: ip is %s, port: %lu\n", ip, *port);
+//		TPRINT("get_ip_port_sockaddr: ip is %s, port: %lu\n", ip, *port);
 		break;
 	case AF_LOCAL: ;// AF_UNIX
 		struct sockaddr_un* un_sockaddr;
@@ -11609,7 +11747,7 @@ void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_f
 		cc = (unsigned char *)in_sockaddr;
 		sprintf(ip, "%u.%u.%u.%u",cc[4],cc[5],cc[6],cc[7]);
 
-		TPRINT("get_ip_port_sockfd: ip is %s, port: %lu\n", ip, *port);
+//		TPRINT("get_ip_port_sockfd: ip is %s, port: %lu\n", ip, *port);
 		break;
 	case AF_LOCAL: ;// AF_UNIX
 		struct sockaddr_un* un_sockaddr;
@@ -11633,7 +11771,7 @@ void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_f
 		break;
 	case AF_INET6: /* TODO */
 	default:
-		printk("get_ip_port_sockfd: sa_family problem %d\n", peer_sockaddr->sa_family);
+//		printk("get_ip_port_sockfd: sa_family problem %d\n", peer_sockaddr->sa_family);
 		*port = THEIA_INVALID_PORT;
 		strcpy(ip, "NA");
 		strcpy(sun_path, "NA");
