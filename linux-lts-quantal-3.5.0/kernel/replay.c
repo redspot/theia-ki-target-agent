@@ -2845,7 +2845,7 @@ void get_user_callstack(char* buffer, size_t bufsize) {
 	
 	struct mm_struct *mm = current->mm;
 	struct vm_area_struct *vma;
-//	char ret_str[1024];
+	struct inode *inode;
 	char *ret_str = theia_buf2;
 
 	trace.nr_entries  = 0;
@@ -2859,21 +2859,22 @@ void get_user_callstack(char* buffer, size_t bufsize) {
 	char *ptr;
 	char *path = NULL;
 	buffer[0] = '\0';
-//	for (i = trace.nr_entries-1; i >= 0; --i) {
 	for (i = 0; i < trace.nr_entries; ++i) {
 		vma = find_vma(mm, trace.entries[i]);
 		if (!vma)
 			continue;
 
 		if (vma->vm_file) {
+			inode = vma->vm_file->f_dentry->d_inode;
 			path = d_path(&(vma->vm_file->f_path), theia_buf2, 4096);
-			if (IS_ERR(path))
-				path = "[NOFILE]";
-			sprintf(ret_str, "%s=%lx", path, trace.entries[i]);
+			if (IS_ERR(path)) {
+				path = "anon_page";
+			}
+			sprintf(ret_str, "%s[%lx:%lx]=%lx", path, inode->i_sb->s_dev, inode->i_ino, trace.entries[i]);
 			ptr = ret_str;
 		}
 		else {
-			sprintf(ret_str, "[ANONYMOUS]=%lx", trace.entries[i]);
+			sprintf(ret_str, "anon_page=%lx", trace.entries[i]);
 			ptr = ret_str;
 		}
 
@@ -7970,7 +7971,7 @@ void packahgv_read (struct read_ahgv *sys_args) {
 //				sprintf(inode_str, "inode:%lx:%lx", inode->i_sb->s_dev, inode->i_ino);
 			}
 		}
-		else if (dev == 0xfd00001 /* in-disk file */ || dev == 0xf /* in-memory file */ || dev == 0x5 /* ptmx */ || dev == 0xb /* pts */) {
+		else if (dev == 0xfd00001 /* in-disk file */ || dev == 0xf /* in-memory file */ || dev == 0x5 /* ptmx */ || dev == 0xb /* pts */ || dev == 0x3 /* procfs */) {
 			/* publish inode */
 			sprintf(inode_str, "inode:[%lx:%lx]", dev, ino);
 		}
@@ -8572,7 +8573,7 @@ void packahgv_write (struct write_ahgv *sys_args) {
 				return;
 			}
 		}
-		else if (dev == 0xfd00001 /* in-disk file */ || dev == 0xf /* in-memory file */ || dev == 0x5 /* ptmx */ || dev == 0xb /* pts */) {
+		else if (dev == 0xfd00001 /* in-disk file */ || dev == 0xf /* in-memory file */ || dev == 0x5 /* ptmx */ || dev == 0xb /* pts */ || dev == 0x3 /* procfs */) {
 			/* publish inode */
 			sprintf(inode_str, "inode:[%lx:%lx]", dev, ino);
 		}
@@ -10732,7 +10733,8 @@ void packahgv_ioctl (struct ioctl_ahgv *sys_args) {
 			sprintf(inode_str, "inode:[%lx:%lx]", dev, ino);
 		}
 		else {
-			inode_str[0] = 'N'; inode_str[1] = 'A'; inode_str[2] = '\0';
+			/* no file? */
+			return;
 		}
 
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%ld|%d|%ld|%ld|endahg\n", 
@@ -11520,6 +11522,15 @@ void packahgv_munmap (struct munmap_ahgv *sys_args) {
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
+/*
+	struct vm_area_struct *vma = find_vma(current->mm, sys_args->addr);
+	char *fpath = NULL;
+	if (vma->vm_file) {
+		fpath = d_path(&(vma->vm_file->f_path), theia_retbuf, 4096);
+		if (!IS_ERR(fpath))
+			printk("XXX: munmap: %s\n", fpath);
+	}
+*/
 
 	//Yang
 	if(theia_logging_toggle) {
@@ -17374,11 +17385,11 @@ void packahgv_mmap (struct mmap_ahgv *sys_args) {
 				sprintf(inode_str, "inode:[%lx:%lx]", dev, ino);
 			}
 			else {
-				inode_str[0] = 'N'; inode_str[1] = 'A'; inode_str[2] = '\0';
+				strcpy(inode_str, "anon_page");
 			}
 		}
 		else {
-			inode_str[0] = 'N'; inode_str[1] = 'A'; inode_str[2] = '\0';
+			strcpy(inode_str, "anon_page");
 		}
 
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%s|%lx|%lu|%d|%lx|%lx|%d|%ld|%ld|endahg\n", 
