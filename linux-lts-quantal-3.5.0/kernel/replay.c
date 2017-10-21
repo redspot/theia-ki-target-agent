@@ -10711,16 +10711,40 @@ void packahgv_ioctl (struct ioctl_ahgv *sys_args) {
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
+	struct file *file;
+	struct inode *inode;
+	u_long dev, ino;
+	char inode_str[128];
+	int fput_needed;
 
 	//Yang
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%u|%lu|%ld|%d|%ld|%ld|endahg\n", 
+#ifdef THEIA_INODE
+		file = fget_light(sys_args->fd, &fput_needed);
+		if (file) {
+			inode = file->f_dentry->d_inode;
+			dev = inode->i_sb->s_dev;
+			ino = inode->i_ino;
+			fput_light(file, fput_needed);
+			sprintf(inode_str, "inode:[%lx:%lx]", dev, ino);
+		}
+		else {
+			inode_str[0] = 'N'; inode_str[1] = 'A'; inode_str[2] = '\0';
+		}
+
+		int size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%ld|%d|%ld|%ld|endahg\n", 
+				16, sys_args->pid, current->start_time.tv_sec, 
+				inode_str, sys_args->cmd, sys_args->arg, sys_args->rc, current->tgid, 
+				sec, nsec);
+#else
+		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%d|%ld|%ld|%d|%ld|%ld|endahg\n", 
 				16, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->fd, sys_args->cmd, sys_args->arg, sys_args->rc, current->tgid, 
 				sec, nsec);
+#endif
 		theia_file_write(buf, size);
 	}
 }
@@ -17328,16 +17352,45 @@ void packahgv_mmap (struct mmap_ahgv *sys_args) {
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
+	struct file *file;
+	struct inode *inode;
+	u_long dev, ino;
+	char inode_str[128];
+	int fput_needed;
 
 	//Yang
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
+#ifdef THEIA_INODE
+		if (sys_args->fd != -1) {
+			file = fget_light(sys_args->fd, &fput_needed);
+			if (file) {
+				inode = file->f_dentry->d_inode;
+				dev = inode->i_sb->s_dev;
+				ino = inode->i_ino;
+				fput_light(file, fput_needed);
+				sprintf(inode_str, "inode:[%lx:%lx]", dev, ino);
+			}
+			else {
+				inode_str[0] = 'N'; inode_str[1] = 'A'; inode_str[2] = '\0';
+			}
+		}
+		else {
+			inode_str[0] = 'N'; inode_str[1] = 'A'; inode_str[2] = '\0';
+		}
+
+		int size = sprintf(buf, "startahg|%d|%d|%ld|%s|%lx|%lu|%d|%lx|%lx|%d|%ld|%ld|endahg\n", 
+				9, sys_args->pid, current->start_time.tv_sec, 
+				inode_str, sys_args->address, sys_args->length, sys_args->prot_type,
+				sys_args->flag, sys_args->offset, current->tgid, sec, nsec);
+#else
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%lx|%lu|%d|%lx|%lx|%d|%ld|%ld|endahg\n", 
 				9, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->fd, sys_args->address, sys_args->length, sys_args->prot_type,
 				sys_args->flag, sys_args->offset, current->tgid, sec, nsec);
+#endif
 		theia_file_write(buf, size);
 	}
 }
@@ -17565,7 +17618,8 @@ replay_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 	return rc;
 }
 
-int theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff) {
+static asmlinkage long 
+theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff) {
 	long rc;
 	int ret;
 	char vm_file_path[PATH_MAX];
@@ -17636,7 +17690,7 @@ int theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, un
 	return rc;
 }
 
-asmlinkage long shim_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff) 
+asmlinkage long shim_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff)
 SHIM_CALL_MAIN(9, record_mmap_pgoff(addr, len, prot, flags, fd, pgoff), replay_mmap_pgoff(addr, len, prot, flags, fd, pgoff), theia_sys_mmap(addr, len, prot, flags, fd, pgoff))
 
 static asmlinkage long
