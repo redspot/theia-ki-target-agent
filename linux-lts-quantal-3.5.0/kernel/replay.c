@@ -420,13 +420,14 @@ bool fd2uuid(int fd, char *uuid_str) {
 		}
 //		else if (dev == 0xfd00001 /* in-disk file */ || dev == 0xf /* in-memory file */ || dev == 0x5 /* ptmx */ || dev == 0xb /* pts */ || dev == 0x3 /* procfs */) {
 		else if (S_ISBLK(mode) || S_ISCHR(mode) || S_ISDIR(mode) || S_ISREG(mode) || S_ISLNK(mode)) {
-			sprintf(uuid_str, "inode:[%lx:%lx]", dev, ino);
-/*
-			if (S_ISREG(mode)) {
+//			sprintf(uuid_str, "inode:[%lx:%lx]", dev, ino);
+			if (dev == 0xfd00001) {
 				struct timespec ts = ext4_get_crtime(inode);
-				printk("XXX: %lx:%lx, crtime: %u.%u\n", dev, ino, ts.tv_sec, ts.tv_nsec);
+				sprintf(uuid_str, "inode:[%lx:%lx:%d]", dev, ino, ts.tv_sec); /* do we need nanosec? */
 			}
-*/
+			else {
+				sprintf(uuid_str, "inode:[%lx:%lx:0]", dev, ino);
+			}
 			return true;
 		}
 		else { /* pipe, anon_inode, or others */
