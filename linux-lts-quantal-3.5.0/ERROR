@@ -1,0 +1,457 @@
+In file included from kernel/replay.c:81:0:
+include/linux/theia.h:6:1: warning: function declaration isn’t a prototype [-Wstrict-prototypes]
+include/linux/theia.h:7:1: warning: function declaration isn’t a prototype [-Wstrict-prototypes]
+kernel/replay.c:106:1: warning: function declaration isn’t a prototype [-Wstrict-prototypes]
+kernel/replay.c: In function ‘theia_check_channel’:
+kernel/replay.c:348:2: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘fd2uuid’:
+kernel/replay.c:407:5: warning: passing argument 3 of ‘get_ip_port_sockfd’ from incompatible pointer type [enabled by default]
+kernel/replay.c:111:6: note: expected ‘u_long *’ but argument is of type ‘int *’
+kernel/replay.c:407:5: warning: passing argument 5 of ‘get_ip_port_sockfd’ from incompatible pointer type [enabled by default]
+kernel/replay.c:111:6: note: expected ‘sa_family_t *’ but argument is of type ‘sa_family_t **’
+kernel/replay.c:426:5: warning: format ‘%u’ expects argument of type ‘unsigned int’, but argument 4 has type ‘__kernel_time_t’ [-Wformat]
+kernel/replay.c:426:5: warning: format ‘%u’ expects argument of type ‘unsigned int’, but argument 5 has type ‘long int’ [-Wformat]
+kernel/replay.c: At top level:
+kernel/replay.c:443:6: warning: function declaration isn’t a prototype [-Wstrict-prototypes]
+kernel/replay.c: In function ‘theia_dump_auxdata’:
+kernel/replay.c:449:13: warning: unused variable ‘nsec’ [-Wunused-variable]
+kernel/replay.c:449:8: warning: unused variable ‘sec’ [-Wunused-variable]
+kernel/replay.c: In function ‘theia_dump_str’:
+kernel/replay.c:476:3: warning: format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘__kernel_time_t’ [-Wformat]
+kernel/replay.c: In function ‘theia_dump_at_sd’:
+kernel/replay.c:575:25: warning: assignment discards ‘const’ qualifier from pointer target type [enabled by default]
+kernel/replay.c:578:7: warning: assignment discards ‘const’ qualifier from pointer target type [enabled by default]
+kernel/replay.c: At top level:
+kernel/replay.c:695:2: warning: initialization from incompatible pointer type [enabled by default]
+kernel/replay.c:695:2: warning: (near initialization for ‘relay_callbacks.subbuf_start’) [enabled by default]
+kernel/replay.c:696:2: warning: initialization from incompatible pointer type [enabled by default]
+kernel/replay.c:696:2: warning: (near initialization for ‘relay_callbacks.create_buf_file’) [enabled by default]
+kernel/replay.c: In function ‘replay_free_pipe’:
+kernel/replay.c:988:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+kernel/replay.c:999:30: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+kernel/replay.c: In function ‘replay_sock_put’:
+kernel/replay.c:1028:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+kernel/replay.c:1038:30: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+kernel/replay.c: In function ‘set_record_cache_file’:
+kernel/replay.c:1963:101: warning: format ‘%d’ expects argument of type ‘int’, but argument 2 has type ‘long unsigned int’ [-Wformat]
+kernel/replay.c: In function ‘is_regular_file’:
+kernel/replay.c:2331:17: warning: passing argument 1 of ‘atomic_add_unless’ from incompatible pointer type [enabled by default]
+include/linux/atomic.h:15:19: note: expected ‘struct atomic_t *’ but argument is of type ‘struct atomic_long_t *’
+kernel/replay.c: In function ‘get_user_callstack’:
+kernel/replay.c:2927:2: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:2942:4: warning: format ‘%lx’ expects argument of type ‘long unsigned int’, but argument 4 has type ‘dev_t’ [-Wformat]
+kernel/replay.c:2927:6: warning: unused variable ‘idx’ [-Wunused-variable]
+kernel/replay.c: In function ‘argsalloc’:
+kernel/replay.c:3376:4: warning: format ‘%u’ expects argument of type ‘unsigned int’, but argument 3 has type ‘size_t’ [-Wformat]
+kernel/replay.c: In function ‘is_libpath_present’:
+kernel/replay.c:3904:4: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘size_t’ [-Wformat]
+kernel/replay.c: In function ‘fork_replay_theia’:
+kernel/replay.c:4137:2: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:4140:2: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:4154:2: warning: passing argument 2 of ‘replay_checkpoint_to_disk’ discards ‘const’ qualifier from pointer target type [enabled by default]
+include/linux/replay.h:92:6: note: expected ‘char *’ but argument is of type ‘const char *’
+kernel/replay.c:4052:22: warning: unused variable ‘pc’ [-Wunused-variable]
+kernel/replay.c: In function ‘show_kernel_stack’:
+kernel/replay.c:4203:3: warning: format ‘%lx’ expects argument of type ‘long unsigned int’, but argument 2 has type ‘u_long *’ [-Wformat]
+kernel/replay.c: In function ‘fork_replay’:
+kernel/replay.c:4250:1: warning: format ‘%lx’ expects argument of type ‘long unsigned int’, but argument 2 has type ‘u_long *’ [-Wformat]
+kernel/replay.c:4336:2: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:4338:2: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘write_user_log’:
+kernel/replay.c:5108:3: warning: format ‘%d’ expects argument of type ‘int’, but argument 2 has type ‘long unsigned int’ [-Wformat]
+kernel/replay.c: In function ‘read_user_log’:
+kernel/replay.c:5192:3: warning: format ‘%d’ expects argument of type ‘int’, but argument 2 has type ‘long unsigned int’ [-Wformat]
+kernel/replay.c: In function ‘track_usually_pt2pt_read’:
+kernel/replay.c:7268:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+kernel/replay.c:7294:34: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+kernel/replay.c:7375:37: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+kernel/replay.c: In function ‘track_usually_pt2pt_write_begin’:
+kernel/replay.c:7396:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+kernel/replay.c:7422:34: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+kernel/replay.c: In function ‘track_usually_pt2pt_write’:
+kernel/replay.c:7450:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+kernel/replay.c:7476:34: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+kernel/replay.c: In function ‘is_remote’:
+kernel/replay.c:7664:2: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:7669:2: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:7674:2: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘get_file_fullpath’:
+kernel/replay.c:7698:6: warning: unused variable ‘ret’ [-Wunused-variable]
+kernel/replay.c: In function ‘get_task_fullpath’:
+kernel/replay.c:7723:2: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:7723:25: warning: unused variable ‘vma’ [-Wunused-variable]
+kernel/replay.c: At top level:
+kernel/replay.c:7749:6: warning: function declaration isn’t a prototype [-Wstrict-prototypes]
+kernel/replay.c: In function ‘packahgv_process’:
+kernel/replay.c:7885:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:7889:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:7892:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:7908:7: warning: format ‘%ld’ expects argument of type ‘long int’, but argument 8 has type ‘int’ [-Wformat]
+kernel/replay.c: In function ‘packahgv_process_bin’:
+kernel/replay.c:7921:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:7925:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:7936:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:7949:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: At top level:
+kernel/replay.c:7977:6: warning: function declaration isn’t a prototype [-Wstrict-prototypes]
+kernel/replay.c: In function ‘packahgv_read’:
+kernel/replay.c:8023:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘theia_read_ahg’:
+kernel/replay.c:8032:6: warning: unused variable ‘ret’ [-Wunused-variable]
+kernel/replay.c: In function ‘record_read’:
+kernel/replay.c:8097:9: warning: passing argument 2 of ‘find_vma’ makes integer from pointer without a cast [enabled by default]
+include/linux/mm.h:1462:32: note: expected ‘long unsigned int’ but argument is of type ‘char *’
+kernel/replay.c:8097:2: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:8100:3: warning: passing argument 1 of ‘sys_mprotect’ makes integer from pointer without a cast [enabled by default]
+include/linux/syscalls.h:456:17: note: expected ‘long unsigned int’ but argument is of type ‘char *’
+kernel/replay.c:8111:3: warning: passing argument 1 of ‘sys_mprotect’ makes integer from pointer without a cast [enabled by default]
+include/linux/syscalls.h:456:17: note: expected ‘long unsigned int’ but argument is of type ‘char *’
+kernel/replay.c:8115:3: warning: passing argument 3 of ‘theia_read_ahg’ makes integer from pointer without a cast [enabled by default]
+kernel/replay.c:8031:6: note: expected ‘u_long’ but argument is of type ‘struct atomic_t *’
+kernel/replay.c:8226:38: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+kernel/replay.c:8252:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+kernel/replay.c:8335:39: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+kernel/replay.c: In function ‘replay_read’:
+kernel/replay.c:8412:2: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘long int’ [-Wformat]
+kernel/replay.c: In function ‘packahgv_write’:
+kernel/replay.c:8574:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘theia_write_ahg’:
+kernel/replay.c:8582:6: warning: unused variable ‘ret’ [-Wunused-variable]
+kernel/replay.c: In function ‘record_write’:
+kernel/replay.c:8667:3: warning: passing argument 3 of ‘theia_write_ahg’ makes integer from pointer without a cast [enabled by default]
+kernel/replay.c:8581:6: note: expected ‘u_long’ but argument is of type ‘struct atomic_t *’
+kernel/replay.c:8669:2: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘ssize_t’ [-Wformat]
+kernel/replay.c:8728:38: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+kernel/replay.c:8754:36: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+kernel/replay.c: In function ‘replay_write’:
+kernel/replay.c:8870:2: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘ssize_t’ [-Wformat]
+kernel/replay.c: In function ‘theia_open_ahg’:
+kernel/replay.c:9013:4: warning: format ‘%d’ expects argument of type ‘int’, but argument 2 has type ‘size_t’ [-Wformat]
+kernel/replay.c:9024:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:9034:5: warning: format ‘%d’ expects argument of type ‘int’, but argument 2 has type ‘size_t’ [-Wformat]
+kernel/replay.c:8979:6: warning: unused variable ‘ret’ [-Wunused-variable]
+kernel/replay.c: In function ‘record_open’:
+kernel/replay.c:9062:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:9064:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:9083:124: warning: format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘long unsigned int’ [-Wformat]
+kernel/replay.c: In function ‘theia_sys_open’:
+kernel/replay.c:9146:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘packahgv_close’:
+kernel/replay.c:9177:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘theia_close_ahg’:
+kernel/replay.c:9184:6: warning: unused variable ‘ret’ [-Wunused-variable]
+kernel/replay.c: In function ‘theia_fullpath_ahgx’:
+kernel/replay.c:9309:3: warning: passing argument 1 of ‘theia_dump_str’ discards ‘const’ qualifier from pointer target type [enabled by default]
+kernel/replay.c:458:6: note: expected ‘char *’ but argument is of type ‘const char *’
+kernel/replay.c: In function ‘theia_unlink_ahgx’:
+kernel/replay.c:9352:3: warning: format ‘%lx’ expects argument of type ‘long unsigned int’, but argument 4 has type ‘dev_t’ [-Wformat]
+kernel/replay.c: In function ‘theia_unlinkat_ahgx’:
+kernel/replay.c:9412:4: warning: format ‘%lx’ expects argument of type ‘long unsigned int’, but argument 4 has type ‘dev_t’ [-Wformat]
+kernel/replay.c: In function ‘packahgv_execve’:
+kernel/replay.c:9521:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:9523:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:9534:5: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:9542:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘theia_execve_ahg’:
+kernel/replay.c:9561:2: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:9569:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:9552:6: warning: unused variable ‘ret’ [-Wunused-variable]
+kernel/replay.c: In function ‘record_execve’:
+kernel/replay.c:9645:2: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:9695:1: warning: format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘long int’ [-Wformat]
+kernel/replay.c:9706:1: warning: format ‘%d’ expects argument of type ‘int’, but argument 2 has type ‘long int’ [-Wformat]
+kernel/replay.c:9707:4: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:9776:1: warning: format ‘%d’ expects argument of type ‘int’, but argument 2 has type ‘long int’ [-Wformat]
+kernel/replay.c:9841:1: warning: format ‘%d’ expects argument of type ‘int’, but argument 2 has type ‘long int’ [-Wformat]
+kernel/replay.c:9645:16: warning: unused variable ‘cptr’ [-Wunused-variable]
+kernel/replay.c: In function ‘theia_start_execve’:
+kernel/replay.c:9988:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:9996:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:10014:5: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘theia_mount_ahg’:
+kernel/replay.c:10209:4: warning: format ‘%d’ expects argument of type ‘int’, but argument 2 has type ‘size_t’ [-Wformat]
+kernel/replay.c:10214:4: warning: format ‘%d’ expects argument of type ‘int’, but argument 2 has type ‘size_t’ [-Wformat]
+kernel/replay.c:10219:4: warning: format ‘%d’ expects argument of type ‘int’, but argument 2 has type ‘size_t’ [-Wformat]
+kernel/replay.c:10186:6: warning: unused variable ‘ret’ [-Wunused-variable]
+kernel/replay.c: In function ‘record_mount’:
+kernel/replay.c:10250:3: warning: passing argument 6 of ‘theia_mount_ahg’ makes integer from pointer without a cast [enabled by default]
+kernel/replay.c:10185:6: note: expected ‘u_long’ but argument is of type ‘struct atomic_t *’
+kernel/replay.c: In function ‘packahgv_pipe’:
+kernel/replay.c:10391:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘theia_pipe_ahg’:
+kernel/replay.c:10401:6: warning: unused variable ‘ret’ [-Wunused-variable]
+kernel/replay.c: In function ‘theia_signal_ahgx’:
+kernel/replay.c:10654:21: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+kernel/replay.c: In function ‘packahgv_ioctl’:
+kernel/replay.c:10695:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘theia_ioctl_ahg’:
+kernel/replay.c:10705:6: warning: unused variable ‘ret’ [-Wunused-variable]
+kernel/replay.c: In function ‘record_ioctl’:
+kernel/replay.c:10887:2: warning: passing argument 5 of ‘theia_ioctl_ahg’ makes integer from pointer without a cast [enabled by default]
+kernel/replay.c:10704:6: note: expected ‘u_long’ but argument is of type ‘struct atomic_t *’
+kernel/replay.c: In function ‘theia_fcntl_ahg’:
+kernel/replay.c:11013:5: warning: format ‘%d’ expects argument of type ‘int’, but argument 5 has type ‘__kernel_time_t’ [-Wformat]
+kernel/replay.c:11013:5: warning: format ‘%d’ expects argument of type ‘int’, but argument 8 has type ‘long unsigned int’ [-Wformat]
+kernel/replay.c:11012:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘replay_munmap’:
+kernel/replay.c:11453:2: warning: format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘size_t’ [-Wformat]
+kernel/replay.c: In function ‘packahgv_munmap’:
+kernel/replay.c:11490:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘theia_munmap_ahg’:
+kernel/replay.c:11498:6: warning: unused variable ‘ret’ [-Wunused-variable]
+kernel/replay.c: In function ‘log_mmsghdr’:
+kernel/replay.c:11671:5: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘__kernel_size_t’ [-Wformat]
+kernel/replay.c: In function ‘get_ip_port_sockaddr’:
+kernel/replay.c:11793:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:11804:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:11815:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘get_ip_port_sockfd’:
+kernel/replay.c:11857:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:11868:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:11879:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘packahgv_connect’:
+kernel/replay.c:11917:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:11927:6: warning: format ‘%d’ expects argument of type ‘int’, but argument 6 has type ‘long int’ [-Wformat]
+kernel/replay.c: In function ‘packahgv_accept’:
+kernel/replay.c:11958:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘packahgv_send’:
+kernel/replay.c:11993:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘packahgv_sendto’:
+kernel/replay.c:12021:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘packahgv_recv’:
+kernel/replay.c:12072:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘packahgv_recvfrom’:
+kernel/replay.c:12100:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘packahgv_sendmsg’:
+kernel/replay.c:12151:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘packahgv_recvmsg’:
+kernel/replay.c:12208:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘record_socket’:
+kernel/replay.c:12584:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘record_connect’:
+kernel/replay.c:12613:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘record_accept’:
+kernel/replay.c:12642:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘record_accept4’:
+kernel/replay.c:12689:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘record_sendto’:
+kernel/replay.c:12728:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:12751:3: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘long int’ [-Wformat]
+kernel/replay.c:12754:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘record_recvfrom’:
+kernel/replay.c:12825:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘record_sendmsg’:
+kernel/replay.c:12902:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘record_recvmsg’:
+kernel/replay.c:12938:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:12945:5: warning: format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘__kernel_size_t’ [-Wformat]
+kernel/replay.c: In function ‘record_shutdown’:
+kernel/replay.c:13020:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘record_bind’:
+kernel/replay.c:13047:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘record_listen’:
+kernel/replay.c:13074:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘record_getsockname’:
+kernel/replay.c:13101:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘record_getpeername’:
+kernel/replay.c:13145:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘record_socketpair’:
+kernel/replay.c:13189:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘record_setsockopt’:
+kernel/replay.c:13223:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘record_getsockopt’:
+kernel/replay.c:13250:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘replay_socket’:
+kernel/replay.c:13268:2: warning: format ‘%d’ expects a matching ‘int’ argument [-Wformat]
+kernel/replay.c:13281:7: warning: format ‘%ld’ expects argument of type ‘long int’, but argument 4 has type ‘int’ [-Wformat]
+kernel/replay.c:13283:7: warning: format ‘%ld’ expects argument of type ‘long int’, but argument 4 has type ‘int’ [-Wformat]
+kernel/replay.c: In function ‘shim_setsockopt’:
+kernel/replay.c:13722:1: warning: passing argument 5 of ‘replay_setsockopt’ makes pointer from integer without a cast [enabled by default]
+kernel/replay.c:13640:1: note: expected ‘int *’ but argument is of type ‘int’
+kernel/replay.c: In function ‘packahgv_shmget’:
+kernel/replay.c:13857:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘theia_shmget_ahg’:
+kernel/replay.c:13874:2: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:13875:21: warning: unused variable ‘pahgv_shmat’ [-Wunused-variable]
+kernel/replay.c:13866:6: warning: unused variable ‘ret’ [-Wunused-variable]
+kernel/replay.c: In function ‘record_shmget’:
+kernel/replay.c:13907:9: warning: unused variable ‘len’ [-Wunused-variable]
+kernel/replay.c:13905:15: warning: unused variable ‘old_fs’ [-Wunused-variable]
+kernel/replay.c: In function ‘replay_shmget’:
+kernel/replay.c:13927:13: warning: unused variable ‘cmd’ [-Wunused-variable]
+kernel/replay.c:13927:6: warning: unused variable ‘repid’ [-Wunused-variable]
+kernel/replay.c: In function ‘packahgv_shmat’:
+kernel/replay.c:13971:5: warning: format ‘%lu’ expects argument of type ‘long unsigned int’, but argument 9 has type ‘void *’ [-Wformat]
+kernel/replay.c:13968:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘theia_shmat_ahg’:
+kernel/replay.c:13979:22: warning: unused variable ‘pahgv_shmget’ [-Wunused-variable]
+kernel/replay.c:13977:6: warning: unused variable ‘ret’ [-Wunused-variable]
+kernel/replay.c: In function ‘theia_sys_shmat’:
+kernel/replay.c:14012:2: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘record_shmat’:
+kernel/replay.c:14059:9: warning: unused variable ‘len’ [-Wunused-variable]
+kernel/replay.c:14057:15: warning: unused variable ‘old_fs’ [-Wunused-variable]
+kernel/replay.c: In function ‘replay_shmat’:
+kernel/replay.c:14136:13: warning: unused variable ‘cmd’ [-Wunused-variable]
+kernel/replay.c: In function ‘record_shmctl’:
+kernel/replay.c:14205:3: warning: statement with no effect [-Wunused-value]
+kernel/replay.c:14194:15: warning: unused variable ‘old_fs’ [-Wunused-variable]
+kernel/replay.c: In function ‘replay_shmctl’:
+kernel/replay.c:14244:2: warning: statement with no effect [-Wunused-value]
+kernel/replay.c:14240:7: warning: unused variable ‘retval’ [-Wunused-variable]
+kernel/replay.c: In function ‘replay_semctl’:
+kernel/replay.c:14333:6: warning: unused variable ‘repid’ [-Wunused-variable]
+kernel/replay.c:14331:7: warning: unused variable ‘retval’ [-Wunused-variable]
+kernel/replay.c: In function ‘record_shmdt’:
+kernel/replay.c:14358:9: warning: unused variable ‘len’ [-Wunused-variable]
+kernel/replay.c:14357:8: warning: unused variable ‘pretval’ [-Wunused-variable]
+kernel/replay.c:14356:15: warning: unused variable ‘old_fs’ [-Wunused-variable]
+kernel/replay.c: In function ‘replay_shmdt’:
+kernel/replay.c:14374:13: warning: unused variable ‘cmd’ [-Wunused-variable]
+kernel/replay.c:14374:6: warning: unused variable ‘repid’ [-Wunused-variable]
+kernel/replay.c: In function ‘record_msgrcv’:
+kernel/replay.c:14420:9: warning: unused variable ‘len’ [-Wunused-variable]
+kernel/replay.c:14418:15: warning: unused variable ‘old_fs’ [-Wunused-variable]
+kernel/replay.c: In function ‘replay_msgrcv’:
+kernel/replay.c:14450:13: warning: unused variable ‘cmd’ [-Wunused-variable]
+kernel/replay.c:14450:6: warning: unused variable ‘repid’ [-Wunused-variable]
+kernel/replay.c:14448:7: warning: unused variable ‘retval’ [-Wunused-variable]
+kernel/replay.c: In function ‘record_msgctl’:
+kernel/replay.c:14471:15: warning: unused variable ‘old_fs’ [-Wunused-variable]
+kernel/replay.c: In function ‘replay_msgctl’:
+kernel/replay.c:14516:6: warning: unused variable ‘repid’ [-Wunused-variable]
+kernel/replay.c:14514:7: warning: unused variable ‘retval’ [-Wunused-variable]
+kernel/replay.c: In function ‘theia_ipc_ahg’:
+kernel/replay.c:14540:6: warning: unused variable ‘ret’ [-Wunused-variable]
+kernel/replay.c: In function ‘record_ipc’:
+kernel/replay.c:14796:4: warning: statement with no effect [-Wunused-value]
+kernel/replay.c: In function ‘replay_ipc’:
+kernel/replay.c:14942:3: warning: statement with no effect [-Wunused-value]
+kernel/replay.c: In function ‘packahgv_clone’:
+kernel/replay.c:15305:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:15331:6: warning: format ‘%ld’ expects argument of type ‘long int’, but argument 8 has type ‘int’ [-Wformat]
+kernel/replay.c: In function ‘theia_clone_ahg’:
+kernel/replay.c:15339:6: warning: unused variable ‘ret’ [-Wunused-variable]
+kernel/replay.c: In function ‘packahgv_mprotect’:
+kernel/replay.c:15435:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘theia_mprotect_ahg’:
+kernel/replay.c:15444:6: warning: unused variable ‘ret’ [-Wunused-variable]
+kernel/replay.c: In function ‘theia_init_module_ahgx’:
+kernel/replay.c:15531:16: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+kernel/replay.c: In function ‘record_arch_prctl’:
+kernel/replay.c:16459:9: warning: unused variable ‘len’ [-Wunused-variable]
+kernel/replay.c: In function ‘replay_rt_sigprocmask’:
+kernel/replay.c:16666:3: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘size_t’ [-Wformat]
+kernel/replay.c:16666:3: warning: format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘size_t’ [-Wformat]
+kernel/replay.c: In function ‘record_pwrite64’:
+kernel/replay.c:16901:2: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘ssize_t’ [-Wformat]
+kernel/replay.c: In function ‘replay_pwrite64’:
+kernel/replay.c:16954:2: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘ssize_t’ [-Wformat]
+kernel/replay.c: In function ‘record_sendfile64’:
+kernel/replay.c:17064:1: warning: passing argument 3 of ‘sys_sendfile64’ from incompatible pointer type [enabled by default]
+include/linux/syscalls.h:517:17: note: expected ‘loff_t *’ but argument is of type ‘off_t *’
+kernel/replay.c: In function ‘shim_sendfile64’:
+kernel/replay.c:17064:1: warning: passing argument 3 of ‘sys_sendfile64’ from incompatible pointer type [enabled by default]
+include/linux/syscalls.h:517:17: note: expected ‘loff_t *’ but argument is of type ‘off_t *’
+kernel/replay.c:17064:1: warning: passing argument 3 of ‘sys_sendfile64’ from incompatible pointer type [enabled by default]
+include/linux/syscalls.h:517:17: note: expected ‘loff_t *’ but argument is of type ‘off_t *’
+kernel/replay.c:17064:1: warning: passing argument 3 of ‘sys_sendfile64’ from incompatible pointer type [enabled by default]
+include/linux/syscalls.h:517:17: note: expected ‘loff_t *’ but argument is of type ‘off_t *’
+kernel/replay.c: In function ‘packahgv_mmap’:
+kernel/replay.c:17360:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘theia_mmap_ahg’:
+kernel/replay.c:17371:6: warning: unused variable ‘ret’ [-Wunused-variable]
+kernel/replay.c: In function ‘record_mmap_pgoff’:
+kernel/replay.c:17422:2: warning: passing argument 8 of ‘theia_mmap_ahg’ makes integer from pointer without a cast [enabled by default]
+kernel/replay.c:17369:6: note: expected ‘u_long’ but argument is of type ‘struct atomic_t *’
+kernel/replay.c:17402:6: warning: unused variable ‘ret’ [-Wunused-variable]
+kernel/replay.c: In function ‘replay_mmap_pgoff’:
+kernel/replay.c:17550:2: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘theia_sys_mmap’:
+kernel/replay.c:17598:7: warning: unused variable ‘is_shmem’ [-Wunused-variable]
+kernel/replay.c:17597:8: warning: unused variable ‘path’ [-Wunused-variable]
+kernel/replay.c:17596:7: warning: unused variable ‘vm_file_path’ [-Wunused-variable]
+kernel/replay.c:17595:6: warning: unused variable ‘ret’ [-Wunused-variable]
+kernel/replay.c: In function ‘record_newfstat’:
+kernel/replay.c:17744:91: warning: format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘long unsigned int’ [-Wformat]
+kernel/replay.c: In function ‘shim_newfstat’:
+kernel/replay.c:17766:46: warning: passing argument 2 of ‘sys_newfstat’ from incompatible pointer type [enabled by default]
+include/linux/syscalls.h:420:17: note: expected ‘struct stat *’ but argument is of type ‘struct stat64 *’
+kernel/replay.c:17766:46: warning: passing argument 2 of ‘record_newfstat’ from incompatible pointer type [enabled by default]
+kernel/replay.c:17734:1: note: expected ‘struct stat *’ but argument is of type ‘struct stat64 *’
+kernel/replay.c:17766:46: warning: passing argument 2 of ‘sys_newfstat’ from incompatible pointer type [enabled by default]
+include/linux/syscalls.h:420:17: note: expected ‘struct stat *’ but argument is of type ‘struct stat64 *’
+kernel/replay.c:17766:46: warning: passing argument 2 of ‘replay_newfstat’ from incompatible pointer type [enabled by default]
+kernel/replay.c:17763:1: note: expected ‘struct stat *’ but argument is of type ‘struct stat64 *’
+kernel/replay.c:17766:46: warning: passing argument 2 of ‘sys_newfstat’ from incompatible pointer type [enabled by default]
+include/linux/syscalls.h:420:17: note: expected ‘struct stat *’ but argument is of type ‘struct stat64 *’
+kernel/replay.c: In function ‘packahgv_setuid’:
+kernel/replay.c:17942:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c:17944:3: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+kernel/replay.c: In function ‘theia_setuid_ahg’:
+kernel/replay.c:17955:6: warning: unused variable ‘ret’ [-Wunused-variable]
+kernel/replay.c: In function ‘record_setuid’:
+kernel/replay.c:18004:3: warning: passing argument 3 of ‘theia_setuid_ahg’ makes integer from pointer without a cast [enabled by default]
+kernel/replay.c:17954:6: note: expected ‘u_long’ but argument is of type ‘struct atomic_t *’
+kernel/replay.c: In function ‘ahg_init_log_write’:
+kernel/replay.c:19620:3: warning: passing argument 2 of ‘sys_stat’ from incompatible pointer type [enabled by default]
+include/linux/syscalls.h:403:17: note: expected ‘struct __old_kernel_stat *’ but argument is of type ‘struct stat *’
+kernel/replay.c: In function ‘init_log_write’:
+kernel/replay.c:19683:3: warning: passing argument 2 of ‘sys_stat’ from incompatible pointer type [enabled by default]
+include/linux/syscalls.h:403:17: note: expected ‘struct __old_kernel_stat *’ but argument is of type ‘struct stat *’
+kernel/replay.c: In function ‘write_begin_log’:
+kernel/replay.c:19775:5: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘long unsigned int’ [-Wformat]
+kernel/replay.c:19781:33: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘long unsigned int’ [-Wformat]
+kernel/replay.c:19787:5: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘long unsigned int’ [-Wformat]
+kernel/replay.c:19793:33: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘long unsigned int’ [-Wformat]
+kernel/replay.c: In function ‘write_log_data’:
+kernel/replay.c:19852:3: warning: format ‘%d’ expects argument of type ‘int’, but argument 2 has type ‘ssize_t’ [-Wformat]
+kernel/replay.c:19857:90: warning: format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘long unsigned int’ [-Wformat]
+kernel/replay.c:19861:75: warning: format ‘%d’ expects argument of type ‘int’, but argument 2 has type ‘long unsigned int’ [-Wformat]
+kernel/replay.c:19861:75: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘ssize_t’ [-Wformat]
+kernel/replay.c:19874:3: warning: format ‘%d’ expects argument of type ‘int’, but argument 2 has type ‘ssize_t’ [-Wformat]
+kernel/replay.c:19874:3: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘long unsigned int’ [-Wformat]
+kernel/replay.c:19874:3: warning: format ‘%d’ expects argument of type ‘int’, but argument 4 has type ‘long unsigned int’ [-Wformat]
+kernel/replay.c:19879:7: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘long int’ [-Wformat]
+kernel/replay.c:19889:2: warning: format ‘%d’ expects argument of type ‘int’, but argument 2 has type ‘ssize_t’ [-Wformat]
+kernel/replay.c: In function ‘read_log_data_internal’:
+kernel/replay.c:19951:3: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘long unsigned int’ [-Wformat]
+kernel/replay.c:19960:82: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘long unsigned int’ [-Wformat]
+kernel/replay.c:19966:3: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘long unsigned int’ [-Wformat]
+kernel/replay.c: In function ‘write_mmap_log’:
+kernel/replay.c:20051:110: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘long unsigned int’ [-Wformat]
+kernel/replay.c: In function ‘read_mmap_log’:
+kernel/replay.c:20094:2: warning: passing argument 2 of ‘sys_stat’ from incompatible pointer type [enabled by default]
+include/linux/syscalls.h:403:17: note: expected ‘struct __old_kernel_stat *’ but argument is of type ‘struct stat *’
+kernel/replay.c:20115:93: warning: format ‘%d’ expects argument of type ‘int’, but argument 3 has type ‘long unsigned int’ [-Wformat]
+kernel/replay.c: At top level:
+include/linux/theia_channel.h:15:16: warning: ‘event_n’ defined but not used [-Wunused-variable]
+include/linux/theia_channel.h:16:15: warning: ‘write_count’ defined but not used [-Wunused-variable]
+kernel/replay.c:728:13: warning: ‘destroy_channel’ defined but not used [-Wunused-function]
+kernel/replay.c:142:14: warning: ‘theia_prevbuf’ defined but not used [-Wunused-variable]
+kernel/replay.c:143:15: warning: ‘theia_prevbuf_size’ defined but not used [-Wunused-variable]
+kernel/replay.c:145:21: warning: ‘theia_filp’ defined but not used [-Wunused-variable]
+kernel/replay.c:1575:13: warning: ‘ahg_write_and_free_kernel_log’ declared ‘static’ but never defined [-Wunused-function]
+fs/ext4/file.c:243:1: warning: data definition has no type or storage class [enabled by default]
+fs/ext4/file.c:243:1: warning: type defaults to ‘int’ in declaration of ‘EXPORT_SYMBOL’ [-Wimplicit-int]
+fs/ext4/file.c:243:1: warning: parameter names (without types) in function declaration [enabled by default]
+Setup is 17360 bytes (padded to 17408 bytes).
+System is 5047 kB
+CRC f03f3e7
+WARNING: modpost: Found 2 section mismatch(es).
+To see full details build your kernel with:
+'make CONFIG_DEBUG_SECTION_MISMATCH=y'
+run-parts: executing /etc/kernel/postinst.d/apt-auto-removal 3.5.7.13-ddevec-replay /boot/vmlinuz-3.5.7.13-ddevec-replay
+run-parts: executing /etc/kernel/postinst.d/initramfs-tools 3.5.7.13-ddevec-replay /boot/vmlinuz-3.5.7.13-ddevec-replay
+update-initramfs: Generating /boot/initrd.img-3.5.7.13-ddevec-replay
+run-parts: executing /etc/kernel/postinst.d/pm-utils 3.5.7.13-ddevec-replay /boot/vmlinuz-3.5.7.13-ddevec-replay
+run-parts: executing /etc/kernel/postinst.d/update-notifier 3.5.7.13-ddevec-replay /boot/vmlinuz-3.5.7.13-ddevec-replay
+run-parts: executing /etc/kernel/postinst.d/zz-update-grub 3.5.7.13-ddevec-replay /boot/vmlinuz-3.5.7.13-ddevec-replay
+Generating grub.cfg ...
+Found background image: /usr/share/images/desktop-base/desktop-grub.png
+Found linux image: /boot/vmlinuz-3.5.7.13-ddevec-replay
+Found initrd image: /boot/initrd.img-3.5.7.13-ddevec-replay
+Found linux image: /boot/vmlinuz-3.5.7.13-ddevec-replay.old
+Found initrd image: /boot/initrd.img-3.5.7.13-ddevec-replay
+Found memtest86+ image: /boot/memtest86+.bin
+done

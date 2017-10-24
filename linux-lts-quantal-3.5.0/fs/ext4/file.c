@@ -228,6 +228,20 @@ loff_t ext4_llseek(struct file *file, loff_t offset, int origin)
 	return generic_file_llseek_size(file, offset, origin, maxbytes);
 }
 
+/* THEIA */
+struct timespec ext4_get_crtime(struct inode * inode) {
+	struct ext4_inode_info *ei = EXT4_I(inode);
+	struct timespec tmp;
+
+	memset(&tmp, 0, sizeof(struct timespec));
+
+	if (ei)
+		return ei->i_crtime;
+	else
+		return tmp;
+}
+EXPORT_SYMBOL(ext4_get_crtime);
+
 const struct file_operations ext4_file_operations = {
 	.llseek		= ext4_llseek,
 	.read		= do_sync_read,
