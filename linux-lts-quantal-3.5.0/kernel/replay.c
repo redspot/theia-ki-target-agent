@@ -423,13 +423,13 @@ bool fd2uuid(int fd, char *uuid_str) {
 						return false;
 					else
 //						sprintf(uuid_str, "ip:[%s:%d]", sun_path, port);
-//						sprintf(uuid_str, "ip:[%s:%d:%s:%d]", sun_path, port, local_sun_path, local_port);
-						sprintf(uuid_str, "ip:[%s:%d]|local_ip:[%s:%d]", sun_path, port, local_sun_path, local_port);
+//						sprintf(uuid_str, "ip:[%s:%d]|local_ip:[%s:%d]", sun_path, port, local_sun_path, local_port);
+						sprintf(uuid_str, "S|%s|%d|%s|%d", sun_path, port, local_sun_path, local_port);
 				}
 				else
 //					sprintf(uuid_str, "ip:[%s:%d]", ip, port);
-//					sprintf(uuid_str, "ip:[%s:%d:%s:%d]", ip, port, local_ip, local_port);
-					sprintf(uuid_str, "ip:[%s:%d]|local_ip:[%s:%d]", ip, port, local_ip, local_port);
+//					sprintf(uuid_str, "ip:[%s:%d]|local_ip:[%s:%d]", ip, port, local_ip, local_port);
+					sprintf(uuid_str, "S|%s|%d|%s|%d", ip, port, local_ip, local_port);
 			}
 			else {
 				return false;
@@ -440,16 +440,19 @@ bool fd2uuid(int fd, char *uuid_str) {
 //			sprintf(uuid_str, "inode:[%lx:%lx]", dev, ino);
 			if (dev == 0xfd00001) {
 				struct timespec ts = ext4_get_crtime(inode);
-				sprintf(uuid_str, "inode:[%lx:%lx:%d]", dev, ino, ts.tv_sec); /* do we need nanosec? */
+//				sprintf(uuid_str, "inode:[%lx:%lx:%d]", dev, ino, ts.tv_sec); /* do we need nanosec? */
+				sprintf(uuid_str, "I|%lx|%lx|%lx", dev, ino, ts.tv_sec); /* do we need nanosec? */
 			}
 			else {
-				sprintf(uuid_str, "inode:[%lx:%lx:0]", dev, ino);
+//				sprintf(uuid_str, "inode:[%lx:%lx:0]", dev, ino);
+				sprintf(uuid_str, "I|%lx|%lx|0", dev, ino);
 			}
 			return true;
 		}
 		else { /* pipe, anon_inode, or others */
-			fpath = get_file_fullpath(file, theia_retbuf, 4096);
-			strncpy(uuid_str, fpath, THEIA_UUID_LEN);
+//			fpath = get_file_fullpath(file, theia_retbuf, 4096); /* it returns detailed path */
+//			strncpy(uuid_str, fpath, THEIA_UUID_LEN);
+			sprintf(uuid_str, "I|%lx|%lx|0", dev, ino); /* just inode */
 		}
 	}
 	else {
