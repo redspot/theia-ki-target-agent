@@ -9359,13 +9359,11 @@ THEIA_SHIM2(link, 86, const char __user *, oldname, const char __user *, newname
 /* unlink/unlinkat begin */
 #define SYS_UNLINK    87
 void theia_unlink_ahgx(const char __user * filename) {
-#if 0
-/* TODO: this logic conflicts with FIFO. fix it later.*/	
 	struct file *file;
 	struct inode *inode;
 	char *fpath;
 
-	file = filp_open(filename, O_RDONLY, 0);
+	file = filp_open(filename, O_RDWR, 0);
 	if (!IS_ERR(file)) {
 		inode = file->f_dentry->d_inode;
 		fpath = get_file_fullpath(file, theia_retbuf, 4096);
@@ -9379,7 +9377,6 @@ void theia_unlink_ahgx(const char __user * filename) {
 //		theia_dump_dd(inode->i_sb->s_dev, inode->i_ino, 0, SYS_UNLINK);
 		filp_close(file, NULL);
 	}
-#endif
 }
 
 static asmlinkage long 
@@ -9419,14 +9416,12 @@ SHIM_CALL_MAIN(SYS_UNLINK, record_unlink(filename), replay_unlink(filename), the
 
 #define SYS_UNLINKAT 263
 void theia_unlinkat_ahgx(int dfd, const char __user * filename, int flag) {
-#if 0
-/* TODO: this logic conflicts with FIFO. fix it later.*/
 	struct file *file;
 	struct inode *inode;
 	int fd, fput_needed;
 	char *fpath;
 
-	fd = sys_openat(dfd, filename, O_RDONLY, 0);
+	fd = sys_openat(dfd, filename, O_RDWR, 0);
 	if (fd >= 0) {
 		file = fget_light(fd, &fput_needed);
 		if (file) {
@@ -9444,7 +9439,6 @@ void theia_unlinkat_ahgx(int dfd, const char __user * filename, int flag) {
 		}
 		sys_close(fd);
 	}
-#endif
 }
 
 static asmlinkage long 
