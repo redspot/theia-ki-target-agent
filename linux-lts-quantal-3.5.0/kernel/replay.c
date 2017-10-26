@@ -9363,7 +9363,7 @@ void theia_unlink_ahgx(const char __user * filename) {
 	struct inode *inode;
 	char *fpath;
 
-	file = filp_open(filename, O_RDONLY, 0);
+	file = filp_open(filename, O_RDWR, 0);
 	if (!IS_ERR(file)) {
 		inode = file->f_dentry->d_inode;
 		fpath = get_file_fullpath(file, theia_retbuf, 4096);
@@ -9421,7 +9421,7 @@ void theia_unlinkat_ahgx(int dfd, const char __user * filename, int flag) {
 	int fd, fput_needed;
 	char *fpath;
 
-	fd = sys_openat(dfd, filename, O_RDONLY, 0);
+	fd = sys_openat(dfd, filename, O_RDWR, 0);
 	if (fd >= 0) {
 		file = fget_light(fd, &fput_needed);
 		if (file) {
