@@ -9446,8 +9446,10 @@ record_unlinkat(int dfd, const char __user * filename, int flag) {
 	long rc;						
 
 	/* we should call theia_unlink_ahgx before sys_unlink */
+	/* TODO: fix it
 	if (theia_check_channel())
 		theia_unlinkat_ahgx(dfd, filename, flag);
+	*/
 
 	new_syscall_enter(SYS_UNLINKAT);				
 	rc = sys_unlinkat(dfd, filename, flag);				
