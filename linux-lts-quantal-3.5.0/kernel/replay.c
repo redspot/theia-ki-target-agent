@@ -9359,6 +9359,8 @@ THEIA_SHIM2(link, 86, const char __user *, oldname, const char __user *, newname
 /* unlink/unlinkat begin */
 #define SYS_UNLINK    87
 void theia_unlink_ahgx(const char __user * filename) {
+#if 0
+/* TODO: this logic conflicts with FIFO. fix it later.*/	
 	struct file *file;
 	struct inode *inode;
 	char *fpath;
@@ -9377,6 +9379,7 @@ void theia_unlink_ahgx(const char __user * filename) {
 //		theia_dump_dd(inode->i_sb->s_dev, inode->i_ino, 0, SYS_UNLINK);
 		filp_close(file, NULL);
 	}
+#endif
 }
 
 static asmlinkage long 
@@ -9416,6 +9419,8 @@ SHIM_CALL_MAIN(SYS_UNLINK, record_unlink(filename), replay_unlink(filename), the
 
 #define SYS_UNLINKAT 263
 void theia_unlinkat_ahgx(int dfd, const char __user * filename, int flag) {
+#if 0
+/* TODO: this logic conflicts with FIFO. fix it later.*/
 	struct file *file;
 	struct inode *inode;
 	int fd, fput_needed;
@@ -9439,6 +9444,7 @@ void theia_unlinkat_ahgx(int dfd, const char __user * filename, int flag) {
 		}
 		sys_close(fd);
 	}
+#endif
 }
 
 static asmlinkage long 
@@ -9446,10 +9452,8 @@ record_unlinkat(int dfd, const char __user * filename, int flag) {
 	long rc;						
 
 	/* we should call theia_unlink_ahgx before sys_unlink */
-	/* TODO: fix it
 	if (theia_check_channel())
 		theia_unlinkat_ahgx(dfd, filename, flag);
-	*/
 
 	new_syscall_enter(SYS_UNLINKAT);				
 	rc = sys_unlinkat(dfd, filename, flag);				
