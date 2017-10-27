@@ -6632,7 +6632,7 @@ asmlinkage long sys_pthread_sysign (void)
 #define THEIA_SHIM4(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name) \
 	SIMPLE_RECORD4(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name); \
 	SIMPLE_REPLAY (name, sysnum, arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name); \
-	THEIA_SIMPLE_SHIM4(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type arg3name); \
+	THEIA_SIMPLE_SHIM4(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name); \
 	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name) \
 	SHIM_CALL_MAIN(sysnum, record_##name(arg0name, arg1name, arg2name, arg3name), replay_##name(arg0name, arg1name, arg2name, arg3name), \
         theia_sys_##name(arg0name, arg1name, arg2name, arg3name));
@@ -6645,7 +6645,7 @@ asmlinkage long sys_pthread_sysign (void)
 #define THEIA_SHIM5(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name) \
 	SIMPLE_RECORD5(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name); \
 	SIMPLE_REPLAY (name, sysnum, arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name); \
-	THEIA_SIMPLE_SHIM5(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type arg3name, arg4type arg4name); \
+	THEIA_SIMPLE_SHIM5(name, sysnum, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name, arg3type, arg3name, arg4type, arg4name); \
 	asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name, arg3type arg3name, arg4type arg4name) \
 	SHIM_CALL_MAIN(sysnum, record_##name(arg0name, arg1name, arg2name, arg3name, arg4name), replay_##name(arg0name, arg1name, arg2name, arg3name, arg4name), \
         theia_sys_##name(arg0name, arg1name, arg2name, arg3name, arg4name));
@@ -9370,23 +9370,32 @@ THEIA_SHIM2(link, 86, const char __user *, oldname, const char __user *, newname
 /* unlink/unlinkat begin */
 #define SYS_UNLINK    87
 void theia_unlink_ahgx(const char __user * filename) {
+	char uuid_str[THEIA_UUID_LEN+1];
 	struct file *file;
-	struct inode *inode;
+	int fd, fput_needed;
 	char *fpath;
 
-	file = filp_open(filename, O_RDWR, 0);
-	if (!IS_ERR(file)) {
-		inode = file->f_dentry->d_inode;
-		fpath = get_file_fullpath(file, theia_retbuf, 4096);
-		if (IS_ERR(fpath)) {
-			strncpy(theia_retbuf, filename, 4096);
-			fpath = theia_retbuf;
+	fd = sys_open(filename, O_RDWR, 0);
+	if (fd >= 0) {
+		if (fd2uuid(fd, uuid_str) == false) {
+			sys_close(fd);
+			return;
 		}
 
-		sprintf(theia_buf1, "%s|%lx|%lx", fpath, inode->i_sb->s_dev, inode->i_ino);
-		theia_dump_str(theia_buf1, 0, SYS_UNLINK);
-//		theia_dump_dd(inode->i_sb->s_dev, inode->i_ino, 0, SYS_UNLINK);
-		filp_close(file, NULL);
+		file = fget_light(fd, &fput_needed);
+		if (file) {
+			fpath = get_file_fullpath(file, theia_retbuf, 4096);
+			if (IS_ERR(fpath)) {
+				strncpy(theia_retbuf, filename, 4096);
+				fpath = theia_retbuf;
+			}
+
+			sprintf(theia_buf1, "%s|%s", uuid_str, fpath);
+			theia_dump_str(theia_buf1, 0, SYS_UNLINK);
+			fput_light(file, fput_needed);
+		}
+
+		sys_close(fd);
 	}
 }
 
@@ -9413,11 +9422,9 @@ replay_unlink(const char __user * filename) {
 static asmlinkage long 
 theia_sys_unlink(const char __user * filename) {
 	long rc;
-
 	/* we should call theia_unlink_ahgx before sys_unlink */
-	if (theia_check_channel())
+	if (theia_logging_toggle)
 		theia_unlink_ahgx(filename);
-
 	rc = sys_unlink(filename);
 	return rc;
 }
@@ -9427,27 +9434,31 @@ SHIM_CALL_MAIN(SYS_UNLINK, record_unlink(filename), replay_unlink(filename), the
 
 #define SYS_UNLINKAT 263
 void theia_unlinkat_ahgx(int dfd, const char __user * filename, int flag) {
+	char uuid_str[THEIA_UUID_LEN+1];
 	struct file *file;
-	struct inode *inode;
 	int fd, fput_needed;
 	char *fpath;
 
 	fd = sys_openat(dfd, filename, O_RDWR, 0);
 	if (fd >= 0) {
+		if (fd2uuid(fd, uuid_str) == false) {
+			sys_close(fd);
+			return;
+		}
+
 		file = fget_light(fd, &fput_needed);
 		if (file) {
-			inode = file->f_dentry->d_inode;
 			fpath = get_file_fullpath(file, theia_retbuf, 4096);
 			if (IS_ERR(fpath)) {
 				strncpy(theia_retbuf, filename, 4096);
 				fpath = theia_retbuf;
 			}
 
-			sprintf(theia_buf1, "%s|%lx|%lx", fpath, inode->i_sb->s_dev, inode->i_ino);
+			sprintf(theia_buf1, "%s|%s|%d", uuid_str, fpath, flag);
 			theia_dump_str(theia_buf1, 0, SYS_UNLINKAT);
-			//	theia_dump_dd(inode->i_sb->s_dev, inode->i_ino, 0, SYS_UNLINKAT); /* or SYS_UNLINK for merging? */
 			fput_light(file, fput_needed);
 		}
+
 		sys_close(fd);
 	}
 }
@@ -9475,11 +9486,9 @@ replay_unlinkat(int dfd, const char __user * filename, int flag) {
 static asmlinkage long 
 theia_sys_unlinkat(int dfd, const char __user * filename, int flag) {
 	long rc;
-
 	/* we should call theia_unlink_ahgx before sys_unlink */
-	if (theia_check_channel())
+	if (theia_logging_toggle)
 		theia_unlinkat_ahgx(dfd, filename, flag);
-
 	rc = sys_unlinkat(dfd, filename, flag);
 	return rc;
 }
@@ -9487,6 +9496,66 @@ theia_sys_unlinkat(int dfd, const char __user * filename, int flag) {
 asmlinkage long shim_unlinkat(int dfd, const char __user * filename, int flag)
 SHIM_CALL_MAIN(SYS_UNLINKAT, record_unlinkat(dfd, filename, flag), replay_unlinkat(dfd, filename, flag), theia_sys_unlinkat(dfd, filename, flag));
 /* unlink/unlinkat end */
+
+/* openat begin */
+#define SYS_OPENAT 257
+void theia_openat_ahgx(int fd, const char __user * filename, int flag, int mode) {
+	char uuid_str[THEIA_UUID_LEN+1];
+	struct file *file;
+	int fput_needed;
+	char *fpath;
+
+	if (fd < 0) return; /* TODO */
+
+	if (fd2uuid(fd, uuid_str) == false)
+		return; /* TODO: report openat errors? */
+
+	file = fget_light(fd, &fput_needed);
+	if (file) {
+		fpath = get_file_fullpath(file, theia_retbuf, 4096);
+		if (IS_ERR(fpath)) {
+			strncpy(theia_retbuf, filename, 4096);
+			fpath = theia_retbuf;
+		}
+
+		sprintf(theia_buf1, "%s|%s|%d|%d", uuid_str, fpath, flag, mode);
+		theia_dump_str(theia_buf1, fd, SYS_OPENAT);
+		fput_light(file, fput_needed);
+	}
+}
+
+static asmlinkage long 
+record_openat(int dfd, const char __user * filename, int flag, int mode) {
+	long rc;						
+
+	new_syscall_enter(SYS_OPENAT);				
+	rc = sys_openat(dfd, filename, flag, mode);				
+	new_syscall_done(SYS_OPENAT, rc);				
+	new_syscall_exit(SYS_OPENAT, NULL);			
+
+	if (theia_check_channel())
+		theia_openat_ahgx(rc, filename, flag, mode);
+
+	return rc;						
+}
+
+static asmlinkage long 
+replay_openat(int dfd, const char __user * filename, int flag, int mode) {
+	return get_next_syscall(SYS_OPENAT, NULL);
+}
+
+static asmlinkage long 
+theia_sys_openat(int dfd, const char __user * filename, int flag, int mode) {
+	long rc;
+	rc = sys_openat(dfd, filename, flag, mode);
+	if (theia_logging_toggle)
+		theia_openat_ahgx(rc, filename, flag, mode); /* use created fd */
+	return rc;
+}
+
+asmlinkage long shim_openat(int dfd, const char __user * filename, int flag, int mode)
+SHIM_CALL_MAIN(SYS_OPENAT, record_openat(dfd, filename, flag, mode), replay_openat(dfd, filename, flag, mode), theia_sys_openat(dfd, filename, flag, mode));
+/* openat end */
 
 // This should be called with the record group lock
 static int
@@ -18922,7 +18991,7 @@ SIMPLE_SHIM0(inotify_init, 253);
 SIMPLE_SHIM3(inotify_add_watch, 254, int, fd, const char __user *, path, u32, mask);
 SIMPLE_SHIM2(inotify_rm_watch, 255, int, fd, u32, wd);
 SIMPLE_SHIM4(migrate_pages, 256, pid_t, pid, unsigned long, maxnode, const unsigned long __user *, old_nodes, const unsigned long __user *, new_nodes);
-SIMPLE_SHIM4(openat, 257, int, dfd, const char __user *, filename, int, flags, int, mode);
+// SIMPLE_SHIM4(openat, 257, int, dfd, const char __user *, filename, int, flags, int, mode);
 
 SIMPLE_SHIM3(mkdirat, 258, int, dfd, const char __user *, pathname, int, mode);
 // THEIA_SHIM3(mkdirat, 258, int, dfd, const char __user *, pathname, int, mode);
