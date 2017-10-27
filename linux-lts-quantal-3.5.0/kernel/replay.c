@@ -9613,9 +9613,9 @@ struct execve_ahgv {
 };
 
 void packahgv_execve (struct execve_ahgv *sys_args) {
-//#ifdef THEIA_AUX_DATA
+// #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();	
-//#endif
+// #endif
 	//Yang
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
@@ -12095,33 +12095,6 @@ void packahgv_accept(struct accept_ahgv *sys_args) {
 	}
 }
 
-struct send_ahgv {
-  int             pid;                                                           
-	int							sock_fd;
-	char						ip[16];
-	u_long					port;
-	long						rc;
-//	u_long 					clock;
-};
-
-// never used?
-void packahgv_send(struct send_ahgv *sys_args) {
-#ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
-#endif
-
-	//Yang
-	if(theia_logging_toggle) {
-		char *buf = theia_buf2;
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%ld|NA|0|%d|%ld|%ld|endahg\n", 
-				102, SYS_SEND, sys_args->pid, current->start_time.tv_sec, sys_args->sock_fd, sys_args->rc,
-				current->tgid, sec, nsec);
-		theia_file_write(buf, size);
-	}
-}
-
 struct sendto_ahgv {
   int             pid;                                                           
 	int							sock_fd;
@@ -12171,33 +12144,6 @@ void packahgv_sendto(struct sendto_ahgv *sys_args) {
 
 		}
 #endif
-		theia_file_write(buf, size);
-	}
-}
-
-struct recv_ahgv {
-  int             pid;                                                           
-	int							sock_fd;
-	char						ip[16];
-	u_long					port;
-	long						rc;
-//	u_long					clock;
-};
-
-// never used?
-void packahgv_recv(struct recv_ahgv *sys_args) {
-#ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
-#endif
-
-	//Yang
-	if(theia_logging_toggle) {
-		char *buf = theia_buf2;
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%d|%ld|NA|0|%d|%ld|%ld|endahg\n", 
-				102, SYS_RECV, sys_args->pid, current->start_time.tv_sec, sys_args->sock_fd, sys_args->rc,
-				current->tgid, sec, nsec);
 		theia_file_write(buf, size);
 	}
 }
@@ -18993,8 +18939,8 @@ SIMPLE_SHIM2(inotify_rm_watch, 255, int, fd, u32, wd);
 SIMPLE_SHIM4(migrate_pages, 256, pid_t, pid, unsigned long, maxnode, const unsigned long __user *, old_nodes, const unsigned long __user *, new_nodes);
 // SIMPLE_SHIM4(openat, 257, int, dfd, const char __user *, filename, int, flags, int, mode);
 
-SIMPLE_SHIM3(mkdirat, 258, int, dfd, const char __user *, pathname, int, mode);
-// THEIA_SHIM3(mkdirat, 258, int, dfd, const char __user *, pathname, int, mode);
+// SIMPLE_SHIM3(mkdirat, 258, int, dfd, const char __user *, pathname, int, mode);
+THEIA_SHIM3(mkdirat, 258, int, dfd, const char __user *, pathname, int, mode);
 
 SIMPLE_SHIM4(mknodat, 259, int, dfd, const char __user *, filename, int, mode, unsigned, dev);
 // THEIA_SHIM4(mknodat, 259, int, dfd, const char __user *, filename, int, mode, unsigned, dev);
@@ -19006,7 +18952,6 @@ SIMPLE_SHIM3(futimesat, 261, int, dfd, char __user *, filename, struct timeval _
 RET1_SHIM4(newfstatat, 262, struct stat, statbuf, int, dfd, char __user *, filename, struct stat __user *, statbuf, int, flag);
 
 // SIMPLE_SHIM3(unlinkat, 263, int, dfd, const char __user *, pathname, int, flag);
-// THEIA_SHIM3(unlinkat, 263, int, dfd, const char __user *, pathname, int, flag);
 
 SIMPLE_SHIM4(renameat, 264, int, olddfd, const char __user *, oldname, int, newdfd, const char __user *, newname);
 // THEIA_SHIM4(renameat, 264, int, olddfd, const char __user *, oldname, int, newdfd, const char __user *, newname);
@@ -19017,8 +18962,8 @@ SIMPLE_SHIM3(symlinkat, 266, const char __user *, oldname, int, newdfd, const ch
 
 RET1_COUNT_SHIM4(readlinkat, 267, buf, int, dfd, const char __user *, path, char __user *, buf, int, bufsiz)
 
-SIMPLE_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
-// THEIA_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
+// SIMPLE_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
+THEIA_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
 SIMPLE_SHIM3(faccessat, 269, int, dfd, const char __user *, filename, int, mode);
 // THEIA_SHIM3(faccessat, 269, int, dfd, const char __user *, filename, int, mode);
 
