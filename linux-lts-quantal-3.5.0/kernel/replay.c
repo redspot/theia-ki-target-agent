@@ -9613,9 +9613,9 @@ struct execve_ahgv {
 };
 
 void packahgv_execve (struct execve_ahgv *sys_args) {
-// #ifdef THEIA_AUX_DATA
+ #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();	
-// #endif
+ #endif
 	//Yang
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
@@ -9624,29 +9624,45 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 		char ids[50];
 		get_ids(ids);
 		int is_user_remote = is_remote(current);
-//		int is_user_remote;
-/*
-		struct task_struct *tsk = pid_task(find_vpid(current->real_parent->pid), PIDTYPE_PID);	
-		if (tsk)
-			is_user_remote = is_remote(tsk); // try to use parent's env
-		else
-			is_user_remote = is_remote(current);
-*/
-		is_user_remote = 0;
+		char *fpath;
+		int size;
+		char uuid_str[THEIA_UUID_LEN+1];
+		struct file *file;
+		int fd, fput_needed;
+		mm_segment_t old_fs = get_fs();
 
-  		char *fpathbuf = (char*)vmalloc(PATH_MAX);
-	 	char *fpath    = get_task_fullpath(current, fpathbuf, PATH_MAX);
-		if (!fpath) {
-			fpath = sys_args->filename;
+		set_fs(KERNEL_DS);
+		fd = sys_open(sys_args->filename, O_RDONLY, 0);
+		if (fd >= 0) {
+			if (fd2uuid(fd, uuid_str) == false) {
+				sys_close(fd);
+				set_fs(old_fs);                                                              
+				return;
+			}
+
+			file = fget_light(fd, &fput_needed);
+			if (file) {
+				fpath = get_file_fullpath(file, theia_retbuf, 4096);
+				if (IS_ERR(fpath)) {
+					strncpy(theia_retbuf, sys_args->filename, 4096);
+					fpath = theia_retbuf;
+				}
+				fput_light(file, fput_needed);
+			}
+			sys_close(fd);
 		}
+		else {
+			printk("XXX: %s %d\n", sys_args->filename, fd);
+			set_fs(old_fs);                                                              
+			return; /* TODO: error handling */
+		}
+		set_fs(old_fs);                                                              
 
-		/* TODO: publish args as well */
-
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%s|%d|%d|%ld|%ld|endahg\n", 
+		/* TODO: publish args as well sys_args->args. problem? args can contain | do BASE64 encoding? */
+		size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%s|ARGS|%s|%d|%d|%ld|%ld|endahg\n", 
 				59, sys_args->pid, current->start_time.tv_sec, sys_args->rc, 
-				fpath, ids, is_user_remote, current->tgid, sec, nsec);
+				uuid_str, fpath, ids, is_user_remote, current->tgid, sec, nsec);
 		theia_file_write(buf, size);
-		vfree(fpathbuf);
 	}
 }
 
