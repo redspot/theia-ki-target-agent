@@ -97,6 +97,7 @@
 
 //SL
 struct timespec ext4_get_crtime(struct inode * inode);
+unsigned long get_shm_segsz(int shmid);
 
 void dump_user_stack(void);
 void get_user_callstack(char *buffer, size_t bufsize);
@@ -14020,11 +14021,15 @@ void packahgv_shmat(struct shmat_ahgv *sys_args)
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
+		unsigned long shm_segsz = 0;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%lx|%d|%lu|%d|%lx|%d|%ld|%ld|endahg\n",
+
+		shm_segsz = get_shm_segsz(sys_args->shmid);
+
+		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%lx|%d|%lu|%d|%lx|%lx|%d|%ld|%ld|endahg\n",
 				30, SHMAT, sys_args->pid, current->start_time.tv_sec,
 				sys_args->rc, sys_args->shmid, sys_args->shmaddr, sys_args->shmflg,
-				sys_args->raddr, current->tgid, sec, nsec);
+				shm_segsz, sys_args->raddr, current->tgid, sec, nsec);
 		theia_file_write(buf, size);
 	} 
 }
