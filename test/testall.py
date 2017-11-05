@@ -59,8 +59,8 @@ reclist = sorted(recordings.keys())
 for rec in reclist:
     print "Replaying", rec
     os.system("./parseckpt " + recordings[rec] + " | egrep Argument");
-    print "Running: " + "./resume " + recordings[rec] + " --pthread " + omniplay_dir + "/eglibc-2.15/prefix/lib/"
-    os.system("./resume " + recordings[rec] + " --pthread " + omniplay_dir + "/eglibc-2.15/prefix/lib/")
+    print "Running: " + "./theia_replay " + recordings[rec] + " --pthread " + omniplay_dir + "/eglibc-2.15/prefix/lib"
+    os.system("./theia_replay " + recordings[rec] + " --pthread " + omniplay_dir + "/eglibc-2.15/prefix/lib")
     done = 0
     while (not done):
         (started, finished, mismatched) = get_stats()

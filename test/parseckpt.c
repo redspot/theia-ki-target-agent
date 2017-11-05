@@ -20,8 +20,8 @@ int main (int argc, char* argv[])
 {
     char buf[4096];
     char filename[4096];
-    long copyed, args_cnt, env_cnt, len;
-    int fd, i;
+    long copyed, args_cnt, env_cnt;
+    int len, fd, i;
     pid_t record_pid;
     uint64_t rg_id;
     uint64_t parent_rg_id;

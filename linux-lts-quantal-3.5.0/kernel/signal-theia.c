@@ -41,6 +41,43 @@
 #include <asm/cacheflush.h>
 #include "audit.h"	/* audit_signal_info() */
 
+//Yang
+#include <asm/page.h>
+#include <asm-generic/mman-common.h>
+#include <linux/mm.h>
+#include <asm/pgtable.h>
+#include <linux/highmem.h>
+#include <linux/file.h>
+#include <linux/namei.h>
+#include <linux/replay.h>
+#include <linux/theia_channel.h>
+#include <linux/theia.h>
+#include <linux/relay.h>
+#include <linux/debugfs.h>
+#include <linux/module.h>
+#include <linux/random.h>
+#include <linux/delay.h>
+#include <linux/time.h>
+
+// #define THEIA_STORE_SHMEM 1
+
+//extern ds_list_t* glb_process_list;
+//extern const char* togglefile;
+extern bool theia_logging_toggle;
+extern const char* control_file;
+extern struct dentry	*theia_dir;
+extern struct rchan	*theia_chan;
+
+// copy from fault.c
+enum x86_pf_error_code {
+
+	PF_PROT		=		1 << 0,
+	PF_WRITE	=		1 << 1,
+	PF_USER		=		1 << 2,
+	PF_RSVD		=		1 << 3,
+	PF_INSTR	=		1 << 4,
+};
+
 //#define REP_SIG_DEBUG
 
 /*
@@ -1229,6 +1266,16 @@ int do_send_sig_info(int sig, struct siginfo *info, struct task_struct *p,
 	return ret;
 }
 
+//Yang
+/* It seems inside kernel, we cannot rely on the sigaction change as 
+ * it is userspace function pointer. our solution is 1) identify the 
+ * targeted program; 2) change the protection of this memory do the 
+ * dump if necessary; 3) change sa_handler to SIG_IGN
+ */
+
+
+
+
 /*
  * Force a signal that the process can't ignore: if necessary
  * we unblock the signal and change any SIG_IGN to SIG_DFL.
@@ -1240,12 +1287,299 @@ int do_send_sig_info(int sig, struct siginfo *info, struct task_struct *p,
  * We don't want to have recursive SIGSEGV's etc, for example,
  * that is why we also clear SIGNAL_UNKILLABLE.
  */
+
+struct replay_thread;
+struct record_thread;
+struct record_group;
+
+//Yang
+
+struct shr_read_ahgv {
+	int							pid;
+  u_long          address;
+	u_long					clock;
+};
+
+void packahgv_shrread (struct shr_read_ahgv *sys_args) {
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%d|%d|%ld|%ld|endahg\n", 
+				   500, sys_args->pid, current->start_time.tv_sec, sys_args->address, current->tgid, sys_args->clock, sec, nsec);
+		theia_file_write(buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+void theia_shrread_ahg(unsigned int address, u_long clock) {
+	int ret;
+  struct shr_read_ahgv* pahgv = NULL;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+
+	if(!check_and_update_controlfile()) {
+		set_fs(old_fs);                                                              
+		return;
+	}
+
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
+    set_fs(old_fs);                                                              
+		return;
+	}
+
+  //check if the process is new; if so, send an entry of process                             
+/*
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		recursive_packahgv_process();
+  }
+*/
+	set_fs(old_fs);                                                              
+	
+	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+		recursive_packahgv_process();
+
+	pahgv = (struct shr_read_ahgv*)kmalloc(sizeof(struct shr_read_ahgv), GFP_KERNEL);
+	if(pahgv == NULL) {
+		printk ("theia_shrread_ahg: failed to KMALLOC.\n");
+		return;
+	}
+	pahgv->pid = current->pid;
+	pahgv->address = address;
+	pahgv->clock = clock;
+	packahgv_shrread(pahgv);
+	kfree(pahgv);	
+
+}
+
+
+struct shr_write_ahgv {
+	int							pid;
+  u_long          address;
+	u_long					clock;
+};
+
+void packahgv_shrwrite (struct shr_write_ahgv *sys_args) {
+	//Yang
+	if(theia_chan) {
+		char buf[256];
+		long sec, nsec;
+		get_curr_time(&sec, &nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%d|%lx|%d|%d|%ld|%ld|endahg\n", 
+				   501, sys_args->pid, current->start_time.tv_sec, sys_args->address, current->tgid, sys_args->clock, sec, nsec);
+		theia_file_write(buf, size);
+	}
+	else
+		printk("theia_chan invalid\n");
+}
+
+void theia_shrwrite_ahg(unsigned int address, u_long clock) {
+	int ret;
+  struct shr_write_ahgv* pahgv = NULL;
+
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
+
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+			return;
+		}
+	}
+	if(theia_chan == NULL) {
+		theia_chan = create_channel(subbuf_size, n_subbufs);
+		if (!theia_chan) {
+			debugfs_remove(theia_dir);
+			return;
+		}
+	}
+
+	if(!check_and_update_controlfile()) {
+		set_fs(old_fs);                                                              
+		return;
+	}
+
+//	printk("filter passed, pid is %d, tgid is %d\n", current->pid, current->tgid);
+//  ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//  if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.     
+//    set_fs(old_fs);                                                              
+//		return;
+//  } 
+	if(theia_logging_toggle == 0) {
+    set_fs(old_fs);                                                              
+		return;
+	}
+
+  //check if the process is new; if so, send an entry of process                             
+/*
+  if(is_process_new(current->pid, current->comm)) {                              
+    char *entry = (char*)kmalloc(50, GFP_KERNEL);
+		sprintf(entry, "%d_%s", current->pid, current->comm);
+		if(glb_process_list == NULL) {
+			glb_process_list = ds_list_create (NULL, 0, 0);
+		}
+    ds_list_insert (glb_process_list, entry);                                                
+		
+		recursive_packahgv_process();
+  }
+*/
+	set_fs(old_fs);                                                              
+
+	if(is_process_new2(current->pid, current->start_time.tv_nsec))
+		recursive_packahgv_process();
+
+	pahgv = (struct shr_write_ahgv*)kmalloc(sizeof(struct shr_write_ahgv), GFP_KERNEL);
+	if(pahgv == NULL) {
+		printk ("theia_shrwrite_ahg: failed to KMALLOC.\n");
+		return;
+	}
+	pahgv->pid = current->pid;
+	pahgv->address = address;
+	pahgv->clock = clock;
+	packahgv_shrwrite(pahgv);
+	kfree(pahgv);	
+
+}
+
+void save_to_cache_file(char* buf, size_t buf_len, unsigned long start) {
+	int fd;
+	struct file* file;
+	loff_t pos = 0;
+	int written = 0;
+	char filename[50];
+
+	sprintf (filename, "/data/replay_cache/shr_cache_%lld_%lu", current->rg_id, current->rg_shm_count);
+
+	++(current->rg_shm_count);
+
+	mm_segment_t old_fs = get_fs();
+	set_fs(KERNEL_DS);
+	set_fs(get_ds());
+
+	fd = sys_open(filename, O_RDWR|O_CREAT|O_TRUNC|O_LARGEFILE, 0777);
+	printk("shr_cache filename: %s, fd %d\n", filename, fd);
+	file = fget(fd);
+	if (file == NULL) {
+		printk ("write_shr_cache: invalid file, fd: %d\n", fd);
+		return;
+	}
+	printk("2 shr_cache filename: %s, fd %d\n", filename, fd);
+	//written = vfs_write(file, buf, PAGE_SIZE, &pos);
+	pos = vfs_write(file, &start, sizeof(unsigned long), &pos);
+	written = vfs_write(file, buf, buf_len, &pos);
+
+	set_fs(old_fs);
+//	if(written != PAGE_SIZE) {
+	if(written != buf_len) {
+		printk ("write_shr_cache: tried to write %d, got %ld\n", PAGE_SIZE, written);
+		return;
+	}
+	fput(file);
+	sys_close(fd);
+//	filp_close(file, NULL);
+	
+	return 0;
+}
+
+void load_from_cache_file(char* buf) {
+	int fd;
+	struct file* file;
+	loff_t pos = 0;
+	int read = 0;
+	char filename[50];
+
+	mm_segment_t old_fs = get_fs();
+	set_fs(KERNEL_DS);
+	set_fs(get_ds());
+
+	sprintf (filename, "/data/replay_cache/shr_cache_%lld_%lu", current->rg_id, current->rg_shm_count);
+	++(current->rg_shm_count);
+
+	fd = sys_open(filename, O_RDWR, 0);
+	file = fget(fd);
+	if (file == NULL) {
+		printk ("read_shr_cache: invalid file\n");
+		return;
+	}
+
+	read = vfs_read(file, buf, PAGE_SIZE, &pos);
+	set_fs(old_fs);
+
+	if(read != PAGE_SIZE) {
+		printk ("read_shr_cache: tried to read %d, got %ld\n", PAGE_SIZE, read);
+		return;
+	}
+	fput(file);
+	sys_close(fd);
+	
+	return 0;
+}
+
 int
 force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 {
 	unsigned long int flags;
 	int ret, blocked, ignored;
+	int mprotect_error = false;
 	struct k_sigaction *action;
+
+//Yang
+	struct mm_struct *mm = t->mm;
+	struct vm_area_struct *vma;
+	unsigned long error_code = t->thread.error_code;
+	unsigned long protection;
+	int ahg_mem_access = 0; //0:no need; 1:read; 2:write;
+	
+#ifdef THEIA_STORE_SHMEM
+	bool save_flag = false;
+	char *buf_theia = NULL;
+	size_t buf_theia_len = 0;
+#endif
+
+//	printk("error code: %lu\n", error_code);
+
+//Yang: we pre-load before the spin lock
+//	load_from_cache_file(buf_theia);
+
+//  mm_segment_t old_fs = get_fs();                                                
+//  set_fs(KERNEL_DS);
+//	//For Theia Logging
+//	ret = sys_access(togglefile, 0/*F_OK*/);                                       
+//	set_fs(old_fs);
 
 	spin_lock_irqsave(&t->sighand->siglock, flags);
 	action = &t->sighand->action[sig-1];
@@ -1253,17 +1587,249 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	blocked = sigismember(&t->blocked, sig);
 	if (blocked || ignored) {
 		action->sa.sa_handler = SIG_DFL;
+
 		if (blocked) {
 			sigdelset(&t->blocked, sig);
 			recalc_sigpending_and_wake(t);
 		}
 	}
+
+/*
+	if (!(error_code & PF_USER)) {
+//	if (error_code & PF_PROT == 0 || error_code & PF_USER == 0) {
+		if (action->sa.sa_handler == SIG_DFL)
+			t->signal->flags &= ~SIGNAL_UNKILLABLE;
+		ret = specific_send_sig_info(sig, info, t);
+		spin_unlock_irqrestore(&t->sighand->siglock, flags);
+
+		return ret;
+	}
+*/
+
+	void __user *address = (void __user *)((unsigned long)info->si_addr & ~0xfff); // page
+	unsigned long address_ul = (unsigned long)address;
+	vma = find_vma(mm, address_ul);
+	if (!vma) /* invalid memory */
+		goto skip_page_table_trick;
+	protection = pgprot_val(vma->vm_page_prot);
+//	printk("vma->start: %p, end: %p, current page prot: %lu, vm_flags: %lu\n", 
+//				vma->vm_start,vma->vm_end,pgprot_val(vma->vm_page_prot), vma->vm_flags);
+
+#ifdef THEIA_STORE_SHMEM
+	buf_theia_len = vma->vm_end - vma->vm_start;
+	printk("buf_theia_len: %u\n", buf_theia_len);
+	buf_theia = (char*)vmalloc(buf_theia_len+1);
+#endif
+	void __user *vma_address = (void __user*)vma->vm_start;		
+
+//	if( ret >= 0 && !(t->record_thrd || t->replay_thrd)) { 
+	if( theia_logging_toggle == 1 && !(t->record_thrd || t->replay_thrd)) { 
+		action->sa.sa_handler = SIG_IGN;
+		//This should be the very first mem access
+		if(!(protection & (PROT_READ | PROT_WRITE))) {
+			if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
+				ret = sys_mprotect(address, 1, PROT_READ|PROT_WRITE);
+				if (ret < 0) mprotect_error = true;
+				//Notify this is a mem_write to the shared memory
+				ahg_mem_access = 2;
+			}
+			else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
+				//Notify this is a mem_read to the shared memory
+				ret = sys_mprotect(address, 1, PROT_READ|PROT_WRITE);
+				if (ret < 0) mprotect_error = true;
+				ahg_mem_access = 1;
+			}
+		}
+		else { //following 
+			// if it is write attempt, we change protection to prot_write
+			if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
+				ret = sys_mprotect(address, 1, PROT_WRITE);
+				if (ret < 0) mprotect_error = true;
+				ahg_mem_access = 2;				
+			}
+			// if it is read attempt, we change protection to prot_read
+			else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
+				ret = sys_mprotect(address, 1, PROT_READ);
+				if (ret < 0) mprotect_error = true;
+				ahg_mem_access = 1;				
+			}
+		}
+	}
+
+	if(t->record_thrd || t->replay_thrd) {
+//		printk("t->comm: %s\n", t->comm);
+		//RECORD
+		if (t->record_thrd) { /* uncomment it after doing enough tests */		
+			//		if(t->record_thrd && (strcmp(t->comm, "p3") == 0 || strcmp(t->comm, "p4") == 0) ) {
+//			printk("in signal.c record, id: %lld\n", t->rg_id);
+			action->sa.sa_handler = SIG_IGN;
+
+			//This should be the very first mem access
+			if(!(protection & (PROT_READ | PROT_WRITE))) {
+				if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
+//					ret = theia_mprotect_shared(mm, address, 1, PROT_WRITE);
+					ret = sys_mprotect(address, 1, PROT_READ|PROT_WRITE);
+					if (ret < 0) mprotect_error = true;
+					printk("inside force_sig_info, first from none; address %p is set to prot_write, ret: %d\n", address, ret);
+					
+					//Notify this is a mem_write to the shared memory
+					ahg_mem_access = 2;
+
+				}
+				else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
+//					ret = theia_mprotect_shared(mm, address, 1, PROT_READ);
+					ret = sys_mprotect(address, 1, PROT_READ);
+					if (ret < 0) mprotect_error = true;
+					printk("inside force_sig_info, first from none; address %p is set to prot_read, ret: %d\n", address, ret);
+
+#ifdef THEIA_STORE_SHMEM
+					//copy from user of this one page
+					if ((ret = copy_from_user (buf_theia, vma_address, buf_theia_len))) {
+						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
+					}
+					save_flag = true;
+#endif
+					ahg_mem_access = 1;
+				}
+
+				//Notify this is a mem_read to the shared memory
+//				ahg_mem_access = 1;
+			}
+			//This is the following mem access
+			else {
+				// if it is write attempt, we change protection to prot_write
+				if(error_code & PF_USER && error_code & PF_WRITE) { //write attempt
+//					ret = theia_mprotect_shared(mm, address, 1, PROT_WRITE);
+					ret = sys_mprotect(address, 1, PROT_WRITE|PROT_READ);
+					if (ret < 0) mprotect_error = true;
+					printk("inside force_sig_info, address %p is set to prot_write, ret: %d\n", address, ret);
+					ahg_mem_access = 2;					
+				}
+				// if it is read attempt, we change protection to prot_read
+				else if(error_code & PF_USER && !(error_code & PF_WRITE)) { //read attempt
+					//					ret = theia_mprotect_shared(mm, address, 1, PROT_READ);
+//					ret = theia_mprotect_shared(mm, address, 1, PROT_READ|PROT_EXEC);					
+					ret = sys_mprotect(address, 1, PROT_READ|PROT_EXEC);
+					if (ret < 0) mprotect_error = true;
+					printk("inside force_sig_info, address %p is set to prot_read|exec, ret: %d\n", address, ret);
+#ifdef THEIA_STORE_SHMEM
+					//copy from user of this one page
+					if ((ret = copy_from_user (buf_theia, vma_address, buf_theia_len))) {
+						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
+					}
+					save_flag = true;
+#endif
+					ahg_mem_access = 1;					
+				}
+			}
+		}
+		//REPLAY
+		else if(t->replay_thrd) { // this is indeed p2, but with a hashed name
+			printk("in signal.c replay, id: %lld\n", t->rg_id);
+			action->sa.sa_handler = SIG_IGN;
+
+			//PROT_NONE case, first access
+			if(!(protection & (PROT_READ | PROT_WRITE))) {
+				if(error_code & PF_USER && error_code & PF_WRITE) {
+					//we expect segfault happens again
+					ret = sys_mprotect(address, 1, PROT_READ);
+					if (ret < 0) mprotect_error = true;
+//					printk("inside force_sig_info, first from none; address %p is set to prot_READ, ret: %d\n", address, ret);
+				}
+				else if(error_code & PF_USER && !(error_code & PF_WRITE)) {
+					//in order to dump the read page, we change protection to prot_write temporarily
+					ret = sys_mprotect(address, 1, PROT_WRITE);
+					if (ret < 0) mprotect_error = true;
+//					printk("inside force_sig_info, address %p is set to prot_write temp, ret: %d\n", address, ret);
+//					load_from_cache_file(buf_theia);
+//					load_flag =  true;
+
+					// TODO: what should we do?
+					ret = sys_mprotect(address, 1, PROT_READ);
+
+#ifdef THEIA_STORE_SHMEM
+					if ((ret = copy_to_user (address, buf_theia, 4096))) {
+						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
+					}
+					printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", address, ret);
+
+					buf_theia[4096] = '\0';
+					printk("buf_theia: %s\n", buf_theia);
+					int i=0;
+					for(i=0;i<4096;i++){
+						printk("%02x", buf_theia[i]);
+					}
+					printk("\n");
+#endif
+				}
+			}
+
+			else {
+				// if it is write attempt, we change protection to prot_write
+				if(error_code & PF_USER && error_code & PF_WRITE) {
+					ret = sys_mprotect(address, 1, PROT_WRITE);
+					if (ret < 0) mprotect_error = true;
+					printk("inside force_sig_info, address %p is set to prot_write, ret: %d\n", address, ret);
+				}
+				// if it is read attempt, we change protection to prot_read
+				else if(error_code & PF_USER && !(error_code & PF_WRITE)) {
+					//in order to dump the read page, we change protection to prot_write temporarily
+					ret = sys_mprotect(address, 1, PROT_WRITE);
+					if (ret < 0) mprotect_error = true;
+					printk("inside force_sig_info, address %p is set to prot_write temp, ret: %d\n", address, ret);
+//					load_from_cache_file(buf_theia);
+//					load_flag =  true;
+
+					// TODO: what should we do?
+					ret = sys_mprotect(address, 1, PROT_READ);
+					if (ret < 0) mprotect_error = true;
+#ifdef THEIA_STORE_SHMEM
+					if ((ret = copy_to_user (address, buf_theia, 4096))) {
+						printk ("copy_from_user fails in force_sig_info, ret %d\n", ret);
+					}
+#endif
+					printk("inside force_sig_info, address %p is set to prot_read, ret: %d\n", address, ret);
+				}
+			}
+		}
+	}
+
+skip_page_table_trick:
+	if (mprotect_error) { /* let's fire segfault not by us */ 
+		action->sa.sa_handler = SIG_DFL;
+	}
+
 	if (action->sa.sa_handler == SIG_DFL)
 		t->signal->flags &= ~SIGNAL_UNKILLABLE;
 	ret = specific_send_sig_info(sig, info, t);
 	spin_unlock_irqrestore(&t->sighand->siglock, flags);
 
+#ifdef THEIA_STORE_SHMEM
+	if(save_flag) {	
+		//write to cache file
+		save_to_cache_file(buf_theia, buf_theia_len, vma->vm_start);
+	}
+	vfree(buf_theia);
+#endif
+
+/*
+	if(load_flag) {
+		//need to increment counter for the buffered file
+	}
+*/
+
+	//handle ahg transmission
+	if(ahg_mem_access == 1) {
+		theia_shrread_ahg(address, 0);	
+	}
+	else if(ahg_mem_access == 2) {
+		theia_shrwrite_ahg(address, 0);	
+	}
+
+
 	return ret;
+out:
+	return -EINVAL;
 }
 
 /*

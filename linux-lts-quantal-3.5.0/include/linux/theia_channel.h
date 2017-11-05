@@ -17,16 +17,7 @@ static size_t write_count;
 static int suspended;
 
 struct rchan *create_channel(unsigned size, unsigned n);
-
 static void destroy_channel(void);
-
-bool is_process_new2(pid_t pid, int nsec);
-
-void recursive_packahgv_process();
-
-bool check_and_update_controlfile();
-
-void get_curr_time(long *sec, long *nsec);
 
 //ds_list_t* glb_process_list = NULL;
 

@@ -1254,3 +1254,23 @@ static int sysvipc_shm_proc_show(struct seq_file *s, void *it)
 			  swp * PAGE_SIZE);
 }
 #endif
+
+/* THEIA */
+unsigned long get_shm_segsz(int shmid);
+
+unsigned long get_shm_segsz(int shmid) {
+	struct shmid_kernel *shp;
+	struct ipc_namespace *ns;
+	unsigned long shm_segsz = 0;
+
+	ns = current->nsproxy->ipc_ns;
+
+	shp = shm_lock_check(ns, shmid);
+	if (!IS_ERR(shp)) { /* error */
+		shm_segsz = shp->shm_segsz;
+		shm_unlock(shp);
+	}
+
+	return shm_segsz;
+}
+EXPORT(get_shm_segsz);
