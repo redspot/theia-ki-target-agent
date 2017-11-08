@@ -4159,7 +4159,7 @@ int fork_replay_theia (char __user* logdir, const char* filename, const char __u
 
 	sprintf (ckpt, "%s/ckpt", prg->rg_logdir);
 	char libpath_contents[200];
-	sprintf(libpath_contents, "LD_LIBRARY_PATH=/home/yang/theia-es/eglibc-2.15/prefix/lib:/lib/theia_libs:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/lib:/usr/lib:/lib");
+	sprintf(libpath_contents, "LD_LIBRARY_PATH=/home/theia/theia-es/eglibc-2.15/prefix/lib:/lib/theia_libs:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/lib:/usr/lib:/lib");
 //	sprintf(libpath_contents, "LD_LIBRARY_PATH=$LD_LIBRARY_PATH");
 	char* libpath = KMALLOC (strlen(libpath_contents), GFP_KERNEL);
 	strcpy(libpath, libpath_contents);
@@ -4358,7 +4358,7 @@ show_kernel_stack((u_long*)cur_rsp);
 
 	sprintf (ckpt, "%s/ckpt", prg->rg_logdir);
 	char libpath_contents[200];
-	sprintf(libpath_contents, "LD_LIBRARY_PATH=/home/yang/theia-es/eglibc-2.15/prefix/lib:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib");
+	sprintf(libpath_contents, "LD_LIBRARY_PATH=/home/theia/theia-es/eglibc-2.15/prefix/lib:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib");
 	char* libpath = KMALLOC (strlen(libpath_contents), GFP_KERNEL);
 	strcpy(libpath, libpath_contents);
 	argbuf = copy_args (args, env, &argbuflen, libpath_contents, strlen(libpath_contents));
@@ -4587,6 +4587,7 @@ new_syscall_enter (long sysnum)
 	psr->sysnum = sysnum;
 	new_clock = atomic_add_return (1, prt->rp_precord_clock);
 	start_clock = new_clock - prt->rp_expected_clock - 1;
+	printk ("[%s|%d]pid %d incremented precord_clock to %d, expected_clock %d, start_clock %d, on syscall %ld enter\n", __func__,__LINE__,current->pid, atomic_read(prt->rp_precord_clock), prt->rp_expected_clock, start_clock,sysnum);
 	if (start_clock == 0) {
 		psr->flags = 0;
 	} else {
@@ -4603,8 +4604,7 @@ new_syscall_enter (long sysnum)
 #endif
 	}
 	prt->rp_expected_clock = new_clock;
-	MPRINT ("pid %d incremented clock to %d on syscall %ld enter\n", current->pid, atomic_read(prt->rp_precord_clock), sysnum);
-//	printk ("pid %d incremented precord_clock to %d, expected_clock %d, start_clock %d, on syscall %ld enter\n", current->pid, atomic_read(prt->rp_precord_clock), prt->rp_expected_clock, start_clock,sysnum);
+//	MPRINT ("pid %d incremented clock to %d on syscall %ld enter\n", current->pid, atomic_read(prt->rp_precord_clock), sysnum);
 
 #ifdef USE_HPC
 	psr->hpc_begin = rdtsc(); // minus cc_calibration
@@ -4659,6 +4659,7 @@ new_syscall_done (long sysnum, long retval)
 	}
 	prt->rp_expected_clock = new_clock;
 
+	printk ("[%s|%d]pid %d incremented precord_clock to %d, expected_clock %d, start_clock %d, on syscall %ld enter\n", __func__,__LINE__,current->pid, atomic_read(prt->rp_precord_clock), prt->rp_expected_clock, stop_clock,sysnum);
 	return 0;
 }
 
@@ -8136,7 +8137,7 @@ record_read (unsigned int fd, char __user * buf, size_t count)
 
 	//Yang
 	if (rc != -EAGAIN) /* ignore some less meaningful errors */
-		theia_read_ahg(fd, rc, current->record_thrd->rp_precord_clock);
+		theia_read_ahg(fd, rc, atomic_read(current->record_thrd->rp_precord_clock));
 
 #ifdef TIME_TRICK
 	if (rc <= 0) shift_clock = 0;
@@ -8688,7 +8689,7 @@ record_write (unsigned int fd, const char __user * buf, size_t count)
 
 	//Yang
 	if (size != -EAGAIN)
-		theia_write_ahg(fd, size, current->record_thrd->rp_precord_clock);
+		theia_write_ahg(fd, size, atomic_read(current->record_thrd->rp_precord_clock));
 
 	DPRINT ("Pid %d records write returning %d\n", current->pid,size);
 #ifdef X_COMPRESS
@@ -10129,7 +10130,7 @@ printk("in theia_start_execve: filename %s\n", filename);
     char* linker;
     printk("/dev/spec0 ready ! filename: %s\n", filename);
     //should be ready to add the process to record_group
-    linker = "/home/yang/theia-es/eglibc-2.15/prefix/lib/ld-linux-x86-64.so.2";
+    linker = "/home/theia/theia-es/eglibc-2.15/prefix/lib/ld-linux-x86-64.so.2";
     int save_mmap = 1;
 
     set_fs(old_fs);
@@ -10366,7 +10367,7 @@ record_mount (char __user *dev_name, char __user *dir_name, char __user * type, 
 		long rc;
 		new_syscall_enter (165);
 		rc = sys_mount(dev_name, dir_name, type, flags, data);
-		theia_mount_ahg(dev_name, dir_name, type, flags, (int)rc, current->record_thrd->rp_precord_clock);
+		theia_mount_ahg(dev_name, dir_name, type, flags, (int)rc, atomic_read(current->record_thrd->rp_precord_clock));
 		new_syscall_done (165, rc);
 		new_syscall_exit (165, NULL);
 		return rc;
@@ -11003,7 +11004,7 @@ record_ioctl (unsigned int fd, unsigned int cmd, unsigned long arg)
 
 	new_syscall_enter (16);
 	if (rc == 0) rc = sys_ioctl (fd, cmd, arg);
-	theia_ioctl_ahg(fd, cmd, arg, rc, current->record_thrd->rp_precord_clock);
+	theia_ioctl_ahg(fd, cmd, arg, rc, atomic_read(current->record_thrd->rp_precord_clock));
 	new_syscall_done (16, rc);
 
 	DPRINT ("Pid %d records ioctl fd %d cmd 0x%x arg 0x%lx returning %ld\n", current->pid, fd, cmd, arg, rc);
@@ -17511,7 +17512,7 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 //	printk("mmap record is done. rc:%lx\n", rc);
 //Yang
 	theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc, 
-	current->record_thrd->rp_precord_clock);
+	atomic_read(current->record_thrd->rp_precord_clock));
 	
 	new_syscall_done (9, rc);
 
@@ -18093,7 +18094,7 @@ record_setuid (uid_t uid)
 		long rc;
 		new_syscall_enter (105);
 		rc = sys_setuid(uid);
-		theia_setuid_ahg(uid, (int)rc, current->record_thrd->rp_precord_clock);
+		theia_setuid_ahg(uid, (int)rc, atomic_read(current->record_thrd->rp_precord_clock));
 		new_syscall_done (105, rc);
 		new_syscall_exit (105, NULL);
 		return rc;
