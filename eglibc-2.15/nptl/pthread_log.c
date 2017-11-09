@@ -485,11 +485,11 @@ pthread_log_record (int retval, unsigned long type, unsigned long check, int is_
 	if (delta_clock) log_entry |= SKIPPED_CLOCK_FLAG;
 	if (!is_entry && errno != head->save_errno) log_entry |= ERRNO_CHANGE_FLAG;
 
-	*((int *) head->next) = log_entry;
-	head->next += sizeof(int);
+	*((unsigned long *) head->next) = log_entry;
+	head->next += sizeof(unsigned long);
 
 	if (delta_clock) {
-	    *((int *) head->next) = delta_clock;
+	    *((unsigned long *) head->next) = delta_clock;
 	    head->next += sizeof(unsigned long);
 	}
 	    
@@ -563,7 +563,7 @@ pthread_log_replay (unsigned long type, unsigned long check)
 
     next_clock = head->expected_clock;
     if (*pentry & SKIPPED_CLOCK_FLAG) {
-	next_clock += *((int *)head->next);
+	next_clock += *((unsigned long *)head->next);
 	head->next += sizeof(unsigned long);
     }
 
