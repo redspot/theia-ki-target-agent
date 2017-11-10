@@ -10103,7 +10103,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
   int fd;
   long rc = 0;
 
-printk("in theia_start_execve: filename %s\n", filename);
+// printk("in theia_start_execve: filename %s\n", filename);
 
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
@@ -15630,8 +15630,10 @@ inline void theia_delete_module_ahgx(const char __user * name_user, unsigned int
 }
 
 
-THEIA_SHIM3(init_module, 175, void __user *, umod, unsigned long,  len, const char __user *, uargs);
-THEIA_SHIM2(delete_module, 176, const char __user *, name_user, unsigned int, flags);
+// THEIA_SHIM3(init_module, 175, void __user *, umod, unsigned long,  len, const char __user *, uargs);
+// THEIA_SHIM2(delete_module, 176, const char __user *, name_user, unsigned int, flags);
+SIMPLE_SHIM3(init_module, 175, void __user *, umod, unsigned long,  len, const char __user *, uargs);
+SIMPLE_SHIM2(delete_module, 176, const char __user *, name_user, unsigned int, flags);
 
 /* get_kernel_syms 177 */
 /* query_module 178 */
