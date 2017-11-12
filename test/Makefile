@@ -1,6 +1,7 @@
 CC := gcc
 
 CFLAGS := -Wall -Werror -g 
+CFLAGS += -fPIC 
 LDFLAGS := -Wall -Werror -g 
 
 #LDLIBS := libutil.a
@@ -22,7 +23,7 @@ all: $(TARGETS)
 
 # Build dependencies + any extra flags
 launcher: libutil.a
-launcher: CFLAGS += --static -I../../eglibc-2.15/prefix/include -L../../eglibc-2.15/prefix/lib 
+launcher: CFLAGS += --static -fPIC -I../../eglibc-2.15/prefix/include -L../../eglibc-2.15/prefix/lib 
 
 resume: libutil.a
 resume: CFLAGS += --static
