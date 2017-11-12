@@ -1712,6 +1712,8 @@ static inline int
 test_app_syscall(int number)
 {
 	struct replay_thread* prt = current->replay_thrd;
+//printk("[%s|%d] pid %d, syscall %d, app_syscall_addr %lx, value %d\n", __func__,__LINE__,current->pid,number,
+ // prt->app_syscall_addr,(prt->app_syscall_addr <=1)?-1:*(int*)(prt->app_syscall_addr));
 	if (prt->app_syscall_addr == 1) return 0; // PIN not yet attached
 	return (prt->app_syscall_addr == 0) || (*(int*)(prt->app_syscall_addr) == number);
 }
@@ -1719,6 +1721,7 @@ test_app_syscall(int number)
 static inline int
 is_pin_attached (void)
 {
+printk("[%s|%d] pid %d, app_syscall_addr %lx\n", __func__,__LINE__,current->pid,current->replay_thrd->app_syscall_addr);
 	return current->replay_thrd->app_syscall_addr != 0;
 }
 
@@ -3715,6 +3718,7 @@ EXPORT_SYMBOL(set_pin_address);
 long get_log_id (void)
 {
 	if (current->replay_thrd) {
+    printk("[%s|%d] pid %d, rp_record_pid is %d\n", __func__,__LINE__,current->pid,current->replay_thrd->rp_record_thread->rp_record_pid);
 		return current->replay_thrd->rp_record_thread->rp_record_pid;
 	} else {
 		printk ("get_log_id called by a non-replay process\n");
@@ -4514,7 +4518,7 @@ replay_ckpt_wakeup (int attach_pin, char* logdir, char* linker, int fd, int foll
 	current->replay_thrd = prept;
 	current->record_thrd = NULL;
 
-	MPRINT ("Pid %d set_record_group_id to %llu\n", current->pid, rg_id);
+	MPRINT ("Pid %d set_record_group_id to %llu, rp_record_pid %d\n", current->pid, rg_id, prect->rp_record_pid);
 	current->replay_thrd->rp_record_thread->rp_group->rg_id = rg_id;
 #ifdef LOG_COMPRESS
 	init_evs ();
@@ -4529,6 +4533,7 @@ replay_ckpt_wakeup (int attach_pin, char* logdir, char* linker, int fd, int foll
 	// We would then have to wake up the process after pin has been attached.
 	if (attach_pin) {
 		prept->app_syscall_addr = 1;  // Will be set to actual value later
+printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 1\n", __func__,__LINE__,current->pid);
 		
 		rc = read_mmap_log(precg);
 		if (rc) {
@@ -5887,7 +5892,9 @@ get_next_syscall (int syscall, char** ppretparams)
 	// Pin issues the same syscall immediately after the app
 	if (is_pin_attached()) {
 		if ((*(int*)(prt->app_syscall_addr)) != 999) {
-			(*(int*)(prt->app_syscall_addr)) = 0;
+			(*(int*)(prt->app_syscall_addr)) = 0; 
+			(*(int*)(prt->app_syscall_addr)) = 997; //Yang: in syscall_64.tbl, 0 is read.. we use 997 instead
+printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 997\n", __func__,__LINE__,current->pid);
 		}
 	}
 
@@ -5927,7 +5934,9 @@ cget_next_syscall (int syscall, char** ppretparams, u_char* flag, long predictio
 	// Pin issues the same syscall immediately after the app
 	if (is_pin_attached()) {
 		if ((*(int*)(prt->app_syscall_addr)) != 999) {
-			(*(int*)(prt->app_syscall_addr)) = 0;
+			//(*(int*)(prt->app_syscall_addr)) = 0; 
+			(*(int*)(prt->app_syscall_addr)) = 997; //Yang: in syscall_64.tbl, 0 is read.. we use 997 instead
+printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 997\n", __func__,__LINE__,current->pid);
 		}
 	}
 
@@ -6087,6 +6096,8 @@ long check_clock_after_syscall (int syscall)
 	if (ignore_flag) return 0;
 
 	// This should block until it is time to execute the syscall.  We must save the returned values for use in the actual system call
+printk("[%s|%d] pid %d, syscall %d, app_syscall_addr %lx, value %d\n", __func__,__LINE__,current->pid,syscall,
+  prt->app_syscall_addr,(prt->app_syscall_addr <=1)?-1:*(int*)(prt->app_syscall_addr));
 	if (prt->app_syscall_addr <= 1) {
 		printk ("Pid %d calls check_clock_after_syscall, but thread not yet initialized\n", current->pid);
 		return -EINVAL;
@@ -6367,6 +6378,7 @@ asmlinkage long sys_pthread_sysign (void)
 		return F_RECORD;					\
 	}								\
 	if (current->replay_thrd && test_app_syscall(number)) {		\
+printk("SHIM_CALL_MAIN: Pid %d, app replay meets syscall %d\n", current->pid, number); \
 		if (current->replay_thrd->rp_record_thread->rp_ignore_flag_addr) { \
 			get_user (ignore_flag, current->replay_thrd->rp_record_thread->rp_ignore_flag_addr); \
 			if (ignore_flag) { \
@@ -6374,10 +6386,11 @@ asmlinkage long sys_pthread_sysign (void)
 				return F_SYS;				\
 			}						\
 		}							\
-		DPRINT("Pid %d, regular replay syscall %d\n", current->pid, number); \
+		DPRINT("SHIM_CALL_MAIN: Pid %d, regular replay syscall %d\n", current->pid, number); \
 		return F_REPLAY;					\
 	}								\
 	else if (current->replay_thrd) {				\
+printk("SHIM_CALL_MAIN: Pid %d, non replay meets syscall %d\n", current->pid, number); \
 		if (*(current->replay_thrd->rp_preplay_clock) > pin_debug_clock) {	\
 			DPRINT("Pid %d, pin syscall %d\n", current->pid, number);	\
 		}							\
@@ -7271,7 +7284,7 @@ asmlinkage long
 shim_exit(int error_code)
 {
 	if (current->record_thrd) MPRINT ("Recording Pid %d naturally exiting\n", current->pid);
-	if (current->replay_thrd && test_app_syscall(1)) MPRINT ("Replaying Pid %d naturally exiting\n", current->pid);
+	if (current->replay_thrd && test_app_syscall(60)) MPRINT ("Replaying Pid %d naturally exiting\n", current->pid);
 	return sys_exit (error_code);
 }
 
@@ -10039,6 +10052,8 @@ replay_execve(const char *filename, const char __user *const __user *__argv, con
 				
 				// Now start a new group if needed
 				get_logdir_for_replay_id (logid, logdir);
+printk("[%s|%d] pid %d, app_syscall_addr %lx, value %d\n", __func__,__LINE__,current->pid,
+  app_syscall_addr,(app_syscall_addr <=1)?-1:*(int*)(app_syscall_addr));
 				return replay_ckpt_wakeup (app_syscall_addr, logdir, linker, -1, follow_splits, prg->rg_rec_group->rg_save_mmap_flag);
 			} else {
 				DPRINT ("Don't follow splits - so just exit\n");
@@ -10073,6 +10088,7 @@ replay_execve(const char *filename, const char __user *const __user *__argv, con
 		/* Irregardless of splitting, if pin is attached we'll try to attach */
 		if (is_pin_attached()) {
 			prt->app_syscall_addr = 1; /* We need to reattach the pin tool after exec */
+printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 1\n", __func__,__LINE__,current->pid);
 			preallocate_memory (prt->rp_record_thread->rp_group); /* And preallocate memory again - our previous preallocs were just destroyed */
 			create_used_address_list ();
 		}
@@ -10715,6 +10731,7 @@ replay_brk (unsigned long brk)
 	if (is_pin_attached()) {
 		rc = prt->rp_saved_rc;
 		(*(int*)(prt->app_syscall_addr)) = 999;
+printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__,__LINE__,current->pid);
 	} else {
 		rc = get_next_syscall (12, NULL);
 	}
@@ -11565,6 +11582,7 @@ replay_munmap (unsigned long addr, size_t len)
 	if (is_pin_attached()) {
 		rc = current->replay_thrd->rp_saved_rc;
 		(*(int*)(current->replay_thrd->app_syscall_addr)) = 999;
+printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__,__LINE__,current->pid);
 	} else {
 		rc = get_next_syscall (11, NULL);
 	}
@@ -15233,6 +15251,7 @@ replay_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_reg
 	if (is_pin_attached()) {
 		rc = current->replay_thrd->rp_saved_rc;
 		(*(int*)(current->replay_thrd->app_syscall_addr)) = 999;
+printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__,__LINE__,current->pid);
 	} else {
 		rc = get_next_syscall_enter (current->replay_thrd, prg, 56, NULL, &psr);
 	}
@@ -15586,6 +15605,7 @@ replay_mprotect (unsigned long start, size_t len, unsigned long prot)
 	if (is_pin_attached()) {
 		rc = current->replay_thrd->rp_saved_rc;
 		(*(int*)(current->replay_thrd->app_syscall_addr)) = 999;
+printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__,__LINE__,current->pid);
 	} else {
 		rc = get_next_syscall (10, NULL);
 	}
@@ -16672,6 +16692,7 @@ replay_rt_sigaction (int sig, const struct sigaction __user *act, struct sigacti
 		retparams = prt->rp_saved_retparams;
 		// this is an application syscall (with Pin)
 		(*(int*)(prt->app_syscall_addr)) = 999;
+printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__,__LINE__,current->pid);
 		// actually perform rt_sigaction
 		retval = sys_rt_sigaction (sig, act, oact, sigsetsize);
 		if (rc != retval) {
@@ -16750,6 +16771,7 @@ replay_rt_sigprocmask (int how, sigset_t __user *set, sigset_t __user *oset, siz
 		if (prt->rp_saved_psr) {
 			if (prt->rp_saved_psr->sysnum == 14) {
 				(*(int*)(prt->app_syscall_addr)) = 999;
+printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__,__LINE__,current->pid);
 			}
 		}
 	} else {
@@ -17338,6 +17360,7 @@ replay_vfork (unsigned long clone_flags, unsigned long stack_start, struct pt_re
 	if (is_pin_attached()) {
 		rc = prt->rp_saved_rc;
 		(*(int*)(prt->app_syscall_addr)) = 999;
+printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__,__LINE__,current->pid);
 	} else {
 		rc = get_next_syscall_enter (prt, prg, 58, NULL, &psr);
 		prt->rp_saved_rc = rc;
@@ -17396,7 +17419,7 @@ shim_vfork(unsigned long clone_flags, unsigned long stack_start, struct pt_regs 
 	if (current->replay_thrd) {
 		int child_pid;
 		struct task_struct* tsk;
-		if (test_app_syscall(190)) {
+		if (test_app_syscall(58)) {
 			return replay_vfork(clone_flags, stack_start, regs, stack_size, parent_tidptr, child_tidptr);
 		} 
 		// This is Pin
@@ -17610,6 +17633,7 @@ replay_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 		recbuf = (struct mmap_pgoff_retvals *) prt->rp_saved_retparams;
 		psr = prt->rp_saved_psr;
 		(*(int*)(prt->app_syscall_addr)) = 999;
+printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__,__LINE__,current->pid);
 	} else {
 		rc = get_next_syscall (9, (char **) &recbuf);
 	}
@@ -19711,7 +19735,7 @@ struct file* ahg_init_log_write (struct record_thread* prect, loff_t* ppos, int*
 	if (prect->ahg_rp_log_opened) {
 		//rc = sys_stat64(filename, &st);
 //64port
-		rc = sys_stat(filename, &st);
+		rc = sys_newstat(filename, &st);
 		if (rc < 0) {
 			printk ("Stat of file %s failed\n", filename);
 			ret = NULL;
@@ -19774,7 +19798,7 @@ struct file* init_log_write (struct record_thread* prect, loff_t* ppos, int* pfd
 	if (prect->rp_klog_opened) {
 		//rc = sys_stat64(filename, &st);
 //64port
-		rc = sys_stat(filename, &st);
+		rc = sys_newstat(filename, &st);
 		if (rc < 0) {
 			printk ("Stat of file %s failed\n", filename);
 			ret = NULL;
@@ -20185,7 +20209,7 @@ int read_mmap_log (struct record_group* precg)
 	// stat the file, see how many pmaps we expect
 	//rc = sys_stat64(filename, &st);
 //64port
-	rc = sys_stat(filename, &st);
+	rc = sys_newstat(filename, &st);
 	if (rc < 0) {
 		printk("read_mmap_log: cannot stat file %s, %d\n", filename, rc);
 		return -EINVAL;
@@ -20239,7 +20263,7 @@ struct file* init_clog_write (struct record_thread* prect, loff_t* ppos, int* pf
 	if (prect->rp_klog_opened) {
 		//rc = sys_stat64(filename, &st);
 //64port
-		rc = sys_stat(filename, &st);
+		rc = sys_newstat(filename, &st);
 		if (rc < 0) {
 			printk ("Stat of file %s failed\n", filename);
 			return NULL;
