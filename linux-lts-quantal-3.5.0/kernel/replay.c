@@ -16631,8 +16631,13 @@ long theia_sys_arch_prctl(int code, unsigned long addr) {
 	return rc;
 }
 
+//Yang: when attached with pin, arch_prctl becomes invisible to the shim (blocked?)
+//for now, we remove it from being recorded or replayed.
 asmlinkage long shim_arch_prctl (int code, unsigned long addr) 
-SHIM_CALL_MAIN(158, record_arch_prctl(code, addr), replay_arch_prctl(code, addr), theia_sys_arch_prctl(code, addr))
+{
+  return sys_arch_prctl(code, addr);
+}
+//SHIM_CALL_MAIN(158, record_arch_prctl(code, addr), replay_arch_prctl(code, addr), theia_sys_arch_prctl(code, addr))
 
 long shim_rt_sigreturn(struct pt_regs* regs)
 {
