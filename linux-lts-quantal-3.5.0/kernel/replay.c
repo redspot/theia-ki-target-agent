@@ -460,6 +460,19 @@ bool fd2uuid(int fd, char *uuid_str) {
 		return false;
 	}
 
+/* owner info */
+	struct kstat stat;
+	err = vfs_fstat(fd, &stat);
+	char buf[THEIA_UUID_LEN];
+
+	if (!err) {
+		sprintf(buf, "|%d/%d", stat.uid, stat.gid);
+		strncat(uuid_str, buf, THEIA_UUID_LEN-strlen(uuid_str));
+	}
+	else
+		strcat(uuid_str, "|-1/-1");
+	
+
 	return true;
 }
 
@@ -8985,8 +8998,6 @@ void packahgv_open (struct open_ahgv *sys_args) {
 		struct path path;
 		long sec, nsec;
 		int size;
-		struct kstat stat;
-		int ret;
 
 		get_curr_time(&sec, &nsec);
 
@@ -8995,23 +9006,9 @@ void packahgv_open (struct open_ahgv *sys_args) {
 		if (fd2uuid(sys_args->fd, uuid_str) == false)
 			return;
 
-		ret = vfs_fstat(sys_args->fd, &stat);
-
-/*
 		size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%s|%s|%d|%d|%d|%d|%ld|%ld|endahg\n", 
 				2, sys_args->pid, current->start_time.tv_sec, uuid_str, sys_args->filename, sys_args->flags, sys_args->mode, 
 				sys_args->is_new, current->tgid, sec, nsec);
-*/
-		if (!ret) { // vfs_fstat was successful
-			size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%s|%s|%d|%d|%d|%d|%d|%d|%ld|%ld|endahg\n", 
-				2, sys_args->pid, current->start_time.tv_sec, uuid_str, sys_args->filename, sys_args->flags, sys_args->mode, 
-				sys_args->is_new, stat.uid, stat.gid, current->tgid, sec, nsec);
-		}
-		else {
-			size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%s|%s|%d|%d|%d|-1|-1|%d|%ld|%ld|endahg\n", 
-				2, sys_args->pid, current->start_time.tv_sec, uuid_str, sys_args->filename, sys_args->flags, sys_args->mode, 
-				sys_args->is_new, current->tgid, sec, nsec);
-		}
 #else
 		if (sys_args->filename[0] == '/') {
 			size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%d|%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
