@@ -1254,6 +1254,9 @@ struct task_struct *copy_process(unsigned long clone_flags,
 
 	init_sigpending(&p->pending);
 
+/* THEIA */
+	p->no_syscalls = 0;
+
 	p->utime = p->stime = p->gtime = 0;
 	p->utimescaled = p->stimescaled = 0;
 #ifndef CONFIG_VIRT_CPU_ACCOUNTING
