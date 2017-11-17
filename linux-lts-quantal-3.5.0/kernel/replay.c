@@ -95,6 +95,8 @@
 #include "../kernel/replay_graph/replayfs_syscall_cache.h"
 #include "../kernel/replay_graph/replayfs_perftimer.h"
 
+#include <linux/base64.h>
+
 //SL
 struct timespec ext4_get_crtime(struct inode * inode);
 unsigned long get_shm_segsz(int shmid);
@@ -9685,11 +9687,16 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 		}
 		set_fs(old_fs);                                                              
 
+		char *args_b64 = base64_encode(sys_args->args, strlen(sys_args->args), NULL);
+		if (!args_b64) args_b64 = "";
+
 		/* TODO: publish args as well sys_args->args. problem? args can contain | do BASE64 encoding? */
-		size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%s|ARGS|%s|%d|%d|%ld|%ld|endahg\n", 
+		size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%s|%s|%s|%d|%d|%ld|%ld|endahg\n", 
 				59, sys_args->pid, current->start_time.tv_sec, sys_args->rc, 
-				uuid_str, fpath, ids, is_user_remote, current->tgid, sec, nsec);
+				uuid_str, fpath, args_b64, ids, is_user_remote, current->tgid, sec, nsec);
 		theia_file_write(buf, size);
+
+		vfree(args_b64);
 	}
 }
 
