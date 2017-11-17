@@ -9392,9 +9392,12 @@ inline void theia_symlink_ahgx(const char __user * oldname, const char __user * 
 	theia_dump_ss(oldname, newname, rc, sysnum);
 }
 
+SIMPLE_SHIM2(creat, 85, const char __user *, pathname, int, mode);
+SIMPLE_SHIM2(link, 86, const char __user *, oldname, const char __user *, newname);
+/*
 THEIA_SHIM2(creat, 85, const char __user *, pathname, int, mode);
 THEIA_SHIM2(link, 86, const char __user *, oldname, const char __user *, newname);
-// SIMPLE_SHIM1(unlink, 87, const char __user *, pathname);
+*/
 
 /* unlink/unlinkat begin */
 #define SYS_UNLINK    87
@@ -10223,7 +10226,8 @@ inline void theia_chdir_ahgx(const char __user * filename, long rc, int sysnum)
 	theia_fullpath_ahgx(filename, rc, sysnum);
 }
 
-THEIA_SHIM1(chdir, 80, const char __user *, filename);
+SIMPLE_SHIM1(chdir, 80, const char __user *, filename);
+// THEIA_SHIM1(chdir, 80, const char __user *, filename);
 
 static asmlinkage long 
 record_time(time_t __user * tloc)
@@ -10297,6 +10301,14 @@ inline void theia_lseek_ahgx(unsigned int fd, off_t offset, unsigned int origin,
 }
 
 //64port
+SIMPLE_SHIM3(mknod, 133, const char __user *, filename, int, mode, unsigned, dev);
+SIMPLE_SHIM2(chmod, 90, const char __user *, filename, mode_t,  mode);
+SIMPLE_SHIM2(fchmod, 91, unsigned int, fd, mode_t, mode);
+SIMPLE_SHIM3(chown, 92, const char __user *, filename, uid_t, user, gid_t, group);
+SIMPLE_SHIM3(fchown, 93, unsigned int, fd, uid_t, user, gid_t, group);
+SIMPLE_SHIM3(lchown, 94, const char __user *, filename, uid_t, user, gid_t, group);
+SIMPLE_SHIM3(lseek, 8, unsigned int, fd, off_t, offset, unsigned int, origin);
+/*
 THEIA_SHIM3(mknod, 133, const char __user *, filename, int, mode, unsigned, dev);
 THEIA_SHIM2(chmod, 90, const char __user *, filename, mode_t,  mode);
 THEIA_SHIM2(fchmod, 91, unsigned int, fd, mode_t, mode);
@@ -10304,6 +10316,7 @@ THEIA_SHIM3(chown, 92, const char __user *, filename, uid_t, user, gid_t, group)
 THEIA_SHIM3(fchown, 93, unsigned int, fd, uid_t, user, gid_t, group);
 THEIA_SHIM3(lchown, 94, const char __user *, filename, uid_t, user, gid_t, group);
 THEIA_SHIM3(lseek, 8, unsigned int, fd, off_t, offset, unsigned int, origin);
+*/
 
 SIMPLE_SHIM0(getpid, 39);
 
@@ -10508,10 +10521,16 @@ inline void theia_rmdir_ahgx(const char __user * pathname, long rc, int sysnum)
 	theia_fullpath_ahgx(pathname, rc, sysnum);
 }
 
+/*
 THEIA_SHIM2(kill, 62, int, pid, int, sig);
 THEIA_SHIM2(rename, 82, const char __user *, oldname, const char __user *, newname);
 THEIA_SHIM2(mkdir, 83, const char __user *, pathname, int, mode);
 THEIA_SHIM1(rmdir, 84, const char __user *, pathname);
+*/
+SIMPLE_SHIM2(kill, 62, int, pid, int, sig);
+SIMPLE_SHIM2(rename, 82, const char __user *, oldname, const char __user *, newname);
+SIMPLE_SHIM2(mkdir, 83, const char __user *, pathname, int, mode);
+SIMPLE_SHIM1(rmdir, 84, const char __user *, pathname);
 
 //Yang
 struct pipe_ahgv {
@@ -10819,7 +10838,8 @@ inline void theia_umount_ahgx(const char __user * name, int flags, long rc, int 
 }
 
 
-THEIA_SHIM2(umount, 166, char __user *, name, int, flags);
+SIMPLE_SHIM2(umount, 166, char __user *, name, int, flags);
+// THEIA_SHIM2(umount, 166, char __user *, name, int, flags);
 
 struct ioctl_ahgv {
 	int							pid;
@@ -11192,7 +11212,8 @@ inline void theia_chroot_ahgx(const char __user * filename, long rc, int sysnum)
 	theia_fullpath_ahgx(filename, rc, sysnum);
 }
 
-THEIA_SHIM1(chroot, 161, const char __user *, filename);
+// THEIA_SHIM1(chroot, 161, const char __user *, filename);
+SIMPLE_SHIM1(chroot, 161, const char __user *, filename);
 
 RET1_SHIM2(ustat, 136, struct ustat, ubuf, unsigned, dev, struct ustat __user *, ubuf);
 
@@ -11505,7 +11526,8 @@ asmlinkage long shim_gettimeofday (struct timeval __user *tv, struct timezone __
 
 SIMPLE_SHIM2(settimeofday, 164, struct timeval __user *, tv, struct timezone __user *, tz);
 
-THEIA_SHIM2(symlink, 88, const char __user *, oldname, const char __user *, newname);
+// THEIA_SHIM2(symlink, 88, const char __user *, oldname, const char __user *, newname);
+SIMPLE_SHIM2(symlink, 88, const char __user *, oldname, const char __user *, newname);
 
 //64port
 RET1_COUNT_SHIM3(readlink, 89, buf, const char __user *, path, char __user *, buf, int, bufsiz);
@@ -11702,8 +11724,12 @@ inline void theia_ftruncate_ahgx(unsigned int fd, unsigned long length, long rc,
 	theia_dump_dd(fd, length, rc, sysnum);
 }
 
+/*
 THEIA_SHIM2(truncate, 76, const char __user *, path, unsigned long, length);
 THEIA_SHIM2(ftruncate, 77, unsigned int, fd, unsigned long, length);
+*/
+SIMPLE_SHIM2(truncate, 76, const char __user *, path, unsigned long, length);
+SIMPLE_SHIM2(ftruncate, 77, unsigned int, fd, unsigned long, length);
 
 RET1_SHIM2(statfs, 137, struct statfs, buf, const char __user *, path, struct statfs __user *, buf);
 RET1_SHIM2(fstatfs, 138, struct statfs, buf, unsigned int, fd, struct statfs __user *, buf)
@@ -19007,8 +19033,8 @@ SIMPLE_SHIM2(inotify_rm_watch, 255, int, fd, u32, wd);
 SIMPLE_SHIM4(migrate_pages, 256, pid_t, pid, unsigned long, maxnode, const unsigned long __user *, old_nodes, const unsigned long __user *, new_nodes);
 // SIMPLE_SHIM4(openat, 257, int, dfd, const char __user *, filename, int, flags, int, mode);
 
-// SIMPLE_SHIM3(mkdirat, 258, int, dfd, const char __user *, pathname, int, mode);
-THEIA_SHIM3(mkdirat, 258, int, dfd, const char __user *, pathname, int, mode);
+SIMPLE_SHIM3(mkdirat, 258, int, dfd, const char __user *, pathname, int, mode);
+// THEIA_SHIM3(mkdirat, 258, int, dfd, const char __user *, pathname, int, mode);
 
 SIMPLE_SHIM4(mknodat, 259, int, dfd, const char __user *, filename, int, mode, unsigned, dev);
 // THEIA_SHIM4(mknodat, 259, int, dfd, const char __user *, filename, int, mode, unsigned, dev);
@@ -19030,8 +19056,8 @@ SIMPLE_SHIM3(symlinkat, 266, const char __user *, oldname, int, newdfd, const ch
 
 RET1_COUNT_SHIM4(readlinkat, 267, buf, int, dfd, const char __user *, path, char __user *, buf, int, bufsiz)
 
-// SIMPLE_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
-THEIA_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
+SIMPLE_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
+// THEIA_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
 SIMPLE_SHIM3(faccessat, 269, int, dfd, const char __user *, filename, int, mode);
 // THEIA_SHIM3(faccessat, 269, int, dfd, const char __user *, filename, int, mode);
 
