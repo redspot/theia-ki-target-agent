@@ -450,7 +450,6 @@ bool fd2uuid(int fd, char *uuid_str) {
 //				sprintf(uuid_str, "inode:[%lx:%lx:0]", dev, ino);
 				sprintf(uuid_str, "I|%lx|%lx|0", dev, ino);
 			}
-			return true;
 		}
 		else { /* pipe, anon_inode, or others */
 //			fpath = get_file_fullpath(file, theia_retbuf, 4096); /* it returns detailed path */
@@ -10336,6 +10335,42 @@ void packahgv_mount (struct mount_ahgv *sys_args) {
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
+	char uuid_str[THEIA_UUID_LEN+1];
+	struct file *file;
+	int fd, fput_needed;
+	char *fpath;
+	mm_segment_t old_fs;	
+
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+	fd = sys_open(sys_args->devname, O_RDONLY, 0);
+	if (fd >= 0) {
+		if (fd2uuid(fd, uuid_str) == false) {
+			sys_close(fd);
+			set_fs(old_fs);
+			return;
+		}
+
+		if (uuid_str[0] == '\0')
+			strcpy(uuid_str, "I|0|0|0|-1/-1");
+
+		file = fget_light(fd, &fput_needed);
+		if (file) {
+			fpath = get_file_fullpath(file, theia_retbuf, 4096);
+			if (IS_ERR(fpath)) {
+				strncpy(theia_retbuf, sys_args->devname, 4096);
+				fpath = theia_retbuf;
+			}
+			fput_light(file, fput_needed);
+		}
+		sys_close(fd);
+	}
+	else {
+		strcpy(uuid_str, "I|0|0|0|-1/-1"); /* imaginary file, e.g., debugfs */
+		strncpy(theia_retbuf, sys_args->devname, 4096);
+		fpath = theia_retbuf;
+	}
+	set_fs(old_fs);
 
 	//Yang
 	if(theia_logging_toggle) {
@@ -10344,8 +10379,8 @@ void packahgv_mount (struct mount_ahgv *sys_args) {
 
 		get_curr_time(&sec, &nsec);
 
-		size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%s|%s|%s|%lu|%d|%d|%ld|%ld|endahg\n", 
-				165, sys_args->pid, current->start_time.tv_sec, sys_args->devname, sys_args->dirname, sys_args->type, 
+		size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%s|%s|%s|%s|%lu|%d|%d|%ld|%ld|endahg\n", 
+				165, sys_args->pid, current->start_time.tv_sec, uuid_str, fpath, sys_args->dirname, sys_args->type, 
 				sys_args->flags, sys_args->rc, current->tgid, sec, nsec);
 		theia_file_write(theia_buf1, size);
 	}
