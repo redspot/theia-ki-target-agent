@@ -16090,7 +16090,33 @@ replay_readv (unsigned long fd, const struct iovec __user *vec, unsigned long vl
 	return rc;
 }
 
-asmlinkage long shim_readv (unsigned long fd, const struct iovec __user *vec, unsigned long vlen) SHIM_CALL(readv, 19, fd, vec, vlen);
+#define SYS_READV 19
+void theia_readv_ahgx (unsigned long fd, const struct iovec __user *vec, unsigned long vlen, long rc) {
+	char uuid_str[THEIA_UUID_LEN+1];
+
+	if (fd < 0) return; /* TODO */
+
+	if (fd2uuid(fd, uuid_str) == false)
+		return; /* TODO: report openat errors? */
+
+	/* TODO: parse iovec */
+	sprintf(theia_buf1, "%s", uuid_str);
+	theia_dump_str(theia_buf1, rc, SYS_READV);
+}
+
+static asmlinkage long 
+theia_sys_readv (unsigned long fd, const struct iovec __user *vec, unsigned long vlen)
+{
+	long rc;
+	rc = sys_readv(fd, vec, vlen);
+	if (theia_logging_toggle)
+		theia_readv_ahgx(fd, vec, vlen, rc);
+	return rc;
+}
+
+asmlinkage long shim_readv (unsigned long fd, const struct iovec __user *vec, unsigned long vlen) 
+// SHIM_CALL(readv, 19, fd, vec, vlen);
+SHIM_CALL_MAIN(19, record_readv(fd, vec, vlen), replay_readv(fd, vec, vlen), theia_sys_readv(fd, vec, vlen))
 
 #ifdef X_COMPRESS
 static asmlinkage long
@@ -16187,7 +16213,33 @@ replay_writev (unsigned long fd, const struct iovec __user * vec, unsigned long 
 	return size; 
 }
 
-asmlinkage long shim_writev (unsigned long fd, const struct iovec __user *vec, unsigned long vlen) SHIM_CALL(writev, 20, fd, vec, vlen);
+#define SYS_WRITEV 20
+void theia_writev_ahgx (unsigned long fd, const struct iovec __user *vec, unsigned long vlen, long rc) {
+	char uuid_str[THEIA_UUID_LEN+1];
+
+	if (fd < 0) return; /* TODO */
+
+	if (fd2uuid(fd, uuid_str) == false)
+		return; /* TODO: report openat errors? */
+
+	/* TODO: parse iovec */
+	sprintf(theia_buf1, "%s", uuid_str);
+	theia_dump_str(theia_buf1, rc, SYS_WRITEV);
+}
+
+static asmlinkage long 
+theia_sys_writev (unsigned long fd, const struct iovec __user *vec, unsigned long vlen)
+{
+	long rc;
+	rc = sys_writev(fd, vec, vlen);
+	if (theia_logging_toggle)
+		theia_writev_ahgx(fd, vec, vlen, rc);
+	return rc;
+}
+
+asmlinkage long shim_writev (unsigned long fd, const struct iovec __user *vec, unsigned long vlen) 
+// SHIM_CALL(writev, 20, fd, vec, vlen);
+SHIM_CALL_MAIN(20, record_writev(fd, vec, vlen), replay_writev(fd, vec, vlen), theia_sys_writev(fd, vec, vlen))
 #else
 SIMPLE_SHIM3(writev, 20, unsigned long, fd, const struct iovec __user *, vec, unsigned long, vlen);
 #endif
@@ -17159,8 +17211,59 @@ replay_pwrite64(unsigned int fd, const char __user *buf, size_t count, loff_t po
 	return rc;
 }
 
-asmlinkage long shim_pread64(unsigned int fd, char __user *buf, size_t count, loff_t pos) SHIM_CALL(pread64, 17, fd, buf, count, pos);
-asmlinkage long shim_pwrite64(unsigned int fd, const char __user *buf, size_t count, loff_t pos) SHIM_CALL(pwrite64, 18, fd, buf, count, pos);
+#define SYS_PREAD64 17
+void theia_pread64_ahgx(unsigned int fd, const char __user *buf, size_t count, loff_t pos, long rc) {
+	char uuid_str[THEIA_UUID_LEN+1];
+
+	if (fd < 0) return; /* TODO */
+
+	if (fd2uuid(fd, uuid_str) == false)
+		return; /* TODO: report openat errors? */
+
+	sprintf(theia_buf1, "%s|%d|%d", uuid_str, count, pos);
+	theia_dump_str(theia_buf1, rc, SYS_PREAD64);
+}
+
+static asmlinkage long
+theia_sys_pread64(unsigned int fd, const char __user *buf, size_t count, loff_t pos)
+{
+	long rc;
+	rc = sys_pread64(fd, buf, count, pos);
+	if (theia_logging_toggle)
+		theia_pread64_ahgx(fd, buf, count, pos, rc);
+	return rc;
+}
+
+#define SYS_PWRITE64 18
+void theia_pwrite64_ahgx(unsigned int fd, const char __user *buf, size_t count, loff_t pos, long rc) {
+	char uuid_str[THEIA_UUID_LEN+1];
+
+	if (fd < 0) return; /* TODO */
+
+	if (fd2uuid(fd, uuid_str) == false)
+		return; /* TODO: report openat errors? */
+
+	sprintf(theia_buf1, "%s|%d|%d", uuid_str, count, pos);
+	theia_dump_str(theia_buf1, rc, SYS_PWRITE64);
+}
+
+static asmlinkage long
+theia_sys_pwrite64(unsigned int fd, const char __user *buf, size_t count, loff_t pos)
+{
+	long rc;
+	rc = sys_pwrite64(fd, buf, count, pos);
+	if (theia_logging_toggle)
+		theia_pwrite64_ahgx(fd, buf, count, pos, rc);
+	return rc;
+}
+
+asmlinkage long shim_pread64(unsigned int fd, char __user *buf, size_t count, loff_t pos) 
+//SHIM_CALL(pread64, 17, fd, buf, count, pos);
+SHIM_CALL_MAIN(17, record_pread64(fd, buf, count, pos), replay_pread64(fd, buf, count, pos), theia_sys_pread64(fd, buf, count, pos))
+
+asmlinkage long shim_pwrite64(unsigned int fd, const char __user *buf, size_t count, loff_t pos) 
+// SHIM_CALL(pwrite64, 18, fd, buf, count, pos);
+SHIM_CALL_MAIN(18, record_pwrite64(fd, buf, count, pos), replay_pwrite64(fd, buf, count, pos), theia_sys_pwrite64(fd, buf, count, pos))
 
 static asmlinkage long 
 record_getcwd (char __user *buf, unsigned long size) 
@@ -19546,9 +19649,92 @@ replay_preadv (unsigned long fd, const struct iovec __user *vec,  unsigned long 
 	return rc;
 }
 
-asmlinkage long shim_preadv(unsigned long fd, const struct iovec __user *vec,  unsigned long vlen, unsigned long pos_l, unsigned long pos_h) SHIM_CALL(preadv, 295, fd, vec, vlen, pos_l, pos_h);
+#define SYS_PREADV 295
+void theia_preadv_ahgx (unsigned long fd, const struct iovec __user *vec,  unsigned long vlen, unsigned long pos_l, unsigned long pos_h, long rc)
+{
+	char uuid_str[THEIA_UUID_LEN+1];
 
-SIMPLE_SHIM5(pwritev, 296, unsigned long, fd, const struct iovec __user *, vec, unsigned long, vlen, unsigned long, pos_l, unsigned long, pos_h);
+	if (fd < 0) return; /* TODO */
+
+	if (fd2uuid(fd, uuid_str) == false)
+		return; /* TODO: report openat errors? */
+
+	/* TODO: parse iovec */
+	sprintf(theia_buf1, "%s", uuid_str);
+	theia_dump_str(theia_buf1, rc, SYS_PREADV);
+}
+
+static asmlinkage long 
+theia_sys_preadv (unsigned long fd, const struct iovec __user *vec,  unsigned long vlen, unsigned long pos_l, unsigned long pos_h) 
+{
+	long rc;
+	rc = sys_preadv(fd, vec, vlen, pos_l, pos_h);
+	if (theia_logging_toggle)
+		theia_preadv_ahgx(fd, vec, vlen, pos_l, pos_h, rc);
+	return rc;
+}
+
+asmlinkage long shim_preadv(unsigned long fd, const struct iovec __user *vec,  unsigned long vlen, unsigned long pos_l, unsigned long pos_h) 
+//SHIM_CALL(preadv, 295, fd, vec, vlen, pos_l, pos_h);
+SHIM_CALL_MAIN(295, record_preadv(fd, vec, vlen, pos_l, pos_h), replay_preadv(fd, vec, vlen, pos_l, pos_h), theia_sys_preadv(fd, vec, vlen, pos_l, pos_h))
+
+#define SYS_PWRITEV 296
+static asmlinkage long 
+record_pwritev (unsigned long fd, const struct iovec __user *vec,  unsigned long vlen, unsigned long pos_l, unsigned long pos_h) 
+{
+	long size;
+
+	new_syscall_enter (SYS_PWRITEV);
+	size = sys_pwritev (fd, vec, vlen, pos_l, pos_h);
+	new_syscall_done (SYS_PWRITEV, size);
+	new_syscall_exit (SYS_PWRITEV, copy_iovec_to_args(size, vec, vlen));
+	return size;
+}
+
+static asmlinkage long 
+replay_pwritev (unsigned long fd, const struct iovec __user *vec,  unsigned long vlen, unsigned long pos_l, unsigned long pos_h) 
+{
+	char* retparams;
+	long retval, rc;
+
+	rc = get_next_syscall (SYS_PWRITEV, &retparams);
+	if (retparams) {
+		retval = copy_args_to_iovec (retparams, rc, vec, vlen);
+		if (retval < 0) return retval;
+		argsconsume(current->replay_thrd->rp_record_thread, rc);
+	}
+
+	return rc;
+}
+
+void theia_pwritev_ahgx (unsigned long fd, const struct iovec __user *vec,  unsigned long vlen, unsigned long pos_l, unsigned long pos_h, long rc)
+{
+	char uuid_str[THEIA_UUID_LEN+1];
+
+	if (fd < 0) return; /* TODO */
+
+	if (fd2uuid(fd, uuid_str) == false)
+		return; /* TODO: report openat errors? */
+
+	/* TODO: parse iovec */
+	sprintf(theia_buf1, "%s", uuid_str);
+	theia_dump_str(theia_buf1, rc, SYS_PWRITEV);
+}
+
+static asmlinkage long 
+theia_sys_pwritev (unsigned long fd, const struct iovec __user *vec,  unsigned long vlen, unsigned long pos_l, unsigned long pos_h) 
+{
+	long rc;
+	rc = sys_pwritev(fd, vec, vlen, pos_l, pos_h);
+	if (theia_logging_toggle)
+		theia_pwritev_ahgx(fd, vec, vlen, pos_l, pos_h, rc);
+	return rc;
+}
+
+// SIMPLE_SHIM5(pwritev, 296, unsigned long, fd, const struct iovec __user *, vec, unsigned long, vlen, unsigned long, pos_l, unsigned long, pos_h);
+asmlinkage long shim_pwritev(unsigned long fd, const struct iovec __user *vec,  unsigned long vlen, unsigned long pos_l, unsigned long pos_h) 
+SHIM_CALL_MAIN(SYS_PWRITEV, record_pwritev(fd, vec, vlen, pos_l, pos_h), replay_pwritev(fd, vec, vlen, pos_l, pos_h), theia_sys_pwritev(fd, vec, vlen, pos_l, pos_h))
+
 SIMPLE_SHIM4(rt_tgsigqueueinfo, 297, pid_t, tgid, pid_t, pid, int, sig, siginfo_t __user *, uinfo);
 SIMPLE_SHIM5(perf_event_open, 298, struct perf_event_attr __user *, attr_uptr, pid_t, pid, int, cpu, int, group_fd, unsigned long, flags);
 
