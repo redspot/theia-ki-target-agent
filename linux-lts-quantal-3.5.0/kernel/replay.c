@@ -17360,7 +17360,57 @@ replay_capget (cap_user_header_t header, cap_user_data_t dataptr)
 
 asmlinkage long shim_capget (cap_user_header_t header, cap_user_data_t dataptr) SHIM_CALL(capget, 125, header, dataptr)
 RET1_SHIM2(capset, 126, struct __user_cap_header_struct, header, cap_user_header_t, header, const cap_user_data_t, data);
-RET1_SHIM4(sendfile64, 40, off_t, offset, int, out_fd, int, in_fd, off_t __user *, offset, size_t, count);
+
+void theia_sendfile64_ahgx (int out_fd, int in_fd, off_t __user * offset, size_t count, long rc) {
+	char socket_uuid_str[THEIA_UUID_LEN+1];
+	char file_uuid_str[THEIA_UUID_LEN+1];
+	off_t location;
+	struct file *file;
+	int fput_needed;
+	char *fpath;
+
+	if (out_fd >= 0 && in_fd >= 0) {
+		if (!fd2uuid(out_fd, socket_uuid_str)) return;
+		if (!fd2uuid(in_fd, file_uuid_str)) return;
+
+		get_user (location, offset);
+
+		file = fget_light(in_fd, &fput_needed);
+		if (file) {
+			fpath = get_file_fullpath(file, theia_retbuf, 4096);
+			if (IS_ERR(fpath)) {
+				theia_retbuf[0] = '\0';
+				fpath = theia_retbuf;
+			}
+			fput_light(file, fput_needed);
+		}
+		else {
+			theia_retbuf[0] = '\0';
+			fpath = theia_retbuf;
+		}
+		sprintf(theia_buf1, "%s|%s|%s|%u|%u", file_uuid_str, fpath, socket_uuid_str, location, count);
+		theia_dump_str(theia_buf1, rc, 40);
+	}
+}
+
+static asmlinkage long 
+theia_sys_sendfile64 (int out_fd, int in_fd, off_t __user * offset, size_t count)
+{
+	long rc;
+
+	rc = sys_sendfile64(out_fd, in_fd, offset, count);
+
+	if (theia_check_channel())
+		theia_sendfile64_ahgx(out_fd, in_fd, offset, count, rc);
+
+	return rc;
+}
+
+//RET1_SHIM4(sendfile64, 40, off_t, offset, int, out_fd, int, in_fd, off_t __user *, offset, size_t, count);
+RET1_RECORD4 (sendfile64, 40, off_t, offset, int, out_fd, int, in_fd, off_t __user *, offset, size_t, count);
+RET1_REPLAY (sendfile64, 40, off_t, offset, int out_fd, int in_fd, off_t __user * offset, size_t count);
+asmlinkage long shim_sendfile64 (int out_fd, int in_fd, off_t __user * offset, size_t count)
+SHIM_CALL_MAIN(40, record_sendfile64(out_fd, in_fd, offset, count), replay_sendfile64(out_fd, in_fd, offset, count), theia_sys_sendfile64(out_fd, in_fd, offset, count)); 
 
 void 
 record_vfork_handler (struct task_struct* tsk)
@@ -19883,7 +19933,32 @@ asmlinkage long shim_name_to_handle_at(int dfd, const char __user *name, struct 
 SIMPLE_SHIM3(open_by_handle_at, 304, int, mountdirfd, struct file_handle __user *, handle, int, flags);
 RET1_SHIM2(clock_adjtime, 305, struct timex, tx, clockid_t, which_clock, struct timex __user *,tx);
 SIMPLE_SHIM1(syncfs, 306, int, fd);
+
+/*
+static asmlinkage long 
+theia_sys_sendmmsg (int fd, struct mmsghdr __user * msg, unsigned int vlen, unsigned flags)
+{
+	long rc;
+	int i;
+
+	rc = sys_sendmmsg(fd, msg, vlen, flags);
+
+	for (i = 0; i < vlen; ++i) {
+		theia_sendmsg_ahg(msg[i].msg_len, fd, &(msg[i].msg_hdr), flags);
+	}
+
+	return rc;
+}
+*/
+
 SIMPLE_SHIM4(sendmmsg, 307, int, fd, struct mmsghdr __user *, msg, unsigned int, vlen, unsigned, flags);
+/*
+SIMPLE_RECORD4(sendmmsg, 307, int, fd, struct mmsghdr __user *, msg, unsigned int, vlen, unsigned, flags);
+SIMPLE_REPLAY(sendmmsg, 307, int fd, struct mmsghdr __user * msg, unsigned int vlen, unsigned flags);
+asmlinkage long shim_sendmmsg(int fd, struct mmsghdr __user * msg, unsigned int vlen, unsigned flags)
+SHIM_CALL_MAIN(307, record_sendmmsg(fd, msg, vlen, flags), replay_sendmmsg(fd, msg, vlen, flags), theia_sys_sendmmsg(fd, msg, vlen, flags))
+*/
+
 SIMPLE_SHIM2(setns, 308, int, fd, int, nstype);
 
 static asmlinkage long 
