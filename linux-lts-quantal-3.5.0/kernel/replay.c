@@ -108,6 +108,8 @@ char* get_file_fullpath(struct file *opened_file, char *buf, size_t buflen);
 void theia_dump_str(char *str, int rc, int sysum);
 void theia_dump_auxdata();
 
+void theia_setuid_ahg(uid_t uid, int rc, u_long clock);
+
 #define MAX_SOCK_ADDR      128
 #define THEIA_INVALID_PORT 0
 void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char* ip, u_long* port, char* sun_path, sa_family_t* sa_family);
@@ -18076,7 +18078,14 @@ SIMPLE_SHIM2(setpgid, 109, pid_t, pid, pid_t, pgid);
 SIMPLE_SHIM0(getppid, 110);
 SIMPLE_SHIM0(getpgrp, 111);
 SIMPLE_SHIM0(setsid, 112);
-SIMPLE_SHIM2(setreuid, 113, uid_t, ruid, uid_t, euid);
+// SIMPLE_SHIM2(setreuid, 113, uid_t, ruid, uid_t, euid);
+
+inline void theia_setreuid_ahgx(uid_t ruid, uid_t euid, long rc, int sysnum)
+{
+	theia_setuid_ahg(euid, rc, 0); // setreuid -> setuid
+}
+
+THEIA_SHIM2(setreuid, 113, uid_t, ruid, uid_t, euid);
 SIMPLE_SHIM2(setregid, 114, gid_t, rgid, gid_t, egid);
 
 static asmlinkage long 
@@ -18120,7 +18129,14 @@ replay_getgroups (int gidsetsize, gid_t __user *grouplist)
 asmlinkage long shim_getgroups (int gidsetsize, gid_t __user *grouplist) SHIM_CALL(getgroups, 115, gidsetsize, grouplist);
 
 SIMPLE_SHIM2(setgroups, 116, int, gidsetsize, gid_t __user *, grouplist);
-SIMPLE_SHIM3(setresuid, 117, uid_t, ruid, uid_t, euid, uid_t, suid);
+
+
+inline void theia_setresuid_ahgx(uid_t ruid, uid_t euid, uid_t suid, long rc, int sysnum)
+{
+	theia_setuid_ahg(euid, rc, 0); // setresuid -> setuid
+}
+
+THEIA_SHIM3(setresuid, 117, uid_t, ruid, uid_t, euid, uid_t, suid);
 
 static asmlinkage long
 record_getresuid (uid_t __user *ruid, uid_t __user *euid, uid_t __user *suid) 
