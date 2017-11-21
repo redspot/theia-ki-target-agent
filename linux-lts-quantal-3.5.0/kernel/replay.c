@@ -4290,9 +4290,11 @@ u_long cur_rsp;
 	MPRINT ("in fork_replay for pid %d\n", current->pid);
 
 //show_regs(get_pt_regs(NULL));
+/*
 __asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
 printk("Yang verify: addr cur_rsp: %lx, cur_rsp: %lx\n", &cur_rsp, cur_rsp);
 show_kernel_stack((u_long*)cur_rsp);
+*/
 
 	if (current->record_thrd || current->replay_thrd) {
 		printk ("fork_replay: pid %d cannot start a new recording while already recording or replaying\n", current->pid);
@@ -4316,8 +4318,10 @@ show_kernel_stack((u_long*)cur_rsp);
 	prg->rg_save_mmap_flag = save_mmap;
 
 //show_regs(get_pt_regs(NULL));
+/*
 __asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
 show_kernel_stack((u_long*)cur_rsp);
+*/
 
 // allocate a slab for retparams
 	slab = VMALLOC (argsalloc_size);
@@ -4373,8 +4377,10 @@ show_kernel_stack((u_long*)cur_rsp);
 
 
 //show_regs(get_pt_regs(NULL));
+/*
 __asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
 show_kernel_stack((u_long*)cur_rsp);
+*/
 
 	sprintf (ckpt, "%s/ckpt", prg->rg_logdir);
 	char libpath_contents[200];
@@ -4422,16 +4428,20 @@ show_kernel_stack((u_long*)cur_rsp);
 printk("prg->rg_libpath is (%s)", prg->rg_libpath);
 
 //show_regs(get_pt_regs(NULL));
+/*
 __asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
 show_kernel_stack((u_long*)cur_rsp);
+*/
 
 
 printk("Yang before entering record_execve in fork_replay\n");
 	retval = record_execve (filename, args, env, get_pt_regs (NULL));
 
 //show_regs(get_pt_regs(NULL));
+/*
 __asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
 show_kernel_stack((u_long*)cur_rsp);
+*/
 
 printk("Yang after entering record_execve in fork_replay\n");
 	if (retval) printk ("fork_replay: execve returns %ld\n", retval);
@@ -9776,8 +9786,10 @@ u_long cur_rsp;
 
 printk("Yang just start record_execve\n");
 //show_regs(get_pt_regs(NULL));
+/*
 __asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
 show_kernel_stack((u_long*)cur_rsp);
+*/
 /*
 	const char *whitelist1;                                                             
 	whitelist1 = "/usr/lib/firefox/firefox";
@@ -9827,13 +9839,17 @@ show_kernel_stack((u_long*)cur_rsp);
 		libpath_env_free (env);
 	} else 
   {
+/*
 printk("Yang before do_execve\n");
 __asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
 show_kernel_stack((u_long*)cur_rsp);
-		rc = do_execve(filename, __argv, __envp, regs);
+*/
+	rc = do_execve(filename, __argv, __envp, regs);
+/*
 printk("Yang after do_execve\n");
 __asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
 show_kernel_stack((u_long*)cur_rsp);
+*/
 	}
 
 	//Yang
@@ -9984,9 +10000,11 @@ printk("Yang record_execve before new_syscall_exit, rc %d\n", rc);
 	if (argbuf) KFREE (argbuf);
 	new_syscall_exit (59, pretval);
 //show_regs(get_pt_regs(NULL));
+/*
 __asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
 show_kernel_stack((u_long*)cur_rsp);
 printk("Yang record_execve after new_syscall_exit, rc %d\n", rc);
+*/
 	return rc;
 }
 
@@ -10165,7 +10183,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
     int save_mmap = 1;
 
     set_fs(old_fs);
-    fork_replay_theia (NULL /*logdir*/, filename, __argv, __envp, linker, save_mmap, fd, -1 /*pipe_fd*/);
+    rc = fork_replay_theia (NULL /*logdir*/, filename, __argv, __envp, linker, save_mmap, fd, -1 /*pipe_fd*/);
     
     printk("fork_replay_theia returns. %s\n", filename);
     goto out;
