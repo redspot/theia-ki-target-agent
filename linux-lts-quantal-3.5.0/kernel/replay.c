@@ -7875,6 +7875,7 @@ bool check_and_update_controlfile() {
                 strcmp(current->comm, "theia_toggle") == 0 ||
                 strcmp(current->comm, "rsyslogd") == 0 ||
                 strcmp(current->comm, "gvfsd-trash") == 0 ||
+                strcmp(current->comm, "deja-dup-monitor") == 0 ||
 		strcmp(current->comm, "gnome-pty-helper") == 0) {
                 return false;
         }
@@ -10172,6 +10173,12 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
   fd = sys_open ("/dev/spec0", O_RDWR, 0777 /*mode should be ignored anyway*/);
   if (fd < 0) {
     printk("/dev/spec0 not open yet. ret %d\n", ret);
+    goto out_norm;
+  }
+
+  //apply a black list for recording also.
+  if(strcmp(current->comm, "deja-dup-monitor") == 0) {
+    printk("[Record-blacklist] %s is skipped.\n", current->comm);
     goto out_norm;
   }
 
