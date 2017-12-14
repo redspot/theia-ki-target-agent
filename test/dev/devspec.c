@@ -1,5 +1,7 @@
+/* vim: set noexpandtab sw=8 sts=0 : */
 #include <linux/init.h>
 #include <linux/module.h>
+#include <linux/device.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>
 #include <linux/errno.h>
@@ -22,6 +24,10 @@ extern bool theia_logging_toggle;
 extern bool theia_recording_toggle;
 extern bool theia_cross_toggle;
 extern struct theia_replay_register_data_type theia_replay_register_data;
+
+static int majorNumber;
+static struct class*  charClass  = NULL;
+static struct device* charDevice = NULL;
 
 /* Debugging stuff */
 //#define DPRINT printk
@@ -267,21 +273,39 @@ static struct file_operations spec_psdev_fops = {
 
 int init_module(void)
 {
-	printk(KERN_INFO "User-level speculation module version 1.0\n");
-
-	if(register_chrdev(SPEC_PSDEV_MAJOR, "spec_psdev", 
-			   &spec_psdev_fops)) {
-              printk(KERN_ERR "spec_psdev: unable to get major %d\n", 
-		     SPEC_PSDEV_MAJOR);
-              return -EIO;
+	//allocate dynamic major number
+	majorNumber = register_chrdev(0, DEVICE_NAME, &spec_psdev_fops);
+	if(majorNumber<0) {
+		printk(KERN_ERR DEVICE_NAME": unable to get major dynamically\n");
+		return majorNumber;
+	}
+	//register device class
+	charClass = class_create(THIS_MODULE, CLASS_NAME);
+	if (IS_ERR(charClass)) {
+		unregister_chrdev(majorNumber, DEVICE_NAME);
+		printk(KERN_ALERT DEVICE_NAME": Failed to register device class\n");
+		return PTR_ERR(charClass);
+	}
+	//register the device driver
+	charDevice = device_create(charClass, NULL, MKDEV(majorNumber, 0), NULL, DEVICE_NAME);
+	if (IS_ERR(charDevice)) {
+		class_destroy(charClass);
+		unregister_chrdev(majorNumber, DEVICE_NAME);
+		printk(KERN_ALERT DEVICE_NAME": Failed to create the device\n");
+		return PTR_ERR(charDevice);
 	}
 	
+	printk(KERN_INFO "User-level speculation module version 1.0, major=%d\n", majorNumber);
 	return 0;
 }
 
 void cleanup_module(void)
 {
-        unregister_chrdev(SPEC_PSDEV_MAJOR,"spec_psdev");
+	printk (KERN_INFO DEVICE_NAME": destroying device and class.\n");
+	device_destroy(charClass, MKDEV(majorNumber, 0));
+	class_unregister(charClass);
+	class_destroy(charClass);
+	unregister_chrdev(majorNumber, DEVICE_NAME);
 	printk (KERN_INFO "User-Level speculation module 1.0 exiting.\n");
 }
 
