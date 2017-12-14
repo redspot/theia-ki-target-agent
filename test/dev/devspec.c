@@ -65,15 +65,19 @@ spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
 	switch (cmd) {
 	case THEIA_LOGGING_ON:
 		theia_logging_toggle = 1;
+		printk(KERN_INFO "Theia logging on\n");
 		return 0;
 	case THEIA_LOGGING_OFF:
 		theia_logging_toggle = 0;
+		printk(KERN_INFO "Theia logging off\n");
 		return 0;
 	case THEIA_RECORDING_ON:
 		theia_recording_toggle = 1;
+		printk(KERN_INFO "Theia recording on\n");
 		return 0;
 	case THEIA_RECORDING_OFF:
 		theia_recording_toggle = 0;
+		printk(KERN_INFO "Theia recording off\n");
 		return 0;
 
   case THEIA_REPLAY_REGISTER:
