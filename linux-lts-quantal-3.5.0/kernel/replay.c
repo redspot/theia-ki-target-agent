@@ -254,7 +254,7 @@ EXPORT_SYMBOL(theia_replay_register_data);
 
 /* dump aux data (callstack, user ids, ...) */
 #define THEIA_AUX_DATA 1
-#undef THEIA_AUX_DATA
+//#undef THEIA_AUX_DATA
 
 /*
 #define THEIA_USER_RET_ADDR 1
@@ -392,13 +392,11 @@ bool theia_check_channel(void) {
 #endif
 }
 
-bool fd2uuid(int fd, char *uuid_str) {
-	struct file *file;
+bool file2uuid(struct file* file, char *uuid_str, int fd) {
 	struct inode *inode;
 	struct socket *sock;
 	u_long dev, ino;
 	umode_t mode;
-	int fput_needed;
 	int err;
 	char ip[16] = {'\0'};
 	int port;
@@ -409,13 +407,11 @@ bool fd2uuid(int fd, char *uuid_str) {
 	sa_family_t *sa_family; /* not used */
 	char *fpath;
 
-	file = fget_light(fd, &fput_needed);
 	if (file) {
 		inode = file->f_dentry->d_inode;
 		mode = inode->i_mode;
 		dev = inode->i_sb->s_dev;
 		ino = inode->i_ino;
-		fput_light(file, fput_needed);
 
 //		if (dev == 0x7) { /* socket */
 		if (S_ISSOCK(mode)) {
@@ -458,6 +454,28 @@ bool fd2uuid(int fd, char *uuid_str) {
 //			strncpy(uuid_str, fpath, THEIA_UUID_LEN);
 			sprintf(uuid_str, "I|%lx|%lx|0", dev, ino); /* just inode */
 		}
+    printk("file2uuid!!! pid %d, dev %lx, ino %lx\n", current->pid, dev,ino);
+	}
+	else {
+		return false;
+	}
+
+	return true;
+}
+
+
+bool fd2uuid(int fd, char *uuid_str) {
+	struct file *file;
+	int fput_needed;
+	int err;
+  int ret;
+
+	file = fget_light(fd, &fput_needed);
+	if (file) {
+    ret = file2uuid(file, uuid_str, fd); 
+    fput_light(file, fput_needed);
+    if(ret == false)
+      return false;
 	}
 	else {
 		return false;
@@ -4102,7 +4120,7 @@ int fork_replay_theia (char __user* logdir, const char* filename, const char __u
 	struct timespec tp;
 #endif
 
-	MPRINT ("in fork_replay_theia for pid %d\n", current->pid);
+	MPRINT ("[%s|%d] pid %d, fd %d\n", __func__,__LINE__,current->pid, fd);
 	if (current->record_thrd || current->replay_thrd) {
 		printk ("fork_replay_theia: pid %d cannot start a new recording while already recording or replaying\n", current->pid);
 		return -EINVAL;
@@ -8064,7 +8082,9 @@ void recursive_packahgv_process() {
 void packahgv_read (struct read_ahgv *sys_args) {
 #ifdef THEIA_AUX_DATA
 //      too many events are generated and system hangs
-//	theia_dump_auxdata();
+if(strcmp(current->comm, "pthread-lock") == 0) {
+  theia_dump_auxdata();
+}
 #endif
 	//Yang
 	if(theia_logging_toggle) {
@@ -8612,7 +8632,9 @@ struct write_ahgv {
 void packahgv_write (struct write_ahgv *sys_args) {
 #ifdef THEIA_AUX_DATA
 //      too many events are generated and system hangs
-//	theia_dump_auxdata();
+if(strcmp(current->comm, "pthread-lock") == 0) {
+  theia_dump_auxdata();
+}
 #endif
 	//Yang
 	if(theia_logging_toggle) {
@@ -8654,6 +8676,7 @@ void theia_write_ahg(unsigned int fd, long rc, u_long clock) {
 	pahgv->bytes = (u_long)rc;
 //	pahgv->clock = clock;
 	packahgv_write(pahgv);
+printk("[%s|%d] pid %d, fd %d, rc %lu\n", __func__,__LINE__,pahgv->pid, pahgv->fd, pahgv->bytes);
 	KFREE(pahgv);	
 
 }
@@ -8670,7 +8693,7 @@ record_write (unsigned int fd, const char __user * buf, size_t count)
 #endif
 
 	//perftimer_tick(write_btwn_timer);
-	perftimer_start(write_in_timer);
+//	perftimer_start(write_in_timer);
 
 	// TODO: fd 99999?
 	if (fd == 99999) {  // Hack that assists in debugging user-level code
@@ -8683,6 +8706,10 @@ record_write (unsigned int fd, const char __user * buf, size_t count)
 		return count;
 	}
 
+//Yang
+printk("[%s|%d] fd %u, count %d\n", __func__,__LINE__,fd,count);
+if(fd != 0)
+{
 	filp = fget(fd);
 	if (filp) {
 		if (filp->replayfs_filemap) {
@@ -8695,8 +8722,12 @@ record_write (unsigned int fd, const char __user * buf, size_t count)
 		}
 #endif
 	}
+//Yang
 	fput(filp);
-#ifdef TRACE_SOCKET_READ_WRITE
+}
+//printk("[%s|%d] fd %u, count %d\n", __func__,__LINE__,fd,count);
+//#ifdef TRACE_SOCKET_READ_WRITE
+#if 0
 	do {
 		int err = 0;
 		struct socket *sock = sockfd_lookup(fd, &err);
@@ -8714,7 +8745,7 @@ record_write (unsigned int fd, const char __user * buf, size_t count)
 	} while (0);
 #endif
 	/* Okay... this is tricky... */
-	perftimer_start(write_sys_timer);
+//	perftimer_start(write_sys_timer);
 	new_syscall_enter (1);
 	size = sys_write (fd, buf, count);
 
@@ -8735,14 +8766,15 @@ record_write (unsigned int fd, const char __user * buf, size_t count)
 #else
 	new_syscall_done (1, size);			       
 #endif		       
-	perftimer_stop(write_sys_timer);
+//	perftimer_stop(write_sys_timer);
 
-#ifdef TRACE_READ_WRITE
+//#ifdef TRACE_READ_WRITE
+#if 0
 	if (size > 0) {
 		struct file *filp;
 		struct inode *inode;
 
-		perftimer_start(write_traceread_timer);
+//		perftimer_start(write_traceread_timer);
 
 		filp = fget (fd);
 		inode = filp->f_dentry->d_inode;
@@ -8762,10 +8794,10 @@ record_write (unsigned int fd, const char __user * buf, size_t count)
 
 			fpos = filp->f_pos - size;
 			if (fpos >= 0) { 
-				perftimer_start(write_filemap_timer);
+//				perftimer_start(write_filemap_timer);
 				replayfs_filemap_write(map, current->record_thrd->rp_group->rg_id, current->record_thrd->rp_record_pid, 
 						current->record_thrd->rp_count, 0, fpos, size);
-				perftimer_stop(write_filemap_timer);
+//				perftimer_stop(write_filemap_timer);
 			}
 
 			replayfs_diskalloc_sync(map->entries.allocator);
@@ -8893,12 +8925,12 @@ record_write (unsigned int fd, const char __user * buf, size_t count)
 		}
 		fput(filp);
 
-		perftimer_stop(write_traceread_timer);
+//		perftimer_stop(write_traceread_timer);
 	}
 #endif
 	new_syscall_exit (1, pretparams);
 
-	perftimer_stop(write_in_timer);
+//	perftimer_stop(write_in_timer);
 
 	return size;
 }
@@ -14159,6 +14191,7 @@ struct shmat_ahgv {
 	void __user	*shmaddr;
 	int 		shmflg;
 	u_long		raddr;
+  struct file *file;
 };
 
 void packahgv_shmat(struct shmat_ahgv *sys_args)
@@ -14175,15 +14208,26 @@ void packahgv_shmat(struct shmat_ahgv *sys_args)
 
 		shm_segsz = get_shm_segsz(sys_args->shmid);
 
+#ifdef THEIA_UUID
+		char uuid_str[THEIA_UUID_LEN+1];
+		if (file2uuid(sys_args->file, uuid_str, -1) == false)
+			return; /* no file, socket, ...? */
+
+		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%s|%lx|%d|%lu|%d|%lx|%lx|%d|%ld|%ld|%u|endahg\n",
+				30, SHMAT, sys_args->pid, current->start_time.tv_sec, uuid_str,
+				sys_args->rc, sys_args->shmid, sys_args->shmaddr, sys_args->shmflg,
+				shm_segsz, sys_args->raddr, current->tgid, sec, nsec, current->no_syscalls++);
+#else
 		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%lx|%d|%lu|%d|%lx|%lx|%d|%ld|%ld|%u|endahg\n",
 				30, SHMAT, sys_args->pid, current->start_time.tv_sec,
 				sys_args->rc, sys_args->shmid, sys_args->shmaddr, sys_args->shmflg,
 				shm_segsz, sys_args->raddr, current->tgid, sec, nsec, current->no_syscalls++);
+#endif
 		theia_file_write(buf, size);
 	} 
 }
 
-void theia_shmat_ahg(long rc, int shmid, char __user *shmaddr, int shmflg) {
+void theia_shmat_ahg(long rc, int shmid, char __user *shmaddr, int shmflg, struct file *file) {
 	int ret;
 	unsigned long raddr;
 	struct shmget_ahgv* pahgv_shmget = NULL;
@@ -14209,6 +14253,7 @@ void theia_shmat_ahg(long rc, int shmid, char __user *shmaddr, int shmflg) {
 	pahgv_shmat->shmid = shmid;
 	pahgv_shmat->shmaddr = shmaddr;
 	pahgv_shmat->shmflg = shmflg;
+	pahgv_shmat->file = file;
 	packahgv_shmat(pahgv_shmat);
 	KFREE(pahgv_shmat);
 }
@@ -14227,7 +14272,6 @@ long theia_sys_shmat(int shmid, char __user *shmaddr, int shmflg)
 
 	get_user(raddr, (unsigned long __user *) rc);
 
-	theia_shmat_ahg(rc, shmid, shmaddr, shmflg);
 
 	if (theia_logging_toggle == 0)
 		return rc;
@@ -14240,6 +14284,8 @@ long theia_sys_shmat(int shmid, char __user *shmaddr, int shmflg)
 	shp = container_of(ipcp, struct shmid_kernel, shm_perm);
 	size = shp->shm_segsz;
 	ipc_unlock(&shp->shm_perm);
+
+	theia_shmat_ahg(rc, shmid, shmaddr, shmflg, shp->shm_file);
 
 #ifdef THEIA_TRACK_SHMAT
 	int ret = 0;
@@ -14275,7 +14321,25 @@ record_shmat(int shmid, char __user *shmaddr, int shmflg)
 
 	get_user(raddr, (unsigned long __user *) rc);
 
-	theia_shmat_ahg(rc, shmid, shmaddr, shmflg);
+	struct shmid_kernel* shp;
+	struct ipc_namespace* ns = current->nsproxy->ipc_ns;
+	struct kern_ipc_perm *ipcp;
+
+	get_user(raddr, (unsigned long __user *) rc);
+
+
+	if (theia_logging_toggle == 0)
+		return rc;
+
+	ipcp = ipc_lock(&ns->ids[IPC_SHM_IDS], shmid);
+	if (IS_ERR(ipcp)) {
+		printk ("theia_sys_ipc: cannot lock ipc for shmat\n");
+		return -EINVAL;
+	}
+	shp = container_of(ipcp, struct shmid_kernel, shm_perm);
+	ipc_unlock(&shp->shm_perm);
+
+	theia_shmat_ahg(rc, shmid, shmaddr, shmflg, shp->shm_file);
 
 	new_syscall_done (30, rc);
 
