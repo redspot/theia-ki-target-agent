@@ -10180,6 +10180,11 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
     printk("/dev/spec0 ready ! filename: %s\n", filename);
     //should be ready to add the process to record_group
     linker = "/home/theia/theia-es/eglibc-2.15/prefix/lib/ld-linux-x86-64.so.2";
+    ret = sys_access(linker, 0/*F_OK*/);
+    if(ret < 0) { //if linker is not there, bail out
+           pr_warn_ratelimited("theia linker \"%s\" not found\n", linker);
+           goto out_norm;
+    }
     int save_mmap = 1;
 
     set_fs(old_fs);
