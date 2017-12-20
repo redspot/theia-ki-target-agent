@@ -1,3 +1,11 @@
+linux (3.5.0-99.13+theia1) quantal; urgency=low
+
+  [Wilson Martin]
+
+  * initial theia kernel autobuild
+
+ -- Wilson Martin <wilson.martin@gtri.gatech.edu>  Thu, 07 Dec 2017 13:49:54 -0500
+
 linux (3.5.0-34.55) quantal; urgency=low
 
   [Steve Conklin]

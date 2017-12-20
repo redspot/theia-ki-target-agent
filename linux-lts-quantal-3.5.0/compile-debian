@@ -1,0 +1,23 @@
+#!/bin/bash
+set -e
+
+fakeroot debian/rules clean
+
+mkdir -p debian/build/build-generic/security/tomoyo
+cp -r security/tomoyo/policy debian/build/build-generic/security/tomoyo/
+
+skipdbg=false \
+DEB_BUILD_OPTIONS=parallel=8 \
+NOEXTRAS=1 \
+CROSS_COMPILE=`pwd`/debian.master/bin/ \
+fakeroot debian/rules binary-generic V=1
+
+#skipabi=true \
+#AUTOBUILD=1 \
+#exit
+
+skipdbg=false \
+DEB_BUILD_OPTIONS=parallel=8 \
+NOEXTRAS=1 \
+CROSS_COMPILE=`pwd`/debian.master/bin/ \
+fakeroot debian/rules binary-headers V=1

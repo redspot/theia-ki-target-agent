@@ -49,6 +49,14 @@ modules.builtin
 # Debian directory (make deb-pkg)
 #
 /debian/
+debian.master/abi/*
+!debian.master/abi/.keep
+!debian.master/abi/3.5.0-33.54/amd64/generic
+!debian.master/abi/3.5.0-33.54/amd64/generic.modules
+debian.master/control.stub
+debian.master/d-i/kernel-versions
+generic.depmod.log
+generic.inclusion-list.log
 
 #
 # git files that we don't want to ignore even it they are dot-files
