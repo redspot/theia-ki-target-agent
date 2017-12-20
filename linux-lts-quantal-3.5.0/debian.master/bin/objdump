@@ -1,0 +1,4 @@
+#!/bin/bash
+WRAP=/usr/bin/objdump
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source "${DIR}/wrapper.sh"
