@@ -3,8 +3,10 @@ set -e
 
 fakeroot debian/rules clean
 
-mkdir -p debian/build/build-generic/security/tomoyo
-cp -r security/tomoyo/policy debian/build/build-generic/security/tomoyo/
+if [ -d security/tomoyo/policy ]; then
+	mkdir -p debian/build/build-generic/security/tomoyo
+	cp -r security/tomoyo/policy debian/build/build-generic/security/tomoyo/
+fi
 
 skipdbg=false \
 DEB_BUILD_OPTIONS=parallel=8 \
