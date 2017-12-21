@@ -125,6 +125,11 @@ EXPORT_SYMBOL(sysctl_udp_wmem_min);
 atomic_long_t udp_memory_allocated;
 EXPORT_SYMBOL(udp_memory_allocated);
 
+//Yang
+bool theia_cross_toggle = 0;
+EXPORT_SYMBOL(theia_cross_toggle);
+
+
 #define MAX_UDP_PORTS 65536
 #define PORTS_PER_CHAIN (MAX_UDP_PORTS / UDP_HTABLE_SIZE_MIN)
 
@@ -796,6 +801,14 @@ int udp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 	struct udp_sock *up = udp_sk(sk);
 	struct flowi4 fl4_stack;
 	struct flowi4 *fl4;
+
+// Yang we extend the packet and enlarge the len here.
+// (before all the size calculation starts.)
+  if(theia_cross_toggle) {
+    len += sizeof(uint8_t); // one byte for testing
+    msg->msg_iov->iov_len += sizeof(uint8_t);
+  }
+
 	int ulen = len;
 	struct ipcm_cookie ipc;
 	struct rtable *rt = NULL;

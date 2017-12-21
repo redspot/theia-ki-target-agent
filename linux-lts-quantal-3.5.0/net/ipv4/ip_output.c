@@ -726,6 +726,7 @@ ip_generic_getfrag(void *from, char *to, int offset, int len, int odd, struct sk
 	struct iovec *iov = from;
 
 	if (skb->ip_summed == CHECKSUM_PARTIAL) {
+//Yang
 		if (memcpy_fromiovecend(to, iov, offset, len) < 0)
 			return -EFAULT;
 	} else {
