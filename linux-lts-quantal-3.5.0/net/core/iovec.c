@@ -27,8 +27,7 @@
 #include <net/checksum.h>
 #include <net/sock.h>
 
-//Yang
-extern bool theia_cross_toggle;
+extern bool theia_is_track_cross();
 
 /*
  *	Verify iovec. The caller must ensure that the iovec is big enough
@@ -161,8 +160,13 @@ int memcpy_fromiovecend(unsigned char *kdata, const struct iovec *iov,
 {
   
   u8 *extended_buff = 0;
-  if(theia_cross_toggle) {
-     //extend the payload
+  if(theia_is_track_cross()) {
+    //extend the payload
+    extended_buff = vmalloc(len);
+    *extended_buff = 'a';
+    if(copy_from_user(extended_buff+sizeof(uint8_t), iov->iov_base, len-sizeof(uint8_t)))
+//      return -EFAULT;
+      goto err_out;
   }
 
 	/* Skip over the finished iovecs */
@@ -174,7 +178,7 @@ int memcpy_fromiovecend(unsigned char *kdata, const struct iovec *iov,
 	while (len > 0) {
     u8 *base_k;
     u8 __user *base;
-    if(theia_cross_toggle) {
+    if(theia_is_track_cross()) {
       //extend the payload
       base_k = extended_buff + offset;
     }
@@ -185,21 +189,31 @@ int memcpy_fromiovecend(unsigned char *kdata, const struct iovec *iov,
 
 		offset = 0;
     int ret = 0;
-    if(theia_cross_toggle) {
-      ret  = memcpy(kdata, base_k, copy);
+    if(theia_is_track_cross()) {
+      memcpy(kdata, base_k, copy);
     }
     else {
       ret = copy_from_user(kdata, base, copy);
     }
     
     if(ret)
-			return -EFAULT;
+//			return -EFAULT;
+      goto err_out;
 		len -= copy;
 		kdata += copy;
 		iov++;
 	}
 
+  if(theia_is_track_cross())
+    vfree(extended_buff);
+
 	return 0;
+
+err_out:
+  if(theia_is_track_cross())
+    vfree(extended_buff);
+  return -EFAULT;
+
 }
 EXPORT_SYMBOL(memcpy_fromiovecend);
 
@@ -215,8 +229,13 @@ int csum_partial_copy_fromiovecend(unsigned char *kdata, struct iovec *iov,
 				 int offset, unsigned int len, __wsum *csump)
 {
   u8 *extended_buff = 0;
-  if(theia_cross_toggle) {
-     //extend the payload
+  if(theia_is_track_cross()) {
+    //extend the payload
+    extended_buff = vmalloc(len);
+    *extended_buff = 'a';
+    if(copy_from_user(extended_buff+sizeof(uint8_t), iov->iov_base, len-sizeof(uint8_t)))
+//      return -EFAULT;
+      goto err_out;
   }
 
 	__wsum csum = *csump;
@@ -231,7 +250,7 @@ int csum_partial_copy_fromiovecend(unsigned char *kdata, struct iovec *iov,
 	while (len > 0) {
     u8 *base_k;
     u8 __user *base;
-    if(theia_cross_toggle) {
+    if(theia_is_track_cross()) {
       //extend the payload
       base_k = extended_buff + offset;
     }
@@ -249,8 +268,8 @@ int csum_partial_copy_fromiovecend(unsigned char *kdata, struct iovec *iov,
 			/* iov component is too short ... */
 			if (par_len > copy) {
         int ret = 0;
-        if(theia_cross_toggle) {
-          ret = memcpy(kdata, base_k, copy);
+        if(theia_is_track_cross()) {
+          memcpy(kdata, base_k, copy);
         }
         else {
           ret = copy_from_user(kdata, base, copy);
@@ -258,7 +277,7 @@ int csum_partial_copy_fromiovecend(unsigned char *kdata, struct iovec *iov,
 				if (ret)
 					goto out_fault;
 				kdata += copy;
-        if(theia_cross_toggle) {
+        if(theia_is_track_cross()) {
           base_k += copy;
         }
         else {
@@ -274,8 +293,8 @@ int csum_partial_copy_fromiovecend(unsigned char *kdata, struct iovec *iov,
 				goto out;
 			}
       int ret = 0;
-      if(theia_cross_toggle) {
-        ret = memcpy(kdata, base_k, par_len);
+      if(theia_is_track_cross()) {
+        memcpy(kdata, base_k, par_len);
       }
       else {
         ret = copy_from_user(kdata, base, par_len);
@@ -284,7 +303,7 @@ int csum_partial_copy_fromiovecend(unsigned char *kdata, struct iovec *iov,
 				goto out_fault;
 			csum = csum_partial(kdata - partial_cnt, 4, csum);
 			kdata += par_len;
-      if(theia_cross_toggle) {
+      if(theia_is_track_cross()) {
         base_k += par_len;
       }
       else {
@@ -300,8 +319,8 @@ int csum_partial_copy_fromiovecend(unsigned char *kdata, struct iovec *iov,
 			if (partial_cnt) {
 				copy -= partial_cnt;
         int ret = 0;
-        if(theia_cross_toggle) {
-          ret = memcpy(kdata + copy, base_k + copy, partial_cnt);
+        if(theia_is_track_cross()) {
+          memcpy(kdata + copy, base_k + copy, partial_cnt);
         }
         else {
           ret = copy_from_user(kdata + copy, base + copy, partial_cnt);
@@ -312,7 +331,7 @@ int csum_partial_copy_fromiovecend(unsigned char *kdata, struct iovec *iov,
 		}
 
 		if (copy) {
-        if(theia_cross_toggle) {
+        if(theia_is_track_cross()) {
           //Yang: it seems csum_and_copy_from_user does not have kernel version..
           csum = csum_and_copy_from_user(base_k, kdata, copy,
               csum, &err);
@@ -330,10 +349,17 @@ int csum_partial_copy_fromiovecend(unsigned char *kdata, struct iovec *iov,
 	}
 	*csump = csum;
 out:
+  if(theia_is_track_cross())
+    vfree(extended_buff);
 	return err;
 
 out_fault:
 	err = -EFAULT;
 	goto out;
+
+err_out:
+  if(theia_is_track_cross())
+    vfree(extended_buff);
+  return -EFAULT;
 }
 EXPORT_SYMBOL(csum_partial_copy_fromiovecend);
