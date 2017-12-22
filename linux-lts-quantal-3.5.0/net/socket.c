@@ -132,6 +132,9 @@ static ssize_t sock_splice_read(struct file *file, loff_t *ppos,
  *	in the operation structures but are done directly via the socketcall() multiplexor.
  */
 
+//Yang
+extern bool theia_is_track_cross();
+
 static const struct file_operations socket_file_ops = {
 	.owner =	THIS_MODULE,
 	.llseek =	no_llseek,
@@ -735,7 +738,18 @@ static inline int __sock_recvmsg(struct kiocb *iocb, struct socket *sock,
 {
 	int err = security_socket_recvmsg(sock, msg, size, flags);
 
-	return err ?: __sock_recvmsg_nosec(iocb, sock, msg, size, flags);
+//Yang
+  int ret = err ?: __sock_recvmsg_nosec(iocb, sock, msg, size, flags);
+
+  if(theia_is_track_cross()) {
+    if(sock->sk->sk_type == SOCK_DGRAM) {
+      //strip the tag
+      msg->msg_iov->iov_base = msg->msg_iov->iov_base + sizeof(uint8_t);
+      if(ret > 0)
+        ret -= sizeof(uint8_t);
+    }
+  }
+	return ret; 
 }
 
 int sock_recvmsg(struct socket *sock, struct msghdr *msg,
