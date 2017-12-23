@@ -92,6 +92,8 @@ struct filemap_entry_data {
 #define THEIA_LOGGING_OFF _IO('u', 16)
 #define THEIA_RECORDING_ON _IO('u', 17)
 #define THEIA_RECORDING_OFF _IO('u', 18)
-#define THEIA_REPLAY_REGISTER _IOR('u', 19, struct replay_register_user_data)
+#define THEIA_CROSS_ON _IO('u', 19)
+#define THEIA_CROSS_OFF _IO('u', 20)
+#define THEIA_REPLAY_REGISTER _IOR('u', 21, struct replay_register_user_data)
 
 #endif

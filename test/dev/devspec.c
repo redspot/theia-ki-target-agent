@@ -20,6 +20,7 @@ MODULE_LICENSE("GPL");
 
 extern bool theia_logging_toggle;
 extern bool theia_recording_toggle;
+extern bool theia_cross_toggle;
 extern struct theia_replay_register_data_type theia_replay_register_data;
 
 /* Debugging stuff */
@@ -74,6 +75,12 @@ spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
 		return 0;
 	case THEIA_RECORDING_OFF:
 		theia_recording_toggle = 0;
+		return 0;
+	case THEIA_CROSS_ON:
+		theia_cross_toggle = 1;
+		return 0;
+	case THEIA_CROSS_OFF:
+		theia_cross_toggle = 0;
 		return 0;
 
   case THEIA_REPLAY_REGISTER:

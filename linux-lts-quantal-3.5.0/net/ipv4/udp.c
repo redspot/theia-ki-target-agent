@@ -126,12 +126,13 @@ atomic_long_t udp_memory_allocated;
 EXPORT_SYMBOL(udp_memory_allocated);
 
 //Yang
-bool theia_cross_toggle = 1;
+bool theia_cross_toggle = 0;
 EXPORT_SYMBOL(theia_cross_toggle);
 
 bool theia_is_track_cross()
 {
-  if(theia_cross_toggle && strcmp(current->comm, "socket_test") == 0 )
+  if(theia_cross_toggle && 
+     (strcmp(current->comm, "socket_test_client") == 0 || strcmp(current->comm, "socket_test_server") == 0) )
     return true;
   else
     return false;

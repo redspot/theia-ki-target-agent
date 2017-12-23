@@ -56,6 +56,8 @@ int theia_logging_on(int fd_spec);
 int theia_logging_off(int fd_spec);
 int theia_recording_on(int fd_spec);
 int theia_recording_off(int fd_spec);
+int theia_cross_on(int fd_spec);
+int theia_cross_off(int fd_spec);
 int theia_replay_register(int fd_spec, int pin, int follow_splits, 
   int save_mmap, char* logdir, char* linker);
 
