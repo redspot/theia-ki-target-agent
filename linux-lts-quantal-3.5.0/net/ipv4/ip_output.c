@@ -80,6 +80,14 @@
 #include <linux/netlink.h>
 #include <linux/tcp.h>
 
+//Yang
+extern int memcpy_fromiovecend_theia(unsigned char *kdata, const struct iovec *iov,
+			       int offset, int len, struct sock *sk);
+extern int csum_partial_copy_fromiovecend_theia(unsigned char *kdata, 
+					  struct iovec *iov, 
+					  int offset, 
+					  unsigned int len, __wsum *csump, struct sock *sk);
+
 int sysctl_ip_default_ttl __read_mostly = IPDEFTTL;
 EXPORT_SYMBOL(sysctl_ip_default_ttl);
 
@@ -727,11 +735,14 @@ ip_generic_getfrag(void *from, char *to, int offset, int len, int odd, struct sk
 
 	if (skb->ip_summed == CHECKSUM_PARTIAL) {
 //Yang
-		if (memcpy_fromiovecend(to, iov, offset, len) < 0)
+//		if (memcpy_fromiovecend(to, iov, offset, len) < 0)
+		if (memcpy_fromiovecend_theia(to, iov, offset, len, skb->sk) < 0)
 			return -EFAULT;
 	} else {
 		__wsum csum = 0;
-		if (csum_partial_copy_fromiovecend(to, iov, offset, len, &csum) < 0)
+//Yang
+		//if (csum_partial_copy_fromiovecend(to, iov, offset, len, &csum) < 0)
+		if (csum_partial_copy_fromiovecend_theia(to, iov, offset, len, &csum, skb->sk) < 0)
 			return -EFAULT;
 		skb->csum = csum_block_add(skb->csum, csum, odd);
 	}

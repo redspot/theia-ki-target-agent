@@ -105,6 +105,11 @@
 #include <linux/sockios.h>
 #include <linux/atalk.h>
 
+#include "theia_cross_track.h"
+
+bool theia_cross_toggle = 0;
+EXPORT_SYMBOL(theia_cross_toggle);
+
 static int sock_no_open(struct inode *irrelevant, struct file *dontcare);
 static ssize_t sock_aio_read(struct kiocb *iocb, const struct iovec *iov,
 			 unsigned long nr_segs, loff_t pos);
@@ -131,9 +136,6 @@ static ssize_t sock_splice_read(struct file *file, loff_t *ppos,
  *	Socket files have a set of 'special' operations as well as the generic file ones. These don't appear
  *	in the operation structures but are done directly via the socketcall() multiplexor.
  */
-
-//Yang
-extern bool theia_is_track_cross();
 
 static const struct file_operations socket_file_ops = {
 	.owner =	THIS_MODULE,
@@ -741,12 +743,20 @@ static inline int __sock_recvmsg(struct kiocb *iocb, struct socket *sock,
 //Yang
   int ret = err ?: __sock_recvmsg_nosec(iocb, sock, msg, size, flags);
 
-  if(theia_is_track_cross()) {
-    if(sock->sk->sk_type == SOCK_DGRAM) {
-      //strip the tag
-      msg->msg_iov->iov_base = msg->msg_iov->iov_base + sizeof(uint8_t);
-      if(ret > 0)
-        ret -= sizeof(uint8_t);
+  if(sock->sk->sk_type == SOCK_DGRAM) {
+    if(theia_is_track_cross() && ret > 0) {//we only care positive received packets
+      //get the tag
+      void *u_buf = msg->msg_iov->iov_base - ret;
+      theia_udp_tag tag = *(theia_udp_tag*)(u_buf);
+      void *new_payload = vmalloc(ret-sizeof(theia_udp_tag)); 
+      memcpy(new_payload, u_buf+sizeof(theia_udp_tag), ret-sizeof(theia_udp_tag));
+      memcpy(u_buf, new_payload, ret-sizeof(theia_udp_tag));
+      memset(u_buf+ret-sizeof(theia_udp_tag), 0x0, sizeof(theia_udp_tag));
+      vfree(new_payload);
+      printk("after payload (%s), tag %u\n", u_buf, tag);
+
+    //strip the tag
+      ret -= sizeof(theia_udp_tag);
     }
   }
 	return ret; 
@@ -1804,6 +1814,8 @@ SYSCALL_DEFINE6(recvfrom, int, fd, void __user *, ubuf, size_t, size,
 
 	fput_light(sock->file, fput_needed);
 out:
+  if(theia_is_track_cross())
+    printk("in recvfrom(comm:%s), ret: %d, ubuf[%p]: (%s),iov[%p]: (%s)\n", current->comm,err, ubuf,ubuf, msg.msg_iov->iov_base,msg.msg_iov->iov_base);
 	return err;
 }
 

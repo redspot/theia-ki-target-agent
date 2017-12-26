@@ -110,6 +110,41 @@
 #include <linux/static_key.h>
 #include "udp_impl.h"
 
+//Yang
+#include "../theia_cross_track.h"
+
+//Yang
+bool theia_is_track_cross()
+{
+  if(theia_cross_toggle && 
+     (strcmp(current->comm, "test_client") == 0 
+    || strcmp(current->comm, "test_server") == 0) )
+    return true;
+  else
+    return false;
+}
+EXPORT_SYMBOL(theia_is_track_cross);
+
+//Yang
+//extern bool theia_is_track_cross();
+theia_udp_tag get_theia_udp_tag(struct sock *sk)
+{
+  theia_udp_tag tag;
+
+  lock_sock(sk); 
+  tag = sk->theia_udp_tag; 
+
+  if(unlikely(sk->theia_udp_tag == UINT_MAX))
+    sk->theia_udp_tag = 0;
+  else
+    sk->theia_udp_tag++; 
+    
+  release_sock(sk); 
+
+  return tag;
+}
+
+
 struct udp_table udp_table __read_mostly;
 EXPORT_SYMBOL(udp_table);
 
@@ -126,20 +161,6 @@ atomic_long_t udp_memory_allocated;
 EXPORT_SYMBOL(udp_memory_allocated);
 
 //Yang
-bool theia_cross_toggle = 0;
-EXPORT_SYMBOL(theia_cross_toggle);
-
-bool theia_is_track_cross()
-{
-  if(theia_cross_toggle && 
-     (strcmp(current->comm, "socket_test_client") == 0 || strcmp(current->comm, "socket_test_server") == 0) )
-    return true;
-  else
-    return false;
-}
-EXPORT_SYMBOL(theia_is_track_cross);
-
-
 #define MAX_UDP_PORTS 65536
 #define PORTS_PER_CHAIN (MAX_UDP_PORTS / UDP_HTABLE_SIZE_MIN)
 
@@ -815,8 +836,8 @@ int udp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 // Yang we extend the packet and enlarge the len here.
 // (before all the size calculation starts.)
   if(theia_is_track_cross()) {
-    len += sizeof(uint8_t); // one byte for testing
-    msg->msg_iov->iov_len += sizeof(uint8_t);
+    len += sizeof(theia_udp_tag); // one byte for testing
+    msg->msg_iov->iov_len += sizeof(theia_udp_tag);
   }
 
 	int ulen = len;
