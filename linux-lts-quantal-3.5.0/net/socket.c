@@ -579,7 +579,6 @@ static inline int __sock_sendmsg(struct kiocb *iocb, struct socket *sock,
   if(sock->sk->sk_type == SOCK_DGRAM) {
     if(theia_is_track_cross() ) {//we only care positive received packets
       //get the tag
-      extended_ubuf = vmalloc_user(size + sizeof(theia_udp_tag));
       extended_ubuf = sys_mmap_pgoff(0, size + sizeof(theia_udp_tag), 
         PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
       *(theia_udp_tag*)extended_ubuf = get_theia_udp_tag(sock->sk);
@@ -773,30 +772,45 @@ static inline int __sock_recvmsg_nosec(struct kiocb *iocb, struct socket *sock,
 static inline int __sock_recvmsg(struct kiocb *iocb, struct socket *sock,
 				 struct msghdr *msg, size_t size, int flags)
 {
+  void *extended_ubuf;
+  void *original_ubuf;
+  //handle the truncation
+  if(sock->sk->sk_type == SOCK_DGRAM) {
+    if(theia_is_track_cross() ) {//we only care positive received packets
+      extended_ubuf = sys_mmap_pgoff(0, size + sizeof(theia_udp_tag), 
+        PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+      original_ubuf = msg->msg_iov->iov_base;
+      msg->msg_iov->iov_len += sizeof(theia_udp_tag);
+      size += sizeof(theia_udp_tag);
+    }
+  }
+
 	int err = security_socket_recvmsg(sock, msg, size, flags);
 
 //Yang
   int ret = err ?: __sock_recvmsg_nosec(iocb, sock, msg, size, flags);
 
-//  if(sock->sk->sk_type == SOCK_DGRAM) {
-//    if(theia_is_track_cross() && ret > 0) {//we only care positive received packets
-//      //get the tag
-//      void *u_buf = msg->msg_iov->iov_base - ret;
-//      theia_udp_tag tag = *(theia_udp_tag*)(u_buf);
-//printk("[%s|%d] original payload size %d\n", __func__,__LINE__,ret-sizeof(theia_udp_tag));
-//      if(ret-sizeof(theia_udp_tag) > 0) {
-//        void *new_payload = vmalloc(ret-sizeof(theia_udp_tag)); 
-//        memcpy(new_payload, u_buf+sizeof(theia_udp_tag), ret-sizeof(theia_udp_tag));
-//        memcpy(u_buf, new_payload, ret-sizeof(theia_udp_tag));
-//        vfree(new_payload);
-//      }
-//      memset(u_buf+ret-sizeof(theia_udp_tag), 0x0, sizeof(theia_udp_tag));
-//      printk("after payload (%s), tag %u\n", u_buf, tag);
-//
-//    //strip the tag
-//      ret -= sizeof(theia_udp_tag);
-//    }
-//  }
+  if(sock->sk->sk_type == SOCK_DGRAM) {
+    if(theia_is_track_cross() ) {
+      if(ret > 0 ){//we only care positive received packets
+        //get the tag
+        void *u_buf = msg->msg_iov->iov_base - ret;
+        theia_udp_tag tag = *(theia_udp_tag*)(u_buf);
+        if(ret-sizeof(theia_udp_tag) > 0) {
+          memcpy(original_ubuf, u_buf+sizeof(theia_udp_tag), ret-sizeof(theia_udp_tag));
+        }
+        //      memset(u_buf+ret-sizeof(theia_udp_tag), 0x0, sizeof(theia_udp_tag));
+        printk("[%s|%d]received tag %u, ret %d\n", __func__,__LINE__, tag, ret-sizeof(theia_udp_tag));
+
+        //strip the tag
+        ret -= sizeof(theia_udp_tag);
+      }
+      sys_munmap(extended_ubuf, size);
+      msg->msg_iov->iov_base = original_ubuf;
+      msg->msg_iov->iov_len -= sizeof(theia_udp_tag);
+      size -= sizeof(theia_udp_tag);
+    }
+  }
 	return ret; 
 }
 
