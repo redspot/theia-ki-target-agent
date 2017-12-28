@@ -118,7 +118,8 @@ bool theia_is_track_cross()
 {
   if(theia_cross_toggle && 
      (strcmp(current->comm, "test_client") == 0 
-    || strcmp(current->comm, "test_server") == 0) )
+      || strcmp(current->comm, "iperf3") == 0
+      || strcmp(current->comm, "test_server") == 0) )
     return true;
   else
     return false;
@@ -832,13 +833,6 @@ int udp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 	struct udp_sock *up = udp_sk(sk);
 	struct flowi4 fl4_stack;
 	struct flowi4 *fl4;
-
-// Yang we extend the packet and enlarge the len here.
-// (before all the size calculation starts.)
-  if(theia_is_track_cross()) {
-    len += sizeof(theia_udp_tag); // one byte for testing
-    msg->msg_iov->iov_len += sizeof(theia_udp_tag);
-  }
 
 	int ulen = len;
 	struct ipcm_cookie ipc;

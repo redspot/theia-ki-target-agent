@@ -27,13 +27,6 @@
 #include <net/checksum.h>
 #include <net/sock.h>
 
-#include "../theia_cross_track.h"
-
-//Yang
-//extern theia_udp_tag get_theia_udp_tag();
-
-//extern bool theia_is_track_cross();
-
 /*
  *	Verify iovec. The caller must ensure that the iovec is big enough
  *	to hold the message iovec.
@@ -170,10 +163,10 @@ int memcpy_fromiovecend(unsigned char *kdata, const struct iovec *iov,
 	}
 
 	while (len > 0) {
-    u8 *base_k;
     u8 __user *base;
     base = iov->iov_base + offset;
 		int copy = min_t(unsigned int, len, iov->iov_len - offset);
+printk("[%s|%d] len %d, iov->iov_len %d, offset %d, copy %d\n",__func__,__LINE__,len,iov->iov_len,offset,copy);
 
 		offset = 0;
     int ret = 0;
@@ -189,78 +182,6 @@ int memcpy_fromiovecend(unsigned char *kdata, const struct iovec *iov,
 	return 0;
 }
 EXPORT_SYMBOL(memcpy_fromiovecend);
-
-//Yang
-int memcpy_fromiovecend_theia(unsigned char *kdata, const struct iovec *iov,
-			int offset, int len, struct sock *sk)
-{
-  
-  void *extended_buff = 0;
-  if(theia_is_track_cross()) {
-    //extend the payload
-    extended_buff = vmalloc(len);
-    *(theia_udp_tag*)extended_buff = get_theia_udp_tag(sk);
-    if(copy_from_user(extended_buff+sizeof(theia_udp_tag), 
-        iov->iov_base, len-sizeof(theia_udp_tag)))
-      goto err_out;
-  }
-//  u8 *extended_buff = 0;
-//  if(theia_is_track_cross()) {
-//    //extend the payload
-//    extended_buff = vmalloc(len);
-//    *(uint8_t*)extended_buff = 'a';
-//    if(copy_from_user(extended_buff+sizeof(theia_udp_tag), 
-//        iov->iov_base, len-sizeof(theia_udp_tag)))
-//      goto err_out;
-//  }
-
-	/* Skip over the finished iovecs */
-	while (offset >= iov->iov_len) {
-		offset -= iov->iov_len;
-		iov++;
-	}
-
-	while (len > 0) {
-    u8 *base_k;
-    u8 __user *base;
-    if(theia_is_track_cross()) {
-      //extend the payload
-      base_k = extended_buff + offset;
-    }
-    else {
-     base = iov->iov_base + offset;
-    }
-		int copy = min_t(unsigned int, len, iov->iov_len - offset);
-
-		offset = 0;
-    int ret = 0;
-    if(theia_is_track_cross()) {
-      memcpy(kdata, base_k, copy);
-    }
-    else {
-      ret = copy_from_user(kdata, base, copy);
-    }
-    
-    if(ret)
-//			return -EFAULT;
-      goto err_out;
-		len -= copy;
-		kdata += copy;
-		iov++;
-	}
-
-  if(theia_is_track_cross())
-    vfree(extended_buff);
-
-	return 0;
-
-err_out:
-  if(theia_is_track_cross())
-    vfree(extended_buff);
-  return -EFAULT;
-
-}
-EXPORT_SYMBOL(memcpy_fromiovecend_theia);
 
 /*
  *	And now for the all-in-one: copy and checksum from a user iovec
@@ -283,7 +204,6 @@ int csum_partial_copy_fromiovecend(unsigned char *kdata, struct iovec *iov,
 	}
 
 	while (len > 0) {
-    u8 *base_k;
     u8 __user *base;
     base = iov->iov_base + offset;
 		int copy = min_t(unsigned int, len, iov->iov_len - offset);
@@ -354,143 +274,3 @@ out_fault:
 
 }
 EXPORT_SYMBOL(csum_partial_copy_fromiovecend);
-
-//Yang
-int csum_partial_copy_fromiovecend_theia(unsigned char *kdata, struct iovec *iov,
-				 int offset, unsigned int len, __wsum *csump, struct sock *sk)
-{
-  void *extended_buff = 0;
-  if(theia_is_track_cross()) {
-    //extend the payload
-    extended_buff = vmalloc(len);
-    *(theia_udp_tag*)extended_buff = get_theia_udp_tag(sk);
-    if(copy_from_user(extended_buff+sizeof(theia_udp_tag), 
-        iov->iov_base, len-sizeof(theia_udp_tag)))
-      goto err_out;
-  }
-
-	__wsum csum = *csump;
-	int partial_cnt = 0, err = 0;
-
-	/* Skip over the finished iovecs */
-	while (offset >= iov->iov_len) {
-		offset -= iov->iov_len;
-		iov++;
-	}
-
-	while (len > 0) {
-    u8 *base_k;
-    u8 __user *base;
-    if(theia_is_track_cross()) {
-      //extend the payload
-      base_k = extended_buff + offset;
-    }
-    else {
-      base = iov->iov_base + offset;
-    }
-		int copy = min_t(unsigned int, len, iov->iov_len - offset);
-
-		offset = 0;
-
-		/* There is a remnant from previous iov. */
-		if (partial_cnt) {
-			int par_len = 4 - partial_cnt;
-
-			/* iov component is too short ... */
-			if (par_len > copy) {
-        int ret = 0;
-        if(theia_is_track_cross()) {
-          memcpy(kdata, base_k, copy);
-        }
-        else {
-          ret = copy_from_user(kdata, base, copy);
-        }
-				if (ret)
-					goto out_fault;
-				kdata += copy;
-        if(theia_is_track_cross()) {
-          base_k += copy;
-        }
-        else {
-          base += copy;
-        }
-				partial_cnt += copy;
-				len -= copy;
-				iov++;
-				if (len)
-					continue;
-				*csump = csum_partial(kdata - partial_cnt,
-							 partial_cnt, csum);
-				goto out;
-			}
-      int ret = 0;
-      if(theia_is_track_cross()) {
-        memcpy(kdata, base_k, par_len);
-      }
-      else {
-        ret = copy_from_user(kdata, base, par_len);
-      }
-			if (ret)
-				goto out_fault;
-			csum = csum_partial(kdata - partial_cnt, 4, csum);
-			kdata += par_len;
-      if(theia_is_track_cross()) {
-        base_k += par_len;
-      }
-      else {
-        base  += par_len;
-      }
-			copy  -= par_len;
-			len   -= par_len;
-			partial_cnt = 0;
-		}
-
-		if (len > copy) {
-			partial_cnt = copy % 4;
-			if (partial_cnt) {
-				copy -= partial_cnt;
-        int ret = 0;
-        if(theia_is_track_cross()) {
-          memcpy(kdata + copy, base_k + copy, partial_cnt);
-        }
-        else {
-          ret = copy_from_user(kdata + copy, base + copy, partial_cnt);
-        }
-				if (ret)
-					goto out_fault;
-			}
-		}
-
-		if (copy) {
-        if(theia_is_track_cross()) {
-          //Yang: it seems csum_and_copy_from_user does not have kernel version..
-          csum = csum_and_copy_from_user(base_k, kdata, copy,
-              csum, &err);
-        }
-        else {
-          csum = csum_and_copy_from_user(base, kdata, copy,
-              csum, &err);
-        }
-			if (err)
-				goto out;
-		}
-		len   -= copy + partial_cnt;
-		kdata += copy + partial_cnt;
-		iov++;
-	}
-	*csump = csum;
-out:
-  if(theia_is_track_cross())
-    vfree(extended_buff);
-	return err;
-
-out_fault:
-	err = -EFAULT;
-	goto out;
-
-err_out:
-  if(theia_is_track_cross())
-    vfree(extended_buff);
-  return -EFAULT;
-}
-EXPORT_SYMBOL(csum_partial_copy_fromiovecend_theia);

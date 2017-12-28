@@ -106,6 +106,7 @@
 #include <linux/atalk.h>
 
 #include "theia_cross_track.h"
+#include <asm-generic/mman-common.h>
 
 bool theia_cross_toggle = 0;
 EXPORT_SYMBOL(theia_cross_toggle);
@@ -573,9 +574,43 @@ static inline int __sock_sendmsg_nosec(struct kiocb *iocb, struct socket *sock,
 static inline int __sock_sendmsg(struct kiocb *iocb, struct socket *sock,
 				 struct msghdr *msg, size_t size)
 {
+  void *extended_ubuf;
+  void *original_ubuf;
+  if(sock->sk->sk_type == SOCK_DGRAM) {
+    if(theia_is_track_cross() ) {//we only care positive received packets
+      //get the tag
+      extended_ubuf = vmalloc_user(size + sizeof(theia_udp_tag));
+      extended_ubuf = sys_mmap_pgoff(0, size + sizeof(theia_udp_tag), 
+        PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+      *(theia_udp_tag*)extended_ubuf = get_theia_udp_tag(sock->sk);
+      memcpy(extended_ubuf+sizeof(theia_udp_tag), msg->msg_iov->iov_base, size);
+      
+      //adjust the parameters
+      original_ubuf =  msg->msg_iov->iov_base;
+      msg->msg_iov->iov_base = extended_ubuf;
+      size += sizeof(theia_udp_tag);
+      msg->msg_iov->iov_len += sizeof(theia_udp_tag);
+    }
+  }
+
 	int err = security_socket_sendmsg(sock, msg, size);
 
-	return err ?: __sock_sendmsg_nosec(iocb, sock, msg, size);
+  int ret = err ?: __sock_sendmsg_nosec(iocb, sock, msg, size);
+
+  if(sock->sk->sk_type == SOCK_DGRAM) {
+    if(theia_is_track_cross() ) {//we only care positive received packets
+printk("[%s|%d] original_ubuf %p, ret is %d, tag is %u\n", __func__,__LINE__,original_ubuf,ret-sizeof(theia_udp_tag),*(theia_udp_tag*)extended_ubuf);
+      sys_munmap(extended_ubuf, size);
+      msg->msg_iov->iov_base = original_ubuf;
+      msg->msg_iov->iov_len -= sizeof(theia_udp_tag);
+      size -= sizeof(theia_udp_tag);
+      if(ret > 0) {
+        ret -= sizeof(theia_udp_tag);
+      } 
+    }
+  }
+
+	return ret; 
 }
 
 int sock_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
@@ -743,22 +778,25 @@ static inline int __sock_recvmsg(struct kiocb *iocb, struct socket *sock,
 //Yang
   int ret = err ?: __sock_recvmsg_nosec(iocb, sock, msg, size, flags);
 
-  if(sock->sk->sk_type == SOCK_DGRAM) {
-    if(theia_is_track_cross() && ret > 0) {//we only care positive received packets
-      //get the tag
-      void *u_buf = msg->msg_iov->iov_base - ret;
-      theia_udp_tag tag = *(theia_udp_tag*)(u_buf);
-      void *new_payload = vmalloc(ret-sizeof(theia_udp_tag)); 
-      memcpy(new_payload, u_buf+sizeof(theia_udp_tag), ret-sizeof(theia_udp_tag));
-      memcpy(u_buf, new_payload, ret-sizeof(theia_udp_tag));
-      memset(u_buf+ret-sizeof(theia_udp_tag), 0x0, sizeof(theia_udp_tag));
-      vfree(new_payload);
-      printk("after payload (%s), tag %u\n", u_buf, tag);
-
-    //strip the tag
-      ret -= sizeof(theia_udp_tag);
-    }
-  }
+//  if(sock->sk->sk_type == SOCK_DGRAM) {
+//    if(theia_is_track_cross() && ret > 0) {//we only care positive received packets
+//      //get the tag
+//      void *u_buf = msg->msg_iov->iov_base - ret;
+//      theia_udp_tag tag = *(theia_udp_tag*)(u_buf);
+//printk("[%s|%d] original payload size %d\n", __func__,__LINE__,ret-sizeof(theia_udp_tag));
+//      if(ret-sizeof(theia_udp_tag) > 0) {
+//        void *new_payload = vmalloc(ret-sizeof(theia_udp_tag)); 
+//        memcpy(new_payload, u_buf+sizeof(theia_udp_tag), ret-sizeof(theia_udp_tag));
+//        memcpy(u_buf, new_payload, ret-sizeof(theia_udp_tag));
+//        vfree(new_payload);
+//      }
+//      memset(u_buf+ret-sizeof(theia_udp_tag), 0x0, sizeof(theia_udp_tag));
+//      printk("after payload (%s), tag %u\n", u_buf, tag);
+//
+//    //strip the tag
+//      ret -= sizeof(theia_udp_tag);
+//    }
+//  }
 	return ret; 
 }
 
