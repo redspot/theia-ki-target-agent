@@ -166,7 +166,6 @@ int memcpy_fromiovecend(unsigned char *kdata, const struct iovec *iov,
     u8 __user *base;
     base = iov->iov_base + offset;
 		int copy = min_t(unsigned int, len, iov->iov_len - offset);
-printk("[%s|%d] len %d, iov->iov_len %d, offset %d, copy %d\n",__func__,__LINE__,len,iov->iov_len,offset,copy);
 
 		offset = 0;
     int ret = 0;

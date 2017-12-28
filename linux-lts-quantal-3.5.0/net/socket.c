@@ -598,7 +598,7 @@ static inline int __sock_sendmsg(struct kiocb *iocb, struct socket *sock,
 
   if(sock->sk->sk_type == SOCK_DGRAM) {
     if(theia_is_track_cross() ) {//we only care positive received packets
-printk("[%s|%d] original_ubuf %p, ret is %d, tag is %u\n", __func__,__LINE__,original_ubuf,ret-sizeof(theia_udp_tag),*(theia_udp_tag*)extended_ubuf);
+printk("[%s|%d] original_ubuf %p, ret is %lu, tag is %u\n", __func__,__LINE__,original_ubuf,ret-sizeof(theia_udp_tag),*(theia_udp_tag*)extended_ubuf);
       sys_munmap(extended_ubuf, size);
       msg->msg_iov->iov_base = original_ubuf;
       msg->msg_iov->iov_len -= sizeof(theia_udp_tag);
@@ -800,7 +800,7 @@ static inline int __sock_recvmsg(struct kiocb *iocb, struct socket *sock,
           memcpy(original_ubuf, u_buf+sizeof(theia_udp_tag), ret-sizeof(theia_udp_tag));
         }
         //      memset(u_buf+ret-sizeof(theia_udp_tag), 0x0, sizeof(theia_udp_tag));
-        printk("[%s|%d]received tag %u, ret %d\n", __func__,__LINE__, tag, ret-sizeof(theia_udp_tag));
+        printk("[%s|%d]received tag %u, ret %lu\n", __func__,__LINE__, tag, ret-sizeof(theia_udp_tag));
 
         //strip the tag
         ret -= sizeof(theia_udp_tag);
@@ -1866,8 +1866,6 @@ SYSCALL_DEFINE6(recvfrom, int, fd, void __user *, ubuf, size_t, size,
 
 	fput_light(sock->file, fput_needed);
 out:
-  if(theia_is_track_cross())
-    printk("in recvfrom(comm:%s), ret: %d, ubuf[%p]: (%s),iov[%p]: (%s)\n", current->comm,err, ubuf,ubuf, msg.msg_iov->iov_base,msg.msg_iov->iov_base);
 	return err;
 }
 
