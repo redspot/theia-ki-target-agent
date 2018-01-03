@@ -12715,6 +12715,7 @@ long theia_sys_sendto(int fd, void __user *buff, size_t len, unsigned int flags,
 #endif
 
 	rc = sys_sendto(fd, buff, len, flags, addr, addr_len);
+printk("sendto is called!, pid %d, ret %ld\n", current->pid,rc);
 
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
@@ -12740,6 +12741,7 @@ long theia_sys_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags) {
 	long rc;
 	rc = sys_sendmsg(fd, msg, flags);
 
+printk("sendmsg is called!, pid %d, ret %ld\n", current->pid,rc);
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
 	if (rc != -EAGAIN) { 
@@ -16337,7 +16339,37 @@ asmlinkage long shim_writev (unsigned long fd, const struct iovec __user *vec, u
 // SHIM_CALL(writev, 20, fd, vec, vlen);
 SHIM_CALL_MAIN(20, record_writev(fd, vec, vlen), replay_writev(fd, vec, vlen), theia_sys_writev(fd, vec, vlen))
 #else
-SIMPLE_SHIM3(writev, 20, unsigned long, fd, const struct iovec __user *, vec, unsigned long, vlen);
+#define SYS_WRITEV 20
+void theia_writev_ahgx (unsigned long fd, const struct iovec __user *vec, unsigned long vlen, long rc, int sysnum) {
+	char uuid_str[THEIA_UUID_LEN+1];
+
+	if (fd < 0) return; /* TODO */
+
+	if (fd2uuid(fd, uuid_str) == false)
+		return; /* TODO: report openat errors? */
+
+	/* TODO: parse iovec */
+	sprintf(theia_buf1, "%s", uuid_str);
+	theia_dump_str(theia_buf1, rc, sysnum);
+}
+
+static asmlinkage long 
+theia_sys_writev (unsigned long fd, const struct iovec __user *vec, unsigned long vlen)
+{
+	long rc;
+	rc = sys_writev(fd, vec, vlen);
+printk("theia_sys_writev: pid %d, fd %lu, rc %ld\n", current->pid, fd, rc);
+	if (theia_logging_toggle)
+		theia_writev_ahgx(fd, vec, vlen, rc, SYS_WRITEV);
+	return rc;
+}
+
+SIMPLE_RECORD3(writev, 20, unsigned long, fd, const struct iovec __user *, vec, unsigned long, vlen);
+SIMPLE_REPLAY(writev, 20, unsigned long fd, const struct iovec __user * vec, unsigned long vlen);
+asmlinkage long shim_writev (unsigned long fd, const struct iovec __user *vec, unsigned long vlen) 
+// SHIM_CALL(writev, 20, fd, vec, vlen);
+SHIM_CALL_MAIN(20, record_writev(fd, vec, vlen), replay_writev(fd, vec, vlen), theia_sys_writev(fd, vec, vlen))
+//SIMPLE_SHIM3(writev, 20, unsigned long, fd, const struct iovec __user *, vec, unsigned long, vlen);
 #endif
 SIMPLE_SHIM1(getsid, 124, pid_t, pid);
 SIMPLE_SHIM1(fdatasync, 75, int, fd);
@@ -17348,6 +17380,7 @@ theia_sys_pwrite64(unsigned int fd, const char __user *buf, size_t count, loff_t
 {
 	long rc;
 	rc = sys_pwrite64(fd, buf, count, pos);
+printk("pwrite64 is called! pid %d, ret %ld\n", current->pid,rc);
 	if (theia_logging_toggle)
 		theia_pwrite64_ahgx(fd, buf, count, pos, rc, SYS_PWRITE64);
 	return rc;
@@ -19890,6 +19923,7 @@ theia_sys_pwritev (unsigned long fd, const struct iovec __user *vec,  unsigned l
 {
 	long rc;
 	rc = sys_pwritev(fd, vec, vlen, pos_l, pos_h);
+printk("pwritev is called! pid %d, ret %ld\n", current->pid,rc);
 	if (theia_logging_toggle)
 		theia_pwritev_ahgx(fd, vec, vlen, pos_l, pos_h, rc, SYS_PWRITEV);
 	return rc;
@@ -20037,7 +20071,6 @@ SIMPLE_SHIM3(open_by_handle_at, 304, int, mountdirfd, struct file_handle __user 
 RET1_SHIM2(clock_adjtime, 305, struct timex, tx, clockid_t, which_clock, struct timex __user *,tx);
 SIMPLE_SHIM1(syncfs, 306, int, fd);
 
-/*
 static asmlinkage long 
 theia_sys_sendmmsg (int fd, struct mmsghdr __user * msg, unsigned int vlen, unsigned flags)
 {
@@ -20045,22 +20078,22 @@ theia_sys_sendmmsg (int fd, struct mmsghdr __user * msg, unsigned int vlen, unsi
 	int i;
 
 	rc = sys_sendmmsg(fd, msg, vlen, flags);
-
+printk("sendmmsg is called!, pid %d, ret %ld\n", current->pid,rc);
+/*
 	for (i = 0; i < vlen; ++i) {
 		theia_sendmsg_ahg(msg[i].msg_len, fd, &(msg[i].msg_hdr), flags);
 	}
-
+*/
 	return rc;
 }
-*/
 
-SIMPLE_SHIM4(sendmmsg, 307, int, fd, struct mmsghdr __user *, msg, unsigned int, vlen, unsigned, flags);
 /*
+SIMPLE_SHIM4(sendmmsg, 307, int, fd, struct mmsghdr __user *, msg, unsigned int, vlen, unsigned, flags);
+*/
 SIMPLE_RECORD4(sendmmsg, 307, int, fd, struct mmsghdr __user *, msg, unsigned int, vlen, unsigned, flags);
 SIMPLE_REPLAY(sendmmsg, 307, int fd, struct mmsghdr __user * msg, unsigned int vlen, unsigned flags);
 asmlinkage long shim_sendmmsg(int fd, struct mmsghdr __user * msg, unsigned int vlen, unsigned flags)
 SHIM_CALL_MAIN(307, record_sendmmsg(fd, msg, vlen, flags), replay_sendmmsg(fd, msg, vlen, flags), theia_sys_sendmmsg(fd, msg, vlen, flags))
-*/
 
 SIMPLE_SHIM2(setns, 308, int, fd, int, nstype);
 
@@ -20160,6 +20193,19 @@ replay_process_vm_writev(pid_t pid, const struct iovec __user *lvec, unsigned lo
 	return syscall_mismatch();
 }
 
+static asmlinkage long 
+theia_sys_process_vm_writev (pid_t pid, const struct iovec __user *lvec, 
+                             unsigned long liovcnt, const struct iovec __user *rvec, 
+                             unsigned long riovcnt, unsigned long flags)
+{
+  long rc;
+  rc = sys_process_vm_writev(pid, lvec, liovcnt, rvec, riovcnt, flags); 
+printk("shim_process_vm_writev is called!, pid %d, ret :%ld\n", pid, rc);
+  return rc;
+
+}
+
+
 asmlinkage long shim_process_vm_writev(pid_t pid, const struct iovec __user *lvec, unsigned long liovcnt, const struct iovec __user *rvec, unsigned long riovcnt, unsigned long flags) 
 {
 	// Paranoid check
@@ -20169,7 +20215,10 @@ asmlinkage long shim_process_vm_writev(pid_t pid, const struct iovec __user *lve
 			printk ("[ERROR]: non-recorded process %d modifying the address space of recorded thread %d\n", current->pid, pid);
 		}
 	}
-	SHIM_CALL(process_vm_writev, 311, pid, lvec, liovcnt, rvec, riovcnt, flags);
+	//SHIM_CALL(process_vm_writev, 311, pid, lvec, liovcnt, rvec, riovcnt, flags);
+  SHIM_CALL_MAIN(311, record_process_vm_writev(pid,lvec,liovcnt,rvec,riovcnt,flags), 
+    replay_process_vm_writev(pid,lvec,liovcnt,rvec,riovcnt,flags), 
+    theia_sys_process_vm_writev(pid,lvec,liovcnt,rvec,riovcnt,flags));
 }
 
 SIMPLE_SHIM5(kcmp, 312, pid_t, pid1, pid_t, pid2, int, type, unsigned long, idx1, unsigned long, idx2);
