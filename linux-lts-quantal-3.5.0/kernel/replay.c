@@ -300,7 +300,7 @@ int verify_debug = 0;
 //#define DPRINT(x,...)
 #define MPRINT if(replay_debug || replay_min_debug) printk
 //#define MPRINT(x,...)
-#define MCPRINT
+//#define MCPRINT
 
 unsigned int theia_debug = 1;
 #define TPRINT if(theia_debug) printk
@@ -3422,7 +3422,7 @@ static void* argsalloc (size_t size)
 
 	node = list_first_entry(&prect->rp_argsalloc_list, struct argsalloc_node, list);
 
-printk("in argsalloc: size %lu\n", size);
+//printk("in argsalloc: size %lu\n", size);
 
 	// check to see if we've allocated a slab and if we have enough space left in the slab
 	if (unlikely(list_empty(&prect->rp_argsalloc_list) || ((node->head + node->size - node->pos) < size))) {
@@ -4636,7 +4636,7 @@ new_syscall_enter (long sysnum)
 	psr->sysnum = sysnum;
 	new_clock = atomic_add_return (1, prt->rp_precord_clock);
 	start_clock = new_clock - prt->rp_expected_clock - 1;
-	printk ("[%s|%d]pid %d incremented precord_clock to %d, expected_clock %d, start_clock %d, on syscall %ld enter\n", __func__,__LINE__,current->pid, atomic_read(prt->rp_precord_clock), prt->rp_expected_clock, start_clock,sysnum);
+	//printk ("[%s|%d]pid %d incremented precord_clock to %d, expected_clock %d, start_clock %d, on syscall %ld enter\n", __func__,__LINE__,current->pid, atomic_read(prt->rp_precord_clock), prt->rp_expected_clock, start_clock,sysnum);
 	if (start_clock == 0) {
 		psr->flags = 0;
 	} else {
@@ -4708,7 +4708,7 @@ new_syscall_done (long sysnum, long retval)
 	}
 	prt->rp_expected_clock = new_clock;
 
-	printk ("[%s|%d]pid %d incremented precord_clock to %d, expected_clock %d, start_clock %d, on syscall %ld enter\n", __func__,__LINE__,current->pid, atomic_read(prt->rp_precord_clock), prt->rp_expected_clock, stop_clock,sysnum);
+	//printk ("[%s|%d]pid %d incremented precord_clock to %d, expected_clock %d, start_clock %d, on syscall %ld enter\n", __func__,__LINE__,current->pid, atomic_read(prt->rp_precord_clock), prt->rp_expected_clock, stop_clock,sysnum);
 	return 0;
 }
 
@@ -7830,73 +7830,73 @@ struct read_ahgv {
 
 bool check_and_update_controlfile() {
 
-//	int ret = 0, file_size = 0;
-//	struct black_pid* pblackpid;
-//	loff_t pos = 0;
-//	struct file* filp = NULL;
-//	int taskid_to_avoid[12];
-//	
-//	taskid_to_avoid[0] = current->pid;
-//	taskid_to_avoid[1] = current->tgid;
-//	taskid_to_avoid[2] = current->parent->pid;
-//	taskid_to_avoid[3] = current->parent->tgid;
-//	taskid_to_avoid[4] = current->parent->parent->pid;
-//	taskid_to_avoid[5] = current->parent->parent->tgid;
-//	taskid_to_avoid[6] = current->parent->parent->parent->pid;
-//	taskid_to_avoid[7] = current->parent->parent->parent->tgid;
-//	taskid_to_avoid[8] = current->parent->parent->parent->parent->pid;
-//	taskid_to_avoid[9] = current->parent->parent->parent->parent->tgid;
-//	taskid_to_avoid[10] = current->parent->parent->parent->parent->parent->pid;
-//	taskid_to_avoid[11] = current->parent->parent->parent->parent->parent->tgid;
-//	
-//	if(glb_blackpid.pid[0] == 0 || glb_blackpid.pid[1] == 0 || glb_blackpid.pid[2] == 0) {
-//		filp = filp_open(control_file, O_RDONLY, 0);
-//
-//		if(IS_ERR(filp)) {
-//		//	printk("error in opening: %s\n", control_file);
-//			return false;
-//		}
-//		pblackpid = KMALLOC (sizeof(struct black_pid), GFP_KERNEL);
-//		memset(pblackpid, 0x0, sizeof(struct black_pid));
-//		file_size = vfs_llseek(filp, 0, SEEK_END);
-//		ret = vfs_read(filp, (char *) pblackpid, file_size, &pos);
-//		if(ret < file_size) {
-//			printk("read from theia-control.conf fails, read size: %d, should be %d\n", ret, file_size);
-//			filp_close(filp, NULL);
-//			return false;
-//		}
-//		else {
-//			printk("first pid is %d, second pid is %d, third pid is %d\n", glb_blackpid.pid[0], glb_blackpid.pid[1], glb_blackpid.pid[2]);
-//			put_blackpid(pblackpid->pid[0]);
-//			put_blackpid(pblackpid->pid[1]);
-//			put_blackpid(pblackpid->pid[2]);
-//
-//			if(is_pid_match(taskid_to_avoid, 12)) {
-////				printk("we do not track this syscall, pgrp %d\n", current->tgid);
-//				filp_close(filp, NULL);
-//				return false;
-//			}
-//			filp_close(filp, NULL);
-//		}
-//		KFREE(pblackpid);	
-//	}
-//	else {
-////		printk("glb_blackpid is already filled. first pid is %d, second pid is %d, third is %d\n",glb_blackpid.pid[0], glb_blackpid.pid[1],glb_blackpid.pid[2] );
-//		if(is_pid_match(taskid_to_avoid, 12)) {
-////			printk("we do not track this syscall, pgrp %d\n", current->tgid);
-//			return false;
-//		}
-//	}
+	int ret = 0, file_size = 0;
+	struct black_pid* pblackpid;
+	loff_t pos = 0;
+	struct file* filp = NULL;
+	int taskid_to_avoid[12];
+	
+	taskid_to_avoid[0] = current->pid;
+	taskid_to_avoid[1] = current->tgid;
+	taskid_to_avoid[2] = current->parent->pid;
+	taskid_to_avoid[3] = current->parent->tgid;
+	taskid_to_avoid[4] = current->parent->parent->pid;
+	taskid_to_avoid[5] = current->parent->parent->tgid;
+	taskid_to_avoid[6] = current->parent->parent->parent->pid;
+	taskid_to_avoid[7] = current->parent->parent->parent->tgid;
+	taskid_to_avoid[8] = current->parent->parent->parent->parent->pid;
+	taskid_to_avoid[9] = current->parent->parent->parent->parent->tgid;
+	taskid_to_avoid[10] = current->parent->parent->parent->parent->parent->pid;
+	taskid_to_avoid[11] = current->parent->parent->parent->parent->parent->tgid;
+	
+	if(glb_blackpid.pid[0] == 0 || glb_blackpid.pid[1] == 0 || glb_blackpid.pid[2] == 0) {
+		filp = filp_open(control_file, O_RDONLY, 0);
 
-        if (strcmp(current->comm, "relay-read-sock") == 0 ||
-                strcmp(current->comm, "relay-read-file") == 0 ||
-                strcmp(current->comm, "theia_toggle") == 0 ||
-                strcmp(current->comm, "rsyslogd") == 0 ||
-                strcmp(current->comm, "gvfsd-trash") == 0 ||
-                strcmp(current->comm, "deja-dup-monitor") == 0 ||
-		strcmp(current->comm, "gnome-pty-helper") == 0) {
-                return false;
-        }
+		if(IS_ERR(filp)) {
+		//	printk("error in opening: %s\n", control_file);
+			return false;
+		}
+		pblackpid = KMALLOC (sizeof(struct black_pid), GFP_KERNEL);
+		memset(pblackpid, 0x0, sizeof(struct black_pid));
+		file_size = vfs_llseek(filp, 0, SEEK_END);
+		ret = vfs_read(filp, (char *) pblackpid, file_size, &pos);
+		if(ret < file_size) {
+			printk("read from theia-control.conf fails, read size: %d, should be %d\n", ret, file_size);
+			filp_close(filp, NULL);
+			return false;
+		}
+		else {
+			printk("first pid is %d, second pid is %d, third pid is %d\n", glb_blackpid.pid[0], glb_blackpid.pid[1], glb_blackpid.pid[2]);
+			put_blackpid(pblackpid->pid[0]);
+			put_blackpid(pblackpid->pid[1]);
+			put_blackpid(pblackpid->pid[2]);
+
+			if(is_pid_match(taskid_to_avoid, 12)) {
+//				printk("we do not track this syscall, pgrp %d\n", current->tgid);
+				filp_close(filp, NULL);
+				return false;
+			}
+			filp_close(filp, NULL);
+		}
+		KFREE(pblackpid);	
+	}
+	else {
+//		printk("glb_blackpid is already filled. first pid is %d, second pid is %d, third is %d\n",glb_blackpid.pid[0], glb_blackpid.pid[1],glb_blackpid.pid[2] );
+		if(is_pid_match(taskid_to_avoid, 12)) {
+//			printk("we do not track this syscall, pgrp %d\n", current->tgid);
+			return false;
+		}
+	}
+
+  if (strcmp(current->comm, "relay-read-sock") == 0 ||
+      strcmp(current->comm, "relay-read-file") == 0 ||
+      strcmp(current->comm, "theia_toggle") == 0 ||
+      strcmp(current->comm, "rsyslogd") == 0 ||
+      strcmp(current->comm, "gvfsd-trash") == 0 ||
+      strcmp(current->comm, "deja-dup-monito") == 0 ||
+      strcmp(current->comm, "gnome-pty-helper") == 0) {
+    return false;
+  }
 	return true;
 }
 
@@ -8093,8 +8093,10 @@ if(strcmp(current->comm, "pthread-lock") == 0) {
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
 		char uuid_str[THEIA_UUID_LEN+1];
-		if (fd2uuid(sys_args->fd, uuid_str) == false)
-			return; /* no file, socket, ...? */
+    if (fd2uuid(sys_args->fd, uuid_str) == false) {
+      printk("fd2uuid returns false, pid %d, fd %d\n", current->pid, sys_args->fd);
+      return; /* no file, socket, ...? */
+    }
 
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n", 
 				0, sys_args->pid, current->start_time.tv_sec, uuid_str, sys_args->bytes, current->tgid, 
@@ -10210,7 +10212,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
   }
 
   //apply a black list for recording also.
-  if(strcmp(current->comm, "deja-dup-monitor") == 0) {
+  if(strcmp(current->comm, "deja-dup-monito") == 0) {
     printk("[Record-blacklist] %s is skipped.\n", current->comm);
     goto out_norm;
   }
@@ -12114,6 +12116,7 @@ void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_f
 	}
 
 	if (err) {
+printk("getname error: err %d, sock is null? %d\n",err, sock==NULL?1:0);
 		*port = THEIA_INVALID_PORT;
 		strcpy(ip, "NA");
 		strcpy(sun_path, "NA");
@@ -12159,7 +12162,7 @@ void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_f
 		break;
 	case AF_INET6: /* TODO */
 	default:
-//		printk("get_ip_port_sockfd: sa_family problem %d\n", sockaddr->sa_family);
+		printk("get_ip_port_sockfd: sa_family problem %d\n", sockaddr->sa_family);
 		*port = THEIA_INVALID_PORT;
 		strcpy(ip, "NA");
 		strcpy(sun_path, "NA");
@@ -13690,7 +13693,7 @@ replay_recvmsg (int fd, struct msghdr __user *msg, unsigned int flags)
   char* retparams = NULL;
   long rc; 
 
-  DPRINT ("Pid %d in replay_recvmsg\n", current->pid);
+  DPRINT ("Pid %d in replay_recvmsg, fd %d, flags %u, msg %p\n", current->pid, fd, flags, msg);
 
   rc = get_next_syscall (47, &retparams);
 
@@ -13699,11 +13702,14 @@ replay_recvmsg (int fd, struct msghdr __user *msg, unsigned int flags)
 		if (retparams) {
 			struct recvmsg_retvals* retvals = (struct recvmsg_retvals *) retparams;
 			char* pdata = ((char *) retvals) + sizeof (struct recvmsg_retvals);
-			struct msghdr *msg = (struct msghdr __user *) msg;
+//			struct msghdr *msg = (struct msghdr __user *) msg;
 			long rem_size, to_copy, i, iovlen;
 
+printk("[%s|%d] replay_recvmsg, msg %p\n",__func__,__LINE__, msg);
 			put_user (retvals->msg_controllen, &msg->msg_controllen); // This is a in-out parameter
-			put_user (retvals->msg_flags, &msg->msg_flags);           // Out parameter
+printk("[%s|%d] replay_recvmsg, retvals msg_controllen size %u, msg->msg_controllen size %u, retvals msg_flags size %u, msg->msg_flags size %u, retvals->msg_flags %u, msg_flags ptr %p\n",__func__,__LINE__, sizeof(retvals->msg_controllen), sizeof(&msg->msg_controllen), sizeof(retvals->msg_flags), sizeof(msg->msg_flags),retvals->msg_flags, &(msg->msg_flags));
+			put_user (retvals->msg_flags, &(msg->msg_flags));           // Out parameter
+printk("[%s|%d] replay_recvmsg, msg_namelen %d, msg->msg_namelen %d\n",__func__,__LINE__, retvals->msg_namelen, msg->msg_namelen);
 
 			if (retvals->msg_namelen) {
 				long crc = copy_to_user ((char *) msg->msg_name, pdata, retvals->msg_namelen);
@@ -13714,6 +13720,7 @@ replay_recvmsg (int fd, struct msghdr __user *msg, unsigned int flags)
 				}
 				pdata += retvals->msg_namelen;
 			}
+printk("[%s|%d] replay_recvmsg\n",__func__,__LINE__);
 
 			if (retvals->msg_controllen) {
 				long crc = copy_to_user ((char *) msg->msg_control, pdata, retvals->msg_controllen);
@@ -13724,6 +13731,7 @@ replay_recvmsg (int fd, struct msghdr __user *msg, unsigned int flags)
 				}
 				pdata += retvals->msg_controllen;
 			}
+printk("[%s|%d] replay_recvmsg\n",__func__,__LINE__);
 
 			get_user (iovlen, &msg->msg_iovlen);
 			rem_size = rc;
@@ -13740,6 +13748,7 @@ replay_recvmsg (int fd, struct msghdr __user *msg, unsigned int flags)
 				if (rem_size == 0) break;
 			}
 
+printk("[%s|%d] replay_recvmsg\n",__func__,__LINE__);
 			if (rem_size != 0) {
 				printk ("replay_socketcall(recvmsg): %ld bytes remaining\n", rem_size);
 				syscall_mismatch();
@@ -16364,7 +16373,19 @@ printk("theia_sys_writev: pid %d, fd %lu, rc %ld\n", current->pid, fd, rc);
 	return rc;
 }
 
-SIMPLE_RECORD3(writev, 20, unsigned long, fd, const struct iovec __user *, vec, unsigned long, vlen);
+static asmlinkage long	
+record_writev (unsigned long fd, const struct iovec __user *vec, unsigned long vlen)
+{
+  long rc;
+  new_syscall_enter (20);
+  rc = sys_writev(fd, vec, vlen);
+	if (theia_logging_toggle)
+		theia_writev_ahgx(fd, vec, vlen, rc, SYS_WRITEV);
+  new_syscall_done (20, rc);
+  new_syscall_exit (20, NULL);
+  return rc;
+}								
+
 SIMPLE_REPLAY(writev, 20, unsigned long fd, const struct iovec __user * vec, unsigned long vlen);
 asmlinkage long shim_writev (unsigned long fd, const struct iovec __user *vec, unsigned long vlen) 
 // SHIM_CALL(writev, 20, fd, vec, vlen);
