@@ -9324,6 +9324,7 @@ record_close (int fd)
 	new_syscall_enter (3);
 	perftimer_start(close_sys_timer);
 	rc = sys_close (fd);
+printk("[%s|%d] fd %d, rc %ld\n",__func__,__LINE__,fd,rc);
 	perftimer_stop(close_sys_timer);
 	new_syscall_done (3, rc);
 	if (rc >= 0) clear_record_cache_file (current->record_thrd->rp_cache_files, fd);
@@ -10212,7 +10213,9 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
   }
 
   //apply a black list for recording also.
-  if(strcmp(current->comm, "deja-dup-monito") == 0) {
+printk("[%s|%d] current->comm (%s), strcmp is %d\n", __func__,__LINE__,current->comm,strcmp(current->comm, "deja-dup-monito"));
+  if( (strcmp(current->comm, "deja-dup-monito") == 0) ||
+      (strcmp(current->comm, "gnome-session") == 0) ){
     printk("[Record-blacklist] %s is skipped.\n", current->comm);
     goto out_norm;
   }
@@ -10227,7 +10230,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
     set_fs(old_fs);
     rc = fork_replay_theia (NULL /*logdir*/, filename, __argv, __envp, linker, save_mmap, fd, -1 /*pipe_fd*/);
     
-    printk("fork_replay_theia returns. %s\n", filename);
+    printk("fork_replay_theia returns. %s, comm(%s)\n", filename, current->comm);
     goto out;
   }
 
@@ -13177,6 +13180,7 @@ record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
 	new_syscall_enter (47);
 
 	rc = sys_recvmsg (fd, msg, flags);
+printk("[%s|%d] pid %d, fd %d, rc %ld\n",__func__,__LINE__,current->pid,fd,rc);
 
 // Yang also needed at recording
 	if (rc != -EAGAIN) /* ignore some less meaningful errors */
@@ -13198,7 +13202,7 @@ record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
 
   if (rc >= 0) {
 
-    DPRINT ("record_socketcall(recvmsg): namelen: %d, controllen %ld iov_len %d rc %ld\n", pmsghdr->msg_namelen, (long) pmsghdr->msg_controllen, pmsghdr->msg_iovlen, rc);
+    DPRINT ("record_recvmsg: namelen: %d, controllen %ld iov_len %d rc %ld\n", pmsghdr->msg_namelen, (long) pmsghdr->msg_controllen, pmsghdr->msg_iovlen, rc);
 
     pretvals = ARGSKMALLOC(sizeof(struct recvmsg_retvals) + pmsghdr->msg_namelen + pmsghdr->msg_controllen + rc, GFP_KERNEL);
     if (pretvals == NULL) {
