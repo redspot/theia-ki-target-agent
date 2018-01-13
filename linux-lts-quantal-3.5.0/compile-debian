@@ -1,8 +1,7 @@
 #!/bin/bash
 
-if [ ! -d debian ]; then
-	cp -r debian.theia debian
-fi
+rm -rf debian
+cp -r debian.theia debian
 
 fakeroot debian/rules clean
 
