@@ -357,8 +357,9 @@ $(inst_libexecdir)/getconf: $(inst_bindir)/getconf \
 	$(addprefix $(..)./scripts/mkinstalldirs ,\
 		    $(filter-out $(wildcard $@),$@))
 	while read spec; do \
+	  if [ x"$spec" == "x" ]; then continue; fi; \
 	  ln -f $< $@/$$spec.new || $(INSTALL_PROGRAM) $< $@/$$spec.new; \
-	  mv -f $@/$$spec.new $@/$$spec; \
+	  mv -f $@/$$spec.new $@/$$spec || true; \
 	done < $(objpfx)getconf.speclist
 
 # eglibc: If we are cross-compiling, build cross-getconf utility and use it
