@@ -2,7 +2,7 @@ CC := gcc
 
 CFLAGS := -Wall -Werror -g 
 CFLAGS += -fPIC 
-LDFLAGS := -Wall -Werror -g 
+LDFLAGS := -Wall -Werror -g -Wl,-dynamic-linker=/lib64/ld-linux-x86-64.so.2
 
 #LDLIBS := libutil.a
 
