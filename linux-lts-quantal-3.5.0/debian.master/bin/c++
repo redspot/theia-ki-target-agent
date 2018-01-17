@@ -1,4 +1,7 @@
 #!/bin/bash
 WRAP=/home/linuxbrew/.linuxbrew/bin/c++-4.8
+if which ccache &> /dev/null; then
+        WRAP="ccache $WRAP"
+fi
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "${DIR}/wrapper.sh"
