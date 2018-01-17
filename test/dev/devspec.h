@@ -1,6 +1,7 @@
 #ifndef __DEVSPEC_H__
 #define __DEVSPEC_H__
 
+#define SPEC_DEV "/dev/spec0"
 #define DEVICE_NAME "spec0"
 #define CLASS_NAME "spec"
 
