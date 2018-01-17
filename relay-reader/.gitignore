@@ -1,0 +1,3 @@
+*.o
+relay-read-sock
+relay-read-file
