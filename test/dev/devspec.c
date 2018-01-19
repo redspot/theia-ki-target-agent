@@ -11,6 +11,8 @@
 #include <linux/ioctl.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
+#include <linux/kobject.h>
+#include <linux/sysfs.h>
 
 #include <linux/replay.h>
 
@@ -23,6 +25,7 @@ MODULE_LICENSE("GPL");
 extern bool theia_logging_toggle;
 extern bool theia_recording_toggle;
 extern struct theia_replay_register_data_type theia_replay_register_data;
+extern char theia_linker[];
 
 static int majorNumber;
 static struct class*  charClass  = NULL;
@@ -31,6 +34,76 @@ static struct device* charDevice = NULL;
 /* Debugging stuff */
 //#define DPRINT printk
 #define DPRINT(x,...)
+
+static ssize_t linker_show(struct kobject *kobj,
+    struct kobj_attribute *attr, char *buf)
+{
+  return sprintf(buf, "%s\n", theia_linker);
+}
+static ssize_t linker_store(struct kobject *kobj,
+    struct kobj_attribute *attr, const char *buf, size_t count)
+{
+  /* MAX_LOGDIR_STRLEN is in include/linux/replay.h
+   * and gets used as a generic buffer size in replay.c
+   */
+  if (count > MAX_LOGDIR_STRLEN)
+    return -ENOENT;
+  memcpy(theia_linker, buf, count);
+  theia_linker[count] = '\0';
+  if (count && theia_linker[count-1] == '\n')
+    theia_linker[count-1] = '\0';
+  return count;
+}
+static struct kobj_attribute linker_attribute =
+__ATTR(theia_linker, 0600, linker_show, linker_store);
+
+static ssize_t flag_show(struct kobject *kobj, struct kobj_attribute *attr,
+    char *buf)
+{
+  bool flag;
+
+  if (strcmp(attr->attr.name, "logging_toggle") == 0)
+    flag = theia_logging_toggle;
+  else if (strcmp(attr->attr.name, "recording_toggle") == 0)
+    flag = theia_recording_toggle;
+  else
+    return -EINVAL;
+  return sprintf(buf, "%d\n", flag);
+}
+static ssize_t flag_store(struct kobject *kobj, struct kobj_attribute *attr,
+    const char *buf, size_t count)
+{
+  unsigned int flag;
+  int error;
+
+  error = kstrtouint(buf, 10, &flag);
+  if (error || flag > 1) return -EINVAL;
+
+  if (strcmp(attr->attr.name, "logging_toggle") == 0)
+    theia_logging_toggle = flag;
+  else if (strcmp(attr->attr.name, "recording_toggle") == 0)
+    theia_recording_toggle = flag;
+  else
+    return -EINVAL;
+  return count;
+}
+
+static struct kobj_attribute logging_toggle_attribute =
+__ATTR(theia_logging_toggle, 0600, flag_show, flag_store);
+static struct kobj_attribute recording_toggle_attribute =
+__ATTR(theia_recording_toggle, 0600, flag_show, flag_store);
+
+static struct attribute *theia_attrs[] = {
+  &linker_attribute.attr,
+  &logging_toggle_attribute.attr,
+  &recording_toggle_attribute.attr,
+  NULL,	/* need to NULL terminate the list of attributes */
+};
+static struct attribute_group theia_attr_group = {
+  .attrs = theia_attrs,
+};
+
+static struct kobject *theia_kobj;
 
 /* Called by apps to open the device. */ 
 static int spec_psdev_open(struct inode* inode, struct file* filp)
@@ -239,10 +312,10 @@ static long spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
 
 
 static struct file_operations spec_psdev_fops = {
-owner:		THIS_MODULE,
-          unlocked_ioctl:	spec_psdev_ioctl,
-          open:		spec_psdev_open,
-          release:	spec_psdev_release,
+  owner:		THIS_MODULE,
+  unlocked_ioctl:	spec_psdev_ioctl,
+  open:		spec_psdev_open,
+  release:	spec_psdev_release,
 };
 
 
@@ -273,6 +346,24 @@ int init_module(void)
     return PTR_ERR(charDevice);
   }
 
+  /*
+   * Create a simple kobject with the name of "theia",
+   * located under /sys/kernel/
+   *
+   * As this is a simple directory, no uevent will be sent to
+   * userspace.  That is why this function should not be used for
+   * any type of dynamic kobjects, where the name and number are
+   * not known ahead of time.
+   */
+  theia_kobj = kobject_create_and_add("theia", kernel_kobj);
+  if (!theia_kobj)
+    return -ENOMEM;
+
+  /* Create the files associated with this kobject */
+  int retval = sysfs_create_group(theia_kobj, &theia_attr_group);
+  if (retval)
+    kobject_put(theia_kobj);  // decrement the ref count
+
   printk(KERN_INFO "User-level speculation module version 1.0, major=%d\n", majorNumber);
   return 0;
 }
@@ -284,6 +375,7 @@ void cleanup_module(void)
   class_unregister(charClass);
   class_destroy(charClass);
   unregister_chrdev(majorNumber, DEVICE_NAME);
+  kobject_put(theia_kobj);  // decrement the ref count
   printk (KERN_INFO "User-Level speculation module 1.0 exiting.\n");
 }
 
