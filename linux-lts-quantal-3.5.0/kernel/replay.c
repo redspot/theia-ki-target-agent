@@ -241,6 +241,8 @@ bool theia_logging_toggle = 0;
 EXPORT_SYMBOL(theia_logging_toggle);
 bool theia_recording_toggle = 0;
 EXPORT_SYMBOL(theia_recording_toggle);
+char theia_linker[MAX_LOGDIR_STRLEN+1];
+EXPORT_SYMBOL(theia_linker);
 
 //we use pid (and more) to identify the replay process
 
@@ -10349,19 +10351,17 @@ printk("[%s|%d] current->comm (%s), strcmp is %d\n", __func__,__LINE__,current->
   }
 
   if(theia_recording_toggle == 1) {
-    char* linker;
     printk("/dev/spec0 ready ! filename: %s\n", filename);
     //should be ready to add the process to record_group
-    linker = "/home/theia/theia-es/eglibc-2.15/prefix/lib/ld-linux-x86-64.so.2";
-    ret = sys_access(linker, 0/*F_OK*/);
+    ret = sys_access(theia_linker, 0/*F_OK*/);
     if(ret < 0) { //if linker is not there, bail out
-           pr_warn_ratelimited("theia linker \"%s\" not found\n", linker);
+           pr_warn_ratelimited("theia linker \"%s\" not found\n", theia_linker);
            goto out_norm;
     }
     int save_mmap = 1;
 
     set_fs(old_fs);
-    rc = fork_replay_theia (NULL /*logdir*/, filename, __argv, __envp, linker, save_mmap, fd, -1 /*pipe_fd*/);
+    rc = fork_replay_theia (NULL /*logdir*/, filename, __argv, __envp, theia_linker, save_mmap, fd, -1 /*pipe_fd*/);
     
     printk("fork_replay_theia returns. %s, comm(%s)\n", filename, current->comm);
     goto out;
@@ -21588,6 +21588,11 @@ static int __init replay_init(void)
 #ifdef CONFIG_SYSCTL
 	register_sysctl_table(replay_ctl_root);
 #endif
+
+	// setup default for theia_linker
+	//const char* theia_linker_default = "/home/theia/theia-es/eglibc-2.15/prefix/lib/ld-linux-x86-64.so.2";
+	const char* theia_linker_default = "/usr/local/eglibc/lib/ld-linux-x86-64.so.2";
+	strncpy(theia_linker, theia_linker_default, MAX_LOGDIR_STRLEN+1);
 
 	/* Performance monitoring */
 	perftimer_init();
