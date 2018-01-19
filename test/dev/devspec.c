@@ -1,4 +1,4 @@
-/* vim: set noexpandtab sw=8 sts=0 : */
+/* vim: set expandtab tabstop=2 shiftwidth=2 softtabstop=2 : */
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/device.h>
@@ -34,23 +34,20 @@ static struct device* charDevice = NULL;
 #define DPRINT(x,...)
 
 /* Called by apps to open the device. */ 
-static int 
-spec_psdev_open(struct inode* inode, struct file* filp)
+static int spec_psdev_open(struct inode* inode, struct file* filp)
 {
 	DPRINT ("process %d has opened device\n", current->pid);
 	return 0;
 }
 
 /* Called by apps to release the device */
-static int
-spec_psdev_release(struct inode * inode, struct file * file)
+static int spec_psdev_release(struct inode * inode, struct file * file)
 {
 	DPRINT ("process %d has closed device\n", current->pid);
 	return 0;
 }
 
-static long
-spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
+static long spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
 {
   int len = _IOC_SIZE(cmd), retval;
   struct ckpt_proc *pckpt_proc, *new_ckpt_proc;
@@ -261,7 +258,7 @@ spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
 
 
 static struct file_operations spec_psdev_fops = {
-	owner:		THIS_MODULE,
+owner:		THIS_MODULE,
 	unlocked_ioctl:	spec_psdev_ioctl,
 	open:		spec_psdev_open,
 	release:	spec_psdev_release,
