@@ -417,6 +417,7 @@ bool file2uuid(struct file* file, char *uuid_str, int fd) {
 		if (S_ISSOCK(mode)) {
 			sock = sockfd_lookup(fd, &err);
 			if (sock) {
+				sockfd_put(sock);
 				get_peer_ip_port_sockfd(fd, ip, &port, sun_path, &sa_family); 
 				get_local_ip_port_sockfd(fd, local_ip, &local_port, local_sun_path, &sa_family); 
 				if (strcmp(ip, "LOCAL") == 0) {
@@ -12082,6 +12083,7 @@ void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char* i
 		*port = THEIA_INVALID_PORT;
 		strcpy(ip, "LOCAL");
 		strncpy(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX);
+                printk("AF_LOCAL: %s\n", sun_path);
 		if (strlen(sun_path) == 0) {
 			strcpy(sun_path, "LOCAL");
 		}
@@ -12109,6 +12111,7 @@ void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_f
 	struct sockaddr *sockaddr;
 	int len;
 	int err = 1;
+        int fput_needed;
 	struct socket *sock = sockfd_lookup(sockfd, &err);
 
 	if (sock != NULL) {
@@ -12116,6 +12119,8 @@ void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_f
 			err = sock->ops->getname(sock, (struct sockaddr*)address, &len, 1);
 		else
 			err = sock->ops->getname(sock, (struct sockaddr*)address, &len, 0);
+
+		sockfd_put(sock);
 	}
 
 	if (err) {
@@ -16342,7 +16347,7 @@ theia_sys_writev (unsigned long fd, const struct iovec __user *vec, unsigned lon
 {
 	long rc;
 	rc = sys_writev(fd, vec, vlen);
-printk("theia_sys_writev: pid %d, fd %lu, rc %ld\n", current->pid, fd, rc)
+//printk("theia_sys_writev: pid %d, fd %lu, rc %ld\n", current->pid, fd, rc)
 	if (theia_logging_toggle)
 		theia_writev_ahgx(fd, vec, vlen, rc, SYS_WRITEV);
 	return rc;
