@@ -421,12 +421,12 @@ bool file2uuid(struct file* file, char *uuid_str, int fd) {
 				get_peer_ip_port_sockfd(fd, ip, &port, sun_path, &sa_family); 
 				get_local_ip_port_sockfd(fd, local_ip, &local_port, local_sun_path, &sa_family); 
 				if (strcmp(ip, "LOCAL") == 0) {
-					if (strcmp(sun_path, "LOCAL") == 0 || sun_path[0] == '\0')
-						return false;
-					else
+					sprintf(uuid_str, "S|%s|%d|%s|%d", sun_path, port, local_sun_path, local_port);
+//					if (strcmp(sun_path, "LOCAL") == 0 || sun_path[0] == '\0')
+//						return false;
+//					else
 //						sprintf(uuid_str, "ip:[%s:%d]", sun_path, port);
 //						sprintf(uuid_str, "ip:[%s:%d]|local_ip:[%s:%d]", sun_path, port, local_sun_path, local_port);
-						sprintf(uuid_str, "S|%s|%d|%s|%d", sun_path, port, local_sun_path, local_port);
 				}
 				else
 //					sprintf(uuid_str, "ip:[%s:%d]", ip, port);
@@ -12082,7 +12082,10 @@ void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char* i
 
 		*port = THEIA_INVALID_PORT;
 		strcpy(ip, "LOCAL");
-		strncpy(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX);
+		if (un_sockaddr->sun_path[0] != '\0')
+			strncpy(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX);
+		else
+			strncpy(sun_path, un_sockaddr->sun_path+1, UNIX_PATH_MAX);
                 printk("AF_LOCAL: %s\n", sun_path);
 		if (strlen(sun_path) == 0) {
 			strcpy(sun_path, "LOCAL");
@@ -12154,7 +12157,10 @@ printk("getname error: err %d, sock is null? %d\n",err, sock==NULL?1:0);
 
 		*port = THEIA_INVALID_PORT;
 		strcpy(ip, "LOCAL");
-		strncpy(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX);
+		if (un_sockaddr->sun_path[0] != '\0')
+			strncpy(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX);
+		else
+			strncpy(sun_path, un_sockaddr->sun_path+1, UNIX_PATH_MAX);
 		if (strlen(sun_path) == 0) {
 			strcpy(sun_path, "LOCAL");
 		}
