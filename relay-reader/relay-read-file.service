@@ -1,0 +1,8 @@
+[Unit]
+Description=Theia relay read file
+
+[Service]
+ExecStart=/usr/loca/bin/relay-read-file
+
+[Install]
+WantedBy=multi-user.target
