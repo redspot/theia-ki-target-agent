@@ -7095,6 +7095,7 @@ EXPORT_SYMBOL vmlinux 0xd3d54047	tcp_v4_send_check
 EXPORT_SYMBOL vmlinux 0xd3dcab0b	flex_array_alloc
 EXPORT_SYMBOL vmlinux 0xd433a15c	tty_hung_up_p
 EXPORT_SYMBOL vmlinux 0xd462aaee	blk_queue_unprep_rq
+EXPORT_SYMBOL vmlinux 0xd4638a67	theia_linker
 EXPORT_SYMBOL vmlinux 0xd46a3213	sock_from_file
 EXPORT_SYMBOL vmlinux 0xd46f9749	scsi_block_requests
 EXPORT_SYMBOL vmlinux 0xd47addc4	fifo_set_limit
