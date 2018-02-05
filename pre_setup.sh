@@ -6,12 +6,12 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 if [ "`whoami`" == 'root' ]; then
 	if [ -e ${SPEC_PATH} -a -L ${SPEC_PATH} ]; then
 		rm ${SPEC_PATH}
-	elif [ ! -L ${SPEC_PATH} ]; then
+	elif [ -e ${SPEC_PATH} -a ! -L ${SPEC_PATH} ]; then
 		exit 1
 	fi
 	ln -s ${DIR}/test/dev ${SPEC_PATH}
 else
-	exec sudo "${DIR}/$(basename $0)"
+	exec sudo -E "${DIR}/$(basename $0)"
 fi
 
 sed -i -e "/^PACKAGE_VERSION/ s/0000/${GO_PIPELINE_COUNTER}/" ${SPEC_PATH}/dkms.conf
