@@ -62,9 +62,9 @@ static ssize_t flag_show(struct kobject *kobj, struct kobj_attribute *attr,
 {
   bool flag;
 
-  if (strcmp(attr->attr.name, "logging_toggle") == 0)
+  if (strcmp(attr->attr.name, "theia_logging_toggle") == 0)
     flag = theia_logging_toggle;
-  else if (strcmp(attr->attr.name, "recording_toggle") == 0)
+  else if (strcmp(attr->attr.name, "theia_recording_toggle") == 0)
     flag = theia_recording_toggle;
   else
     return -EINVAL;
@@ -79,9 +79,9 @@ static ssize_t flag_store(struct kobject *kobj, struct kobj_attribute *attr,
   error = kstrtouint(buf, 10, &flag);
   if (error || flag > 1) return -EINVAL;
 
-  if (strcmp(attr->attr.name, "logging_toggle") == 0)
+  if (strcmp(attr->attr.name, "theia_logging_toggle") == 0)
     theia_logging_toggle = flag;
-  else if (strcmp(attr->attr.name, "recording_toggle") == 0)
+  else if (strcmp(attr->attr.name, "theia_recording_toggle") == 0)
     theia_recording_toggle = flag;
   else
     return -EINVAL;
