@@ -1,19 +1,21 @@
 #!/bin/bash
+PVERSION="1.0-${GO_PIPELINE_COUNTER}"
+SPEC_PATH="/usr/src/spec-${PVERSION}"
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 if [ "`whoami`" == 'root' ]; then
-	if [ ! -d /usr/src/spec-1.0 ]; then
-		mkdir -p /usr/src/spec-1.0
+	if [ -e ${SPEC_PATH} -a -L ${SPEC_PATH} ]; then
+		rm ${SPEC_PATH}
+	elif [ -e ${SPEC_PATH} -a ! -L ${SPEC_PATH} ]; then
+		exit 1
 	fi
-	if [ "`stat -c '%U' /usr/src/spec-1.0`" != 'go' ]; then
-		chown go /usr/src/spec-1.0
-	fi
+	ln -s ${DIR}/test/dev ${SPEC_PATH}
 else
-	DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-	exec sudo "${DIR}/$(basename $0)"
+	exec sudo -E "${DIR}/$(basename $0)"
 fi
 
-cp /var/lib/go-agent/pipelines/target-agent/test/dev/* /usr/src/spec-1.0
+sed -i -e "/^PACKAGE_VERSION/ s/0000/${GO_PIPELINE_COUNTER}/" ${SPEC_PATH}/dkms.conf
 
-if ! dkms status spec/1.0 | grep -q ^spec; then
-	dkms add -m spec -v 1.0
+if ! dkms status spec/${PVERSION} | grep -q ^spec; then
+	dkms add -m spec -v ${PVERSION}
 fi
