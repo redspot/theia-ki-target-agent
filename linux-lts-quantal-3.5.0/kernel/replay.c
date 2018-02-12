@@ -793,7 +793,7 @@ struct rchan *create_channel(unsigned size,
 	channel = relay_open("cpu", theia_dir, size, n, &relay_callbacks, NULL);
 	
 	if (!channel) {
-		printk("relay app channel creation failed\n");
+		pr_warn_ratelimited("relay app channel creation failed\n");
 		return NULL;
 	}
 
