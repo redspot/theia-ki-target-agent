@@ -1,31 +1,39 @@
 #!/bin/bash
 
-rm -rf debian
-cp -r debian.theia debian
+#pkg-config-dbgsym is needed to build a kernel with debug symbols
+if ! dpkg-query -s pkg-config-dbgsym 2>/dev/null >/dev/null; then
+    echo you need to install pkg-config-dbgsym
+    exit 1
+fi
 
-fakeroot debian/rules clean
+#example w/ clean
+#DO_CLEAN=1 ./compile-debian
+#off by default
+if [ ! -z "$DO_CLEAN" ]; then
+    rm -rf debian
+    cp -r debian.theia debian
+    fakeroot debian/rules clean
+fi
 
 if [ -d security/tomoyo/policy ]; then
 	mkdir -p debian/build/build-generic/security/tomoyo
 	cp -r security/tomoyo/policy debian/build/build-generic/security/tomoyo/
 fi
 
-skipdbg=false \
 DEB_BUILD_OPTIONS=parallel=8 \
 NOEXTRAS=1 \
 CROSS_COMPILE=`pwd`/debian.master/bin/ \
 AUTOBUILD=1 \
-fakeroot debian/rules binary-generic
+fakeroot debian/rules binary-generic skipdbg=false
 
 # The previous command sometimes fails on the first try
 
 if [[ $? -ne 0 ]]; then
-skipdbg=false \
 DEB_BUILD_OPTIONS=parallel=8 \
 NOEXTRAS=1 \
 CROSS_COMPILE=`pwd`/debian.master/bin/ \
 AUTOBUILD=1 \
-fakeroot debian/rules binary-generic
+fakeroot debian/rules binary-generic skipdbg=false
 fi
 
 # If it still fails, give up!
@@ -34,22 +42,20 @@ if [[ $? -ne 0 ]]; then
 	exit $?
 fi
 
-skipdbg=false \
 DEB_BUILD_OPTIONS=parallel=8 \
 NOEXTRAS=1 \
 CROSS_COMPILE=`pwd`/debian.master/bin/ \
 AUTOBUILD=1 \
-fakeroot debian/rules binary-headers
+fakeroot debian/rules binary-headers skipdbg=false
 
 # The previous command sometimes fails on the first try
 
 if [[ $? -ne 0 ]]; then
-skipdbg=false \
 DEB_BUILD_OPTIONS=parallel=8 \
 NOEXTRAS=1 \
 CROSS_COMPILE=`pwd`/debian.master/bin/ \
 AUTOBUILD=1 \
-fakeroot debian/rules binary-headers
+fakeroot debian/rules binary-headers skipdbg=false
 fi
 
 exit $?
