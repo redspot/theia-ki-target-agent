@@ -4156,6 +4156,7 @@ int fork_replay_theia (char __user* logdir, const char* filename, const char __u
 	current->replay_thrd = NULL;
 	MPRINT ("in fork_replay_theia: Record-Pid %d, tsk %p, prp %p\n", current->pid, current, current->record_thrd);
 
+  BUG_ON(IS_ERR_OR_NULL(linker));
 	if (linker) {
 		strncpy (current->record_thrd->rp_group->rg_linker, linker, MAX_LOGDIR_STRLEN);
 		MPRINT ("Set linker for record process to %s\n", linker);
@@ -10171,11 +10172,13 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
   ret = sys_access(devfile, 0/*F_OK*/);
   if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.
     printk("/dev/spec0 not accessible yet. ret %d\n", ret);
+    theia_recording_toggle = 0;
     goto out_norm;
   }
   fd = sys_open ("/dev/spec0", O_RDWR, 0777 /*mode should be ignored anyway*/);
   if (fd < 0) {
     printk("/dev/spec0 not open yet. ret %d\n", ret);
+    theia_recording_toggle = 0;
     goto out_norm;
   }
 
@@ -10185,10 +10188,31 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
     ret = sys_access(theia_linker, 0/*F_OK*/);
     if(ret < 0) { //if linker is not there, bail out
            pr_warn_ratelimited("theia linker \"%s\" not found\n", theia_linker);
+           theia_recording_toggle = 0;
            goto out_norm;
     }
+    //check for linker path being a symlink
+    struct path linker_path;
+    ret = kern_path(theia_linker, LOOKUP_FOLLOW, &linker_path);
+    if (!ret) {
+      char followed_buf[MAX_LOGDIR_STRLEN+1];
+      char* followed_path;
+      followed_path = d_path(&linker_path, followed_buf, MAX_LOGDIR_STRLEN);
+      if (!IS_ERR(followed_path)) {
+        ret = sys_access(followed_path, 0/*F_OK*/);
+        if(ret < 0) { //if linker is not there, bail out
+          pr_warn_ratelimited("theia linker \"%s\", from symlink \"%s\", not found\n",
+              followed_path, theia_linker);
+          theia_recording_toggle = 0;
+          goto out_norm;
+        }
+        strncpy(theia_linker, followed_path, MAX_LOGDIR_STRLEN+1);
+      }
+    }
+
     int save_mmap = 1;
 
+    BUG_ON(IS_ERR_OR_NULL(theia_linker));
     set_fs(old_fs);
     rc = fork_replay_theia (NULL /*logdir*/, filename, __argv, __envp, theia_linker, save_mmap, fd, -1 /*pipe_fd*/);
     
