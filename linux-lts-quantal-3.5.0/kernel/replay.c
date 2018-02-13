@@ -9654,7 +9654,6 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
  #endif
 	//Yang
 	if(theia_logging_toggle) {
-		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		char ids[50];
@@ -9697,12 +9696,15 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 		char *args_b64 = base64_encode(sys_args->args, strlen(sys_args->args), NULL);
 		if (!args_b64) args_b64 = "";
 
+    uint32_t buf_size = strlen(args_b64)+256;
+    char *buf = vmalloc(buf_size);
 		/* TODO: publish args as well sys_args->args. problem? args can contain | do BASE64 encoding? */
 		size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%s|%s|%s|%d|%d|%ld|%ld|%u|endahg\n", 
 				59, sys_args->pid, current->start_time.tv_sec, sys_args->rc, 
 				uuid_str, fpath, args_b64, ids, is_user_remote, current->tgid, sec, nsec, current->no_syscalls++);
 		theia_file_write(buf, size);
 
+    vfree(buf);
 		vfree(args_b64);
 	}
 }
@@ -21196,7 +21198,8 @@ static int __init replay_init(void)
 
 	// setup default for theia_linker
 	//const char* theia_linker_default = "/home/theia/theia-es/eglibc-2.15/prefix/lib/ld-linux-x86-64.so.2";
-	const char* theia_linker_default = "/usr/local/eglibc/lib/ld-linux-x86-64.so.2";
+	//const char* theia_linker_default = "/usr/local/eglibc/lib/ld-linux-x86-64.so.2";
+	const char* theia_linker_default = "/usr/local/eglibc/lib/ld-2.15.so";
 	strncpy(theia_linker, theia_linker_default, MAX_LOGDIR_STRLEN+1);
 
 	/* Performance monitoring */
