@@ -79,10 +79,13 @@ static ssize_t flag_store(struct kobject *kobj, struct kobj_attribute *attr,
   error = kstrtouint(buf, 10, &flag);
   if (error || flag > 1) return -EINVAL;
 
-  if (strcmp(attr->attr.name, "theia_logging_toggle") == 0)
+  if (strcmp(attr->attr.name, "theia_logging_toggle") == 0) {
+    pr_info("theia logging set to %d\n", flag);
     theia_logging_toggle = flag;
-  else if (strcmp(attr->attr.name, "theia_recording_toggle") == 0)
+  } else if (strcmp(attr->attr.name, "theia_recording_toggle") == 0) {
+    pr_info("theia recording set to %d\n", flag);
     theia_recording_toggle = flag;
+  }
   else
     return -EINVAL;
   return count;
