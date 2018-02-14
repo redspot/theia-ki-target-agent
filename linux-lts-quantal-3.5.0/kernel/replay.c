@@ -345,6 +345,10 @@ char *theia_buf1   = NULL;
 char *theia_buf2   = NULL;
 char *theia_retbuf = NULL;
 
+//Yang: inode etc for replay and pin
+char rec_uuid_str[THEIA_UUID_LEN+1];
+char repl_uuid_str[THEIA_UUID_LEN+1];
+
 bool theia_check_channel(void) {
 
 	if (!theia_buf1)   theia_buf1   = vmalloc(4096);
@@ -455,6 +459,8 @@ bool file2uuid(struct file* file, char *uuid_str, int fd) {
 //			strncpy(uuid_str, fpath, THEIA_UUID_LEN);
 			sprintf(uuid_str, "I|%lx|%lx|0", dev, ino); /* just inode */
 		}
+//Yang: we need these later:
+    strcpy(rec_uuid_str, uuid_str);
 	}
 	else {
 		return false;
@@ -3761,6 +3767,16 @@ long get_log_id (void)
 	}
 }
 EXPORT_SYMBOL(get_log_id);
+
+
+//Yang: get inode,dev,crtime for taint
+int get_inode_for_pin (void *inode)
+{
+  strcpy((char*)inode, repl_uuid_str);
+  return 0;
+}
+EXPORT_SYMBOL(get_inode_for_pin);
+
 
 unsigned long get_clock_value (void)
 {
@@ -8232,12 +8248,19 @@ record_read (unsigned int fd, char __user * buf, size_t count)
 			}
 			// Since not all syscalls handled for cached reads, record the position
 			DPRINT ("Cached read of fd %u - record by reference\n", fd);
-			pretval = ARGSKMALLOC (sizeof(u_int) + sizeof(loff_t), GFP_KERNEL);
+//			pretval = ARGSKMALLOC (sizeof(u_int) + sizeof(loff_t), GFP_KERNEL);
+//Yang: include inode, etc in retparam
+			pretval = ARGSKMALLOC (strlen(rec_uuid_str)+1+sizeof(u_int) + sizeof(loff_t), GFP_KERNEL);
 			if (pretval == NULL) {
 				printk ("record_read: can't allocate pos buffer\n"); 
 				record_cache_file_unlock (current->record_thrd->rp_cache_files, fd);
 				return -ENOMEM;
 			}
+
+//Yang: we get the inode 
+      strcpy((char*)pretval, rec_uuid_str);
+      pretval = pretval+strlen(rec_uuid_str)+1;
+
 			*((u_int *) pretval) = 1;
 			record_cache_file_unlock (current->record_thrd->rp_cache_files, fd);
 			*((loff_t *) (pretval+sizeof(u_int))) = filp->f_pos - rc;
@@ -8494,6 +8517,11 @@ replay_read (unsigned int fd, char __user * buf, size_t count)
 
 	DPRINT ("[READ] Pid %d replays read returning %d, fd %u, clock %ld, log_clock %ld\n", current->pid,rc,fd, *(current->replay_thrd->rp_preplay_clock),current->replay_thrd->rp_expected_clock);
 	if (retparams) {
+//Yang: take out the ino, dev, etc
+    strcpy(repl_uuid_str, (char*)retparams);
+    retparams = retparams+strlen(repl_uuid_str)+1;
+
+
 		u_int is_cache_file = *((u_int *)retparams);
 		int consume_size = 0;
 
@@ -8578,6 +8606,7 @@ replay_read (unsigned int fd, char __user * buf, size_t count)
 			argsconsume (current->replay_thrd->rp_record_thread, consume_size); 
 		}
 	}
+
 
 	return rc;							
 }									
