@@ -234,6 +234,8 @@ bool theia_recording_toggle = 0;
 EXPORT_SYMBOL(theia_recording_toggle);
 char theia_linker[MAX_LOGDIR_STRLEN+1];
 EXPORT_SYMBOL(theia_linker);
+char theia_libpath[MAX_LOGDIR_STRLEN+1];
+EXPORT_SYMBOL(theia_libpath);
 
 //we use pid (and more) to identify the replay process
 
@@ -4181,12 +4183,9 @@ int fork_replay_theia (char __user* logdir, const char* filename, const char __u
 
 
 	sprintf (ckpt, "%s/ckpt", prg->rg_logdir);
-	char libpath_contents[200];
-	sprintf(libpath_contents, "LD_LIBRARY_PATH=/home/theia/theia-es/eglibc-2.15/prefix/lib:/lib/theia_libs:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/lib:/usr/lib:/lib");
-//	sprintf(libpath_contents, "LD_LIBRARY_PATH=$LD_LIBRARY_PATH");
-	char* libpath = KMALLOC (strlen(libpath_contents), GFP_KERNEL);
-	strcpy(libpath, libpath_contents);
-	argbuf = copy_args (args, env, &argbuflen, libpath_contents, strlen(libpath_contents));
+  BUG_ON(IS_ERR_OR_NULL(theia_libpath));
+  int theia_libpath_len = strnlen(theia_libpath,MAX_LOGDIR_STRLEN+1);
+	argbuf = copy_args (args, env, &argbuflen, theia_libpath, theia_libpath_len);
 
 	if (argbuf == NULL) {
 		printk ("replay_checkpoint_to_disk: copy_args failed\n");
@@ -4211,7 +4210,8 @@ int fork_replay_theia (char __user* logdir, const char* filename, const char __u
 	if (prg->rg_libpath == NULL) {
 		TPRINT("fork_replay: libpath not found\n");
 	
-		prg->rg_libpath = libpath;
+    prg->rg_libpath = KMALLOC(theia_libpath_len, GFP_KERNEL);
+    strncpy(prg->rg_libpath, theia_libpath, MAX_LOGDIR_STRLEN+1);
 		TPRINT("hardcoded libpath is (%s)", prg->rg_libpath);
 //		return -EINVAL;
 	}
@@ -4386,11 +4386,9 @@ show_kernel_stack((u_long*)cur_rsp);
 */
 
 	sprintf (ckpt, "%s/ckpt", prg->rg_logdir);
-	char libpath_contents[200];
-	sprintf(libpath_contents, "LD_LIBRARY_PATH=/home/theia/theia-es/eglibc-2.15/prefix/lib:/lib/i386-linux-gnu:/usr/lib/i386-linux-gnu:/usr/local/lib:/usr/lib:/lib");
-	char* libpath = KMALLOC (strlen(libpath_contents), GFP_KERNEL);
-	strcpy(libpath, libpath_contents);
-	argbuf = copy_args (args, env, &argbuflen, libpath_contents, strlen(libpath_contents));
+  BUG_ON(IS_ERR_OR_NULL(theia_libpath));
+  int theia_libpath_len = strnlen(theia_libpath,MAX_LOGDIR_STRLEN+1);
+	argbuf = copy_args (args, env, &argbuflen, theia_libpath, theia_libpath_len);
 
 	if (argbuf == NULL) {
 		printk ("replay_checkpoint_to_disk: copy_args failed\n");
@@ -4424,8 +4422,9 @@ show_kernel_stack((u_long*)cur_rsp);
 	if (prg->rg_libpath == NULL) {
 		printk ("fork_replay: libpath not found\n");
 	
-		prg->rg_libpath = libpath;
-		printk("hardcoded libpath is (%s)", prg->rg_libpath);
+    prg->rg_libpath = KMALLOC(theia_libpath_len, GFP_KERNEL);
+    strncpy(prg->rg_libpath, theia_libpath, MAX_LOGDIR_STRLEN+1);
+		TPRINT("hardcoded libpath is (%s)", prg->rg_libpath);
 //		return -EINVAL;
 	}
 printk("prg->rg_libpath is (%s)", prg->rg_libpath);
@@ -21225,6 +21224,10 @@ static int __init replay_init(void)
 	//const char* theia_linker_default = "/usr/local/eglibc/lib/ld-linux-x86-64.so.2";
 	const char* theia_linker_default = "/usr/local/eglibc/lib/ld-2.15.so";
 	strncpy(theia_linker, theia_linker_default, MAX_LOGDIR_STRLEN+1);
+	// setup default for theia_libpath
+	//const char* theia_libpath_default = "LD_LIBRARY_PATH=/home/theia/theia-es/eglibc-2.15/prefix/lib:/lib/theia_libs:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/lib:/usr/lib:/lib";
+	const char* theia_libpath_default = "LD_LIBRARY_PATH=/usr/local/eglibc/lib:/usr/local/lib:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu";
+	strncpy(theia_libpath, theia_libpath_default, MAX_LOGDIR_STRLEN+1);
 
 	/* Performance monitoring */
 	perftimer_init();
