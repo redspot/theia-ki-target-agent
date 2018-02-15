@@ -8259,11 +8259,14 @@ record_read (unsigned int fd, char __user * buf, size_t count)
 
 //Yang: we get the inode 
       strcpy((char*)pretval, rec_uuid_str);
+printk("rec_uuid_str is %s\n", rec_uuid_str);
+printk("copied to pretval is (%s)\n", (char*)pretval);
       pretval = pretval+strlen(rec_uuid_str)+1;
 
 			*((u_int *) pretval) = 1;
 			record_cache_file_unlock (current->record_thrd->rp_cache_files, fd);
 			*((loff_t *) (pretval+sizeof(u_int))) = filp->f_pos - rc;
+printk("loff_t is (%lu)\n", *((loff_t *) (pretval+sizeof(u_int))));
 
 			if (is_cache_file & READ_NEW_CACHE_FILE) {
 				void *tmp = ARGSKMALLOC(sizeof(orets), GFP_KERNEL);
@@ -8504,6 +8507,7 @@ record_read (unsigned int fd, char __user * buf, size_t count)
 	return rc;							
 }
 
+void print_mem(u_long addr, int length);
 static asmlinkage long 
 replay_read (unsigned int fd, char __user * buf, size_t count)
 {
@@ -8516,13 +8520,18 @@ replay_read (unsigned int fd, char __user * buf, size_t count)
 	int cache_fd;
 
 	DPRINT ("[READ] Pid %d replays read returning %d, fd %u, clock %ld, log_clock %ld\n", current->pid,rc,fd, *(current->replay_thrd->rp_preplay_clock),current->replay_thrd->rp_expected_clock);
+printk("base addr: %p\n", retparams);
+//print_mem(retparams-30, 128);
 	if (retparams) {
 //Yang: take out the ino, dev, etc
     strcpy(repl_uuid_str, (char*)retparams);
+printk("repl_uuid is %s, repl_uuid_str len is %d, retparam len is %d\n", repl_uuid_str, strlen(repl_uuid_str), strlen((char*)retparams));
+//print_mem((u_long)retparams-30, 100);
+
     retparams = retparams+strlen(repl_uuid_str)+1;
 
-
 		u_int is_cache_file = *((u_int *)retparams);
+printk("is_cache_file is %u\n", is_cache_file);
 		int consume_size = 0;
 
 		if (is_cache_file & READ_NEW_CACHE_FILE) {
@@ -8542,7 +8551,7 @@ replay_read (unsigned int fd, char __user * buf, size_t count)
 				return syscall_mismatch();
 			}
 			consume_size += sizeof(u_int) + sizeof(loff_t);
-			argsconsume (current->replay_thrd->rp_record_thread, consume_size);
+			argsconsume (current->replay_thrd->rp_record_thread, consume_size+strlen(repl_uuid_str)+1);
 
 #ifdef TRACE_READ_WRITE
 			do {
@@ -8566,13 +8575,13 @@ replay_read (unsigned int fd, char __user * buf, size_t count)
 
 			if (copy_to_user (buf, retparams+consume_size, rc)) printk ("replay_read: pid %d cannot copy to user\n", current->pid); 
 
-			argsconsume (current->replay_thrd->rp_record_thread, consume_size + rc);
+			argsconsume (current->replay_thrd->rp_record_thread, consume_size + rc+strlen(repl_uuid_str)+1);
 		} else if (is_cache_file & READ_IS_PIPE) {
 			consume_size = sizeof(u_int) + sizeof(u64) + sizeof(int);
 
 			if (copy_to_user (buf, retparams+consume_size, rc)) printk ("replay_read: pid %d cannot copy to user\n", current->pid); 
 
-			argsconsume (current->replay_thrd->rp_record_thread, consume_size + rc);
+			argsconsume (current->replay_thrd->rp_record_thread, consume_size + rc+strlen(repl_uuid_str)+1);
 #endif
 		} else {
 #ifdef X_COMPRESS
@@ -8603,7 +8612,7 @@ replay_read (unsigned int fd, char __user * buf, size_t count)
 			DPRINT ("uncached read of fd %u\n", fd);
 			if (copy_to_user (buf, retparams+sizeof(u_int), rc)) printk ("replay_read: pid %d cannot copy %ld bytes to user\n", current->pid, rc);
 			consume_size = sizeof(u_int)+rc;
-			argsconsume (current->replay_thrd->rp_record_thread, consume_size); 
+			argsconsume (current->replay_thrd->rp_record_thread, consume_size+strlen(repl_uuid_str)+1); 
 		}
 	}
 
@@ -12764,7 +12773,7 @@ long theia_sys_sendto(int fd, void __user *buff, size_t len, unsigned int flags,
 #endif
 
 	rc = sys_sendto(fd, buff, len, flags, addr, addr_len);
-printk("sendto is called!, pid %d, ret %ld\n", current->pid,rc);
+//printk("sendto is called!, pid %d, ret %ld\n", current->pid,rc);
 
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
@@ -12790,7 +12799,7 @@ long theia_sys_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags) {
 	long rc;
 	rc = sys_sendmsg(fd, msg, flags);
 
-printk("sendmsg is called!, pid %d, ret %ld\n", current->pid,rc);
+//printk("sendmsg is called!, pid %d, ret %ld\n", current->pid,rc);
 // Yang: regardless of the return value, passes the failed syscall also
 //	if (rc >= 0) 
 	if (rc != -EAGAIN) { 
@@ -16414,7 +16423,7 @@ theia_sys_writev (unsigned long fd, const struct iovec __user *vec, unsigned lon
 {
 	long rc;
 	rc = sys_writev(fd, vec, vlen);
-printk("theia_sys_writev: pid %d, fd %lu, rc %ld\n", current->pid, fd, rc);
+//printk("theia_sys_writev: pid %d, fd %lu, rc %ld\n", current->pid, fd, rc);
 	if (theia_logging_toggle)
 		theia_writev_ahgx(fd, vec, vlen, rc, SYS_WRITEV);
 	return rc;
@@ -18095,6 +18104,10 @@ printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__,__LINE_
 	}
 
 	retval = sys_mmap_pgoff (rc, len, prot, (flags | MAP_FIXED), given_fd, pgoff);
+ struct argsalloc_node* node;
+ node = list_first_entry(&(current->replay_thrd->rp_record_thread)->rp_argsalloc_list, struct argsalloc_node, list);
+printk("base addr: %p\n", node->pos);
+//print_mem(node->pos, 1024);
 	DPRINT ("Pid %d replays mmap_pgoff with address %lx len %lx input address %lx fd %d flags %lx prot %lx pgoff %lx returning %lx, flags & MAP_FIXED %lu\n", current->pid, addr, len, rc, given_fd, flags, prot, pgoff, retval, flags & MAP_FIXED);
 	
 	if (rc != retval) {
@@ -18129,6 +18142,8 @@ printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__,__LINE_
 			printk("vma is %p\n",vma);
 	up_read(&mm->mmap_sem);
 
+printk("base addr1: %p\n", node->pos);
+//print_mem(node->pos, 1024);
 /*
 	if(given_fd == 5) { // only for this test
 		printk("replay: protection about myregion1 will be changed\n");
@@ -18143,6 +18158,8 @@ printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__,__LINE_
 			reserve_memory(rc, len);
 		}
 	}
+printk("base addr2: %p\n", node->pos);
+//print_mem(node->pos, 1024);
 
 	return rc;
 }
@@ -20593,7 +20610,7 @@ int read_log_data (struct record_thread* prect)
  	int rc;
  	int count = 0; // num syscalls returned by read
  	rc = read_log_data_internal (prect, prect->rp_log, prect->rp_record_pid, &count, &prect->rp_read_log_pos);
-	MPRINT("Pid %d read_log_data_internal returned %d syscalls\n", current->pid, count);
+	MPRINT("Pid %d read_log_data_internal returned %d syscalls, rc %d\n", current->pid, count);
 	prect->rp_in_ptr = count;
  	return rc;
 }
@@ -20683,6 +20700,8 @@ int read_log_data_internal (struct record_thread* prect, struct syscall_result* 
 			*syscall_count = 0;
 			goto error;
 		}
+printk("read in klog: len %lu\n", data_len);
+print_mem(node->pos,data_len);
 	}
 
 	*syscall_count = count;  
