@@ -27,6 +27,7 @@ extern bool theia_recording_toggle;
 extern bool theia_cross_toggle;
 extern struct theia_replay_register_data_type theia_replay_register_data;
 extern char theia_linker[];
+extern char theia_libpath[];
 
 static int majorNumber;
 static struct class*  charClass  = NULL;
@@ -36,12 +37,20 @@ static struct device* charDevice = NULL;
 //#define DPRINT printk
 #define DPRINT(x,...)
 
-static ssize_t linker_show(struct kobject *kobj,
+static ssize_t str_show(struct kobject *kobj,
     struct kobj_attribute *attr, char *buf)
 {
-  return sprintf(buf, "%s\n", theia_linker);
+  char* str_attr;
+
+  if (strcmp(attr->attr.name, "theia_linker") == 0)
+    str_attr = theia_linker;
+  else if (strcmp(attr->attr.name, "theia_libpath") == 0)
+    str_attr = theia_libpath;
+  else
+    return -EINVAL;
+  return sprintf(buf, "%s\n", str_attr);
 }
-static ssize_t linker_store(struct kobject *kobj,
+static ssize_t str_store(struct kobject *kobj,
     struct kobj_attribute *attr, const char *buf, size_t count)
 {
   /* MAX_LOGDIR_STRLEN is in include/linux/replay.h
@@ -49,14 +58,26 @@ static ssize_t linker_store(struct kobject *kobj,
    */
   if (count > MAX_LOGDIR_STRLEN)
     return -ENOENT;
-  memcpy(theia_linker, buf, count);
-  theia_linker[count] = '\0';
-  if (count && theia_linker[count-1] == '\n')
-    theia_linker[count-1] = '\0';
+  char* str_attr;
+
+  if (strcmp(attr->attr.name, "theia_linker") == 0)
+    str_attr = theia_linker;
+  else if (strcmp(attr->attr.name, "theia_libpath") == 0)
+    str_attr = theia_libpath;
+  else
+    return -EINVAL;
+
+  memcpy(str_attr, buf, count);
+  str_attr[count] = '\0';
+  if (count && str_attr[count-1] == '\n')
+    str_attr[count-1] = '\0';
+  pr_info("%s set to %s\n", attr->attr.name, str_attr);
   return count;
 }
 static struct kobj_attribute linker_attribute =
-__ATTR(theia_linker, 0600, linker_show, linker_store);
+__ATTR(theia_linker, 0600, str_show, str_store);
+static struct kobj_attribute libpath_attribute =
+__ATTR(theia_libpath, 0600, str_show, str_store);
 
 static ssize_t flag_show(struct kobject *kobj, struct kobj_attribute *attr,
     char *buf)
@@ -81,14 +102,12 @@ static ssize_t flag_store(struct kobject *kobj, struct kobj_attribute *attr,
   if (error || flag > 1) return -EINVAL;
 
   if (strcmp(attr->attr.name, "theia_logging_toggle") == 0) {
-    pr_info("theia logging set to %d\n", flag);
     theia_logging_toggle = flag;
   } else if (strcmp(attr->attr.name, "theia_recording_toggle") == 0) {
-    pr_info("theia recording set to %d\n", flag);
     theia_recording_toggle = flag;
-  }
-  else
+  } else
     return -EINVAL;
+  pr_info("%s set to %d\n", attr->attr.name, flag);
   return count;
 }
 
@@ -99,6 +118,7 @@ __ATTR(theia_recording_toggle, 0600, flag_show, flag_store);
 
 static struct attribute *theia_attrs[] = {
   &linker_attribute.attr,
+  &libpath_attribute.attr,
   &logging_toggle_attribute.attr,
   &recording_toggle_attribute.attr,
   NULL,	/* need to NULL terminate the list of attributes */
