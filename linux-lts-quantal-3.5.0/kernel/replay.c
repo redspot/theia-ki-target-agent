@@ -363,6 +363,10 @@ bool theia_check_channel(void) {
 		return true;
 	}
 #else
+	if(theia_logging_toggle == 0) {
+		return false;
+	} 
+
 	mm_segment_t old_fs = get_fs();                                                
 	set_fs(KERNEL_DS);
 
@@ -385,10 +389,6 @@ bool theia_check_channel(void) {
 		set_fs(old_fs);                                                              
 		return false;
 	}
-	if(theia_logging_toggle == 0) {
-		set_fs(old_fs);                                                              
-		return false;
-	} 
 
 	set_fs(old_fs);                                                              
 
