@@ -1,3 +1,4 @@
+/* vim: set expandtab tabstop=2 shiftwidth=2 softtabstop=2 : */
 /* Kernel sport's for multithreaded replay
    
    Jason Flinn 
@@ -21631,14 +21632,15 @@ static int __init replay_init(void)
   //theia_replay_register init
   theia_replay_register_data.pid = 0;
   
-	mm_segment_t old_fs = get_fs();                                                
-	set_fs(KERNEL_DS);
+  //theia create relay cpu
+  mm_segment_t old_fs = get_fs();                                                
+  set_fs(KERNEL_DS);
 
-	if(theia_dir == NULL) {
-		theia_dir = debugfs_create_dir(APP_DIR, NULL);
-		if (!theia_dir) {
-			printk("Couldn't create relay app directory.\n");
-		}
+  if(theia_dir == NULL) {
+    theia_dir = debugfs_create_dir(APP_DIR, NULL);
+    if (!theia_dir) {
+      printk("Couldn't create relay app directory.\n");
+    }
     else {
       if(theia_chan == NULL) {
         theia_chan = create_channel(subbuf_size, n_subbufs);
@@ -21648,7 +21650,7 @@ static int __init replay_init(void)
       }
     }
   }
-	set_fs(old_fs);                                                              
+  set_fs(old_fs);
 
 	/* Read monitors */
 	//read_btwn_timer = perftimer_create("Between Reads", "Read");
