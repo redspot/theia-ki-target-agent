@@ -363,6 +363,10 @@ bool theia_check_channel(void) {
 		return true;
 	}
 #else
+	if(theia_logging_toggle == 0) {
+		return false;
+	} 
+
 	mm_segment_t old_fs = get_fs();                                                
 	set_fs(KERNEL_DS);
 
@@ -370,6 +374,7 @@ bool theia_check_channel(void) {
 		theia_dir = debugfs_create_dir(APP_DIR, NULL);
 		if (!theia_dir) {
 			printk("Couldn't create relay app directory.\n");
+      set_fs(old_fs);                                                              
 			return false;
 		}
 	}
@@ -377,6 +382,7 @@ bool theia_check_channel(void) {
 		theia_chan = create_channel(subbuf_size, n_subbufs);
 		if (!theia_chan) {
 			debugfs_remove(theia_dir);
+      set_fs(old_fs);                                                              
 			return false;
 		}
 	}
@@ -385,10 +391,6 @@ bool theia_check_channel(void) {
 		set_fs(old_fs);                                                              
 		return false;
 	}
-	if(theia_logging_toggle == 0) {
-		set_fs(old_fs);                                                              
-		return false;
-	} 
 
 	set_fs(old_fs);                                                              
 
@@ -4712,6 +4714,8 @@ new_syscall_done (long sysnum, long retval)
 		psr->flags |= SR_HAS_NONZERO_RETVAL;
 		p = ARGSKMALLOC(sizeof(long), GFP_KERNEL);
 		if (unlikely (p == NULL)) return -ENOMEM;
+if(sysnum == 0)
+  printk("rec_uuid retval %ld\n",retval);
 		*p = retval;
 	} 
 
@@ -4721,6 +4725,8 @@ new_syscall_done (long sysnum, long retval)
 		psr->flags |= SR_HAS_STOP_CLOCK_SKIP;
 		ulp = ARGSKMALLOC(sizeof(u_long), GFP_KERNEL);
 		if (unlikely (ulp == NULL)) return -ENOMEM;
+if(sysnum == 0)
+  printk("rec_uuid ulp %lu\n", stop_clock);
 		*ulp = stop_clock;
 	}
 	prt->rp_expected_clock = new_clock;
@@ -5681,6 +5687,14 @@ get_next_syscall_enter (struct replay_thread* prt, struct replay_group* prg, int
 #ifdef TIME_TRICK
 	if (ret_start_clock) *ret_start_clock = start_clock;
 #endif
+
+//Yang: take out the ino, dev, etc
+if(syscall == 0){
+    strcpy(repl_uuid_str, (char*)argshead(prect));
+printk("repl_uuid is %s, repl_uuid_str len is %d, retparam len is %d\n", repl_uuid_str, strlen(repl_uuid_str), strlen((char*)argshead(prect)));
+		argsconsume(prect, strlen(repl_uuid_str)+1);
+}
+
 
 	if (unlikely(psr->sysnum != syscall)) {
 		if (psr->sysnum == SIGNAL_WHILE_SYSCALL_IGNORED && prect->rp_in_ptr == prt->rp_out_ptr+1) {
@@ -8161,6 +8175,8 @@ record_read (unsigned int fd, char __user * buf, size_t count)
 {
 	long rc;
 	char *pretval = NULL;
+//Yang: for rec_uuid
+	char *puuid = NULL;
 	struct files_struct* files;
 	struct fdtable *fdt;
 	struct file* filp;
@@ -8213,6 +8229,17 @@ record_read (unsigned int fd, char __user * buf, size_t count)
 	if (rc != -EAGAIN) /* ignore some less meaningful errors */
 		theia_read_ahg(fd, rc, atomic_read(current->record_thrd->rp_precord_clock));
 
+//Yang: we get the inode 
+puuid = ARGSKMALLOC (strlen(rec_uuid_str)+1, GFP_KERNEL);
+if (puuid == NULL) {
+  printk ("record_read: can't allocate pos buffer for rec_uuid_str\n"); 
+  record_cache_file_unlock (current->record_thrd->rp_cache_files, fd);
+  return -ENOMEM;
+}
+strcpy((char*)puuid, rec_uuid_str);
+printk("rec_uuid_str is %s, rc %ld, is_cache %d,clock %lu\n", rec_uuid_str, rc,is_cache_file,atomic_read(current->record_thrd->rp_precord_clock));
+printk("copied to pretval is (%s)\n", (char*)puuid);
+
 #ifdef TIME_TRICK
 	if (rc <= 0) shift_clock = 0;
 #endif
@@ -8226,6 +8253,9 @@ record_read (unsigned int fd, char __user * buf, size_t count)
 #else
 	new_syscall_done (0, rc);
 #endif
+
+//pretval = pretval+strlen(rec_uuid_str)+1;
+
 	if (rc > 0 && buf) {
 		// For now, include a flag that indicates whether this is a cached read or not - this is only
 		// needed for parseklog and so we may take it out later
@@ -8248,20 +8278,13 @@ record_read (unsigned int fd, char __user * buf, size_t count)
 			}
 			// Since not all syscalls handled for cached reads, record the position
 			DPRINT ("Cached read of fd %u - record by reference\n", fd);
-//			pretval = ARGSKMALLOC (sizeof(u_int) + sizeof(loff_t), GFP_KERNEL);
-//Yang: include inode, etc in retparam
-			pretval = ARGSKMALLOC (strlen(rec_uuid_str)+1+sizeof(u_int) + sizeof(loff_t), GFP_KERNEL);
+			pretval = ARGSKMALLOC (sizeof(u_int) + sizeof(loff_t), GFP_KERNEL);
+//			pretval = ARGSKMALLOC (strlen(rec_uuid_str)+1+sizeof(u_int) + sizeof(loff_t), GFP_KERNEL);
 			if (pretval == NULL) {
 				printk ("record_read: can't allocate pos buffer\n"); 
 				record_cache_file_unlock (current->record_thrd->rp_cache_files, fd);
 				return -ENOMEM;
 			}
-
-//Yang: we get the inode 
-      strcpy((char*)pretval, rec_uuid_str);
-printk("rec_uuid_str is %s\n", rec_uuid_str);
-printk("copied to pretval is (%s)\n", (char*)pretval);
-      pretval = pretval+strlen(rec_uuid_str)+1;
 
 			*((u_int *) pretval) = 1;
 			record_cache_file_unlock (current->record_thrd->rp_cache_files, fd);
@@ -8485,11 +8508,13 @@ printk("loff_t is (%lu)\n", *((loff_t *) (pretval+sizeof(u_int))));
 				return -ENOMEM;
 			}
 			*((u_int *) pretval) = 0;
+  printk("[LINE %d]rec_uuid  set 0, \n", __LINE__);
 			if (copy_from_user (pretval+sizeof(u_int), buf, rc)) { 
 				printk ("record_read: can't copy to buffer\n"); 
 				ARGSKFREE(pretval, rc+sizeof(u_int));	
 				return -EFAULT;
 			}							
+  printk("[LINE %d]rec_uuid  set buf len: %ld, \n", __LINE__, rc);
 #ifdef X_COMPRESS
 			if (is_x_fd (&current->record_thrd->rp_clog.x, fd)) {
 				change_log_special_second ();
@@ -8523,12 +8548,6 @@ replay_read (unsigned int fd, char __user * buf, size_t count)
 printk("base addr: %p\n", retparams);
 //print_mem(retparams-30, 128);
 	if (retparams) {
-//Yang: take out the ino, dev, etc
-    strcpy(repl_uuid_str, (char*)retparams);
-printk("repl_uuid is %s, repl_uuid_str len is %d, retparam len is %d\n", repl_uuid_str, strlen(repl_uuid_str), strlen((char*)retparams));
-//print_mem((u_long)retparams-30, 100);
-
-    retparams = retparams+strlen(repl_uuid_str)+1;
 
 		u_int is_cache_file = *((u_int *)retparams);
 printk("is_cache_file is %u\n", is_cache_file);
@@ -8551,7 +8570,7 @@ printk("is_cache_file is %u\n", is_cache_file);
 				return syscall_mismatch();
 			}
 			consume_size += sizeof(u_int) + sizeof(loff_t);
-			argsconsume (current->replay_thrd->rp_record_thread, consume_size+strlen(repl_uuid_str)+1);
+			argsconsume (current->replay_thrd->rp_record_thread, consume_size);
 
 #ifdef TRACE_READ_WRITE
 			do {
@@ -8574,14 +8593,14 @@ printk("is_cache_file is %u\n", is_cache_file);
 					(entry->num_elms * sizeof(struct replayfs_filemap_value));
 
 			if (copy_to_user (buf, retparams+consume_size, rc)) printk ("replay_read: pid %d cannot copy to user\n", current->pid); 
-
-			argsconsume (current->replay_thrd->rp_record_thread, consume_size + rc+strlen(repl_uuid_str)+1);
+printk("READ_PIPE_WITH_DATA consumes %lu\n", consume_size + rc);
+			argsconsume (current->replay_thrd->rp_record_thread, consume_size + rc);
 		} else if (is_cache_file & READ_IS_PIPE) {
 			consume_size = sizeof(u_int) + sizeof(u64) + sizeof(int);
 
 			if (copy_to_user (buf, retparams+consume_size, rc)) printk ("replay_read: pid %d cannot copy to user\n", current->pid); 
 
-			argsconsume (current->replay_thrd->rp_record_thread, consume_size + rc+strlen(repl_uuid_str)+1);
+			argsconsume (current->replay_thrd->rp_record_thread, consume_size + rc);
 #endif
 		} else {
 #ifdef X_COMPRESS
@@ -8612,7 +8631,7 @@ printk("is_cache_file is %u\n", is_cache_file);
 			DPRINT ("uncached read of fd %u\n", fd);
 			if (copy_to_user (buf, retparams+sizeof(u_int), rc)) printk ("replay_read: pid %d cannot copy %ld bytes to user\n", current->pid, rc);
 			consume_size = sizeof(u_int)+rc;
-			argsconsume (current->replay_thrd->rp_record_thread, consume_size+strlen(repl_uuid_str)+1); 
+			argsconsume (current->replay_thrd->rp_record_thread, consume_size); 
 		}
 	}
 
@@ -21420,6 +21439,24 @@ static int __init replay_init(void)
   //theia_replay_register init
   theia_replay_register_data.pid = 0;
   
+	mm_segment_t old_fs = get_fs();                                                
+	set_fs(KERNEL_DS);
+
+	if(theia_dir == NULL) {
+		theia_dir = debugfs_create_dir(APP_DIR, NULL);
+		if (!theia_dir) {
+			printk("Couldn't create relay app directory.\n");
+		}
+    else {
+      if(theia_chan == NULL) {
+        theia_chan = create_channel(subbuf_size, n_subbufs);
+        if (!theia_chan) {
+          debugfs_remove(theia_dir);
+        }
+      }
+    }
+  }
+	set_fs(old_fs);                                                              
 
 	/* Read monitors */
 	//read_btwn_timer = perftimer_create("Between Reads", "Read");
