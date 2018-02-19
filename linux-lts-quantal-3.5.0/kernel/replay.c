@@ -347,7 +347,7 @@ char *theia_retbuf = NULL;
 
 //Yang: inode etc for replay and pin
 char rec_uuid_str[THEIA_UUID_LEN+1];
-char repl_uuid_str[THEIA_UUID_LEN+1];
+char repl_uuid_str[THEIA_UUID_LEN+1] = "initial";
 
 bool theia_check_channel(void) {
 
@@ -3772,10 +3772,11 @@ EXPORT_SYMBOL(get_log_id);
 
 
 //Yang: get inode,dev,crtime for taint
-int get_inode_for_pin (void *inode)
+int get_inode_for_pin (u_long inode)
 {
-  printk("received get_inode_for_pin request!!!!, repl_uuid_str is %s\n", repl_uuid_str);
-  strcpy((char*)inode, repl_uuid_str);
+  printk("received get_inode_for_pin request!!!!, inode %lx, repl_uuid_str is %s\n", inode, repl_uuid_str);
+  copy_to_user((char*)inode, repl_uuid_str, strlen(repl_uuid_str));
+  ((char*)inode)[strlen(repl_uuid_str)] = '\0';
   return 0;
 }
 EXPORT_SYMBOL(get_inode_for_pin);

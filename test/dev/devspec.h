@@ -95,6 +95,6 @@ struct filemap_entry_data {
 #define THEIA_CROSS_ON _IO('u', 19)
 #define THEIA_CROSS_OFF _IO('u', 20)
 #define THEIA_REPLAY_REGISTER _IOR('u', 21, struct replay_register_user_data)
-#define THEIA_GET_INODE_FORPIN _IOR('u',22, void*)
+#define THEIA_GET_INODE_FORPIN _IOR('u',22, u_long)
 
 #endif

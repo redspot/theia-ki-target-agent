@@ -59,7 +59,7 @@ spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
 	char logdir[MAX_LOGDIR_STRLEN+1];
 	char* tmp = NULL;
 	long rc;
-  void *inode;
+  u_long inode;
 
 	pckpt_proc = new_ckpt_proc = NULL;
 	DPRINT ("pid %d cmd number 0x%08x\n", current->pid, cmd);
@@ -196,12 +196,13 @@ spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
 		return get_log_id ();
 //Yang: get inode for pin
 	case THEIA_GET_INODE_FORPIN:
-		if (len != sizeof(void*)) {
+		if (len != sizeof(u_long)) {
 			printk ("ioctl SPECI_GET_INODE_FORPIN fails, len %d\n", len);
 			return -EINVAL;
 		}
-		if (copy_from_user (&inode, (void *) data, sizeof(void*)))
+		if (copy_from_user (&inode, (void *) data, sizeof(u_long)))
 			return -EFAULT;
+    printk("inode received: %lx\n",inode);
 		return get_inode_for_pin(inode);
 
 	case SPECI_GET_CLOCK_VALUE:

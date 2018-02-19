@@ -32,7 +32,7 @@ struct used_address {
 int set_pin_address (u_long pin_address);
 long get_log_id (void);
 //Yang: for getting inode for pin
-int get_inode_for_pin(void *inode);
+int get_inode_for_pin(u_long inode);
 unsigned long get_clock_value (void);
 long check_clock_before_syscall (int syscall);
 long check_clock_after_syscall (int syscall);
