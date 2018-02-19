@@ -9826,7 +9826,7 @@ show_kernel_stack((u_long*)cur_rsp);
 
 	// Hack to support multiple glibcs - make sure that LD_LIBRARY_PATH is in there
 	present = is_libpath_present (current->record_thrd->rp_group, argbuf);
-	if (present>0) {
+	if (present) {
 		// Need to copy environments to kernel and modify
 		env = patch_for_libpath (current->record_thrd->rp_group, argbuf, present);
 		newbuf = patch_buf_for_libpath (current->record_thrd->rp_group, argbuf, &argbuflen, present);
