@@ -3774,6 +3774,7 @@ EXPORT_SYMBOL(get_log_id);
 //Yang: get inode,dev,crtime for taint
 int get_inode_for_pin (void *inode)
 {
+  printk("received get_inode_for_pin request!!!!, repl_uuid_str is %s\n", repl_uuid_str);
   strcpy((char*)inode, repl_uuid_str);
   return 0;
 }
@@ -12186,11 +12187,12 @@ void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_f
 		sockfd_put(sock);
 	}
 
+  *port = THEIA_INVALID_PORT;
+  strcpy(ip, "NA");
+  strcpy(sun_path, "NA");
+
 	if (err) {
 printk("getname error: err %d, sock is null? %d\n",err, sock==NULL?1:0);
-		*port = THEIA_INVALID_PORT;
-		strcpy(ip, "NA");
-		strcpy(sun_path, "NA");
 		return;
 	}
 
