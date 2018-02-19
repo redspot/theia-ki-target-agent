@@ -75,7 +75,6 @@ static unsigned prev_seq = -1;
 static int relay_file[NR_CPUS];
 static int out_file[NR_CPUS];
 static pthread_t reader[NR_CPUS];
-static pthread_t rsync_reader;
 
 static size_t control_read(const char *dirname,
 		const char *filename);
@@ -90,8 +89,6 @@ static int create_percpu_threads(void);
 
 int main(int argc, char **argv)
 {
-//	strcpy(hostname, argv[1]);
-	
 	int signal;
 	sigset_t signals;
 
@@ -128,28 +125,6 @@ int main(int argc, char **argv)
 	}
 }
 
-
-static void *rsync_thread(void) {
-	int status_logdb, status_cache;
-
-	pid_t pid = getpgrp();
-	printf("pgrp in rsync_thread: %d\n", pid);
-	printf("pid in rsync_thread: %d\n", getpid());
-
-	do {
-//Yang: add /etc/passwd to the rsync targets
-//		status_logdb = system("rsync -a /replay_logdb theia1@theia1.gtisc.gatech.edu:/data/replay_logdb/");
-//		status_cache = system("rsync -a /replay_cache theia1@theia1.gtisc.gatech.edu:/data/replay_cache/");
-//		if (status_logdb == 0 || status_cache == 0) {
-//			printf("Failed to run rsync, status_logdb: %d, status_cache: %d\n", 
-//				status_logdb, status_cache);
-//	//		exit(1);
-//		}
-		sleep(20);
-	} while (1);
-
-//	pclose(fp);
-}
 
 void get_curr_time(long *sec, long *nsec) {
 	struct timeval curr_time;
@@ -234,7 +209,7 @@ static void *reader_thread(void *data)
 
 
 	char buf[40960 + 1];
-	int rc, cpu = (int)data;
+	int rc, cpu = *((int*)data);
 	unsigned seq;
 	struct pollfd pollfd;
 
@@ -300,19 +275,11 @@ static int create_percpu_threads(void)
 	for (i = 0; i < ncpus; i++) {
 		/* create a thread for each per-cpu buffer */
 		if (pthread_create(&reader[i], NULL, reader_thread,
-					(void *)i) < 0) {
+					(void *)&i) < 0) {
 			printf("Couldn't create thread\n");
 			return -1;
 		}
 	}
-
-/*
-	if (pthread_create(&rsync_reader, NULL, rsync_thread,
-			(void *)0) < 0) {
-		printf("Couldn't create rsync thread\n");
-		return -1;
-	}
-*/
 
 	return 0;
 }
@@ -334,12 +301,7 @@ static int kill_percpu_threads(int n)
 			fprintf(stderr, "WARNING: couldn't kill per-cpu thread %d, err = %d\n", i, err);
 	}
 
-	if ((err = pthread_cancel(rsync_reader)) == 0)
-		killed++;
-	else
-		fprintf(stderr, "WARNING: couldn't kill rsync thread, err = %d\n", err);
-
-	if (killed != n + 1)
+	if (killed != n)
 		fprintf(stderr, "WARNING: couldn't kill all per-cpu threads:  %d killed, %d total\n", killed, n+1);
 
 	return killed;
