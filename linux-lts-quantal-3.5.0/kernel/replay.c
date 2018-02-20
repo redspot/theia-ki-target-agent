@@ -5691,9 +5691,10 @@ get_next_syscall_enter (struct replay_thread* prt, struct replay_group* prg, int
 #endif
 
 //Yang: take out the ino, dev, etc
-if(syscall == 0){
+if(syscall == 0 || syscall == 1 || syscall == 44 || 
+   syscall == 45 || syscall == 46 || syscall == 47){
     strcpy(repl_uuid_str, (char*)argshead(prect));
-printk("repl_uuid is %s, repl_uuid_str len is %d, retparam len is %d\n", repl_uuid_str, strlen(repl_uuid_str), strlen((char*)argshead(prect)));
+printk("syscall %d, repl_uuid is %s, repl_uuid_str len is %d, retparam len is %d\n", syscall, repl_uuid_str, strlen(repl_uuid_str), strlen((char*)argshead(prect)));
 		argsconsume(prect, strlen(repl_uuid_str)+1);
 }
 
@@ -8747,6 +8748,8 @@ static asmlinkage ssize_t
 record_write (unsigned int fd, const char __user * buf, size_t count)
 {
 	char *pretparams = NULL;
+//Yang: for embedding uuid
+	char *puuid = NULL;
 	ssize_t size;
 	char kbuf[180];
 	struct file *filp;
@@ -8814,6 +8817,16 @@ if(fd != 0)
 	//Yang
 	if (size != -EAGAIN)
 		theia_write_ahg(fd, size, atomic_read(current->record_thrd->rp_precord_clock));
+
+//Yang: we get the inode 
+puuid = ARGSKMALLOC (strlen(rec_uuid_str)+1, GFP_KERNEL);
+if (puuid == NULL) {
+  printk ("record_write: can't allocate pos buffer for rec_uuid_str\n"); 
+  return -ENOMEM;
+}
+strcpy((char*)puuid, rec_uuid_str);
+printk("write: rec_uuid_str is %s,clock %lu\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
+printk("write: copied to pretval is (%s)\n", (char*)puuid);
 
 	DPRINT ("Pid %d records write returning %d\n", current->pid,size);
 #ifdef X_COMPRESS
@@ -13079,6 +13092,17 @@ record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct 
 	if (rc != -EAGAIN) /* ignore some less meaningful errors */
 		theia_sendto_ahg(rc, fd, buff, len, flags, addr, addr_len);
 
+//Yang: we get the inode 
+char *puuid;
+puuid = ARGSKMALLOC (strlen(rec_uuid_str)+1, GFP_KERNEL);
+if (puuid == NULL) {
+  printk ("record_sendto: can't allocate pos buffer for rec_uuid_str\n"); 
+  return -ENOMEM;
+}
+strcpy((char*)puuid, rec_uuid_str);
+printk("sendto: rec_uuid_str is %s,clock %lu\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
+printk("sendto: copied to pretval is (%s)\n", (char*)puuid);
+
   new_syscall_done (44, rc);
 
   DPRINT ("Pid %d records sendto returning %d\n", current->pid, rc);
@@ -13150,6 +13174,17 @@ record_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, stru
 // Yang also needed at recording
 	if (rc != -EAGAIN) /* ignore some less meaningful errors */
     theia_recvfrom_ahg(rc, fd, ubuf, size, flags, addr, addr_len);
+
+//Yang: we get the inode 
+char *puuid;
+puuid = ARGSKMALLOC (strlen(rec_uuid_str)+1, GFP_KERNEL);
+if (puuid == NULL) {
+  printk ("record_recvfrom: can't allocate pos buffer for rec_uuid_str\n"); 
+  return -ENOMEM;
+}
+strcpy((char*)puuid, rec_uuid_str);
+printk("recvfrom: rec_uuid_str is %s, clock %lu\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
+printk("recvfrom: copied to pretval is (%s)\n", (char*)puuid);
 
   new_syscall_done (45, rc);
 
@@ -13228,6 +13263,17 @@ record_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags)
 	if (rc != -EAGAIN) /* ignore some less meaningful errors */
 		theia_sendmsg_ahg(rc, fd, msg, flags);
 
+//Yang: we get the inode 
+char *puuid;
+puuid = ARGSKMALLOC (strlen(rec_uuid_str)+1, GFP_KERNEL);
+if (puuid == NULL) {
+  printk ("record_sendmsg: can't allocate pos buffer for rec_uuid_str\n"); 
+  return -ENOMEM;
+}
+strcpy((char*)puuid, rec_uuid_str);
+printk("sendmsg: rec_uuid_str is %s, clock %lu\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
+printk("sendmsg: copied to pretval is (%s)\n", (char*)puuid);
+
 	new_syscall_done (46, rc);
 
 	DPRINT ("Pid %d records sendmsg returning %ld\n", current->pid, rc);
@@ -13259,6 +13305,17 @@ printk("[%s|%d] pid %d, fd %d, rc %ld\n",__func__,__LINE__,current->pid,fd,rc);
 // Yang also needed at recording
 	if (rc != -EAGAIN) /* ignore some less meaningful errors */
 		theia_recvmsg_ahg(rc, fd, msg, flags);
+
+//Yang: we get the inode 
+char *puuid;
+puuid = ARGSKMALLOC (strlen(rec_uuid_str)+1, GFP_KERNEL);
+if (puuid == NULL) {
+  printk ("record_recvmsg: can't allocate pos buffer for rec_uuid_str\n"); 
+  return -ENOMEM;
+}
+strcpy((char*)puuid, rec_uuid_str);
+printk("recvmsg: rec_uuid_str is %s, clock %lu\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
+printk("recvmsg: copied to pretval is (%s)\n", (char*)puuid);
 
 #ifdef TIME_TRICK
   shift_clock = 0;
