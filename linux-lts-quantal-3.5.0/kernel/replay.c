@@ -148,6 +148,13 @@ void get_ids(char *ids);
 /* inode:[dev:ino], ip:[ip/path:port], pipe:[xxxx], anon_inode:[xxxx] */
 bool fd2uuid(int fd, char *uuid_str);
 
+bool startsWith(const char *pre, const char *str)
+{
+    size_t lenpre = strlen(pre),
+           lenstr = strlen(str);
+    return lenstr < lenpre ? false : strncmp(pre, str, lenpre) == 0;
+}
+
 #define THEIA_DIRECT_FILE_WRITE 1
 #undef THEIA_DIRECT_FILE_WRITE
 
@@ -218,6 +225,8 @@ void theia_file_write(char *buf, size_t size) {
 		theia_prevbuf_size = 0;
 	}
 #else
+if(size <= 0)
+  printk("strange relay_write size %d\n", size);
 	relay_write(theia_chan, buf, size);
 #endif
 }
@@ -516,6 +525,8 @@ void theia_dump_auxdata() {
 		int size;
 
 		size = sprintf(theia_buf2, "startahg|700|%d|%s|%s|endahg\n", current->pid, theia_retbuf, ids);
+if(theia_buf2[0] != 's' || theia_buf2[1] != 't')
+  printk("strange auxdata \n");
 		theia_file_write(theia_buf2, size);
 	}
 }
@@ -7995,7 +8006,6 @@ bool is_opened_inode(struct inode *inode) {
 void packahgv_process(struct task_struct *tsk) {
 	if(theia_logging_toggle) {
 		long sec, nsec;
-		char *buf = theia_buf2;
 		char ids[50];
 		get_ids(ids);
 		get_curr_time(&sec, &nsec);
@@ -8012,20 +8022,30 @@ void packahgv_process(struct task_struct *tsk) {
 			fpath = tsk->comm;
 		}
 
+		char *fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+		if (!fpath_b64) fpath_b64 = "";
+
+    uint32_t buf_size = strlen(fpath_b64)+256;
+    char *buf = vmalloc(buf_size);
+
 		if(ptsk) {
 			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%d|%d|%ld|%ld|endahg\n", 
 				399/*used for new process*/, tsk->pid, tsk->start_time.tv_sec, 
 				ids, tsk->real_parent->pid, 
-				ptsk->start_time.tv_sec, fpath, is_user_remote, tsk->tgid, sec, nsec);
+				ptsk->start_time.tv_sec, fpath_b64, is_user_remote, tsk->tgid, sec, nsec);
 		}
 		else {
 			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%d|%d|%ld|%ld|endahg\n", 
 					399/*used for new process*/, tsk->pid, tsk->start_time.tv_sec, 
 					ids, tsk->real_parent->pid, 
-				  -1, fpath, is_user_remote, tsk->tgid, sec, nsec);
+				  -1, fpath_b64, is_user_remote, tsk->tgid, sec, nsec);
 		}
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
 		theia_file_write(buf, size);
 		vfree(fpathbuf);
+    vfree(fpath_b64);
+    vfree(buf);
 	}
 }
 
@@ -8140,6 +8160,10 @@ if(strcmp(current->comm, "pthread-lock") == 0) {
 				0, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, 
 				sec, nsec);
 #endif
+if(buf[0] != 's' || buf[1] != 't')
+  printk("strange read \n");
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
 		theia_file_write(buf, size);
 	}
 }
@@ -8715,6 +8739,10 @@ if(strcmp(current->comm, "pthread-lock") == 0) {
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
 				1, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, sec, nsec);
 #endif
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
+if(buf[0] != 's' || buf[1] != 't')
+  printk("strange write \n");
 		theia_file_write(buf, size);
 	}
 }
@@ -9107,6 +9135,7 @@ void packahgv_open (struct open_ahgv *sys_args) {
 
 	if(theia_logging_toggle) {
 		char *pcwd = NULL;
+    char *buf;
 		struct path path;
 		long sec, nsec;
 		int size;
@@ -9118,12 +9147,24 @@ void packahgv_open (struct open_ahgv *sys_args) {
 		if (fd2uuid(sys_args->fd, uuid_str) == false)
 			return;
 
-		size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%s|%s|%d|%d|%d|%d|%ld|%ld|%u|endahg\n", 
-				2, sys_args->pid, current->start_time.tv_sec, uuid_str, sys_args->filename, sys_args->flags, sys_args->mode, 
+		char *filename_b64 = base64_encode(sys_args->filename, strlen(sys_args->filename), NULL);
+		if (!filename_b64) filename_b64 = "";
+
+    uint32_t buf_size = strlen(filename_b64)+256;
+    buf = vmalloc(buf_size);
+
+
+		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%s|%d|%d|%d|%d|%ld|%ld|%u|endahg\n", 
+				2, sys_args->pid, current->start_time.tv_sec, uuid_str, filename_b64, sys_args->flags, sys_args->mode, 
 				sys_args->is_new, current->tgid, sec, nsec, current->no_syscalls++);
+
+		theia_file_write(buf, size);
+    vfree(filename_b64);
+    vfree(buf);
 #else
+    buf = theia_buf1;
 		if (sys_args->filename[0] == '/') {
-			size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%d|%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
+			size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
 					2, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->filename, sys_args->flags, sys_args->mode,
 					sys_args->dev, sys_args->ino, sys_args->is_new, current->tgid, sec, nsec);
 		}
@@ -9138,12 +9179,15 @@ void packahgv_open (struct open_ahgv *sys_args) {
 				pcwd = ".";
 			}
 
-			size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%d|%s/%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
+			size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s/%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
 					2, sys_args->pid, current->start_time.tv_sec, sys_args->fd, pcwd, sys_args->filename, sys_args->flags, sys_args->mode,
 					sys_args->dev, sys_args->ino, sys_args->is_new, current->tgid, sec, nsec);
 		}
+		theia_file_write(buf, size);
 #endif
-		theia_file_write(theia_buf1, size);
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
+
 	}
 }
 
@@ -9349,6 +9393,8 @@ void packahgv_close (struct close_ahgv *sys_args) {
 		get_curr_time(&sec, &nsec);
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%d|%ld|%ld|endahg\n", 3, 
 		sys_args->pid, current->start_time.tv_sec, sys_args->fd, current->tgid, sec, nsec);
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
 		theia_file_write(buf, size);
 	}
 }
@@ -9800,20 +9846,26 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 		}
 		set_fs(old_fs);                                                              
 
+		char *fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+		if (!fpath_b64) fpath_b64 = "";
+
 		char *args_b64 = base64_encode(sys_args->args, strlen(sys_args->args), NULL);
 		if (!args_b64) args_b64 = "";
 
-    uint32_t buf_size = strlen(args_b64)+256;
+    uint32_t buf_size = strlen(args_b64) + strlen(fpath_b64) + 256;
     char *buf = vmalloc(buf_size);
 
 		/* TODO: publish args as well sys_args->args. problem? args can contain | do BASE64 encoding? */
 		size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%s|%s|%s|%d|%d|%ld|%ld|%u|endahg\n", 
 				59, sys_args->pid, current->start_time.tv_sec, sys_args->rc, 
-				uuid_str, fpath, args_b64, ids, is_user_remote, current->tgid, sec, nsec, current->no_syscalls++);
+				uuid_str, fpath_b64, args_b64, ids, is_user_remote, current->tgid, sec, nsec, current->no_syscalls++);
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
 		theia_file_write(buf, size);
 
     vfree(buf);
 		vfree(args_b64);
+		vfree(fpath_b64);
 	}
 }
 
@@ -10511,10 +10563,23 @@ void packahgv_mount (struct mount_ahgv *sys_args) {
 
 		get_curr_time(&sec, &nsec);
 
-		size = sprintf(theia_buf1, "startahg|%d|%d|%ld|%s|%s|%s|%s|%lu|%d|%d|%ld|%ld|%u|endahg\n", 
-				165, sys_args->pid, current->start_time.tv_sec, uuid_str, fpath, sys_args->dirname, sys_args->type, 
+		char *fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+		if (!fpath_b64) fpath_b64 = "";
+    
+    uint32_t buf_size = strlen(fpath_b64)+256;
+    char *buf = vmalloc(buf_size);
+
+		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%s|%s|%s|%lu|%d|%d|%ld|%ld|%u|endahg\n", 
+				165, sys_args->pid, current->start_time.tv_sec, uuid_str, fpath_b64, sys_args->dirname, sys_args->type, 
 				sys_args->flags, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
-		theia_file_write(theia_buf1, size);
+
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
+
+		theia_file_write(buf, size);
+
+    vfree(fpath_b64);
+    vfree(buf);
 	}
 }
 
@@ -10735,6 +10800,8 @@ void packahgv_pipe (struct pipe_ahgv *sys_args) {
 				sys_args->dev1, sys_args->ino1, current->tgid, sec, nsec); // let's focus on pipe inode (dev,ino) itself
 //				sys_args->inode1, sys_args->inode2, current->tgid, sec, nsec);
 #endif
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
 		theia_file_write(buf, size);
 	}
 }
@@ -11041,6 +11108,8 @@ void packahgv_ioctl (struct ioctl_ahgv *sys_args) {
 				sys_args->fd, sys_args->cmd, sys_args->arg, sys_args->rc, current->tgid, 
 				sec, nsec);
 #endif
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
 		theia_file_write(buf, size);
 	}
 }
@@ -11837,6 +11906,8 @@ void packahgv_munmap (struct munmap_ahgv *sys_args) {
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%lx|%ld|%d|%ld|%ld|%u|endahg\n", 
 				11, sys_args->pid, current->start_time.tv_sec, sys_args->rc, 
 				sys_args->addr, sys_args->len, current->tgid, sec, nsec, current->no_syscalls++);
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
 		theia_file_write(buf, size);
 	}
 }
@@ -12302,6 +12373,8 @@ void packahgv_connect(struct connect_ahgv *sys_args) {
 		}
 //		printk("[socketcall connect]: %s", buf);
 #endif
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
 		theia_file_write(buf, size);
 	}
 }
@@ -12352,6 +12425,8 @@ void packahgv_accept(struct accept_ahgv *sys_args) {
 		}
 #endif
 		theia_file_write(buf, size);
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
 	}
 }
 
@@ -12404,6 +12479,8 @@ void packahgv_sendto(struct sendto_ahgv *sys_args) {
 
 		}
 #endif
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
 		theia_file_write(buf, size);
 	}
 }
@@ -12456,6 +12533,8 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args) {
 				sys_args->port, current->tgid, sec, nsec);
 		}
 #endif
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
 		theia_file_write(buf, size);
 	}
 }
@@ -12513,6 +12592,8 @@ void packahgv_sendmsg(struct sendmsg_ahgv *sys_args) {
 				sys_args->sock_fd, sys_args->rc, current->tgid, 
 				sec, nsec);
 #endif
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
 		theia_file_write(buf, size);
 	}
 }
@@ -12552,6 +12633,8 @@ void packahgv_recvmsg(struct recvmsg_ahgv *sys_args) {
 			sys_args->sock_fd, sys_args->rc, current->tgid, 
 			sec, nsec);
 #endif
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
 		theia_file_write(buf, size);
 	}
 }
@@ -14255,6 +14338,8 @@ void packahgv_shmget(struct shmget_ahgv *sys_args)
 				29, SHMGET, sys_args->pid, current->start_time.tv_sec,
 				sys_args->rc, sys_args->key, sys_args->size, sys_args->shmflg,
 				current->tgid, sec, nsec, current->no_syscalls++);
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
 		theia_file_write(buf, size);
 	} 
 }
@@ -14382,6 +14467,8 @@ void packahgv_shmat(struct shmat_ahgv *sys_args)
 				sys_args->rc, sys_args->shmid, sys_args->shmaddr, sys_args->shmflg,
 				shm_segsz, sys_args->raddr, current->tgid, sec, nsec, current->no_syscalls++);
 #endif
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
 		theia_file_write(buf, size);
 	} 
 }
@@ -15765,6 +15852,8 @@ void packahgv_clone (struct clone_ahgv *sys_args) {
 					-1, -1, current->tgid, sec, nsec, current->no_syscalls++);
 		}
 
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
 		theia_file_write(buf, size);
 	}
 }
@@ -15870,6 +15959,8 @@ void packahgv_mprotect (struct mprotect_ahgv *sys_args) {
 				10, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->retval, sys_args->address, sys_args->length, 
 				sys_args->protection, current->tgid, sec, nsec, current->no_syscalls++);
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
 		theia_file_write(buf, size);
 	}
 }
@@ -18007,6 +18098,8 @@ void packahgv_mmap (struct mmap_ahgv *sys_args) {
 				sys_args->fd, sys_args->address, sys_args->length, sys_args->prot_type,
 				sys_args->flag, sys_args->offset, current->tgid, sec, nsec, current->no_syscalls++);
 #endif
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
 		theia_file_write(buf, size);
 	}
 }
@@ -18615,6 +18708,8 @@ void packahgv_setuid (struct setuid_ahgv *sys_args) {
 				105, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->newuid, ids, sys_args->rc, is_newuser_remote, current->tgid, 
 				sec, nsec, current->no_syscalls++);
+if(size <= 0)
+  printk("[%d]strange size %d\n", __LINE__,size);
 		theia_file_write(buf, size);
 	}
 }
