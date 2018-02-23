@@ -209,7 +209,7 @@ static void *reader_thread(void *data)
 
 
 	char buf[40960 + 1];
-	int rc, cpu = *((int*)data);
+	int rc, cpu = (int)(long)data;
 	unsigned seq;
 	struct pollfd pollfd;
 
@@ -275,7 +275,7 @@ static int create_percpu_threads(void)
 	for (i = 0; i < ncpus; i++) {
 		/* create a thread for each per-cpu buffer */
 		if (pthread_create(&reader[i], NULL, reader_thread,
-					(void *)&i) < 0) {
+					(void *)(long)i) < 0) {
 			printf("Couldn't create thread\n");
 			return -1;
 		}
