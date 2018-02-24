@@ -268,7 +268,7 @@ EXPORT_SYMBOL(theia_replay_register_data);
 
 /* dump aux data (callstack, user ids, ...) */
 #define THEIA_AUX_DATA 1
-//#undef THEIA_AUX_DATA
+#undef THEIA_AUX_DATA
 
 /*
 #define THEIA_USER_RET_ADDR 1
@@ -501,6 +501,7 @@ bool file2uuid(struct file* file, char *uuid_str, int fd) {
     strcpy(rec_uuid_str, uuid_str);
 	}
 	else {
+		printk("[file2uuid]: Note a file\n");
 		return false;
 	}
 
@@ -508,20 +509,39 @@ bool file2uuid(struct file* file, char *uuid_str, int fd) {
 }
 
 
+
+void path2uuid(const struct path path, char* uuid_str)
+{
+	kuid_t uid;
+	kgid_t gid;
+	u_long dev, ino;
+	struct timespec cr_time;
+
+	cr_time = ext4_get_crtime(path.dentry->d_inode);
+	dev = path.dentry->d_inode->i_sb->s_dev;
+	ino = path.dentry->d_inode->i_ino;
+	uid = path.dentry->d_inode->i_uid;
+	gid = path.dentry->d_inode->i_gid;
+	
+	sprintf(uuid_str, "%x|%x|%ld|%ld", dev, ino,
+		cr_time.tv_sec, cr_time.tv_nsec);
+}
+
 bool fd2uuid(int fd, char *uuid_str) {
 	struct file *file;
 	int fput_needed;
 	int err;
-  int ret;
+  	int ret;
 
 	file = fget_light(fd, &fput_needed);
 	if (file) {
-    ret = file2uuid(file, uuid_str, fd); 
-    fput_light(file, fput_needed);
-    if(ret == false)
-      return false;
+    		ret = file2uuid(file, uuid_str, fd); 
+    		fput_light(file, fput_needed);
+    		if(ret == false)
+      			return false;
 	}
 	else {
+		printk("[fd2uuid]: Failed to get file.\n");
 		return false;
 	}
 
@@ -668,6 +688,8 @@ void theia_dump_sdd(const char __user *str, int val1, int val2, int rc, int sysn
 }
 
 void theia_dump_at_sd(int dfd, const char __user *str, int val, int rc, int sysnum) {
+	
+	/*
 	char *ptr = NULL;
 	struct path path;
 	int res;
@@ -695,11 +717,10 @@ void theia_dump_at_sd(int dfd, const char __user *str, int val, int rc, int sysn
 		else {
 			ptr = ".";
 		}
-
 		sprintf(theia_buf1, "%s/%s|%d", ptr, str, val);
 	}
-
 	theia_dump_str(theia_buf1, rc, sysnum);
+	*/
 }
 
 void theia_dump_dd(int val1, int val2, int rc, int sysnum) {
@@ -720,7 +741,7 @@ void get_curr_time(long *sec, long *nsec) {
 	struct timespec ts;
 	getnstimeofday(&ts);
 	*sec = ts.tv_sec;
-	*nsec = ts.tv_nsec / 1000; //granuality is microsec
+	*nsec = ts.tv_nsec; //granuality is microsec
 	return;
 }
 
@@ -10524,32 +10545,209 @@ inline void theia_mknod_ahgx(const char __user * filename, int mode, unsigned de
 
 inline void theia_chmod_ahgx(const char __user * filename, mode_t mode, long rc, int sysnum)
 {
-	theia_dump_sd(filename, mode, rc, sysnum);
+	struct path path;
+	char *fpath;
+	char uuid_str[THEIA_UUID_LEN+1];
+	int error;
+
+	error = user_path(filename, &path);
+	if (error)
+		return;
+	
+	fpath = d_path(&path, theia_buf2, 4096);
+	if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
+		fpath = filename;
+
+	path2uuid(path, uuid_str);
+	sprintf(theia_buf1, "%s|%s|%d", uuid_str, fpath, mode);
+	theia_dump_str(theia_buf1, rc, sysnum);
 }
 
 inline void theia_fchmod_ahgx(unsigned int fd, mode_t mode, long rc, int sysnum)
 {
-	theia_dump_dd(fd, mode, rc, sysnum);
+	struct file *file;
+	char uuid_str[THEIA_UUID_LEN+1];
+	char *fpath;
+	int fput_needed;
+
+	file = fget_light(fd, &fput_needed);
+	if (!file) {
+		//XXX(joey): Call fput_light if call fails?
+		return;
+	}
+
+	fpath = get_file_fullpath(file, theia_retbuf, 4096);
+	if (IS_ERR(fpath)) {
+		fput_light(file, fput_needed);
+		return;
+	}
+	
+	if(file2uuid(file, uuid_str, fd) == false) {
+		fput_light(file, fput_needed);
+		return;
+	}
+
+	fput_light(file, fput_needed);
+	
+	sprintf(theia_buf1, "%s|%s|%d", uuid_str, fpath, mode);
+	theia_dump_str(theia_buf1, rc, sysnum);
 }
 
-inline void theia_fchmodat_ahgx(int dfd, const char __user * filename, int mode, long rc, int sysnum)
+inline void theia_fchmodat_ahgx(int dfd, const char __user * filename, int mode, 
+				long rc, int sysnum)
 {
-	theia_dump_at_sd(dfd, filename, mode, rc, sysnum);
-}
+	struct path path;
+	char *fpath = NULL;
+	int error;
+	char uuid_str[THEIA_UUID_LEN+1];
+	unsigned int lookup_flags = LOOKUP_FOLLOW;
 
-inline void theia_lchown_ahgx(const char __user * filename, uid_t user, gid_t group, long rc, int sysnum)
-{
-	theia_dump_sdd(filename, user, group, rc, sysnum);
-}
+	error = user_path_at(dfd, filename, lookup_flags, &path);
+	if (!error) {
+		fpath = d_path(&path, theia_buf2, 4096);
+		if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
+			fpath = filename;
+		else {
+			fpath = NULL;
+		}
+	} else {
+		error = user_path(filename, &path);
+		if (error)
+			return;
 
-inline void theia_chown_ahgx(const char __user * filename, uid_t user, gid_t group, long rc, int sysnum)
-{
-	theia_dump_sdd(filename, user, group, rc, sysnum);
+		fpath = d_path(&path, theia_buf2, 4096);
+		if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
+			fpath = filename;
+		else {
+			fpath = NULL;
+		}
+	}
+
+	if (fpath == NULL)
+		return;
+	
+	path2uuid(path, uuid_str);
+	sprintf(theia_buf1, "%s|%s|%d", uuid_str, fpath, mode);
+	theia_dump_str(theia_buf1, rc, sysnum);
 }
 
 inline void theia_fchown_ahgx(unsigned int fd, uid_t user, gid_t group, long rc, int sysnum)
 {
-	theia_dump_ddd(fd, user, group, rc, sysnum);
+	struct file *file;
+	char uuid_str[THEIA_UUID_LEN+1];
+	char *fpath;
+	int fput_needed;
+	umode_t mode;
+
+	file = fget_light(fd, &fput_needed);
+	if (!file) {
+		//XXX(joey): Call fput_light if call fails?
+		return;
+	}
+
+	fpath = get_file_fullpath(file, theia_retbuf, 4096);
+	if (IS_ERR(fpath)) {
+		fput_light(file, fput_needed);
+		return;
+	}
+	
+	if(file2uuid(file, uuid_str, fd) == false) {
+		fput_light(file, fput_needed);
+		return;
+	}
+
+	mode = file->f_path.dentry->d_inode->i_mode;
+	fput_light(file, fput_needed);
+
+	sprintf(theia_buf1, "%s|%s|%u|%d/%d", uuid_str, fpath, mode, user, group);
+	theia_dump_str(theia_buf1, rc, sysnum);
+}
+
+inline void theia_lchown_ahgx(const char __user * filename, uid_t user, gid_t group, 
+		              long rc, int sysnum)
+{
+	struct path path;
+	umode_t mode;
+	char *fpath;
+	char uuid_str[THEIA_UUID_LEN+1];
+	int error;
+
+	error = user_lpath(filename, &path);
+	if (error)
+		return;
+
+	mode = path.dentry->d_inode->i_mode;
+	fpath = d_path(&path, theia_buf2, 4096);
+	if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
+		fpath = filename;
+	
+	path2uuid(path, uuid_str);
+	sprintf(theia_buf1, "%s|%s|%u|%d/%d", uuid_str, fpath, mode, user, group);
+	theia_dump_str(theia_buf1, rc, sysnum);
+}
+
+inline void theia_chown_ahgx(const char __user * filename, uid_t user, 
+		             gid_t group, long rc, int sysnum)
+{
+	struct path path;
+	umode_t mode;
+	char *fpath;
+	char uuid_str[THEIA_UUID_LEN+1];
+	int error;
+
+	error = user_path(filename, &path);
+	if (error)
+		return;
+	
+	fpath = d_path(&path, theia_buf2, 4096);
+	if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
+		fpath = filename;
+
+	mode = path.dentry->d_inode->i_mode;
+	path2uuid(path, uuid_str);
+	sprintf(theia_buf1, "%s|%s|%u|%d/%d", uuid_str, fpath, mode, user, group);
+	theia_dump_str(theia_buf1, rc, sysnum);
+}
+
+
+
+inline void theia_fchownat_ahgx(int dfd, const char __user * filename, uid_t user, 
+				gid_t group, int flag, long rc, int sysnum)
+{
+	int res;
+	char *fpath;
+	u_long dev, ino;
+	umode_t mode;
+	struct path path;
+	struct timespec cr_time;
+	char uuid_str[THEIA_UUID_LEN+1];
+
+	res = user_path_at(dfd, filename, LOOKUP_FOLLOW, &path);
+	if (res == 0) {
+		fpath = d_path(&path, theia_buf2, 4096);
+		if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
+			fpath = filename;
+
+		path2uuid(path, uuid_str);
+		mode = path.dentry->d_inode->i_mode;
+		sprintf(theia_buf1, "%s|%s|%u|%d/%d", uuid_str, fpath, mode, user, group);
+		theia_dump_str(theia_buf1, rc, sysnum);
+	} else {
+		if (current->fs) {
+			get_fs_pwd(current->fs, &path);
+			fpath = d_path(&path, theia_buf2, 4096);	
+			if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
+				fpath = filename;
+
+			path2uuid(path, uuid_str);
+			mode = path.dentry->d_inode->i_mode;
+			sprintf(theia_buf1, "%s|%s||%u|%d/%d", uuid_str, fpath, mode, user, group);
+			theia_dump_str(theia_buf1, rc, sysnum);
+		}
+		else {
+			printk("[fchownat]: dfd & current->fs invalid.\n");
+		}
+	}
 }
 
 inline void theia_lseek_ahgx(unsigned int fd, off_t offset, unsigned int origin, long rc, int sysnum)
@@ -10559,21 +10757,21 @@ inline void theia_lseek_ahgx(unsigned int fd, off_t offset, unsigned int origin,
 
 //64port
 SIMPLE_SHIM3(mknod, 133, const char __user *, filename, int, mode, unsigned, dev);
-SIMPLE_SHIM2(chmod, 90, const char __user *, filename, mode_t,  mode);
-SIMPLE_SHIM2(fchmod, 91, unsigned int, fd, mode_t, mode);
-SIMPLE_SHIM3(chown, 92, const char __user *, filename, uid_t, user, gid_t, group);
-SIMPLE_SHIM3(fchown, 93, unsigned int, fd, uid_t, user, gid_t, group);
-SIMPLE_SHIM3(lchown, 94, const char __user *, filename, uid_t, user, gid_t, group);
+//SIMPLE_SHIM2(chmod, 90, const char __user *, filename, mode_t,  mode);
+//SIMPLE_SHIM2(fchmod, 91, unsigned int, fd, mode_t, mode);
+//SIMPLE_SHIM3(chown, 92, const char __user *, filename, uid_t, user, gid_t, group);
+//SIMPLE_SHIM3(fchown, 93, unsigned int, fd, uid_t, user, gid_t, group);
+//SIMPLE_SHIM3(lchown, 94, const char __user *, filename, uid_t, user, gid_t, group);
 SIMPLE_SHIM3(lseek, 8, unsigned int, fd, off_t, offset, unsigned int, origin);
-/*
-THEIA_SHIM3(mknod, 133, const char __user *, filename, int, mode, unsigned, dev);
+
+//THEIA_SHIM3(mknod, 133, const char __user *, filename, int, mode, unsigned, dev);
 THEIA_SHIM2(chmod, 90, const char __user *, filename, mode_t,  mode);
 THEIA_SHIM2(fchmod, 91, unsigned int, fd, mode_t, mode);
+
 THEIA_SHIM3(chown, 92, const char __user *, filename, uid_t, user, gid_t, group);
-THEIA_SHIM3(fchown, 93, unsigned int, fd, uid_t, user, gid_t, group);
 THEIA_SHIM3(lchown, 94, const char __user *, filename, uid_t, user, gid_t, group);
-THEIA_SHIM3(lseek, 8, unsigned int, fd, off_t, offset, unsigned int, origin);
-*/
+THEIA_SHIM3(fchown, 93, unsigned int, fd, uid_t, user, gid_t, group);
+//THEIA_SHIM3(lseek, 8, unsigned int, fd, off_t, offset, unsigned int, origin);
 
 SIMPLE_SHIM0(getpid, 39);
 
@@ -19713,8 +19911,8 @@ SIMPLE_SHIM3(mkdirat, 258, int, dfd, const char __user *, pathname, int, mode);
 
 SIMPLE_SHIM4(mknodat, 259, int, dfd, const char __user *, filename, int, mode, unsigned, dev);
 // THEIA_SHIM4(mknodat, 259, int, dfd, const char __user *, filename, int, mode, unsigned, dev);
-SIMPLE_SHIM5(fchownat, 260, int, dfd, const char __user *, filename, uid_t, user, gid_t, group, int, flag);
-// THEIA_SHIM5(fchownat, 260, int, dfd, const char __user *, filename, uid_t, user, gid_t, group, int, flag);
+//SIMPLE_SHIM5(fchownat, 260, int, dfd, const char __user *, filename, uid_t, user, gid_t, group, int, flag);
+THEIA_SHIM5(fchownat, 260, int, dfd, const char __user *, filename, uid_t, user, gid_t, group, int, flag);
 
 SIMPLE_SHIM3(futimesat, 261, int, dfd, char __user *, filename, struct timeval __user *,utimes);
 //64port
@@ -19731,10 +19929,12 @@ SIMPLE_SHIM3(symlinkat, 266, const char __user *, oldname, int, newdfd, const ch
 
 RET1_COUNT_SHIM4(readlinkat, 267, buf, int, dfd, const char __user *, path, char __user *, buf, int, bufsiz)
 
-SIMPLE_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
-// THEIA_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
+//SIMPLE_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
+THEIA_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
 SIMPLE_SHIM3(faccessat, 269, int, dfd, const char __user *, filename, int, mode);
 // THEIA_SHIM3(faccessat, 269, int, dfd, const char __user *, filename, int, mode);
+
+
 
 static asmlinkage long 
 record_pselect6 (int n, fd_set __user *inp, fd_set __user *outp, fd_set __user *exp, struct timespec __user *tsp, void __user *sig) 
