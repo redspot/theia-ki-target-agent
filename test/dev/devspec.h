@@ -6,7 +6,7 @@
 #define CLASS_NAME "spec"
 
 #define ROLLED_BACK 1
-#define MAX_LOGDIR_STRLEN 80
+#include <linux/replay.h>
 
 struct record_data {
 	u_long                           app_syscall_addr;

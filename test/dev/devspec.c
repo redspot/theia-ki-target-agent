@@ -55,8 +55,10 @@ static ssize_t str_store(struct kobject *kobj,
   /* MAX_LOGDIR_STRLEN is in include/linux/replay.h
    * and gets used as a generic buffer size in replay.c
    */
-  if (count > MAX_LOGDIR_STRLEN)
+  if (count > MAX_LOGDIR_STRLEN) {
+    pr_err("str_store: %d > %d\n", count, MAX_LOGDIR_STRLEN);
     return -ENOENT;
+  }
   char* str_attr;
 
   if (strcmp(attr->attr.name, "theia_linker") == 0)
