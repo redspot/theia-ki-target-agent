@@ -460,20 +460,42 @@ bool file2uuid(struct file* file, char *uuid_str, int fd) {
 //		else if (dev == 0xfd00001 /* in-disk file */ || dev == 0xf /* in-memory file */ || dev == 0x5 /* ptmx */ || dev == 0xb /* pts */ || dev == 0x3 /* procfs */) {
 		else if (S_ISBLK(mode) || S_ISCHR(mode) || S_ISDIR(mode) || S_ISREG(mode) || S_ISLNK(mode)) {
 //			sprintf(uuid_str, "inode:[%lx:%lx]", dev, ino);
+//Yang: get offset
+#ifdef THEIA_PROVIDE_OFFSET
+      loff_t offset = vfs_llseek(file, 0, SEEK_CUR);
+#endif
+
 			if (dev == 0xfd00001) {
 				struct timespec ts = ext4_get_crtime(inode);
 //				sprintf(uuid_str, "inode:[%lx:%lx:%d]", dev, ino, ts.tv_sec); /* do we need nanosec? */
-				sprintf(uuid_str, "I|%lx|%lx|%lx", dev, ino, ts.tv_sec); /* do we need nanosec? */
+#ifdef THEIA_PROVIDE_OFFSET
+				sprintf(uuid_str, "I|%lx|%lx|%lx|%llx", dev, ino, ts.tv_sec, offset);
+#else
+				sprintf(uuid_str, "I|%lx|%lx|%lx", dev, ino, ts.tv_sec);
+#endif
 			}
 			else {
 //				sprintf(uuid_str, "inode:[%lx:%lx:0]", dev, ino);
+#ifdef THEIA_PROVIDE_OFFSET
+				sprintf(uuid_str, "I|%lx|%lx|0|%llx", dev, ino, offset);
+#else
 				sprintf(uuid_str, "I|%lx|%lx|0", dev, ino);
+#endif
 			}
 		}
 		else { /* pipe, anon_inode, or others */
 //			fpath = get_file_fullpath(file, theia_retbuf, 4096); /* it returns detailed path */
 //			strncpy(uuid_str, fpath, THEIA_UUID_LEN);
+//Yang: get offset
+#ifdef THEIA_PROVIDE_OFFSET
+      loff_t offset = vfs_llseek(file, 0, SEEK_CUR);
+#endif
+
+#ifdef THEIA_PROVIDE_OFFSET
+			sprintf(uuid_str, "I|%lx|%lx|0|%llx", dev, ino, offset); /* just inode */
+#else
 			sprintf(uuid_str, "I|%lx|%lx|0", dev, ino); /* just inode */
+#endif
 		}
 //Yang: we need these later:
     strcpy(rec_uuid_str, uuid_str);
@@ -8027,20 +8049,39 @@ void packahgv_process(struct task_struct *tsk) {
 		char *fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
 		if (!fpath_b64) fpath_b64 = "";
 
-    uint32_t buf_size = strlen(fpath_b64)+256;
+//provide cmdline args in new process
+    struct mm_struct *mm = current->mm;
+    char *args = NULL;
+    if (mm) {
+      unsigned long arg_start = mm->arg_start;
+      unsigned long arg_len   = mm->arg_end - arg_start;
+      args = (char*)vmalloc(arg_len);
+      copy_from_user((void*)args, (const void __user*)arg_start, arg_len);
+
+      int i;
+      for (i = 0; i < arg_len-1; ++i) {
+        if (args[i] == '\0') 
+          args[i] = ' ';
+      }
+    }
+		char *args_b64 = base64_encode(args, strlen(args), NULL);
+		if (!args_b64) args_b64 = "";
+
+//allocate buf
+    uint32_t buf_size = strlen(fpath_b64) + strlen(args_b64) + 256;
     char *buf = vmalloc(buf_size);
 
 		if(ptsk) {
-			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%d|%d|%ld|%ld|endahg\n", 
+			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%s|%d|%d|%ld|%ld|endahg\n", 
 				399/*used for new process*/, tsk->pid, tsk->start_time.tv_sec, 
 				ids, tsk->real_parent->pid, 
-				ptsk->start_time.tv_sec, fpath_b64, is_user_remote, tsk->tgid, sec, nsec);
+				ptsk->start_time.tv_sec, fpath_b64, args_b64, is_user_remote, tsk->tgid, sec, nsec);
 		}
 		else {
-			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%d|%d|%ld|%ld|endahg\n", 
+			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%s|%d|%d|%ld|%ld|endahg\n", 
 					399/*used for new process*/, tsk->pid, tsk->start_time.tv_sec, 
 					ids, tsk->real_parent->pid, 
-				  -1, fpath_b64, is_user_remote, tsk->tgid, sec, nsec);
+				  -1, fpath_b64, args_b64, is_user_remote, tsk->tgid, sec, nsec);
 		}
 if(size <= 0)
   printk("[%d]strange size %d\n", __LINE__,size);
@@ -8048,6 +8089,9 @@ if(size <= 0)
 		vfree(fpathbuf);
     vfree(fpath_b64);
     vfree(buf);
+    if (mm) {
+      vfree(args);
+    }
 	}
 }
 
@@ -10566,7 +10610,7 @@ void packahgv_mount (struct mount_ahgv *sys_args) {
 		}
 
 		if (uuid_str[0] == '\0')
-			strcpy(uuid_str, "I|0|0|0|-1/-1");
+			strcpy(uuid_str, "I|0|0|0|0|-1/-1");
 
 		file = fget_light(fd, &fput_needed);
 		if (file) {
@@ -10580,7 +10624,7 @@ void packahgv_mount (struct mount_ahgv *sys_args) {
 		sys_close(fd);
 	}
 	else {
-		strcpy(uuid_str, "I|0|0|0|-1/-1"); /* imaginary file, e.g., debugfs */
+		strcpy(uuid_str, "I|0|0|0|0|-1/-1"); /* imaginary file, e.g., debugfs */
 		strncpy(theia_retbuf, sys_args->devname, 4096);
 		fpath = theia_retbuf;
 	}
