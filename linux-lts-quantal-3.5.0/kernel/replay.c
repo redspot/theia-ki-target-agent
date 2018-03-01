@@ -9854,7 +9854,7 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 		char *args_b64 = base64_encode(sys_args->args, strlen(sys_args->args), NULL);
 		if (!args_b64) args_b64 = "";
 
-		uint32_t buf_size = strlen(args_b64)+256;
+		uint32_t buf_size = strlen(args_b64) + strlen(fpath_b64) + 256;
 		char *buf = vmalloc(buf_size);
 		/* TODO: publish args as well sys_args->args. problem? args can contain | do BASE64 encoding? */
 		size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%s|%s|%s|%d|%d|%ld|%ld|%u|endahg\n", 
