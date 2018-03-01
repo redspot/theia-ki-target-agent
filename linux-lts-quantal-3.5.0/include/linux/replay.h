@@ -6,7 +6,7 @@
 #include "det_time.h"
 #endif
 
-#define MAX_LOGDIR_STRLEN 2048
+#define MAX_LOGDIR_STRLEN 256
 
 #include <linux/signal.h>
 #include <linux/mm_types.h>
