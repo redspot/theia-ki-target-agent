@@ -24,6 +24,7 @@ MODULE_LICENSE("GPL");
 
 extern bool theia_logging_toggle;
 extern bool theia_recording_toggle;
+extern bool theia_cross_toggle;
 extern struct theia_replay_register_data_type theia_replay_register_data;
 extern char theia_linker[];
 extern char theia_libpath[];
@@ -159,6 +160,7 @@ static long spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
   char logdir[MAX_LOGDIR_STRLEN+1];
   char* tmp = NULL;
   long rc;
+  u_long inode;
 
   pckpt_proc = new_ckpt_proc = NULL;
   DPRINT ("pid %d cmd number 0x%08x\n", current->pid, cmd);
@@ -180,6 +182,12 @@ static long spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
       theia_recording_toggle = 0;
       printk(KERN_INFO "Theia recording off\n");
       return 0;
+    case THEIA_CROSS_ON:
+      theia_cross_toggle = 1;
+      return 0;
+    case THEIA_CROSS_OFF:
+      theia_cross_toggle = 0;
+      return 0;
 
     case THEIA_REPLAY_REGISTER:
       {
@@ -199,7 +207,7 @@ static long spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
           if (tmp == NULL) {
             printk ("THEIA_REPLAY_REGISTER: cannot get linker name\n");
             return -EFAULT;
-          }
+          } 
         } else {
           tmp = NULL;
         }
@@ -230,7 +238,7 @@ static long spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
         if (tmp == NULL) {
           printk ("SPECI_REPLAY_FORK: cannot get linker name\n");
           return -EFAULT;
-        }
+        } 
       } else {
         tmp = NULL;
       }
@@ -291,6 +299,17 @@ static long spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
       return check_clock_after_syscall (0);
     case SPECI_GET_LOG_ID:
       return get_log_id ();
+      //Yang: get inode for pin
+    case THEIA_GET_INODE_FORPIN:
+      if (len != sizeof(u_long)) {
+        printk ("ioctl SPECI_GET_INODE_FORPIN fails, len %d\n", len);
+        return -EINVAL;
+      }
+      if (copy_from_user (&inode, (void *) data, sizeof(u_long)))
+        return -EFAULT;
+      printk("inode received: %lx\n",inode);
+      return get_inode_for_pin(inode);
+
     case SPECI_GET_CLOCK_VALUE:
       return get_clock_value ();
     case SPECI_GET_USED_ADDR:

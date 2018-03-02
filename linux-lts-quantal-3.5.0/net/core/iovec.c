@@ -163,11 +163,15 @@ int memcpy_fromiovecend(unsigned char *kdata, const struct iovec *iov,
 	}
 
 	while (len > 0) {
-		u8 __user *base = iov->iov_base + offset;
+    u8 __user *base;
+    base = iov->iov_base + offset;
 		int copy = min_t(unsigned int, len, iov->iov_len - offset);
 
 		offset = 0;
-		if (copy_from_user(kdata, base, copy))
+    int ret = 0;
+    ret = copy_from_user(kdata, base, copy);
+    
+    if(ret)
 			return -EFAULT;
 		len -= copy;
 		kdata += copy;
@@ -199,7 +203,8 @@ int csum_partial_copy_fromiovecend(unsigned char *kdata, struct iovec *iov,
 	}
 
 	while (len > 0) {
-		u8 __user *base = iov->iov_base + offset;
+    u8 __user *base;
+    base = iov->iov_base + offset;
 		int copy = min_t(unsigned int, len, iov->iov_len - offset);
 
 		offset = 0;
@@ -210,10 +215,12 @@ int csum_partial_copy_fromiovecend(unsigned char *kdata, struct iovec *iov,
 
 			/* iov component is too short ... */
 			if (par_len > copy) {
-				if (copy_from_user(kdata, base, copy))
+        int ret = 0;
+        ret = copy_from_user(kdata, base, copy);
+				if (ret)
 					goto out_fault;
 				kdata += copy;
-				base += copy;
+        base += copy;
 				partial_cnt += copy;
 				len -= copy;
 				iov++;
@@ -223,11 +230,13 @@ int csum_partial_copy_fromiovecend(unsigned char *kdata, struct iovec *iov,
 							 partial_cnt, csum);
 				goto out;
 			}
-			if (copy_from_user(kdata, base, par_len))
+      int ret = 0;
+      ret = copy_from_user(kdata, base, par_len);
+			if (ret)
 				goto out_fault;
 			csum = csum_partial(kdata - partial_cnt, 4, csum);
 			kdata += par_len;
-			base  += par_len;
+      base  += par_len;
 			copy  -= par_len;
 			len   -= par_len;
 			partial_cnt = 0;
@@ -237,16 +246,17 @@ int csum_partial_copy_fromiovecend(unsigned char *kdata, struct iovec *iov,
 			partial_cnt = copy % 4;
 			if (partial_cnt) {
 				copy -= partial_cnt;
-				if (copy_from_user(kdata + copy, base + copy,
-						partial_cnt))
+        int ret = 0;
+        ret = copy_from_user(kdata + copy, base + copy, partial_cnt);
+				if (ret)
 					goto out_fault;
 			}
 		}
 
 		if (copy) {
-			csum = csum_and_copy_from_user(base, kdata, copy,
-							csum, &err);
-			if (err)
+      csum = csum_and_copy_from_user(base, kdata, copy,
+          csum, &err);
+      if (err)
 				goto out;
 		}
 		len   -= copy + partial_cnt;
@@ -260,5 +270,6 @@ out:
 out_fault:
 	err = -EFAULT;
 	goto out;
+
 }
 EXPORT_SYMBOL(csum_partial_copy_fromiovecend);

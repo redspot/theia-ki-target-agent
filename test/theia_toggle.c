@@ -48,6 +48,20 @@ int main (int argc, char* argv[]) {
 			return -1;
 		}
 	}
+	else if(strcmp(argv[1], "cross") == 0) {
+		if(strcmp(argv[2], "on") == 0) {
+			theia_cross_on(fd);
+			printf("Theia cross track is on\n");
+		}
+		else if(strcmp(argv[2], "off") == 0){
+			theia_cross_off(fd);
+			printf("Theia cross is off\n");
+		}
+		else {
+			printf("Error cross toggle\n");
+			return -1;
+		}
+	}
 	else {
 			printf("Error input\n");
 			return -1;

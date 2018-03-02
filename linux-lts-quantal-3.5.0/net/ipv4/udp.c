@@ -110,6 +110,42 @@
 #include <linux/static_key.h>
 #include "udp_impl.h"
 
+//Yang
+#include "../theia_cross_track.h"
+
+//Yang
+bool theia_is_track_cross()
+{
+  if(theia_cross_toggle && 
+     (strcmp(current->comm, "test_client") == 0 
+      || strcmp(current->comm, "iperf3") == 0
+      || strcmp(current->comm, "test_server") == 0) )
+    return true;
+  else
+    return false;
+}
+EXPORT_SYMBOL(theia_is_track_cross);
+
+//Yang
+//extern bool theia_is_track_cross();
+theia_udp_tag get_theia_udp_tag(struct sock *sk)
+{
+  theia_udp_tag tag;
+
+  lock_sock(sk); 
+  tag = sk->theia_udp_tag; 
+
+  if(unlikely(sk->theia_udp_tag == UINT_MAX))
+    sk->theia_udp_tag = 0;
+  else
+    sk->theia_udp_tag++; 
+    
+  release_sock(sk); 
+
+  return tag;
+}
+
+
 struct udp_table udp_table __read_mostly;
 EXPORT_SYMBOL(udp_table);
 
@@ -125,6 +161,7 @@ EXPORT_SYMBOL(sysctl_udp_wmem_min);
 atomic_long_t udp_memory_allocated;
 EXPORT_SYMBOL(udp_memory_allocated);
 
+//Yang
 #define MAX_UDP_PORTS 65536
 #define PORTS_PER_CHAIN (MAX_UDP_PORTS / UDP_HTABLE_SIZE_MIN)
 
@@ -796,6 +833,7 @@ int udp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 	struct udp_sock *up = udp_sk(sk);
 	struct flowi4 fl4_stack;
 	struct flowi4 *fl4;
+
 	int ulen = len;
 	struct ipcm_cookie ipc;
 	struct rtable *rt = NULL;

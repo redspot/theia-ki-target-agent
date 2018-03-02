@@ -179,6 +179,14 @@ int theia_recording_off(int fd_spec) {
 	return ioctl (fd_spec, THEIA_RECORDING_OFF);
 }
 
+int theia_cross_on(int fd_spec) {
+	return ioctl (fd_spec, THEIA_CROSS_ON);
+}
+
+int theia_cross_off(int fd_spec) {
+	return ioctl (fd_spec, THEIA_CROSS_OFF);
+}
+
 int theia_replay_register(int fd_spec, int pin, int follow_splits, 
   int save_mmap, char* logdir, char* linker)
 {
