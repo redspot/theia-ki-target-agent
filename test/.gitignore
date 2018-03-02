@@ -16,3 +16,5 @@ resume
 theia_replay
 *.output
 *.out
+replay_headers/**
+!replay_headers/.keep

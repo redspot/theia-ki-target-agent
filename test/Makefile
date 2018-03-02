@@ -1,12 +1,24 @@
+ifndef KVERSION
+KVERSION := $(shell uname -r)
+endif
+
+ifndef KERNEL_DIR
+#KERNEL_DIR := /var/lib/go-agent/pipelines/target-agent/linux-lts-quantal-3.5.0/debian/build/build-generic
+KERNEL_DIR := /lib/modules/$(KVERSION)/build
+#KERNEL_DIR := $(OMNIPLAY_DIR)/linux-lts-quantal-3.5.0
+#KERNEL_DIR := /home/theia/src/theia-es/linux-lts-quantal-3.5.0
+#KERNEL_DIR := /usr/src/linux-headers-3.5.0-99
+endif
+
 CC := gcc
 
-CFLAGS := -Wall -Werror -g 
-CFLAGS += -fPIC 
+CFLAGS := -Wall -Werror -g
+CFLAGS += -fPIC
 LDFLAGS := -Wall -Werror -g -Wl,-dynamic-linker=/lib64/ld-linux-x86-64.so.2
 
 #LDLIBS := libutil.a
 
-KERN_CONFIG := replay_headers/include/linux/replay_configs.h
+KERNEL_CONFIG := replay_headers/include/linux/replay_configs.h
 
 DEPS_DIR := .deps
 
@@ -20,6 +32,9 @@ DEPS=$(patsubst %.c, .deps/%.d, $(CFILES))
 
 .PHONY: all
 all: $(TARGETS)
+
+$(KERNEL_CONFIG):
+	$(MAKE) -C $(KERNEL_DIR) headers_install INSTALL_HDR_PATH=`pwd`/replay_headers
 
 # Build dependencies + any extra flags
 launcher: libutil.a
@@ -43,7 +58,7 @@ libutil.a: util.o parseklib.o
 	ar rv $@ $^
 	ranlib $@
 
-parseklib.o: $(KENREL_CONFIG)
+util.o parseklib.o: $(KERNEL_CONFIG)
 
 reset_ndx: libutil.a
 
@@ -52,6 +67,7 @@ theia_toggle: libutil.a
 .PHONY: clean
 clean:
 	rm -f *.a *.o $(TARGETS)
+	rm -rf replay_headers/*
 
 .deps/%.d: %.c .dep_dirs_made
 	@$(CC) $(CFLAGS) -M -o $@ $<

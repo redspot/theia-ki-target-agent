@@ -6,7 +6,11 @@
 #define CLASS_NAME "spec"
 
 #define ROLLED_BACK 1
+#ifndef __user
 #include <linux/replay.h>
+#else
+#define MAX_LOGDIR_STRLEN 256
+#endif
 
 struct record_data {
 	u_long                           app_syscall_addr;
