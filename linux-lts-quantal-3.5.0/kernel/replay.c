@@ -9873,7 +9873,6 @@ if(size <= 0)
 
 // void theia_execve_ahg(const char *filename, const char __user *const __user *envp) {
 void theia_execve_ahg(const char *filename, int rc) {
-printk("execve: %s, rc: %d\n", filename, rc);
 	int ret;
 	struct execve_ahgv* pahgv = NULL;
 
