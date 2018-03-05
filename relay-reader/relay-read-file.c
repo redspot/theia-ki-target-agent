@@ -259,8 +259,8 @@ static void *reader_thread(void *data)
 		//		sleep(1);
     if(get_file_size(filename) >= 1000000000 /*1GB*/) {
       //Adding end of file tag.
-      n = write(hostfd, eof_tag, sizeof(eof_tag));
-      if (n != sizeof(eof_tag)) {
+      n = write(hostfd, eof_tag, strlen(eof_tag));
+      if (n != strlen(eof_tag)) {
           perror("ERROR writing eof_tag.");
           exit(1);
       }
