@@ -55,6 +55,9 @@ char *percpu_out_basename = "cpu";
 //char* togglefile = "/home/yang/theia-on.conf";
 char* control_file = "/tmp/theia-control.conf";
 
+// EOF tag.
+char* eof_tag = "startahg|end_of_file|endahg\n";
+
 // server ip address
 //const char* hostname = "172.16.63.140";
 //const char* hostname = "143.215.130.137";
@@ -255,6 +258,13 @@ static void *reader_thread(void *data)
 
 		//		sleep(1);
     if(get_file_size(filename) >= 1000000000 /*1GB*/) {
+      //Adding end of file tag.
+      n = write(hostfd, eof_tag, sizeof(eof_tag));
+      if (n != sizeof(eof_tag)) {
+          perror("ERROR writing eof_tag.");
+          exit(1);
+      }
+         
       close(hostfd);
       dump_ctr ++;
       sprintf(filename, "/data/ahg.dump.%d", dump_ctr);
