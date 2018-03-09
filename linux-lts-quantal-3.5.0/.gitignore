@@ -89,6 +89,10 @@ GRTAGS
 GSYMS
 GTAGS
 
+# build paths
+theia_build
+source
+
 *.orig
 *~
 \#*#

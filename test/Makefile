@@ -82,3 +82,5 @@ clean:
 nuke: clean
 	rm -rf .deps .dep_dirs_made
 
+install: $(TARGETS)
+	echo $^ | xargs -n1 | xargs -I% install -Dv % /usr/local/bin/%

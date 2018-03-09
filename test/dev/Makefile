@@ -22,3 +22,8 @@ clean:
 
 install:
 	$(MAKE) -C $(KERNEL_DIR) CROSS_COMPILE=$(CROSS_COMPILE) M=$(shell pwd) INSTALL_MOD_DIR=updates/dkms modules_install
+	[ -d /etc/modules-load.d ] && cp ${PWD}/theia.conf /etc/modules-load.d \
+	|| { grep -q '^spec$$' /etc/modules || echo spec >> /etc/modules ; }
+	[ -f /etc/udev/rules.d/99-theia-spec.rules ] || cp ${PWD}/99-theia-spec.rules /etc/udev/rules.d
+	[ ! -e /debug ] && ln -s /sys/kernel/debug /debug
+	[ ! -e /data ] && mkdir /data 2>/dev/null || true

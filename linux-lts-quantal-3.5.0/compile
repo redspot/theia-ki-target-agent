@@ -1,33 +1,40 @@
 #!/bin/bash
 
-ret=0
+#find the location of this script
+#and assume that it is in the theia-ki-target-agent/linux-lts-quantal-3.5.0 dir
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+#exit on error from any command
+set -e
+
+#run this script like "BUILD_DIR=other_dir ./compile" to override
+if [ -z "${BUILD_DIR}" ]; then
+  BUILD_DIR=theia_build
+fi
 
 num_cores=`cat /proc/cpuinfo | grep processor | wc -l`
 build_parallel=$(($num_cores+1))
-make -j$build_parallel
 
-rc=$?
-
-if [ $rc -eq 0 ]; then
-	sudo make install
-
-	if [[ ! -z $OMNIPLAY_DIR ]]; then
-		sudo make headers_install INSTALL_HDR_PATH=$OMNIPLAY_DIR/test/replay_headers
-		echo "Building files depending on kernel headers"
-		pushd $OMNIPLAY_DIR/test &> /dev/null
-		make
-		popd &> /dev/null
-	else
-		echo "WARNING: OMNIPLAY_DIR environment variable not set (run scripts/setup.sh)"
-		echo "    Headers not installed, tests not rebuilt!"
-	fi
-else
-	echo "Make Failure!"
-	ret=1
+CC=gcc
+#use ccache if available
+if which ccache >/dev/null; then
+  CC="ccache gcc"
 fi
 
-# Beep!
-echo -e "\a"
+#create build dir if needed
+if [ ! -d "${DIR}/${BUILD_DIR}" ]; then
+  mkdir "${DIR}/${BUILD_DIR}"
+fi
 
-exit $ret
+#copy theia kernel config if needed
+if [ ! -f "${DIR}/${BUILD_DIR}/.config" ]; then
+  cp "${DIR}/theia.64.config" "${DIR}/${BUILD_DIR}/.config"
+fi
 
+#remove pesky directory that makes Kbuild think things are not clean
+if [ -d "${DIR}/include/config" ]; then
+  rmdir "${DIR}/include/config"
+fi
+
+#build everything
+make -j$build_parallel O="${DIR}/${BUILD_DIR}" CC="$CC"

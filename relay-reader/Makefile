@@ -6,3 +6,7 @@ all:
 clean:
 	/bin/rm -rf *.o relay-read-file
 
+install:
+	install -D relay-read-file /usr/local/bin/relay-read-file
+	install -D etc-default-theia /etc/default/theia
+	[ -f /etc/init/relay-read-file.conf ] || cp ${PWD}/etc.init.relay-read-file.conf /etc/init
