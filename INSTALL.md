@@ -6,7 +6,7 @@ Firstly, you can install the Theia target host subsystems using deb packages. Bu
 
 you can download the ISO for installing Ubuntu 12.04 from here:
 
-<http://old-releases.ubuntu.com/releases/12.04.2/ubuntu-12.04.4-server-amd64.iso>
+<http://old-releases.ubuntu.com/releases/12.04.2/ubuntu-12.04.2-desktop-amd64.iso>
 
 ## clone repo
 
