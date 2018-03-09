@@ -53,14 +53,15 @@ static ssize_t str_show(struct kobject *kobj,
 static ssize_t str_store(struct kobject *kobj,
     struct kobj_attribute *attr, const char *buf, size_t count)
 {
+  char* str_attr;
+
   /* MAX_LOGDIR_STRLEN is in include/linux/replay.h
    * and gets used as a generic buffer size in replay.c
    */
   if (count > MAX_LOGDIR_STRLEN) {
-    pr_err("str_store: %d > %d\n", count, MAX_LOGDIR_STRLEN);
+    pr_err("str_store: %zu > %d\n", count, MAX_LOGDIR_STRLEN);
     return -ENOENT;
   }
-  char* str_attr;
 
   if (strcmp(attr->attr.name, "theia_linker") == 0)
     str_attr = theia_linker;
@@ -368,6 +369,8 @@ static struct file_operations spec_psdev_fops = {
 
 int init_module(void)
 {
+  int retval;
+
   //allocate dynamic major number
   majorNumber = register_chrdev(0, DEVICE_NAME, &spec_psdev_fops);
   if(majorNumber<0) {
@@ -404,7 +407,7 @@ int init_module(void)
     return -ENOMEM;
 
   /* Create the files associated with this kobject */
-  int retval = sysfs_create_group(theia_kobj, &theia_attr_group);
+  retval = sysfs_create_group(theia_kobj, &theia_attr_group);
   if (retval)
     kobject_put(theia_kobj);  // decrement the ref count
 
