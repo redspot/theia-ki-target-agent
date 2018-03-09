@@ -15,11 +15,10 @@ KERNEL_DIR := /lib/modules/$(KVERSION)/build
 endif
 
 all:
-	$(MAKE) -C $(KERNEL_DIR) CROSS_COMPILE=$(CROSS_COMPILE) SUBDIRS=$(shell pwd) modules
+	$(MAKE) -C $(KERNEL_DIR) CROSS_COMPILE=$(CROSS_COMPILE) M=$(shell pwd) modules
 
 clean:
 	$(RM) *.o *.a .depend *.d *.ko *.mod.c
 
 install:
-	install spec.ko /lib/modules/$(shell uname -r)/kernel/fs/
-	/sbin/depmod
+	$(MAKE) -C $(KERNEL_DIR) CROSS_COMPILE=$(CROSS_COMPILE) M=$(shell pwd) INSTALL_MOD_DIR=updates/dkms modules_install
