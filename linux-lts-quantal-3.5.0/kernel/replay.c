@@ -9710,7 +9710,10 @@ void theia_openat_ahgx(int fd, const char __user * filename, int flag, int mode)
 			fpath = theia_retbuf;
 		}
 
-		sprintf(theia_buf1, "%s|%s|%d|%d", uuid_str, fpath, flag, mode);
+		char *fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+		if (!fpath_b64) fpath_b64 = "";
+
+		sprintf(theia_buf1, "%s|%s|%d|%d", uuid_str, fpath_b64, flag, mode);
 		theia_dump_str(theia_buf1, fd, SYS_OPENAT);
 		fput_light(file, fput_needed);
 	}
@@ -15894,6 +15897,14 @@ void theia_clone_ahg(long new_pid) {
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
+
+  rcu_read_lock();
+  struct task_struct *new_tsk = find_task_by_vpid(new_pid);
+  rcu_read_unlock();
+  if(new_tsk) {
+    if(is_process_new2(new_tsk->pid, new_tsk->start_time.tv_sec))
+      packahgv_process(new_tsk);
+  }
 
 	if(new_pid >= 0) {
 		pahgv = (struct clone_ahgv*)KMALLOC(sizeof(struct clone_ahgv), GFP_KERNEL);

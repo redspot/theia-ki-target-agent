@@ -1,0 +1,14 @@
+#record
+$ test/theia_toggle recording on
+
+#replay
+
+## In case you did not record with -m, you can replay to generate it first:
+$ test/theia_replay <dir> -m --pthread $OMNIPLAY_DIR/eglibc-2.15/prefix/lib
+
+## replay the process group first
+# <dir> is /replay_logdb/rec_N
+$ ./theia_replay <dir> -p --pthread $OMNIPLAY_DIR/eglibc-2.15/prefix/lib
+
+## Then, at another bash, run pin:
+libdft64/pin-2.13/intel64/bin/pinbin -pid <pid> -t libdft64/libdft64/build/tools/.libs/libdft-dta64.so
