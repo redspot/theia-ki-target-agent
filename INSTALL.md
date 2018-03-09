@@ -2,6 +2,12 @@
 
 Firstly, you can install the Theia target host subsystems using deb packages. But, for developers, you can build and install the subsystems manually. This guide gives rough guide on how to do so.
 
+## base image
+
+you can download the ISO for installing Ubuntu 12.04 from here:
+
+<http://old-releases.ubuntu.com/releases/12.04.2/ubuntu-12.04.4-server-amd64.iso>
+
 ## clone repo
 
 	git clone git@tc.gtisc.gatech.edu:theia-ki-target-agent
