@@ -559,7 +559,6 @@ void theia_dump_str(char *str, int rc, int sysnum) {
 			sysnum, current->pid, current->start_time.tv_sec, \
 			rc, str, \
 			current->tgid, sec, nsec, current->no_syscalls++);
-printk("theia_dump_str: %s\n", theia_buf2);
 		theia_file_write(theia_buf2, size);
 	}
 }
