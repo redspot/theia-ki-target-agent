@@ -9715,7 +9715,7 @@ void theia_openat_ahgx(int fd, const char __user * filename, int flag, int mode)
 		sprintf(theia_buf1, "%s|%s|%d|%d", uuid_str, fpath_b64, flag, mode);
 		theia_dump_str(theia_buf1, fd, SYS_OPENAT);
 		fput_light(file, fput_needed);
-    free(fpath_b64);
+    vfree(fpath_b64);
 	}
 }
 
