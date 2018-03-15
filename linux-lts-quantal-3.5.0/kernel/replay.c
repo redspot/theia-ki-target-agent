@@ -541,7 +541,7 @@ bool fd2uuid(int fd, char *uuid_str) {
       			return false;
 	}
 	else {
-		printk("[fd2uuid]: Failed to get file.\n");
+		printk("[fd2uuid]: Failed to get file. fd %d\n", fd);
 		return false;
 	}
 
@@ -8085,7 +8085,9 @@ void packahgv_process(struct task_struct *tsk) {
           args[i] = ' ';
       }
     }
-		char *args_b64 = base64_encode(args, strlen(args), NULL);
+		char *args_b64 = NULL;
+    if(args)
+      args_b64 = base64_encode(args, strlen(args), NULL);
 		if (!args_b64) args_b64 = "";
 
 //allocate buf
@@ -8110,9 +8112,8 @@ if(size <= 0)
 		vfree(fpathbuf);
     vfree(fpath_b64);
     vfree(buf);
-    if (mm) {
-      vfree(args);
-    }
+    vfree(args);
+    vfree(args_b64);
 	}
 }
 
