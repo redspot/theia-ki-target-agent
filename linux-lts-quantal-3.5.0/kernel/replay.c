@@ -453,7 +453,7 @@ bool file2uuid(struct file* file, char *uuid_str, int fd) {
 				get_peer_ip_port_sockfd(fd, ip, &port, sun_path, &sa_family); 
 				get_local_ip_port_sockfd(fd, local_ip, &local_port, local_sun_path, &sa_family); 
 				if (strcmp(ip, "LOCAL") == 0) {
-					sprintf(uuid_str, "S|%s|%d|%s|%d", sun_path, port, local_sun_path, local_port);
+					snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", sun_path, port, local_sun_path, local_port);
 //					if (strcmp(sun_path, "LOCAL") == 0 || sun_path[0] == '\0')
 //						return false;
 //					else
@@ -463,7 +463,7 @@ bool file2uuid(struct file* file, char *uuid_str, int fd) {
 				else
 //					sprintf(uuid_str, "ip:[%s:%d]", ip, port);
 //					sprintf(uuid_str, "ip:[%s:%d]|local_ip:[%s:%d]", ip, port, local_ip, local_port);
-					sprintf(uuid_str, "S|%s|%d|%s|%d", ip, port, local_ip, local_port);
+					snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", ip, port, local_ip, local_port);
 			}
 			else {
 				return false;
@@ -510,10 +510,10 @@ bool file2uuid(struct file* file, char *uuid_str, int fd) {
 #endif
 		}
 //Yang: we need these later:
-    strcpy(rec_uuid_str, uuid_str);
+    strncpy(rec_uuid_str, uuid_str, THEIA_UUID_LEN);
 	}
 	else {
-		printk("[file2uuid]: Note a file\n");
+		printk("[file2uuid]: Not a file\n");
 		return false;
 	}
 
@@ -564,7 +564,7 @@ bool fd2uuid(int fd, char *uuid_str) {
 
 	if (!err) {
 		sprintf(buf, "|%d/%d", stat.uid, stat.gid);
-		strncat(uuid_str, buf, THEIA_UUID_LEN-strlen(uuid_str));
+		strncat(uuid_str, buf, THEIA_UUID_LEN-strnlen(uuid_str, THEIA_UUID_LEN));
 	}
 	else
 		strcat(uuid_str, "|-1/-1");
@@ -583,7 +583,7 @@ void theia_dump_auxdata() {
 		long sec, nsec;
 		int size;
 
-		size = sprintf(theia_buf2, "startahg|700|%d|%s|%s|endahg\n", current->pid, theia_retbuf, ids);
+		size = snprintf(theia_buf2, THEIA_BUF2_LEN, "startahg|700|%d|%s|%s|endahg\n", current->pid, theia_retbuf, ids);
 if(theia_buf2[0] != 's' || theia_buf2[1] != 't')
   printk("strange auxdata \n");
 		theia_file_write(theia_buf2, size);
@@ -12644,26 +12644,29 @@ void packahgv_connect(struct connect_ahgv *sys_args) {
 		char uuid_str[THEIA_UUID_LEN+1];
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
 			return; /* no file, socket, ...? */
+		uuid_str[THEIA_UUID_LEN] = '\0';
 
-		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n", 
+		size = snprintf(buf, THEIA_BUF2_LEN-1, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n", 
 			42, sys_args->pid, current->start_time.tv_sec, 
 			uuid_str, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
 #else
 		if(sys_args->sa_family == AF_LOCAL){
-			size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
+			size = snprintf(buf, THEIA_BUF2_LEN-1, "startahg|%d|%d|%ld|%ld|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
 					42, sys_args->pid, current->start_time.tv_sec, 
 					sys_args->rc, sys_args->sock_fd, sys_args->sun_path, sys_args->port, current->tgid, sec, nsec);
 		}
 		else {
-			size = sprintf(buf, "startahg|%d|%d|%ld|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
+			size = snprintf(buf, THEIA_BUF2_LEN-1, "startahg|%d|%d|%ld|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
 					42, sys_args->pid, current->start_time.tv_sec, 
 					sys_args->rc, sys_args->sock_fd, sys_args->ip, sys_args->port, current->tgid, sec, nsec);
 		}
 //		printk("[socketcall connect]: %s", buf);
 #endif
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
-		theia_file_write(buf, size);
+    buf[THEIA_BUF2_LEN] = '\0';
+    if(size <= 0)
+      printk("[%d]strange size %d\n", __LINE__,size);
+    else
+		  theia_file_write(buf, size);
 	}
 }
 
