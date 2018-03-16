@@ -25,5 +25,5 @@ install:
 	[ -d /etc/modules-load.d ] && cp ${PWD}/theia.conf /etc/modules-load.d \
 	|| { grep -q '^spec$$' /etc/modules || echo spec >> /etc/modules ; }
 	[ -f /etc/udev/rules.d/99-theia-spec.rules ] || cp ${PWD}/99-theia-spec.rules /etc/udev/rules.d
-	[ ! -e /debug ] && ln -s /sys/kernel/debug /debug
-	[ ! -e /data ] && mkdir /data 2>/dev/null || true
+	[ -e /debug ] || ln -s /sys/kernel/debug /debug
+	[ -e /data ] || mkdir /data 2>/dev/null || true
