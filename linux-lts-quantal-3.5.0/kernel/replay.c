@@ -358,6 +358,9 @@ unsigned int replay_pause_tool = 0;
 char *theia_buf1   = NULL;
 char *theia_buf2   = NULL;
 char *theia_retbuf = NULL;
+#define THEIA_BUF1_LEN PAGE_SIZE
+#define THEIA_BUF2_LEN PAGE_SIZE
+#define THEIA_RETBUF_LEN PAGE_SIZE
 
 //Yang: inode etc for replay and pin
 char rec_uuid_str[THEIA_UUID_LEN+1];
@@ -365,9 +368,18 @@ char repl_uuid_str[THEIA_UUID_LEN+1] = "initial";
 
 bool theia_check_channel(void) {
 
-	if (!theia_buf1)   theia_buf1   = vmalloc(4096);
-	if (!theia_buf2)   theia_buf2   = vmalloc(4096);
-	if (!theia_retbuf) theia_retbuf = vmalloc(4096);
+	if (!theia_buf1) {
+    theia_buf1   = vmalloc(THEIA_BUF1_LEN);
+    memset(theia_buf1, 0x0, THEIA_BUF1_LEN);
+  }
+	if (!theia_buf2) {
+    theia_buf2   = vmalloc(THEIA_BUF2_LEN);
+    memset(theia_buf2, 0x0, THEIA_BUF2_LEN);
+  }
+	if (!theia_retbuf) {
+    theia_retbuf = vmalloc(THEIA_RETBUF_LEN);
+    memset(theia_retbuf, 0x0, THEIA_RETBUF_LEN);
+  }
 
 #ifdef THEIA_DIRECT_FILE_WRITE
 	if(theia_logging_toggle == 0) {
