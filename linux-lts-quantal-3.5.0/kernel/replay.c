@@ -12733,7 +12733,7 @@ void packahgv_sendto(struct sendto_ahgv *sys_args) {
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
 			return; /* no file, socket, ...? */
 
-		size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%d|%d|%u|endahg\n", 
+		size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|%u|endahg\n",
 				44, sys_args->pid, current->start_time.tv_sec, 
 				uuid_str, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
 #else
@@ -12788,7 +12788,7 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args) {
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
 			return; /* no file, socket, ...? */
 
-		size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%d|%d|%u|endahg\n", 
+		size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|%u|endahg\n",
 				45, sys_args->pid, current->start_time.tv_sec, 
 				uuid_str, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
 #else
@@ -12900,7 +12900,7 @@ void packahgv_recvmsg(struct recvmsg_ahgv *sys_args) {
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
 			return; /* no file, socket, ...? */
 
-		size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%d|%d|%u|endahg\n", 
+		size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|%u|endahg\n",
 				47, sys_args->pid, current->start_time.tv_sec, 
 				uuid_str, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
 #else
