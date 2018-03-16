@@ -8086,9 +8086,11 @@ void packahgv_process(struct task_struct *tsk) {
       }
     }
 		char *args_b64 = NULL;
+    char args_bkp[2] = "";
     if(args)
       args_b64 = base64_encode(args, strlen(args), NULL);
-		if (!args_b64) args_b64 = "";
+		if (!args_b64) 
+      args_b64 = args_bkp;
 
 //allocate buf
     uint32_t buf_size = strlen(fpath_b64) + strlen(args_b64) + 256;
@@ -8113,7 +8115,8 @@ if(size <= 0)
     vfree(fpath_b64);
     vfree(buf);
     vfree(args);
-    vfree(args_b64);
+    if(args)
+      vfree(args_b64);
 	}
 }
 
