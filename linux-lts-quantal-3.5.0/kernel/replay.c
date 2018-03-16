@@ -12662,7 +12662,7 @@ void packahgv_connect(struct connect_ahgv *sys_args) {
 		}
 //		printk("[socketcall connect]: %s", buf);
 #endif
-    buf[THEIA_BUF2_LEN] = '\0';
+    buf[THEIA_BUF2_LEN-1] = '\0';
     if(size <= 0)
       printk("[%d]strange size %d\n", __LINE__,size);
     else
