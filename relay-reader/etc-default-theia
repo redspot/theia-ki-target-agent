@@ -1,3 +1,4 @@
 READ_FILE_BIN=/usr/local/bin/relay-read-file
+TOGGLE_BIN=/usr/local/bin/theia_toggle
 LOGGING=0
 RECORDING=0
