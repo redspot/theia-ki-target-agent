@@ -15,6 +15,9 @@
 #include <linux/sysfs.h>
 
 #include <linux/replay.h>
+#include <linux/relay.h>
+#include <linux/ktime.h>
+#include <linux/time.h>
 
 #include <linux/ds_list.h>
 #include "devspec.h"
@@ -28,6 +31,7 @@ extern bool theia_cross_toggle;
 extern struct theia_replay_register_data_type theia_replay_register_data;
 extern char theia_linker[];
 extern char theia_libpath[];
+extern struct rchan *theia_chan;
 
 static int majorNumber;
 static struct class*  charClass  = NULL;
@@ -36,6 +40,26 @@ static struct device* charDevice = NULL;
 /* Debugging stuff */
 //#define DPRINT printk
 #define DPRINT(x,...)
+
+void packahgv_reboot(void) {
+  struct timespec tp;
+  __kernel_long_t uptime;
+  struct timespec ts;
+  int size = 0;
+  char *buf = vmalloc(512);
+  getnstimeofday(&ts);
+
+  ktime_get_ts(&tp);
+  monotonic_to_bootbased(&tp);
+  uptime = tp.tv_sec + (tp.tv_nsec ? 1 : 0);
+
+  size = sprintf(buf, "startahg|%d|%ld|%ld|%ld|endahg\n",
+      601/*used for reboot*/, uptime, ts.tv_sec, ts.tv_nsec);
+
+  if(theia_chan)
+    relay_write(theia_chan, buf, size);
+  vfree(buf);
+}
 
 static ssize_t str_show(struct kobject *kobj,
     struct kobj_attribute *attr, char *buf)
@@ -105,6 +129,8 @@ static ssize_t flag_store(struct kobject *kobj, struct kobj_attribute *attr,
   if (error || flag > 1) return -EINVAL;
 
   if (strcmp(attr->attr.name, "theia_logging_toggle") == 0) {
+    if(theia_logging_toggle == 0 && flag == 1)
+      packahgv_reboot();
     theia_logging_toggle = flag;
   } else if (strcmp(attr->attr.name, "theia_recording_toggle") == 0) {
     theia_recording_toggle = flag;
@@ -168,20 +194,22 @@ static long spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
 
   switch (cmd) {
     case THEIA_LOGGING_ON:
+      if(theia_logging_toggle == 0)
+        packahgv_reboot();
       theia_logging_toggle = 1;
-      printk(KERN_INFO "Theia logging on\n");
+      pr_info("Theia logging on\n");
       return 0;
     case THEIA_LOGGING_OFF:
       theia_logging_toggle = 0;
-      printk(KERN_INFO "Theia logging off\n");
+      pr_info("Theia logging off\n");
       return 0;
     case THEIA_RECORDING_ON:
       theia_recording_toggle = 1;
-      printk(KERN_INFO "Theia recording on\n");
+      pr_info("Theia recording on\n");
       return 0;
     case THEIA_RECORDING_OFF:
       theia_recording_toggle = 0;
-      printk(KERN_INFO "Theia recording off\n");
+      pr_info("Theia recording off\n");
       return 0;
     case THEIA_CROSS_ON:
       theia_cross_toggle = 1;

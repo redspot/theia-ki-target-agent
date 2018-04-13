@@ -133,6 +133,7 @@ int debug_flag = 0;
 
 //#define APP_DIR		"theia_logs"
 struct rchan	*theia_chan = NULL;
+EXPORT_SYMBOL(theia_chan);
 struct dentry	*theia_dir = NULL;
 //static size_t		subbuf_size = 262144*5;
 //static size_t		n_subbufs = 8;

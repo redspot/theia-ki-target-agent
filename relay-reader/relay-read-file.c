@@ -137,21 +137,6 @@ void get_curr_time(long *sec, long *nsec) {
 	return;
 }
 
-
-void packahgv_reboot(char* buf) {
-	struct sysinfo s_info;
-	int error = sysinfo(&s_info);
-	if(error != 0) {
-		printf("sysinfo fails for reaching uptime %d\n", error);
-	}
-
-	long sec, nsec;
-	get_curr_time(&sec, &nsec);
-	int size = 0;
-	size = sprintf(buf, "startahg|%d|%ld|%ld|%ld|endahg\n", 
-			601/*used for reboot*/, s_info.uptime, sec, nsec);
-}
-
 size_t get_file_size(const char* filename) {
   struct stat st;
   if(stat(filename, &st) != 0) {
@@ -215,15 +200,6 @@ static void *reader_thread(void *data)
 	int rc, cpu = (int)(long)data;
 	unsigned seq;
 	struct pollfd pollfd;
-
-	char reboot_buf[512];
-	packahgv_reboot(reboot_buf);
-
-	n = write(hostfd, reboot_buf, strlen(reboot_buf));
-	if (n < 0) {
-		perror("ERROR writing to socket");
-		exit(1);
-	}
 
 	do {
 
