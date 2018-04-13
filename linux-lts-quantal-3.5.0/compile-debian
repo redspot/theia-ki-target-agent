@@ -7,7 +7,8 @@ if ! dpkg-query -s pkg-config-dbgsym 2>/dev/null >/dev/null; then
 fi
 
 #patch changelog with git tag
-sed -i.bak -e "s/13+theia1/13+theia1+$(git describe --always)/" \
+sed -i.bak -e "s/13+theia1/13+theia2+$(
+git describe --always --long | tr - +)/" \
     debian.master/changelog >/dev/null
 
 #example w/ clean
