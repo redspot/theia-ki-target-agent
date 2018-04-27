@@ -451,6 +451,10 @@ void cleanup_module(void)
   class_destroy(charClass);
   unregister_chrdev(majorNumber, DEVICE_NAME);
   kobject_put(theia_kobj);  // decrement the ref count
+  if (theia_chan) {
+    relay_close(theia_chan);
+    theia_chan = NULL;
+  }
   printk (KERN_INFO "User-Level speculation module 1.0 exiting.\n");
 }
 

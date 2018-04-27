@@ -107,7 +107,7 @@ void get_user_callstack(char *buffer, size_t bufsize);
 char* get_file_fullpath(struct file *opened_file, char *buf, size_t buflen);
 
 void theia_dump_str(char *str, int rc, int sysum);
-void theia_dump_auxdata();
+void theia_dump_auxdata(void);
 
 void theia_setuid_ahg(uid_t uid, int rc, u_long clock);
 
@@ -132,9 +132,9 @@ int debug_flag = 0;
 #define N_SUBBUFS 4
 
 //#define APP_DIR		"theia_logs"
-struct rchan	*theia_chan = NULL;
+struct rchan* theia_chan = NULL;
 EXPORT_SYMBOL(theia_chan);
-struct dentry	*theia_dir = NULL;
+struct dentry* theia_dir = NULL;
 //static size_t		subbuf_size = 262144*5;
 //static size_t		n_subbufs = 8;
 //static size_t		event_n = 20;
@@ -162,10 +162,7 @@ bool startsWith(const char *pre, const char *str)
 
 const char* theia_dump_fname = "/data/ahg.dump2.1";
 void theia_file_write(char *buf, size_t size);
-static char *theia_prevbuf = NULL;
-static size_t theia_prevbuf_size = 0;
 
-static struct file* theia_filp = NULL;
 void theia_file_write(char *buf, size_t size) {
 #ifdef THEIA_DIRECT_FILE_WRITE
 	loff_t pos = 0;
@@ -228,7 +225,7 @@ void theia_file_write(char *buf, size_t size) {
 	}
 #else
 if(size <= 0)
-  printk("strange relay_write size %d\n", size);
+  printk("strange relay_write size %zu\n", size);
 	relay_write(theia_chan, buf, size);
 #endif
 }
@@ -311,14 +308,14 @@ int verify_debug = 0;
 // Size of the file cache - default
 #define INIT_RECPLAY_CACHE_SIZE 32
 
-#define DPRINT if(replay_debug) printk
+#define DPRINT if(replay_debug) pr_debug
 //#define DPRINT(x,...)
-#define MPRINT if(replay_debug || replay_min_debug) printk
+#define MPRINT if(replay_debug || replay_min_debug) pr_debug
 //#define MPRINT(x,...)
 //#define MCPRINT
 
 unsigned int theia_debug = 1;
-#define TPRINT if(theia_debug) printk
+#define TPRINT if(theia_debug) pr_debug
 //#define DPRINT(x,...)
 
 //xdou
@@ -368,6 +365,7 @@ char rec_uuid_str[THEIA_UUID_LEN+1];
 char repl_uuid_str[THEIA_UUID_LEN+1] = "initial";
 
 bool theia_check_channel(void) {
+	mm_segment_t old_fs;                                                
 
 	if (!theia_buf1) {
     theia_buf1   = vmalloc(THEIA_BUF1_LEN);
@@ -394,7 +392,7 @@ bool theia_check_channel(void) {
 		return false;
 	} 
 
-	mm_segment_t old_fs = get_fs();                                                
+	old_fs = get_fs();                                                
 	set_fs(KERNEL_DS);
 
 	if(theia_dir == NULL) {
@@ -437,8 +435,7 @@ bool file2uuid(struct file* file, char *uuid_str, int fd) {
 	int local_port;
 	char sun_path[UNIX_PATH_MAX];
 	char local_sun_path[UNIX_PATH_MAX];
-	sa_family_t *sa_family; /* not used */
-	char *fpath;
+	sa_family_t *sa_family = NULL; /* not used */
 
 	if (file) {
 		inode = file->f_dentry->d_inode;
@@ -451,8 +448,8 @@ bool file2uuid(struct file* file, char *uuid_str, int fd) {
 			sock = sockfd_lookup(fd, &err);
 			if (sock) {
 				sockfd_put(sock);
-				get_peer_ip_port_sockfd(fd, ip, &port, sun_path, &sa_family); 
-				get_local_ip_port_sockfd(fd, local_ip, &local_port, local_sun_path, &sa_family); 
+				get_peer_ip_port_sockfd(fd, ip, (u_long*)&port, sun_path, sa_family); 
+				get_local_ip_port_sockfd(fd, local_ip, (u_long*)&local_port, local_sun_path, sa_family); 
 				if (strcmp(ip, "LOCAL") == 0) {
 					snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", sun_path, port, local_sun_path, local_port);
 //					if (strcmp(sun_path, "LOCAL") == 0 || sun_path[0] == '\0')
@@ -536,7 +533,7 @@ void path2uuid(const struct path path, char* uuid_str)
 	uid = path.dentry->d_inode->i_uid;
 	gid = path.dentry->d_inode->i_gid;
 	
-	sprintf(uuid_str, "%x|%x|%ld|%ld", dev, ino,
+	sprintf(uuid_str, "%lx|%lx|%ld|%ld", dev, ino,
 		cr_time.tv_sec, cr_time.tv_nsec);
 }
 
@@ -544,7 +541,9 @@ bool fd2uuid(int fd, char *uuid_str) {
 	struct file *file;
 	int fput_needed;
 	int err;
-  	int ret;
+ 	int ret;
+	struct kstat stat;
+	char buf[THEIA_UUID_LEN];
 
 	file = fget_light(fd, &fput_needed);
 	if (file) {
@@ -559,9 +558,7 @@ bool fd2uuid(int fd, char *uuid_str) {
 	}
 
 /* owner info */
-	struct kstat stat;
 	err = vfs_fstat(fd, &stat);
-	char buf[THEIA_UUID_LEN];
 
 	if (!err) {
 		sprintf(buf, "|%d/%d", stat.uid, stat.gid);
@@ -581,7 +578,6 @@ void theia_dump_auxdata() {
 	get_user_callstack(theia_retbuf, 4096);
 
 	if(theia_logging_toggle) {
-		long sec, nsec;
 		int size;
 
 		size = snprintf(theia_buf2, THEIA_BUF2_LEN, "startahg|700|%d|%s|%s|endahg\n", current->pid, theia_retbuf, ids);
@@ -610,7 +606,7 @@ void theia_dump_str(char *str, int rc, int sysnum) {
 		get_curr_time(&sec, &nsec);
 
 		/* str will be theia_buf1 */
-		size = sprintf(theia_buf2, "startahg|%d|%d|%d|%d|%s|%d|%ld|%ld|%u|endahg\n", \
+		size = sprintf(theia_buf2, "startahg|%d|%d|%li|%d|%s|%d|%ld|%ld|%u|endahg\n", \
 			sysnum, current->pid, current->start_time.tv_sec, \
 			rc, str, \
 			current->tgid, sec, nsec, current->no_syscalls++);
@@ -736,8 +732,8 @@ void theia_dump_at_sd(int dfd, const char __user *str, int val, int rc, int sysn
 	*/
 }
 
-void theia_dump_dd(int val1, int val2, int rc, int sysnum) {
-	sprintf(theia_buf1, "%d|%d", val1, val2);
+void theia_dump_dd(long val1, long val2, int rc, int sysnum) {
+	sprintf(theia_buf1, "%li|%li", val1, val2);
 	theia_dump_str(theia_buf1, rc, sysnum);
 }
 
@@ -781,7 +777,7 @@ ulong dropped_count = 0;
 static int subbuf_start_handler(struct rchan_buf *buf,
 				  void *subbuf,
 				  void *prev_subbuf,
-				  unsigned int prev_padding)
+				  size_t prev_padding)
 {
 	if (relay_buf_full(buf)) {
 		if (!suspended) {
@@ -803,7 +799,7 @@ static int subbuf_start_handler(struct rchan_buf *buf,
  */
 static struct dentry *create_buf_file_handler(const char *filename,
 					      struct dentry *parent,
-					      int mode,
+					      umode_t mode,
 					      struct rchan_buf *buf,
 					      int *is_global)
 {
@@ -843,8 +839,7 @@ static struct rchan_callbacks relay_callbacks =
  *
  *	Returns channel on success, NULL otherwise
  */
-struct rchan *create_channel(unsigned size,
-				    unsigned n)
+struct rchan* create_channel(size_t size, size_t n)
 {
 	struct rchan *channel;
 	
@@ -856,19 +851,6 @@ struct rchan *create_channel(unsigned size,
 	}
 
 	return channel;
-}
-
-/**
- *	destroy_channel - destroys channel /debug/APP_DIR/cpuXXX
- *
- *	Destroys channel along with associated produced/consumed control files
- */
-static void destroy_channel(void)
-{
-	if (theia_chan) {
-		relay_close(theia_chan);
-		theia_chan = NULL;
-	}
 }
 
 void put_blackpid(int grpid) {
@@ -1117,13 +1099,13 @@ struct pipe_track {
 #define READ_IS_PIPE (1<<1)
 
 DEFINE_MUTEX(pipe_tree_mutex);
-static struct btree_head32 pipe_tree;
+static struct btree_head64 pipe_tree;
 
 void replay_free_pipe(void *pipe) {
 	struct pipe_track *info;
 
 	mutex_lock(&pipe_tree_mutex);
-	info = btree_lookup32(&pipe_tree, (u32)pipe);
+	info = btree_lookup64(&pipe_tree, (u64)pipe);
 
 	if (info != NULL) {
 		struct replayfs_btree128_key key;
@@ -1134,7 +1116,7 @@ void replay_free_pipe(void *pipe) {
 		memcpy(&key, &info->key, sizeof(key));
 
 		kfree(info);
-		btree_remove32(&pipe_tree, (u32)pipe);
+		btree_remove64(&pipe_tree, (u64)pipe);
 		mutex_unlock(&pipe_tree_mutex);
 
 		/* Get the map that needs to be freed */
@@ -1163,7 +1145,7 @@ void replay_sock_put(struct sock *sk) {
 	struct pipe_track *info;
 
 	mutex_lock(&pipe_tree_mutex);
-	info = btree_lookup32(&pipe_tree, (u32)sk);
+	info = btree_lookup64(&pipe_tree, (u64)sk);
 
 	if (info != NULL) {
 		struct replayfs_btree128_key key;
@@ -1173,7 +1155,7 @@ void replay_sock_put(struct sock *sk) {
 		memcpy(&key, &info->key, sizeof(key));
 
 		kfree(info);
-		btree_remove32(&pipe_tree, (u32)sk);
+		btree_remove64(&pipe_tree, (u64)sk);
 		mutex_unlock(&pipe_tree_mutex);
 
 		/* Get the map that needs to be freed */
@@ -1710,14 +1692,14 @@ static void clogfreeall (struct record_thread* prect);
 void write_begin_log (struct file* file, loff_t* ppos, struct record_thread* prect);
 static void write_and_free_kernel_log(struct record_thread *prect);
 //Yang
-static void ahg_write_and_free_kernel_log(struct record_thread *prect);
+//static void ahg_write_and_free_kernel_log(struct record_thread *prect);
 void write_mmap_log (struct record_group* prg);
-int read_mmap_log (struct record_group* prg);
+long read_mmap_log (struct record_group* prg);
 //static int add_sysv_mapping (struct replay_thread* prt, int record_id, int replay_id);
 //static int find_sysv_mapping (struct replay_thread* prt, int record_id);
 static void delete_sysv_mappings (struct replay_thread* prt);
 #ifdef WRITE_ASYNC
-static void write_and_free_kernel_log_async(struct record_thread *prect);
+//static void write_and_free_kernel_log_async(struct record_thread *prect);
 static void write_and_free_handler (struct work_struct *work);
 #endif
 static int record_execve(const char *filename, const char __user *const __user *__argv, const char __user *const __user *__envp, struct pt_regs *regs);
@@ -1884,7 +1866,7 @@ static int
 create_shared_clock (struct record_group* prg)
 {
 	u_long uaddr;
-	int fd, rc;
+	long fd, rc;
 	mm_segment_t old_fs = get_fs();
 	struct replay_paths_to_free* ptmp;
 
@@ -1901,25 +1883,25 @@ create_shared_clock (struct record_group* prg)
 	snprintf (prg->rg_shmpath, MAX_LOGDIR_STRLEN+1, "/dev/shm/uclock%d", current->pid);
 	fd = sys_open (prg->rg_shmpath, O_CREAT | O_EXCL | O_RDWR | O_NOFOLLOW, 0644);
 	if (fd < 0) {
-		printk ("create_shared_clock: pid %d cannot open shared file %s, rc=%d\n", current->pid, prg->rg_shmpath, fd);
+		pr_err("create_shared_clock: pid %d cannot open shared file %s, rc=%ld\n", current->pid, prg->rg_shmpath, fd);
 		goto out_oldfs;
 	}
 
 	rc = sys_ftruncate (fd, 4096);
 	if (rc < 0) {
-		printk ("create_shared_clock: pid %d cannot create new shm page, rc=%d\n", current->pid, rc);
+		pr_err ("create_shared_clock: pid %d cannot create new shm page, rc=%ld\n", current->pid, rc);
 		goto out_close;
 	}	
 
 	uaddr = sys_mmap_pgoff (0, 4096, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	if (IS_ERR((void *) uaddr)) {
-		printk ("create_shared_clock: pid %d cannot map shm page, rc=%ld\n", current->pid, PTR_ERR((void *) uaddr));
+		pr_err ("create_shared_clock: pid %d cannot map shm page, rc=%ld\n", current->pid, PTR_ERR((void *) uaddr));
 		goto out_close;
 	}
 
 	rc = get_user_pages (current, current->mm, uaddr, 1, 1, 0, &prg->rg_shared_page, NULL);
 	if (rc != 1) {
-		printk ("creare_shared_clock: pid %d cannot get shm page, rc=%d\n", current->pid, rc);
+		pr_err ("creare_shared_clock: pid %d cannot get shm page, rc=%ld\n", current->pid, rc);
 		goto out_unmap;
 	}
 
@@ -1927,10 +1909,10 @@ create_shared_clock (struct record_group* prg)
 	DPRINT ("record/replay clock is at %p\n", prg->rg_pkrecord_clock);
 
 	rc = sys_munmap (uaddr, 4096);
-	if (rc < 0) printk ("create_shared_clock: pid %d cannot munmap shared page, rc=%d\n", current->pid, rc);
+	if (rc < 0) pr_err ("create_shared_clock: pid %d cannot munmap shared page, rc=%ld\n", current->pid, rc);
 
 	rc = sys_close(fd);
-	if (rc < 0) printk ("create_shared_clock: pid %d cannot close shared file %s, rc=%d\n", current->pid, prg->rg_shmpath, rc);
+	if (rc < 0) pr_err ("create_shared_clock: pid %d cannot close shared file %s, rc=%ld\n", current->pid, prg->rg_shmpath, rc);
 
 	return 0;
 
@@ -2101,7 +2083,7 @@ set_record_cache_file (struct record_cache_files* pfiles, int fd)
 		}		 
 		tmp->data = KMALLOC(chunkcount*sizeof(struct record_cache_data), GFP_KERNEL);
 		if (tmp->data == NULL) {
-			printk ("set_cache_file: cannot allocate new data buffer of size %d\n", chunkcount*sizeof(struct record_cache_data));
+			printk ("set_cache_file: cannot allocate new data buffer of size %lu\n", chunkcount*sizeof(struct record_cache_data));
 			KFREE (tmp);
 			up_write(&pfiles->sem);
 			return -ENOMEM;
@@ -2469,7 +2451,7 @@ inline int is_regular_file(unsigned int fd){
         rcu_read_lock();
         file = fcheck_files(files,fd);
         if(file){
-                if(!atomic_inc_not_zero(&file->f_count)){
+                if(!atomic64_inc_not_zero(&file->f_count)){
                         rcu_read_unlock();
                         return 0;
                 }
@@ -3057,6 +3039,8 @@ void get_user_callstack(char* buffer, size_t bufsize) {
 	struct vm_area_struct *vma;
 	struct inode *inode;
 	char *ret_str = theia_buf2;
+	char *ptr;
+	char *path = NULL;
 
 	trace.nr_entries  = 0;
 	trace.max_entries = NO_STACK_ENTRIES;
@@ -3065,9 +3049,6 @@ void get_user_callstack(char* buffer, size_t bufsize) {
 
 	save_stack_trace_user(&trace);
 
-	int idx = 0;
-	char *ptr;
-	char *path = NULL;
 	buffer[0] = '\0';
 	for (i = 0; i < trace.nr_entries; ++i) {
 		vma = find_vma(mm, trace.entries[i]);
@@ -3080,7 +3061,7 @@ void get_user_callstack(char* buffer, size_t bufsize) {
 			if (IS_ERR(path)) {
 				path = "anon_page";
 			}
-			sprintf(ret_str, "%s[%lx:%lx]=%lx", path, inode->i_sb->s_dev, inode->i_ino, trace.entries[i]);
+			sprintf(ret_str, "%s[%x:%lx]=%lx", path, inode->i_sb->s_dev, inode->i_ino, trace.entries[i]);
 			ptr = ret_str;
 		}
 		else {
@@ -3514,7 +3495,7 @@ static void* argsalloc (size_t size)
 		asize = (size > argsalloc_size) ? size : argsalloc_size;
 		slab = VMALLOC(asize);
 		if (slab == NULL) {
-			printk ("Pid %d argsalloc: couldn't alloc slab with size %u\n", current->pid, asize);
+			printk ("Pid %d argsalloc: couldn't alloc slab with size %lu\n", current->pid, asize);
 			return NULL;
 		}
 		rc = add_argsalloc_node(current->record_thrd, slab, asize);
@@ -4055,7 +4036,7 @@ is_libpath_present (struct record_group* prg, char* p)
 				DPRINT ("pid %d: libpath matches\n", current->pid);
 				return 0; // match found
 			}
-			DPRINT ("pid %d: libpath does not match %d %d, return %d\n", current->pid, strlen(prg->rg_libpath)+1, len, i);
+			DPRINT ("pid %d: libpath does not match %lu %d, return %d\n", current->pid, strlen(prg->rg_libpath)+1, len, i);
 			return i; // libarary path there at this index but does not match
 		}
 		p += sizeof(int) + len;
@@ -4203,10 +4184,10 @@ int fork_replay_theia (char __user* logdir, const char* filename, const char __u
 	struct record_group* prg;
 	long retval;
 	char ckpt[MAX_LOGDIR_STRLEN+10];
-	const char __user * pc;
 	char* argbuf;
 	int argbuflen;
 	void* slab;
+  int theia_libpath_len;
 #ifdef TIME_TRICK
 	struct timeval tv;
 	struct timespec tp;
@@ -4290,7 +4271,7 @@ int fork_replay_theia (char __user* logdir, const char* filename, const char __u
 
 	sprintf (ckpt, "%s/ckpt", prg->rg_logdir);
   BUG_ON(IS_ERR_OR_NULL(theia_libpath));
-  int theia_libpath_len = strnlen(theia_libpath,MAX_LOGDIR_STRLEN+1);
+  theia_libpath_len = strnlen(theia_libpath,MAX_LOGDIR_STRLEN+1);
 	argbuf = copy_args (args, env, &argbuflen, theia_libpath, theia_libpath_len);
 
 	if (argbuf == NULL) {
@@ -4303,7 +4284,7 @@ int fork_replay_theia (char __user* logdir, const char* filename, const char __u
 	init_det_time (&prg->rg_det_time, &tv, &tp);
 #else
 	// Save reduced-size checkpoint with info needed for exec
-	retval = replay_checkpoint_to_disk (ckpt, filename, argbuf, argbuflen, 0);
+	retval = replay_checkpoint_to_disk (ckpt, (char*)filename, argbuf, argbuflen, 0);
 #endif
 	DPRINT ("replay_checkpoint_to_disk returns %ld\n", retval);
 	if (retval) {
@@ -4353,7 +4334,7 @@ void show_kernel_stack(u_long *sp) {
 	}
 
 	stack = sp;
-  printk("kernel stack: sp: %lx\n", sp);
+  printk("kernel stack: sp: %p\n", (void*)sp);
 	for (i = 0; i < kstack_depth_to_print; i++) {
 		if (stack >= irq_stack && stack <= irq_stack_end) {
 			if (stack == irq_stack_end) {
@@ -4393,8 +4374,7 @@ int fork_replay (char __user* logdir, const char __user *const __user *args,
 	struct timespec tp;
 #endif
 	struct record_group* prg;
-
-u_long cur_rsp;
+  int theia_libpath_len;
 
 	MPRINT ("in fork_replay for pid %d\n", current->pid);
 
@@ -4493,7 +4473,7 @@ show_kernel_stack((u_long*)cur_rsp);
 
 	sprintf (ckpt, "%s/ckpt", prg->rg_logdir);
   BUG_ON(IS_ERR_OR_NULL(theia_libpath));
-  int theia_libpath_len = strnlen(theia_libpath,MAX_LOGDIR_STRLEN+1);
+  theia_libpath_len = strnlen(theia_libpath,MAX_LOGDIR_STRLEN+1);
 	argbuf = copy_args (args, env, &argbuflen, theia_libpath, theia_libpath_len);
 
 	if (argbuf == NULL) {
@@ -5273,7 +5253,7 @@ write_user_log (struct record_thread* prect)
 	set_fs(old_fs);
 
 	if (written != sizeof(int)) {
-		printk ("write_user_log: tried to write %d, got rc %ld\n", sizeof(int), written);
+		printk ("write_user_log: tried to write %lu, got rc %ld\n", sizeof(int), written);
 		rc = -EINVAL;
 	}
 
@@ -5357,7 +5337,7 @@ read_user_log (struct record_thread* prect)
 	copyed = vfs_read (file, (char *) &num_bytes, sizeof(int), &prect->rp_read_ulog_pos);
 	set_fs(old_fs);
 	if (copyed != sizeof(int)) {
-		if (copyed) printk ("read_user_log: tried to read num entries %d, got rc %ld\n", sizeof(int), copyed);
+		if (copyed) printk ("read_user_log: tried to read num entries %lu, got rc %zd\n", sizeof(int), copyed);
 		rc = -EINVAL;
 		goto close_out;
 	}
@@ -5763,7 +5743,7 @@ get_next_syscall_enter (struct replay_thread* prt, struct replay_group* prg, int
 if(syscall == 0 || syscall == 1 || syscall == 44 || 
    syscall == 45 || syscall == 46 || syscall == 47){
     strcpy(repl_uuid_str, (char*)argshead(prect));
-printk("syscall %d, repl_uuid is %s, repl_uuid_str len is %d, retparam len is %d\n", syscall, repl_uuid_str, strlen(repl_uuid_str), strlen((char*)argshead(prect)));
+printk("syscall %d, repl_uuid is %s, repl_uuid_str len is %lu, retparam len is %lu\n", syscall, repl_uuid_str, strlen(repl_uuid_str), strlen((char*)argshead(prect)));
 		argsconsume(prect, strlen(repl_uuid_str)+1);
 }
 
@@ -7450,7 +7430,7 @@ int track_usually_pt2pt_read(void *key, int size, struct file *filp) {
 	/* We have to lock our pipe tree externally */
 	mutex_lock(&pipe_tree_mutex);
 
-	info = btree_lookup32(&pipe_tree, (u32)key);
+	info = btree_lookup64(&pipe_tree, (u64)key);
 
 	/* The pipe is not in the tree, this is its first write (by a recorded process) */
 	if (info == NULL) {
@@ -7476,7 +7456,7 @@ int track_usually_pt2pt_read(void *key, int size, struct file *filp) {
 		info->key.id2 = filp->f_dentry->d_inode->i_sb->s_dev;
 
 		info->shared = 0;
-		if (btree_insert32(&pipe_tree, (u32)key, info, GFP_KERNEL)) {
+		if (btree_insert64(&pipe_tree, (u64)key, info, GFP_KERNEL)) {
 			/* FIXME: fail cleanly */
 			BUG();
 		}
@@ -7557,7 +7537,7 @@ int track_usually_pt2pt_read(void *key, int size, struct file *filp) {
 		u64 *writer = (void *)buf;
 		int *id = (int *)(writer +1);
 		mutex_lock(&pipe_tree_mutex);
-		info = btree_lookup32(&pipe_tree, (u32)key);
+		info = btree_lookup64(&pipe_tree, (u64)key);
 		BUG_ON(info == NULL);
 		mutex_lock(&info->lock);
 		mutex_unlock(&pipe_tree_mutex);
@@ -7578,7 +7558,7 @@ int track_usually_pt2pt_write_begin(void *key, struct file *filp) {
 	/* We have to lock our pipe tree externally */
 	mutex_lock(&pipe_tree_mutex);
 
-	info = btree_lookup32(&pipe_tree, (u32)key);
+	info = btree_lookup64(&pipe_tree, (u64)key);
 
 	/* The pipe is not in the tree, this is its first write (by a recorded process) */
 	if (info == NULL) {
@@ -7604,7 +7584,7 @@ int track_usually_pt2pt_write_begin(void *key, struct file *filp) {
 		info->key.id2 = filp->f_dentry->d_inode->i_sb->s_dev;
 
 		info->shared = 0;
-		if (btree_insert32(&pipe_tree, (u32)key, info, GFP_KERNEL)) {
+		if (btree_insert64(&pipe_tree, (u64)key, info, GFP_KERNEL)) {
 			/* FIXME: fail cleanly */
 			BUG();
 		}
@@ -7632,7 +7612,7 @@ int track_usually_pt2pt_write(void *key, int size, struct file *filp, int do_sha
 	/* We have to lock our pipe tree externally */
 	mutex_lock(&pipe_tree_mutex);
 
-	info = btree_lookup32(&pipe_tree, (u32)key);
+	info = btree_lookup64(&pipe_tree, (u64)key);
 
 	/* The pipe is not in the tree, this is its first write (by a recorded process) */
 	if (info == NULL) {
@@ -7658,7 +7638,7 @@ int track_usually_pt2pt_write(void *key, int size, struct file *filp, int do_sha
 		info->key.id2 = filp->f_dentry->d_inode->i_sb->s_dev;
 
 		info->shared = 0;
-		if (btree_insert32(&pipe_tree, (u32)key, info, GFP_KERNEL)) {
+		if (btree_insert64(&pipe_tree, (u64)key, info, GFP_KERNEL)) {
 			/* FIXME: fail cleanly */
 			BUG();
 		}
@@ -7842,21 +7822,26 @@ long file_cache_file_written(struct filemap_data *data, int fd) {
 
 // return 1 if the current process is associated with an SSH session 
 int is_remote(struct task_struct *tsk) {
+	unsigned long env_start;
+	unsigned long env_len;
+	char *env;
+	char *env_mem;
+	char *ret;
+	int i, skip;
 	struct mm_struct *mm = tsk->mm;
+
 	if (!mm)
 		return -1;
 
-	unsigned long env_start = mm->env_start;
-	unsigned long env_len   = mm->env_end - env_start;
+	env_start = mm->env_start;
+	env_len   = mm->env_end - env_start;
 	if (!env_start || !env_len)
 		return 0;
 
-	char *env = (char*)vmalloc(env_len);
-	char *env_mem = env;
-	char *ret;
+	env = (char*)vmalloc(env_len);
+	env_mem = env;
 	copy_from_user((void*)env, (const void __user*)env_start, env_len);
 
-	int i, skip;
 	for (i = 0; i < env_len; i+= skip, env += skip) {
 		ret = strstr(env, "SSH_CONNECTION=");
 		if (ret) {
@@ -7880,7 +7865,6 @@ void get_ids(char* ids) {
 
 char* get_file_fullpath(struct file *opened_file, char *buf, size_t buflen) {
 	char *path = NULL;
-	int ret = 0;
 
 	if (opened_file) {
 		path = d_path(&(opened_file->f_path), buf, buflen);	
@@ -7905,7 +7889,6 @@ char* get_task_fullpath(struct task_struct *tsk, char *buf, size_t buflen) {
 	if (!mm)
 		return NULL;
 
-	struct vm_area_struct *vma;
 	exe_file = get_mm_exe_file(mm);
 	if (exe_file) {
 		path = d_path(&(exe_file->f_path), buf, buflen);	
@@ -8014,9 +7997,9 @@ bool is_process_new2(pid_t pid, int sec) {
 	}
 
 	mutex_lock(&theia_process_tree_mutex);
-	ret = btree_lookup64(&theia_process_tree, key);
+	ret = btree_lookup64(&theia_process_tree, (u64)key);
 	if (ret == NULL) {
-		btree_insert64(&theia_process_tree, key, (void*)1, GFP_KERNEL);
+		btree_insert64(&theia_process_tree, (u64)key, (void*)1, GFP_KERNEL);
 	}
 	mutex_unlock(&theia_process_tree_mutex);
 
@@ -8031,7 +8014,7 @@ void remove_process_from_tree(pid_t pid, int sec) {
 	void *ret;
 	key = ((u64)current->pid)<<32 | (u64)current->start_time.tv_sec;
 	mutex_lock(&theia_process_tree_mutex);
-	ret = btree_remove64(&theia_process_tree, key);
+	ret = btree_remove64(&theia_process_tree, (u64)key);
 	mutex_unlock(&theia_process_tree_mutex);
 
 #define SYS_EXIT 60
@@ -8049,9 +8032,9 @@ bool is_opened_inode(struct inode *inode) {
 	}
 
 	mutex_lock(&theia_opened_inode_tree_mutex);
-	ret = btree_lookup64(&theia_opened_inode_tree, key);
+	ret = btree_lookup64(&theia_opened_inode_tree, (u64)key);
 	if (ret == NULL) {
-		btree_insert64(&theia_opened_inode_tree, key, (void*)1, GFP_KERNEL);
+		btree_insert64(&theia_opened_inode_tree, (u64)key, (void*)1, GFP_KERNEL);
 	}
 	mutex_unlock(&theia_opened_inode_tree_mutex);
 
@@ -8062,52 +8045,62 @@ bool is_opened_inode(struct inode *inode) {
 }
 
 void packahgv_process(struct task_struct *tsk) {
+  int size = 0;
+  int is_user_remote;
+  struct task_struct *ptsk;	
+  char *fpathbuf;
+  char *fpath;
+  char *fpath_b64;
+  struct mm_struct *mm;
+  char *args = NULL;
+  int i;
+  char *args_b64 = NULL;
+  char args_bkp[2] = "";
+  uint32_t buf_size;
+  char *buf;
+
 	if(theia_logging_toggle) {
 		long sec, nsec;
 		char ids[50];
 		get_ids(ids);
 		get_curr_time(&sec, &nsec);
-		int size = 0;
-		int is_user_remote = is_remote(tsk);
-//		int is_user_remote = 0;
+		size = 0;
+		is_user_remote = is_remote(tsk);
 		rcu_read_lock();
-		struct task_struct *ptsk = pid_task(find_vpid(tsk->real_parent->pid), PIDTYPE_PID);	
+		ptsk = pid_task(find_vpid(tsk->real_parent->pid), PIDTYPE_PID);	
 		rcu_read_unlock();
 
-		char *fpathbuf = (char*)vmalloc(PATH_MAX);
-	 	char *fpath    = get_task_fullpath(tsk, fpathbuf, PATH_MAX);
+		fpathbuf = (char*)vmalloc(PATH_MAX);
+	 	fpath    = get_task_fullpath(tsk, fpathbuf, PATH_MAX);
 		if (!fpath) { /* sometimes we can't obtain fullpath */
 			fpath = tsk->comm;
 		}
 
-		char *fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+		fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
 		if (!fpath_b64) fpath_b64 = "";
 
 //provide cmdline args in new process
-    struct mm_struct *mm = current->mm;
-    char *args = NULL;
+    mm = current->mm;
+    args = NULL;
     if (mm) {
       unsigned long arg_start = mm->arg_start;
       unsigned long arg_len   = mm->arg_end - arg_start;
       args = (char*)vmalloc(arg_len);
       copy_from_user((void*)args, (const void __user*)arg_start, arg_len);
 
-      int i;
       for (i = 0; i < arg_len-1; ++i) {
         if (args[i] == '\0') 
           args[i] = ' ';
       }
     }
-		char *args_b64 = NULL;
-    char args_bkp[2] = "";
     if(args)
       args_b64 = base64_encode(args, strlen(args), NULL);
 		if (!args_b64) 
       args_b64 = args_bkp;
 
 //allocate buf
-    uint32_t buf_size = strlen(fpath_b64) + strlen(args_b64) + 256;
-    char *buf = vmalloc(buf_size);
+    buf_size = strlen(fpath_b64) + strlen(args_b64) + 256;
+    buf = vmalloc(buf_size);
 
 		if(ptsk) {
 			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%s|%d|%d|%ld|%ld|endahg\n", 
@@ -8116,13 +8109,13 @@ void packahgv_process(struct task_struct *tsk) {
 				ptsk->start_time.tv_sec, fpath_b64, args_b64, is_user_remote, tsk->tgid, sec, nsec);
 		}
 		else {
-			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%s|%s|%d|%d|%ld|%ld|endahg\n", 
+			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%d|%s|%s|%d|%d|%ld|%ld|endahg\n", 
 					399/*used for new process*/, tsk->pid, tsk->start_time.tv_sec, 
 					ids, tsk->real_parent->pid, 
 				  -1, fpath_b64, args_b64, is_user_remote, tsk->tgid, sec, nsec);
 		}
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
+    if(size <= 0)
+      DPRINT("[%d]strange size %d\n", __LINE__,size); 
 		theia_file_write(buf, size);
 		vfree(fpathbuf);
     vfree(fpath_b64);
@@ -8134,16 +8127,24 @@ if(size <= 0)
 }
 
 void packahgv_process_bin(struct task_struct *tsk) {
+  struct task_struct *ptsk;	
+  struct process_pack_ahg *buf_ahg;
+  char *fpathbuf;
+  char *fpath;
+  int size;
+  void *buf;
+  void *curr_ptr;
+
 	if(theia_logging_toggle) {
 		long sec, nsec;
 		char ids[50];
 		get_curr_time(&sec, &nsec);
 		rcu_read_lock();
-		struct task_struct *ptsk = pid_task(find_vpid(tsk->real_parent->pid), PIDTYPE_PID);	
+		ptsk = pid_task(find_vpid(tsk->real_parent->pid), PIDTYPE_PID);	
 		rcu_read_unlock();
 
 //pack struct
-		struct process_pack_ahg *buf_ahg = vmalloc(sizeof(struct process_pack_ahg));
+		buf_ahg = vmalloc(sizeof(struct process_pack_ahg));
 		buf_ahg->pid = tsk->pid;
 		buf_ahg->task_sec = tsk->start_time.tv_sec;
 		get_ids(ids);
@@ -8154,8 +8155,8 @@ void packahgv_process_bin(struct task_struct *tsk) {
 			buf_ahg->p_task_sec = ptsk->start_time.tv_sec;	
 		else
 			buf_ahg->p_task_sec = -1; 
-		char *fpathbuf = (char*)vmalloc(PATH_MAX);
-	 	char *fpath = get_task_fullpath(tsk, fpathbuf, PATH_MAX);
+		fpathbuf = (char*)vmalloc(PATH_MAX);
+	 	fpath = get_task_fullpath(tsk, fpathbuf, PATH_MAX);
 		if(!fpath) {
 			strncpy(fpathbuf, tsk->comm, TASK_COMM_LEN);
 		}
@@ -8167,13 +8168,13 @@ void packahgv_process_bin(struct task_struct *tsk) {
 		buf_ahg->nsec = nsec;
 		
 //pack final buffer
-		int size = 8/*startahg*/ + 2/*syscall type*/ 
+		size = 8/*startahg*/ + 2/*syscall type*/ 
 							+ sizeof(struct process_pack_ahg) 
 							+ buf_ahg->size_ids
 							+ buf_ahg->size_fpathbuf
 				  		+ 6/*endahg*/;
-		void *buf = vmalloc(size);
-		void *curr_ptr = buf;
+		buf = vmalloc(size);
+		curr_ptr = buf;
 		sprintf((char*)curr_ptr, "startahg");
 		curr_ptr += 8;
 		*(uint16_t*)(curr_ptr) = 399;
@@ -8218,6 +8219,9 @@ void recursive_packahgv_process() {
 }
 
 void packahgv_read (struct read_ahgv *sys_args) {
+  char uuid_str[THEIA_UUID_LEN+1];
+  int size;
+
 #ifdef THEIA_AUX_DATA
 //      too many events are generated and system hangs
 if(strcmp(current->comm, "pthread-lock") == 0) {
@@ -8230,30 +8234,28 @@ if(strcmp(current->comm, "pthread-lock") == 0) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
-		char uuid_str[THEIA_UUID_LEN+1];
     if (fd2uuid(sys_args->fd, uuid_str) == false) {
       printk("fd2uuid returns false, pid %d, fd %d\n", current->pid, sys_args->fd);
       return; /* no file, socket, ...? */
     }
 
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n", 
+		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n", 
 				0, sys_args->pid, current->start_time.tv_sec, uuid_str, sys_args->bytes, current->tgid, 
 				sec, nsec, current->no_syscalls++);
 #else
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
+		size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
 				0, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, 
 				sec, nsec);
 #endif
-if(buf[0] != 's' || buf[1] != 't')
-  printk("strange read \n");
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
-		theia_file_write(buf, size);
-	}
+    if(buf[0] != 's' || buf[1] != 't')
+      pr_warn("strange read \n");
+    if(size <= 0)
+      pr_warn("[%d]strange size %d\n", __LINE__,size);
+    theia_file_write(buf, size);
+  }
 }
 
 void theia_read_ahg(unsigned int fd, long rc, u_long clock) {
-	int ret;
 	struct read_ahgv* pahgv = NULL;
 
 	if (theia_check_channel() == false)
@@ -8293,6 +8295,9 @@ record_read (unsigned int fd, char __user * buf, size_t count)
 	struct file* filp;
 	int is_cache_file = 0;
 	struct open_retvals orets;
+	struct vm_area_struct *vma;
+	bool shared_none = false;
+
 #ifdef TRACE_SOCKET_READ_WRITE
 	int err;
 #endif
@@ -8320,13 +8325,13 @@ record_read (unsigned int fd, char __user * buf, size_t count)
 
 	// TODO: corner case: kernel writes data into shared memory (TA5's test case)
 	// what else? recvmsg, ...
-	struct vm_area_struct *vma = find_vma(current->mm, buf);
-	bool shared_none = false;
-	if (vma->vm_flags & VM_SHARED && !(vma->vm_flags & VM_WRITE)) {
-		err = sys_mprotect(buf, count, PROT_WRITE);
-		shared_none = true;
-		printk("record_read: a buffer for read() is a shared memory (%p)\n", buf);
-        }
+	vma = find_vma(current->mm, (unsigned long)buf);
+	shared_none = false;
+  if (vma->vm_flags & VM_SHARED && !(vma->vm_flags & VM_WRITE)) {
+    err = sys_mprotect((unsigned long)buf, count, PROT_WRITE);
+    shared_none = true;
+    printk("record_read: a buffer for read() is a shared memory (%p)\n", buf);
+  }
 
 	perftimer_stop(read_cache_timer);
 	perftimer_start(read_sys_timer);
@@ -8334,22 +8339,22 @@ record_read (unsigned int fd, char __user * buf, size_t count)
 	perftimer_stop(read_sys_timer);
 
 	if (shared_none)
-		err = sys_mprotect(buf, count, PROT_NONE);
+		err = sys_mprotect((unsigned long)buf, count, PROT_NONE);
 
 	//Yang
 	if (rc != -EAGAIN) /* ignore some less meaningful errors */
 		theia_read_ahg(fd, rc, atomic_read(current->record_thrd->rp_precord_clock));
 
-//Yang: we get the inode 
-puuid = ARGSKMALLOC (strlen(rec_uuid_str)+1, GFP_KERNEL);
-if (puuid == NULL) {
-  printk ("record_read: can't allocate pos buffer for rec_uuid_str\n"); 
-  record_cache_file_unlock (current->record_thrd->rp_cache_files, fd);
-  return -ENOMEM;
-}
-strcpy((char*)puuid, rec_uuid_str);
-printk("rec_uuid_str is %s, rc %ld, is_cache %d,clock %lu\n", rec_uuid_str, rc,is_cache_file,atomic_read(current->record_thrd->rp_precord_clock));
-printk("copied to pretval is (%s)\n", (char*)puuid);
+  //Yang: we get the inode 
+  puuid = ARGSKMALLOC (strlen(rec_uuid_str)+1, GFP_KERNEL);
+  if (puuid == NULL) {
+    printk ("record_read: can't allocate pos buffer for rec_uuid_str\n"); 
+    record_cache_file_unlock (current->record_thrd->rp_cache_files, fd);
+    return -ENOMEM;
+  }
+  strcpy((char*)puuid, rec_uuid_str);
+  DPRINT("rec_uuid_str is %s, rc %ld, is_cache %d,clock %d\n", rec_uuid_str, rc,is_cache_file,atomic_read(current->record_thrd->rp_precord_clock));
+  DPRINT("copied to pretval is (%s)\n", (char*)puuid);
 
 #ifdef TIME_TRICK
 	if (rc <= 0) shift_clock = 0;
@@ -8400,7 +8405,7 @@ printk("copied to pretval is (%s)\n", (char*)puuid);
 			*((u_int *) pretval) = 1;
 			record_cache_file_unlock (current->record_thrd->rp_cache_files, fd);
 			*((loff_t *) (pretval+sizeof(u_int))) = filp->f_pos - rc;
-printk("loff_t is (%lu)\n", *((loff_t *) (pretval+sizeof(u_int))));
+      DPRINT("loff_t is (%lld)\n", *((loff_t *) (pretval+sizeof(u_int))));
 
 			if (is_cache_file & READ_NEW_CACHE_FILE) {
 				void *tmp = ARGSKMALLOC(sizeof(orets), GFP_KERNEL);
@@ -8466,7 +8471,7 @@ printk("loff_t is (%lu)\n", *((loff_t *) (pretval+sizeof(u_int))));
 			/* We have to lock our pipe tree externally */
 			mutex_lock(&pipe_tree_mutex);
 
-			info = btree_lookup32(&pipe_tree, (u32)filp->f_dentry->d_inode->i_pipe);
+			info = btree_lookup64(&pipe_tree, (u64)filp->f_dentry->d_inode->i_pipe);
 
 			/* The pipe is not in the tree, this is its first write (by a recorded process) */
 			if (info == NULL) {
@@ -8492,7 +8497,7 @@ printk("loff_t is (%lu)\n", *((loff_t *) (pretval+sizeof(u_int))));
 				info->key.id2 = filp->f_dentry->d_inode->i_sb->s_dev;
 
 				info->shared = 0;
-				if (btree_insert32(&pipe_tree, (u32)filp->f_dentry->d_inode->i_pipe, info, GFP_KERNEL)) {
+				if (btree_insert64(&pipe_tree, (u64)filp->f_dentry->d_inode->i_pipe, info, GFP_KERNEL)) {
 					/* FIXME: fail cleanly */
 					BUG();
 				}
@@ -8575,7 +8580,7 @@ printk("loff_t is (%lu)\n", *((loff_t *) (pretval+sizeof(u_int))));
 				u64 *writer = (void *)buff;
 				int *id = (int *)(writer +1);
 				mutex_lock(&pipe_tree_mutex);
-				info = btree_lookup32(&pipe_tree, (u32)filp->f_dentry->d_inode->i_pipe);
+				info = btree_lookup64(&pipe_tree, (u64)filp->f_dentry->d_inode->i_pipe);
 				mutex_lock(&info->lock);
 				mutex_unlock(&pipe_tree_mutex);
 				BUG_ON(info == NULL);
@@ -8643,7 +8648,7 @@ printk("loff_t is (%lu)\n", *((loff_t *) (pretval+sizeof(u_int))));
 	return rc;							
 }
 
-void print_mem(u_long addr, int length);
+void print_mem(void* addr, int length);
 static asmlinkage long 
 replay_read (unsigned int fd, char __user * buf, size_t count)
 {
@@ -8654,15 +8659,16 @@ replay_read (unsigned int fd, char __user * buf, size_t count)
 	long retval, rc = cget_next_syscall (0, &retparams, NULL, (long)count, NULL);
 #endif
 	int cache_fd;
+  int consume_size = 0;
 
-	DPRINT ("[READ] Pid %d replays read returning %d, fd %u, clock %ld, log_clock %ld\n", current->pid,rc,fd, *(current->replay_thrd->rp_preplay_clock),current->replay_thrd->rp_expected_clock);
+	DPRINT ("[READ] Pid %d replays read returning %ld, fd %u, clock %ld, log_clock %ld\n", current->pid,rc,fd, *(current->replay_thrd->rp_preplay_clock),current->replay_thrd->rp_expected_clock);
 printk("base addr: %p\n", retparams);
 //print_mem(retparams-30, 128);
 	if (retparams) {
 
 		u_int is_cache_file = *((u_int *)retparams);
 printk("is_cache_file is %u\n", is_cache_file);
-		int consume_size = 0;
+		consume_size = 0;
 
 		if (is_cache_file & READ_NEW_CACHE_FILE) {
 			/* FIXME: Do proper cast */
@@ -8801,6 +8807,9 @@ struct write_ahgv {
 };
 
 void packahgv_write (struct write_ahgv *sys_args) {
+  char uuid_str[THEIA_UUID_LEN+1];
+  int size;
+
 #ifdef THEIA_AUX_DATA
 //      too many events are generated and system hangs
 if(strcmp(current->comm, "pthread-lock") == 0) {
@@ -8813,14 +8822,13 @@ if(strcmp(current->comm, "pthread-lock") == 0) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
-		char uuid_str[THEIA_UUID_LEN+1];
 		if (fd2uuid(sys_args->fd, uuid_str) == false)
 			return; /* no file, socket, ...? */
 
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n", 
+		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n", 
 				1, sys_args->pid, current->start_time.tv_sec, uuid_str, sys_args->bytes, current->tgid, sec, nsec, current->no_syscalls++);
 #else
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
+		size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
 				1, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, sec, nsec);
 #endif
 if(size <= 0)
@@ -8832,7 +8840,6 @@ if(buf[0] != 's' || buf[1] != 't')
 }
 
 void theia_write_ahg(unsigned int fd, long rc, u_long clock) {
-	int ret;
 	struct write_ahgv* pahgv = NULL;
 
 	if (theia_check_channel() == false)
@@ -8865,9 +8872,6 @@ record_write (unsigned int fd, const char __user * buf, size_t count)
 	ssize_t size;
 	char kbuf[180];
 	struct file *filp;
-#ifdef TRACE_SOCKET_READ_WRITE
-	int err;
-#endif
 
 	//perftimer_tick(write_btwn_timer);
 //	perftimer_start(write_in_timer);
@@ -8884,7 +8888,7 @@ record_write (unsigned int fd, const char __user * buf, size_t count)
 	}
 
 //Yang
-printk("[%s|%d] fd %u, count %d\n", __func__,__LINE__,fd,count);
+printk("[%s|%d] fd %u, count %lu\n", __func__,__LINE__,fd,count);
 if(fd != 0)
 {
 	filp = fget(fd);
@@ -8937,10 +8941,10 @@ if (puuid == NULL) {
   return -ENOMEM;
 }
 strcpy((char*)puuid, rec_uuid_str);
-printk("write: rec_uuid_str is %s,clock %lu\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
+printk("write: rec_uuid_str is %s,clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
 printk("write: copied to pretval is (%s)\n", (char*)puuid);
 
-	DPRINT ("Pid %d records write returning %d\n", current->pid,size);
+	DPRINT ("Pid %d records write returning %zd\n", current->pid,size);
 #ifdef X_COMPRESS
 	if (is_x_fd (&current->record_thrd->rp_clog.x, fd) && size > 0) {
 		if (x_detail) printk ("Pid %d write for x\n", current->pid);
@@ -9142,7 +9146,7 @@ replay_write (unsigned int fd, const char __user * buf, size_t count)
 		if (copy_from_user (kbuf, buf, count < 80 ? count : 79)) printk ("replay_write: cannot copy kstring\n");
 		printk ("Pid %d (recpid %d) clock %ld log_clock %ld replays: %s", current->pid, current->replay_thrd->rp_record_thread->rp_record_pid, *(current->replay_thrd->rp_preplay_clock), current->replay_thrd->rp_expected_clock - 1, kbuf);
 	}
-	DPRINT ("[WRITE] Pid %d replays write returning %d, fd %u, clock %ld, log_clock %ld\n", current->pid,rc,fd, *(current->replay_thrd->rp_preplay_clock),current->replay_thrd->rp_expected_clock);
+	DPRINT ("[WRITE] Pid %d replays write returning %zd, fd %u, clock %ld, log_clock %ld\n", current->pid,rc,fd, *(current->replay_thrd->rp_preplay_clock),current->replay_thrd->rp_expected_clock);
 #ifdef REPLAY_COMPRESS_READS
 	if (pretparams != NULL) {
 		struct replayfs_syscache_id id;
@@ -9211,30 +9215,29 @@ struct open_ahgv {
 };
 
 void packahgv_open (struct open_ahgv *sys_args) {
-	//Yang
+  char uuid_str[THEIA_UUID_LEN+1];
+  char* filename_b64;
+  uint32_t buf_size;
 
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
 
 	if(theia_logging_toggle) {
-		char *pcwd = NULL;
     char *buf;
-		struct path path;
 		long sec, nsec;
 		int size;
 
 		get_curr_time(&sec, &nsec);
 
 #ifdef THEIA_UUID
-		char uuid_str[THEIA_UUID_LEN+1];
 		if (fd2uuid(sys_args->fd, uuid_str) == false)
 			return;
 
-		char *filename_b64 = base64_encode(sys_args->filename, strlen(sys_args->filename), NULL);
+		filename_b64 = base64_encode(sys_args->filename, strlen(sys_args->filename), NULL);
 		if (!filename_b64) filename_b64 = "";
 
-    uint32_t buf_size = strlen(filename_b64)+256;
+    buf_size = strlen(filename_b64)+256;
     buf = vmalloc(buf_size);
 
 
@@ -9277,12 +9280,13 @@ if(size <= 0)
 
 void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, bool is_new)
 {
-	int ret;
 	struct file* file;
 	struct inode* inode;
 	struct open_ahgv* pahgv = NULL;
 	int copied_length = 0;
 	int fput_needed = 0;
+  char* fpathbuf;
+  char* fpath;
 
 	if (theia_check_channel() == false)
 		return;
@@ -9311,7 +9315,7 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, 
 		pahgv->dev = 0;
 		pahgv->ino = 0; 
 		if ((copied_length = strncpy_from_user(pahgv->filename, filename, sizeof(pahgv->filename))) != strlen(filename)) {
-			printk ("theia_open_ahg: can't copy filename to ahgv, filename length %d, copied %d, filename:%s\n", strlen(filename), copied_length, filename); 
+			printk ("theia_open_ahg: can't copy filename to ahgv, filename length %lu, copied %d, filename:%s\n", strlen(filename), copied_length, filename); 
 			KFREE(pahgv);	
 			return;
 		}
@@ -9322,8 +9326,8 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, 
 		pahgv->dev = inode->i_sb->s_dev;
 		pahgv->ino = inode->i_ino;
 
-		char *fpathbuf = (char*)vmalloc(PATH_MAX);
-		char *fpath    = get_file_fullpath(file, fpathbuf, PATH_MAX);
+		fpathbuf = (char*)vmalloc(PATH_MAX);
+		fpath    = get_file_fullpath(file, fpathbuf, PATH_MAX);
 		fput_light(file, fput_needed);
 		if (!IS_ERR(fpath)) { /* sometimes we can't obtain fullpath */
 			strncpy(pahgv->filename, fpath, 204);
@@ -9332,7 +9336,7 @@ void theia_open_ahg(const char __user * filename, int flags, int mode, long rc, 
 		else {
 			vfree(fpathbuf);
 			if ((copied_length = strncpy_from_user(pahgv->filename, filename, sizeof(pahgv->filename))) != strlen(filename)) {
-				printk ("theia_open_ahg: can't copy filename to ahgv, filename length %d, copied %d, filename:%s\n", strlen(filename), copied_length, filename); 
+				printk ("theia_open_ahg: can't copy filename to ahgv, filename length %lu, copied %d, filename:%s\n", strlen(filename), copied_length, filename); 
 				KFREE(pahgv);	
 				return;
 			}
@@ -9354,15 +9358,18 @@ record_open (const char __user * filename, int flags, int mode)
 	struct file* file;
 	struct inode* inode;
 	struct open_retvals* recbuf = NULL;
+  mm_segment_t old_fs;                                                
+  int ret_access;                                       
+
 	perftimer_start(open_timer);
 
 	new_syscall_enter (2);	      
 	perftimer_start(open_sys_timer);
 
 	//Yang: check whether the file is new
-  mm_segment_t old_fs = get_fs();                                                
+  old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
-  int ret_access = sys_access(filename, 0/*F_OK*/);                                       
+  ret_access = sys_access(filename, 0/*F_OK*/);                                       
 	set_fs(old_fs);                                                              
 
 	rc = sys_open (filename, flags, mode);
@@ -9381,7 +9388,7 @@ record_open (const char __user * filename, int flags, int mode)
 			fput(file);
 		} while (0);
 		*/
-		MPRINT ("record_open of name %s with flags %x returns fd %ld, sizeof open_ahgv %d\n", filename, flags, rc, sizeof(struct open_ahgv));
+		MPRINT ("record_open of name %s with flags %x returns fd %ld, sizeof open_ahgv %lu\n", filename, flags, rc, sizeof(struct open_ahgv));
     
 //Yang
 	if (ret_access != 0) //the file is new
@@ -9441,10 +9448,11 @@ replay_open (const char __user * filename, int flags, int mode)
 
 int theia_sys_open(const char __user * filename, int flags, int mode) {
 	long rc;
+  int ret_access;                                       
 	//Yang: check whether the file is new
   mm_segment_t old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
-  int ret_access = sys_access(filename, 0/*F_OK*/);                                       
+  ret_access = sys_access(filename, 0/*F_OK*/);                                       
 	set_fs(old_fs);                                                              
 
 	rc = sys_open(filename, flags, mode);
@@ -9474,8 +9482,9 @@ void packahgv_close (struct close_ahgv *sys_args) {
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
+    int size;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%d|%ld|%ld|endahg\n", 3, 
+		size = sprintf(buf, "startahg|%d|%d|%ld|%d|%d|%ld|%ld|endahg\n", 3, 
 		sys_args->pid, current->start_time.tv_sec, sys_args->fd, current->tgid, sec, nsec);
 if(size <= 0)
   printk("[%d]strange size %d\n", __LINE__,size);
@@ -9484,7 +9493,6 @@ if(size <= 0)
 }
 
 void theia_close_ahg(int fd) {
-	int ret;
 	struct close_ahgv* pahgv = NULL;
 
 	if (theia_check_channel() == false)
@@ -9606,7 +9614,7 @@ inline void theia_link_ahgx(const char __user * oldname, const char __user * new
 	theia_dump_ss(oldname, newname, rc, sysnum);
 }
 
-void theia_fullpath_ahgx(const char __user * pathname, long rc, int sysnum)
+void theia_fullpath_ahgx(char __user * pathname, long rc, int sysnum)
 {
 	char *pcwd = NULL;
 	struct path path;
@@ -9777,6 +9785,7 @@ void theia_openat_ahgx(int fd, const char __user * filename, int flag, int mode)
 	struct file *file;
 	int fput_needed;
 	char *fpath;
+  char* fpath_b64;
 
 	if (fd < 0) return; /* TODO */
 
@@ -9791,7 +9800,7 @@ void theia_openat_ahgx(int fd, const char __user * filename, int flag, int mode)
 			fpath = theia_retbuf;
 		}
 
-		char *fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+		fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
 		if (!fpath_b64) fpath_b64 = "";
 
 		sprintf(theia_buf1, "%s|%s|%d|%d", uuid_str, fpath_b64, flag, mode);
@@ -9890,6 +9899,18 @@ struct execve_ahgv {
 };
 
 void packahgv_execve (struct execve_ahgv *sys_args) {
+  char ids[50];
+  int is_user_remote;
+  char *fpath = NULL;
+  int size;
+  char uuid_str[THEIA_UUID_LEN+1];
+  struct file *file;
+  int fd, fput_needed;
+  mm_segment_t old_fs;
+  char* fpath_b64;
+  char* args_b64;
+  uint32_t buf_size;
+  char* buf;
  #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();	
  #endif
@@ -9897,15 +9918,9 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 	if(theia_logging_toggle) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		char ids[50];
 		get_ids(ids);
-		int is_user_remote = is_remote(current);
-		char *fpath;
-		int size;
-		char uuid_str[THEIA_UUID_LEN+1];
-		struct file *file;
-		int fd, fput_needed;
-		mm_segment_t old_fs = get_fs();
+		is_user_remote = is_remote(current);
+		old_fs = get_fs();
 
 		set_fs(KERNEL_DS);
 		fd = sys_open(sys_args->filename, O_RDONLY, 0);
@@ -9934,14 +9949,14 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 		}
 		set_fs(old_fs);                                                              
 
-		char *fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+		fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
 		if (!fpath_b64) fpath_b64 = "";
 
-		char *args_b64 = base64_encode(sys_args->args, strlen(sys_args->args), NULL);
+		args_b64 = base64_encode(sys_args->args, strlen(sys_args->args), NULL);
 		if (!args_b64) args_b64 = "";
 
-		uint32_t buf_size = strlen(args_b64) + strlen(fpath_b64) + 256;
-		char *buf = vmalloc(buf_size);
+		buf_size = strlen(args_b64) + strlen(fpath_b64) + 256;
+		buf = vmalloc(buf_size);
 		/* TODO: publish args as well sys_args->args. problem? args can contain | do BASE64 encoding? */
 		size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%s|%s|%s|%d|%d|%ld|%ld|%u|endahg\n", 
 				59, sys_args->pid, current->start_time.tv_sec, sys_args->rc, 
@@ -9958,8 +9973,10 @@ if(size <= 0)
 
 // void theia_execve_ahg(const char *filename, const char __user *const __user *envp) {
 void theia_execve_ahg(const char *filename, int rc) {
-	int ret;
 	struct execve_ahgv* pahgv = NULL;
+	struct mm_struct *mm;
+	char *args = NULL;
+  int i;
 
 	if (theia_check_channel() == false)
 		return;
@@ -9967,15 +9984,13 @@ void theia_execve_ahg(const char *filename, int rc) {
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
 
-	struct mm_struct *mm = current->mm;
-	char *args = NULL;
+	mm = current->mm;
 	if (mm) {
 		unsigned long arg_start = mm->arg_start;
 		unsigned long arg_len   = mm->arg_end - arg_start;
 		args = (char*)vmalloc(arg_len);
 		copy_from_user((void*)args, (const void __user*)arg_start, arg_len);
 
-		int i;
 		for (i = 0; i < arg_len-1; ++i) {
 			if (args[i] == '\0') 
 				args[i] = ' ';
@@ -10014,249 +10029,246 @@ void print_value(u_long address, int num_of_bytes)
 static int 
 record_execve(const char *filename, const char __user *const __user *__argv, const char __user *const __user *__envp, struct pt_regs *regs) 
 {
-	struct execve_retvals* pretval = NULL;
-	struct record_thread* prt = current->record_thrd;
-	struct record_group* precg;
-	struct record_thread* prect;
-	void* slab;
+  struct execve_retvals* pretval = NULL;
+  struct record_thread* prt = current->record_thrd;
+  struct record_group* precg;
+  struct record_thread* prect;
+  void* slab;
 #ifdef LOG_COMPRESS_1
-	void* clog_slab;
+  void* clog_slab;
 #endif
-	char ckpt[MAX_LOGDIR_STRLEN+10];
-long rc = 0, retval;
-	char* argbuf, *newbuf;
-	int argbuflen, present;
-	char** env;
-	mm_segment_t old_fs;
+  char ckpt[MAX_LOGDIR_STRLEN+10];
+  long rc = 0, retval;
+  char* argbuf, *newbuf;
+  int argbuflen, present;
+  char** env;
+  mm_segment_t old_fs;
 #ifdef TIME_TRICK
-	struct timeval tv;
-	struct timespec tp;
+  struct timeval tv;
+  struct timespec tp;
 #endif
+  __u64 parent_rg_id;
 
-u_long cur_rsp;
+  pr_debug("Yang just start record_execve\n");
+  //show_regs(get_pt_regs(NULL));
+  /*
+     __asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
+     show_kernel_stack((u_long*)cur_rsp);
+     */
+  /*
+     const char *whitelist1;                                                             
+     whitelist1 = "/usr/lib/firefox/firefox";
 
-printk("Yang just start record_execve\n");
-//show_regs(get_pt_regs(NULL));
-/*
-__asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
-show_kernel_stack((u_long*)cur_rsp);
-*/
-/*
-	const char *whitelist1;                                                             
-	whitelist1 = "/usr/lib/firefox/firefox";
+     if(strcmp(filename, whitelist1) == 0) {
+     printk("theia_start_execve, ignore %s\n", filename);
+     rc = do_execve(filename, __argv, __envp, regs);                                 
+     theia_execve_ahg(filename);
+     return rc;
+     }                                                                                   
+     */
 
-	if(strcmp(filename, whitelist1) == 0) {
-		printk("theia_start_execve, ignore %s\n", filename);
-		rc = do_execve(filename, __argv, __envp, regs);                                 
-		theia_execve_ahg(filename);
-		return rc;
-	}                                                                                   
-*/
+  MPRINT ("Record pid %d performing execve of %s\n", current->pid, filename);
+  new_syscall_enter (59);
 
-	char __user * cptr;
+  current->record_thrd->random_values.cnt = 0;
 
-	MPRINT ("Record pid %d performing execve of %s\n", current->pid, filename);
-	new_syscall_enter (59);
-
-	current->record_thrd->random_values.cnt = 0;
-
-	// (flush) and write out the user log before exec-ing (otherwise it disappears)
+  // (flush) and write out the user log before exec-ing (otherwise it disappears)
 #ifndef USE_DEBUG_LOG
-	flush_user_log (prt);
+  flush_user_log (prt);
 #endif
-	write_user_log (prt);
+  write_user_log (prt);
 #ifdef USE_EXTRA_DEBUG_LOG
-	write_user_extra_log (prt);
+  write_user_extra_log (prt);
 #endif
-	// Have to copy arguments out before address space goes away - we will likely need them later
-	argbuf = copy_args (__argv, __envp, &argbuflen, NULL, 0);
+  // Have to copy arguments out before address space goes away - we will likely need them later
+  argbuf = copy_args (__argv, __envp, &argbuflen, NULL, 0);
 
-	// Hack to support multiple glibcs - make sure that LD_LIBRARY_PATH is in there
-	present = is_libpath_present (current->record_thrd->rp_group, argbuf);
-	if (present) {
-		// Need to copy environments to kernel and modify
-		env = patch_for_libpath (current->record_thrd->rp_group, argbuf, present);
-		newbuf = patch_buf_for_libpath (current->record_thrd->rp_group, argbuf, &argbuflen, present);
-		if (env == NULL || newbuf == NULL) {
-			printk ("libpath patch failed\n");
-			return -ENOMEM;
-		}
-		KFREE (argbuf);
-		argbuf = newbuf;
-		old_fs = get_fs();
-		set_fs(KERNEL_DS);
-		rc = do_execve(filename, __argv, (const char __user *const __user *) env, regs);
-		set_fs(old_fs);
-		libpath_env_free (env);
-	} else 
+  // Hack to support multiple glibcs - make sure that LD_LIBRARY_PATH is in there
+  present = is_libpath_present (current->record_thrd->rp_group, argbuf);
+  if (present) {
+    // Need to copy environments to kernel and modify
+    env = patch_for_libpath (current->record_thrd->rp_group, argbuf, present);
+    newbuf = patch_buf_for_libpath (current->record_thrd->rp_group, argbuf, &argbuflen, present);
+    if (env == NULL || newbuf == NULL) {
+      printk ("libpath patch failed\n");
+      return -ENOMEM;
+    }
+    KFREE (argbuf);
+    argbuf = newbuf;
+    old_fs = get_fs();
+    set_fs(KERNEL_DS);
+    rc = do_execve(filename, __argv, (const char __user *const __user *) env, regs);
+    set_fs(old_fs);
+    libpath_env_free (env);
+  } else 
   {
-/*
-printk("Yang before do_execve\n");
-__asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
-show_kernel_stack((u_long*)cur_rsp);
-*/
-	rc = do_execve(filename, __argv, __envp, regs);
-/*
-printk("Yang after do_execve\n");
-__asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
-show_kernel_stack((u_long*)cur_rsp);
-*/
-	}
+    /*
+       printk("Yang before do_execve\n");
+       __asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
+       show_kernel_stack((u_long*)cur_rsp);
+       */
+    rc = do_execve(filename, __argv, __envp, regs);
+    /*
+       printk("Yang after do_execve\n");
+       __asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
+       show_kernel_stack((u_long*)cur_rsp);
+       */
+  }
 
-	//Yang
-	theia_execve_ahg(filename, rc);
+  //Yang
+  theia_execve_ahg(filename, rc);
 
-	new_syscall_done (59, rc);
-printk("Yang record_execve after new_syscall_done, ip: %lx, sp: %lx, r11: %lx, rc %d\n", regs->ip, regs->sp, regs->r11, rc);
-print_value(regs->sp, 128);
-print_value(regs->sp+128, 16);
-	if (rc >= 0) {
-		prt->rp_user_log_addr = 0; // User log address no longer valid since new address space entirely
+  new_syscall_done (59, rc);
+  printk("Yang record_execve after new_syscall_done, ip: %lx, sp: %lx, r11: %lx, rc %ld\n", regs->ip, regs->sp, regs->r11, rc);
+  print_value(regs->sp, 128);
+  print_value(regs->sp+128, 16);
+  if (rc >= 0) {
+    prt->rp_user_log_addr = 0; // User log address no longer valid since new address space entirely
 #ifdef USE_EXTRA_DEBUG_LOG
-		prt->rp_user_extra_log_addr = 0;
+    prt->rp_user_extra_log_addr = 0;
 #endif
-		// Our rule is that we record a split if there is an exec with more than one thread in the group.   Not sure this is best
-		// but I don't know what is better
-		if (prt->rp_next_thread != prt) {
-printk("Yang prt->rp_next_thread != prt, rc %d\n", rc);
-			__u64 parent_rg_id = prt->rp_group->rg_id;
-			DPRINT ("New record group\n");
+    // Our rule is that we record a split if there is an exec with more than one thread in the group.   Not sure this is best
+    // but I don't know what is better
+    if (prt->rp_next_thread != prt) {
+      printk("Yang prt->rp_next_thread != prt, rc %ld\n", rc);
+      parent_rg_id = prt->rp_group->rg_id;
+      DPRINT ("New record group\n");
 
-			// First setup new record group
-			precg = new_record_group (NULL);
-			if (precg == NULL) {
-				current->record_thrd = NULL;
-				return -ENOMEM;
-			}
-			strcpy (precg->rg_linker, prt->rp_group->rg_linker);
-			precg->rg_save_mmap_flag = prt->rp_group->rg_save_mmap_flag;
+      // First setup new record group
+      precg = new_record_group (NULL);
+      if (precg == NULL) {
+        current->record_thrd = NULL;
+        return -ENOMEM;
+      }
+      strcpy (precg->rg_linker, prt->rp_group->rg_linker);
+      precg->rg_save_mmap_flag = prt->rp_group->rg_save_mmap_flag;
 
-			MPRINT ("Pid %d - splits a new record group with logdir %s, save_mmap_flag %d\n", current->pid, precg->rg_logdir, precg->rg_save_mmap_flag);
+      MPRINT ("Pid %d - splits a new record group with logdir %s, save_mmap_flag %d\n", current->pid, precg->rg_logdir, precg->rg_save_mmap_flag);
 
-			if (prt->rp_group->rg_libpath) {
-				precg->rg_libpath = KMALLOC(strlen(prt->rp_group->rg_libpath)+1, GFP_KERNEL);
-				if (precg->rg_libpath == NULL) {
-					printk ("Unable to allocate libpath on execve\n");
-					current->record_thrd = NULL;
-					return -ENOMEM;
-				}
-				strcpy (precg->rg_libpath, prt->rp_group->rg_libpath);
-			}
+      if (prt->rp_group->rg_libpath) {
+        precg->rg_libpath = KMALLOC(strlen(prt->rp_group->rg_libpath)+1, GFP_KERNEL);
+        if (precg->rg_libpath == NULL) {
+          printk ("Unable to allocate libpath on execve\n");
+          current->record_thrd = NULL;
+          return -ENOMEM;
+        }
+        strcpy (precg->rg_libpath, prt->rp_group->rg_libpath);
+      }
 
-			prect = new_record_thread (precg, current->pid, NULL);
-			if (prect == NULL) {
-				destroy_record_group (precg);
-				current->record_thrd = NULL;
-				return -ENOMEM;
-			}
-			memcpy (&prect->random_values, &prt->random_values, sizeof(prt->random_values));
-			memcpy (&prect->exec_values, &prt->exec_values, sizeof(prt->exec_values));
+      prect = new_record_thread (precg, current->pid, NULL);
+      if (prect == NULL) {
+        destroy_record_group (precg);
+        current->record_thrd = NULL;
+        return -ENOMEM;
+      }
+      memcpy (&prect->random_values, &prt->random_values, sizeof(prt->random_values));
+      memcpy (&prect->exec_values, &prt->exec_values, sizeof(prt->exec_values));
 
-			slab = VMALLOC (argsalloc_size);
-			if (slab == NULL) {
-				destroy_record_group (precg);
-				current->record_thrd = NULL;
-				return -ENOMEM;
-			}
+      slab = VMALLOC (argsalloc_size);
+      if (slab == NULL) {
+        destroy_record_group (precg);
+        current->record_thrd = NULL;
+        return -ENOMEM;
+      }
 
-			if (add_argsalloc_node(current->record_thrd, slab, argsalloc_size)) {
-				VFREE (slab);
-				destroy_record_group (precg);
-				current->record_thrd = NULL;
-				return -ENOMEM;
-			}
+      if (add_argsalloc_node(current->record_thrd, slab, argsalloc_size)) {
+        VFREE (slab);
+        destroy_record_group (precg);
+        current->record_thrd = NULL;
+        return -ENOMEM;
+      }
 #ifdef LOG_COMPRESS_1
-			clog_slab = VMALLOC (argsalloc_size);
-			if (clog_slab == NULL) {
-				destroy_record_group (precg);
-				current->record_thrd = NULL;
-				return -ENOMEM;
-			}
+      clog_slab = VMALLOC (argsalloc_size);
+      if (clog_slab == NULL) {
+        destroy_record_group (precg);
+        current->record_thrd = NULL;
+        return -ENOMEM;
+      }
 
-			if (add_clog_node(current->record_thrd, clog_slab, argsalloc_size)) {
-				VFREE (clog_slab);
-				destroy_record_group (precg);
-				current->record_thrd = NULL;
-				return -ENOMEM;
-			}
+      if (add_clog_node(current->record_thrd, clog_slab, argsalloc_size)) {
+        VFREE (clog_slab);
+        destroy_record_group (precg);
+        current->record_thrd = NULL;
+        return -ENOMEM;
+      }
 #endif
-			// Now write last record to log and flush it to disk
-			pretval = ARGSKMALLOC(sizeof(struct execve_retvals), GFP_KERNEL);
-			if (pretval == NULL) {
-				printk ("Unable to allocate space for execve retvals\n");
-				return -ENOMEM;
-			}
-			pretval->is_new_group = 1;
-			pretval->data.new_group.log_id = precg->rg_id;
-printk("Yang record_execve before new_syscall_exit, rc %d\n", rc);
-			new_syscall_exit (59, pretval); 
-			write_and_free_kernel_log (prt);
+      // Now write last record to log and flush it to disk
+      pretval = ARGSKMALLOC(sizeof(struct execve_retvals), GFP_KERNEL);
+      if (pretval == NULL) {
+        printk ("Unable to allocate space for execve retvals\n");
+        return -ENOMEM;
+      }
+      pretval->is_new_group = 1;
+      pretval->data.new_group.log_id = precg->rg_id;
+      printk("Yang record_execve before new_syscall_exit, rc %ld\n", rc);
+      new_syscall_exit (59, pretval); 
+      write_and_free_kernel_log (prt);
 
-			if (atomic_dec_and_test(&prt->rp_group->rg_record_threads)) {
-				rg_lock (prt->rp_group);
-				MPRINT ("Pid %d last record thread to exit, write out mmap log\n", current->pid);
-				write_mmap_log(prt->rp_group);
-				prt->rp_group->rg_save_mmap_flag = 0;
-				rg_unlock (prt->rp_group);
-			}
+      if (atomic_dec_and_test(&prt->rp_group->rg_record_threads)) {
+        rg_lock (prt->rp_group);
+        MPRINT ("Pid %d last record thread to exit, write out mmap log\n", current->pid);
+        write_mmap_log(prt->rp_group);
+        prt->rp_group->rg_save_mmap_flag = 0;
+        rg_unlock (prt->rp_group);
+      }
 
-			__destroy_record_thread (prt);  // The old group may no longer be valid after this
+      __destroy_record_thread (prt);  // The old group may no longer be valid after this
 
-			// Switch thread to new record group
-			current->record_thrd = prt = prect;
+      // Switch thread to new record group
+      current->record_thrd = prt = prect;
 
-			// Write out checkpoint for the new group
-			sprintf (ckpt, "%s/ckpt", precg->rg_logdir);
+      // Write out checkpoint for the new group
+      sprintf (ckpt, "%s/ckpt", precg->rg_logdir);
 #ifdef TIME_TRICK
-			retval = replay_checkpoint_to_disk (ckpt, (char *) filename, argbuf, argbuflen, parent_rg_id, &tv, &tp);
-			init_det_time (&precg->rg_det_time, &tv, &tp);
+      retval = replay_checkpoint_to_disk (ckpt, (char *) filename, argbuf, argbuflen, parent_rg_id, &tv, &tp);
+      init_det_time (&precg->rg_det_time, &tv, &tp);
 #else
-			retval = replay_checkpoint_to_disk (ckpt, (char *) filename, argbuf, argbuflen, parent_rg_id);
+      retval = replay_checkpoint_to_disk (ckpt, (char *) filename, argbuf, argbuflen, parent_rg_id);
 #endif
-			if (retval) {
-				printk ("record_execve: replay_checkpoint_to_disk returns %ld\n", retval);
-				VFREE (slab);
+      if (retval) {
+        printk ("record_execve: replay_checkpoint_to_disk returns %ld\n", retval);
+        VFREE (slab);
 #ifdef LOG_COMPRESS_1
-				VFREE (clog_slab);
+        VFREE (clog_slab);
 #endif
-				destroy_record_group (precg);
-				current->record_thrd = NULL;
-				return retval;
-			}
-			argbuf = NULL;
+        destroy_record_group (precg);
+        current->record_thrd = NULL;
+        return retval;
+      }
+      argbuf = NULL;
 
-			// Write out first log record (exec) for the new group - the code below will finish the job
-			new_syscall_enter (59);
-			new_syscall_done (59, 0);
-		} else {
+      // Write out first log record (exec) for the new group - the code below will finish the job
+      new_syscall_enter (59);
+      new_syscall_done (59, 0);
+    } else {
 #ifdef CACHE_READS
-			close_record_cache_files(prt->rp_cache_files); // This is conservative - some files may not have been closed on exec - but it is correct
+      close_record_cache_files(prt->rp_cache_files); // This is conservative - some files may not have been closed on exec - but it is correct
 #endif
-			prt->rp_ignore_flag_addr = NULL; // No longer valid since address space destroyed
-		}
+      prt->rp_ignore_flag_addr = NULL; // No longer valid since address space destroyed
+    }
 
-		pretval = ARGSKMALLOC(sizeof(struct execve_retvals), GFP_KERNEL);
-		if (pretval == NULL) {
-			printk ("Unable to allocate space for execve retvals\n");
-			return -ENOMEM;
-		}
+    pretval = ARGSKMALLOC(sizeof(struct execve_retvals), GFP_KERNEL);
+    if (pretval == NULL) {
+      printk ("Unable to allocate space for execve retvals\n");
+      return -ENOMEM;
+    }
 
-		pretval->is_new_group = 0;
-		memcpy (&pretval->data.same_group.rvalues, &prt->random_values, sizeof (struct rvalues));
-		memcpy (&pretval->data.same_group.evalues, &prt->exec_values, sizeof (struct exec_values));
-		rg_lock(prt->rp_group);
-		add_file_to_cache_by_name (filename, &pretval->data.same_group.dev, &pretval->data.same_group.ino, &pretval->data.same_group.mtime);
-		rg_unlock(prt->rp_group);
-	}
-	if (argbuf) KFREE (argbuf);
-	new_syscall_exit (59, pretval);
-//show_regs(get_pt_regs(NULL));
-/*
-__asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
-show_kernel_stack((u_long*)cur_rsp);
-printk("Yang record_execve after new_syscall_exit, rc %d\n", rc);
-*/
-	return rc;
+    pretval->is_new_group = 0;
+    memcpy (&pretval->data.same_group.rvalues, &prt->random_values, sizeof (struct rvalues));
+    memcpy (&pretval->data.same_group.evalues, &prt->exec_values, sizeof (struct exec_values));
+    rg_lock(prt->rp_group);
+    add_file_to_cache_by_name (filename, &pretval->data.same_group.dev, &pretval->data.same_group.ino, &pretval->data.same_group.mtime);
+    rg_unlock(prt->rp_group);
+  }
+  if (argbuf) KFREE (argbuf);
+  new_syscall_exit (59, pretval);
+  //show_regs(get_pt_regs(NULL));
+  /*
+     __asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
+     show_kernel_stack((u_long*)cur_rsp);
+     printk("Yang record_execve after new_syscall_exit, rc %d\n", rc);
+     */
+  return rc;
 }
 
 void complete_vfork_done(struct task_struct *tsk); // In fork.c
@@ -10402,6 +10414,9 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
   int ret;
   int fd;
   long rc = 0;
+  const char* devfile = "/dev/spec0";
+  struct path linker_path;
+  int save_mmap = 1;
 
 // printk("in theia_start_execve: filename %s\n", filename);
 
@@ -10413,8 +10428,6 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
     goto out_norm;
 	}
 
-  const char *devfile;
-  devfile = "/dev/spec0";
   ret = sys_access(devfile, 0/*F_OK*/);
   if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.
     printk("/dev/spec0 not accessible yet. ret %d\n", ret);
@@ -10446,7 +10459,6 @@ printk("[%s|%d] current->comm (%s), strcmp is %d\n", __func__,__LINE__,current->
            goto out_norm;
     }
     //check for linker path being a symlink
-    struct path linker_path;
     ret = kern_path(theia_linker, LOOKUP_FOLLOW, &linker_path);
     if (!ret) {
       char followed_buf[MAX_LOGDIR_STRLEN+1];
@@ -10463,8 +10475,6 @@ printk("[%s|%d] current->comm (%s), strcmp is %d\n", __func__,__LINE__,current->
         strncpy(theia_linker, followed_path, MAX_LOGDIR_STRLEN+1);
       }
     }
-
-    int save_mmap = 1;
 
     BUG_ON(IS_ERR_OR_NULL(theia_linker));
     set_fs(old_fs);
@@ -10516,7 +10526,7 @@ out_norm:
 int shim_execve(const char *filename, const char __user *const __user *__argv, const char __user *const __user *__envp, struct pt_regs *regs) 
 SHIM_CALL_MAIN(59, record_execve(filename, __argv, __envp, regs), replay_execve(filename, __argv, __envp, regs), theia_start_execve(filename, __argv, __envp, regs))
 
-inline void theia_chdir_ahgx(const char __user * filename, long rc, int sysnum)
+inline void theia_chdir_ahgx(char __user * filename, long rc, int sysnum)
 {
 	theia_fullpath_ahgx(filename, rc, sysnum);
 }
@@ -10560,7 +10570,7 @@ inline void theia_mknod_ahgx(const char __user * filename, int mode, unsigned de
 	theia_dump_sdd(filename, mode, dev, rc, sysnum);
 }
 
-inline void theia_chmod_ahgx(const char __user * filename, mode_t mode, long rc, int sysnum)
+inline void theia_chmod_ahgx(char __user * filename, mode_t mode, long rc, int sysnum)
 {
 	struct path path;
 	char *fpath;
@@ -10610,7 +10620,7 @@ inline void theia_fchmod_ahgx(unsigned int fd, mode_t mode, long rc, int sysnum)
 	theia_dump_str(theia_buf1, rc, sysnum);
 }
 
-inline void theia_fchmodat_ahgx(int dfd, const char __user * filename, int mode, 
+inline void theia_fchmodat_ahgx(int dfd, char __user * filename, int mode, 
 				long rc, int sysnum)
 {
 	struct path path;
@@ -10680,7 +10690,7 @@ inline void theia_fchown_ahgx(unsigned int fd, uid_t user, gid_t group, long rc,
 	theia_dump_str(theia_buf1, rc, sysnum);
 }
 
-inline void theia_lchown_ahgx(const char __user * filename, uid_t user, gid_t group, 
+inline void theia_lchown_ahgx(char __user * filename, uid_t user, gid_t group, 
 		              long rc, int sysnum)
 {
 	struct path path;
@@ -10703,7 +10713,7 @@ inline void theia_lchown_ahgx(const char __user * filename, uid_t user, gid_t gr
 	theia_dump_str(theia_buf1, rc, sysnum);
 }
 
-inline void theia_chown_ahgx(const char __user * filename, uid_t user, 
+inline void theia_chown_ahgx(char __user * filename, uid_t user, 
 		             gid_t group, long rc, int sysnum)
 {
 	struct path path;
@@ -10728,15 +10738,13 @@ inline void theia_chown_ahgx(const char __user * filename, uid_t user,
 
 
 
-inline void theia_fchownat_ahgx(int dfd, const char __user * filename, uid_t user, 
+inline void theia_fchownat_ahgx(int dfd, char __user * filename, uid_t user, 
 				gid_t group, int flag, long rc, int sysnum)
 {
 	int res;
 	char *fpath;
-	u_long dev, ino;
 	umode_t mode;
 	struct path path;
-	struct timespec cr_time;
 	char uuid_str[THEIA_UUID_LEN+1];
 
 	res = user_path_at(dfd, filename, LOOKUP_FOLLOW, &path);
@@ -10782,11 +10790,11 @@ SIMPLE_SHIM3(mknod, 133, const char __user *, filename, int, mode, unsigned, dev
 SIMPLE_SHIM3(lseek, 8, unsigned int, fd, off_t, offset, unsigned int, origin);
 
 //THEIA_SHIM3(mknod, 133, const char __user *, filename, int, mode, unsigned, dev);
-THEIA_SHIM2(chmod, 90, const char __user *, filename, mode_t,  mode);
+THEIA_SHIM2(chmod, 90, char __user *, filename, mode_t,  mode);
 THEIA_SHIM2(fchmod, 91, unsigned int, fd, mode_t, mode);
 
-THEIA_SHIM3(chown, 92, const char __user *, filename, uid_t, user, gid_t, group);
-THEIA_SHIM3(lchown, 94, const char __user *, filename, uid_t, user, gid_t, group);
+THEIA_SHIM3(chown, 92, char __user *, filename, uid_t, user, gid_t, group);
+THEIA_SHIM3(lchown, 94, char __user *, filename, uid_t, user, gid_t, group);
 THEIA_SHIM3(fchown, 93, unsigned int, fd, uid_t, user, gid_t, group);
 //THEIA_SHIM3(lseek, 8, unsigned int, fd, off_t, offset, unsigned int, origin);
 
@@ -10805,14 +10813,17 @@ struct mount_ahgv {
 
 
 void packahgv_mount (struct mount_ahgv *sys_args) {
-#ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
-#endif
 	char uuid_str[THEIA_UUID_LEN+1];
 	struct file *file;
 	int fd, fput_needed;
-	char *fpath;
+	char *fpath = NULL;
 	mm_segment_t old_fs;	
+  char *fpath_b64;
+  uint32_t buf_size;
+  char* buf;
+#ifdef THEIA_AUX_DATA
+	theia_dump_auxdata();
+#endif
 
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
@@ -10852,28 +10863,27 @@ void packahgv_mount (struct mount_ahgv *sys_args) {
 
 		get_curr_time(&sec, &nsec);
 
-		char *fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+		fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
 		if (!fpath_b64) fpath_b64 = "";
     
-    uint32_t buf_size = strlen(fpath_b64)+256;
-    char *buf = vmalloc(buf_size);
+    buf_size = strlen(fpath_b64)+256;
+    buf = vmalloc(buf_size);
 
 		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%s|%s|%s|%lu|%d|%d|%ld|%ld|%u|endahg\n", 
 				165, sys_args->pid, current->start_time.tv_sec, uuid_str, fpath_b64, sys_args->dirname, sys_args->type, 
 				sys_args->flags, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
 
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
+    if(size <= 0)
+      printk("[%d]strange size %d\n", __LINE__,size);
 
-		theia_file_write(buf, size);
+    theia_file_write(buf, size);
 
     vfree(fpath_b64);
     vfree(buf);
-	}
+  }
 }
 
 void theia_mount_ahg(char __user *dev_name, char __user *dir_name, char __user *type, unsigned long flags, int rc, u_long clock) {
-	int ret;
 	struct mount_ahgv* pahgv = NULL;
 	int copied_length = 0;
 
@@ -10896,17 +10906,17 @@ void theia_mount_ahg(char __user *dev_name, char __user *dir_name, char __user *
 		pahgv->pid = current->pid;
 
 		if ((copied_length = strncpy_from_user(pahgv->devname, dev_name, sizeof(pahgv->devname))) != strlen(dev_name)) {
-			printk ("theia_mount_ahg: can't copy devname to ahgv, devname length %d, copied %d, devname:%s\n", strlen(dev_name), copied_length, dev_name); 
+			printk ("theia_mount_ahg: can't copy devname to ahgv, devname length %lu, copied %d, devname:%s\n", strlen(dev_name), copied_length, dev_name); 
 			KFREE(pahgv);	
 		}
 
 		if ((copied_length = strncpy_from_user(pahgv->dirname, dir_name, sizeof(pahgv->dirname))) != strlen(dir_name)) {
-			printk ("theia_mount_ahg: can't copy dir_name to ahgv, dir_name length %d, copied %d, dir_name:%s\n", strlen(dir_name), copied_length, dir_name); 
+			printk ("theia_mount_ahg: can't copy dir_name to ahgv, dir_name length %lu, copied %d, dir_name:%s\n", strlen(dir_name), copied_length, dir_name); 
 			KFREE(pahgv);	
 		}
 
 		if ((copied_length = strncpy_from_user(pahgv->type, type, sizeof(pahgv->type))) != strlen(type)) {
-			printk ("theia_mount_ahg: can't copy type to ahgv, type length %d, copied %d, type:%s\n", strlen(type), copied_length, type); 
+			printk ("theia_mount_ahg: can't copy type to ahgv, type length %lu, copied %d, type:%s\n", strlen(type), copied_length, type); 
 			KFREE(pahgv);	
 		}
 
@@ -11022,22 +11032,22 @@ inline void theia_kill_ahgx(int pid, int sig, long rc, int sysnum)
 	theia_dump_dd(pid, sig, rc, sysnum);
 }
 
-inline void theia_rename_ahgx(const char __user * oldname, const char __user * newname, long rc, int sysnum)
+inline void theia_rename_ahgx(const char __user * oldname, char __user * newname, long rc, int sysnum)
 {
 	theia_dump_ss(oldname, newname, rc, sysnum);
 }
 
-inline void theia_mkdir_ahgx(const char __user * pathname, int mode, long rc, int sysnum)
+inline void theia_mkdir_ahgx(char __user * pathname, int mode, long rc, int sysnum)
 {
 	theia_dump_sd(pathname, mode, rc, sysnum);
 }
 
-inline void theia_mkdirat_ahgx(int dfd, const char __user * pathname, int mode, long rc, int sysnum)
+inline void theia_mkdirat_ahgx(int dfd, char __user * pathname, int mode, long rc, int sysnum)
 {
 	theia_dump_at_sd(dfd, pathname, mode, rc, sysnum);
 }
 
-inline void theia_rmdir_ahgx(const char __user * pathname, long rc, int sysnum)
+inline void theia_rmdir_ahgx(char __user * pathname, long rc, int sysnum)
 {
 	theia_fullpath_ahgx(pathname, rc, sysnum);
 }
@@ -11066,6 +11076,8 @@ struct pipe_ahgv {
 };
 
 void packahgv_pipe (struct pipe_ahgv *sys_args) {
+  char uuid_str[THEIA_UUID_LEN+1];
+  int size;
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
@@ -11076,15 +11088,14 @@ void packahgv_pipe (struct pipe_ahgv *sys_args) {
 		get_curr_time(&sec, &nsec);
 		/* TODO: publish both ends' data: dev1, dev2, ino1, ino2 */
 #ifdef THEIA_UUID
-		char uuid_str[THEIA_UUID_LEN+1];
 		if (fd2uuid(sys_args->pfd1, uuid_str) == false)
 			return; /* no pipe? */
 
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%s|%d|%ld|%ld|%u|endahg\n", 
+		size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%s|%d|%ld|%ld|%u|endahg\n", 
 				22, sys_args->pid, current->start_time.tv_sec, sys_args->retval, 
 				uuid_str, current->tgid, sec, nsec, current->no_syscalls++);
 #else
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%d|%d|%lx|%lx|%d|%ld|%ld|endahg\n", 
+		size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%d|%d|%lx|%lx|%d|%ld|%ld|endahg\n", 
 				22, sys_args->pid, current->start_time.tv_sec, sys_args->retval, sys_args->pfd1, sys_args->pfd2, 
 				sys_args->dev1, sys_args->ino1, current->tgid, sec, nsec); // let's focus on pipe inode (dev,ino) itself
 //				sys_args->inode1, sys_args->inode2, current->tgid, sec, nsec);
@@ -11096,7 +11107,6 @@ if(size <= 0)
 }
 
 void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
-	int ret;
 	struct pipe_ahgv* pahgv = NULL;
 	struct file* file = NULL;
 	struct inode* inode;
@@ -11350,7 +11360,7 @@ asmlinkage unsigned long shim_brk (unsigned long abrk) SHIM_CALL(brk, 12, abrk);
 
 inline void theia_signal_ahgx(int sig, __sighandler_t handler, long rc, int sysnum)
 {
-	theia_dump_dd(sig, (int)handler, rc, sysnum);
+	theia_dump_dd(sig, (long)handler, rc, sysnum);
 }
 
 SIMPLE_SHIM1(acct, 163, char __user *, name)
@@ -11374,6 +11384,8 @@ struct ioctl_ahgv {
 };
 
 void packahgv_ioctl (struct ioctl_ahgv *sys_args) {
+  char uuid_str[THEIA_UUID_LEN+1];
+  int size;
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
@@ -11383,16 +11395,15 @@ void packahgv_ioctl (struct ioctl_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
-		char uuid_str[THEIA_UUID_LEN+1];
 		if (fd2uuid(sys_args->fd, uuid_str) == false)
 			return;
 
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%ld|%d|%ld|%ld|%u|endahg\n", 
+		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%ld|%d|%ld|%ld|%u|endahg\n", 
 				16, sys_args->pid, current->start_time.tv_sec, 
 				uuid_str, sys_args->cmd, sys_args->arg, sys_args->rc, current->tgid, 
 				sec, nsec, current->no_syscalls++);
 #else
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%d|%ld|%ld|%d|%ld|%ld|endahg\n", 
+		size = sprintf(buf, "startahg|%d|%d|%ld|%d|%d|%ld|%ld|%d|%ld|%ld|endahg\n", 
 				16, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->fd, sys_args->cmd, sys_args->arg, sys_args->rc, current->tgid, 
 				sec, nsec);
@@ -11404,7 +11415,6 @@ if(size <= 0)
 }
 
 void theia_ioctl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long rc, u_long clock) {
-	int ret;
 	struct ioctl_ahgv* pahgv = NULL;
 
 	if (theia_check_channel() == false)
@@ -11700,6 +11710,7 @@ replay_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg)
 
 void theia_fcntl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long rc)
 {
+  int size;
 	if (theia_check_channel() == false)
 		return;
 
@@ -11711,7 +11722,7 @@ void theia_fcntl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long 
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%d|%d|%d|%d|%ld|%ld|%u|endahg\n", 
+		size = sprintf(buf, "startahg|%d|%d|%ld|%d|%d|%lu|%d|%ld|%ld|%u|endahg\n", 
 				72, current->pid, current->start_time.tv_sec, fd, cmd, arg, current->tgid, sec, nsec, current->no_syscalls++);
 		theia_file_write(buf, size);
 	}
@@ -11732,7 +11743,7 @@ SHIM_CALL_MAIN(72, record_fcntl(fd, cmd, arg), replay_fcntl(fd, cmd, arg), theia
 
 SIMPLE_SHIM1(umask, 95, int, mask);
 
-inline void theia_chroot_ahgx(const char __user * filename, long rc, int sysnum)
+inline void theia_chroot_ahgx(char __user * filename, long rc, int sysnum)
 {
 	theia_fullpath_ahgx(filename, rc, sysnum);
 }
@@ -12155,7 +12166,7 @@ printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__,__LINE_
 	}
 
 	retval = sys_munmap (addr, len);
-	DPRINT ("Pid %d replays munmap of addr %lx len %d returning %ld\n", current->pid, addr, len, retval);
+	DPRINT ("Pid %d replays munmap of addr %lx len %lu returning %ld\n", current->pid, addr, len, retval);
 	if (rc != retval) {
 		printk ("Replay munmap returns different value %lu than %lu\n",	retval, rc);
 		return syscall_mismatch();
@@ -12174,6 +12185,7 @@ struct munmap_ahgv {
 };
 
 void packahgv_munmap (struct munmap_ahgv *sys_args) {
+  int size;
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
@@ -12192,7 +12204,7 @@ void packahgv_munmap (struct munmap_ahgv *sys_args) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%lx|%ld|%d|%ld|%ld|%u|endahg\n", 
+		size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%lx|%ld|%d|%ld|%ld|%u|endahg\n", 
 				11, sys_args->pid, current->start_time.tv_sec, sys_args->rc, 
 				sys_args->addr, sys_args->len, current->tgid, sec, nsec, current->no_syscalls++);
 if(size <= 0)
@@ -12202,7 +12214,6 @@ if(size <= 0)
 }
 
 void theia_munmap_ahg(unsigned long addr, size_t len, long rc, u_long clock) {
-	int ret;
 	struct munmap_ahgv* pahgv = NULL;
 
 	if (theia_check_channel() == false)
@@ -12379,7 +12390,7 @@ log_mmsghdr (struct mmsghdr __user *msg, long rc, long* plogsize)
 			}
 			len += phdr->msg_hdr.msg_controllen;
 			if (copy_from_user (pdata, phdr->msg_hdr.msg_control, phdr->msg_hdr.msg_controllen)) {
-				printk("record_recvmmsg: can't copy msg_control %ld of size %d\n", i, phdr->msg_hdr.msg_controllen);
+				printk("record_recvmmsg: can't copy msg_control %ld of size %ld\n", i, phdr->msg_hdr.msg_controllen);
 				ARGSKFREE (plogsize, len);
 				return -EFAULT;
 			}
@@ -12474,7 +12485,7 @@ extract_mmsghdr (char* retparams, struct mmsghdr __user *msg, long rc)
 	return 0;
 }
 
-void print_mem(u_long addr, int length) {                                  
+void print_mem(void* addr, int length) {                                  
   unsigned char* cc = (unsigned char *)addr;                                     
   int i;                                                                         
   for (i=0;i<length;i++){                                                        
@@ -12485,6 +12496,10 @@ void print_mem(u_long addr, int length) {
 void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char* ip, u_long* port, char* sun_path, sa_family_t* sa_family) {
 	char address[MAX_SOCK_ADDR];	
 	struct sockaddr* basic_sockaddr;
+  struct sockaddr_in* in_sockaddr;
+  unsigned char* cc;
+  struct sockaddr_un* un_sockaddr;
+  struct sockaddr_nl* nl_sockaddr;
 
 	if (copy_from_user (address, sockaddr, addrlen)) {
 		printk("get_ip_port_sockaddr[%d]: fails to copy sockaddr from userspace\n", __LINE__);
@@ -12501,8 +12516,6 @@ void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char* i
 	switch (*sa_family) {
 	case AF_INET:
 	case AF_UNSPEC: ; /* likely */
-		struct sockaddr_in* in_sockaddr;
-		unsigned char* cc;
 		in_sockaddr = (struct sockaddr_in*)basic_sockaddr;
 
 		*port = in_sockaddr->sin_port;
@@ -12512,7 +12525,6 @@ void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char* i
 //		TPRINT("get_ip_port_sockaddr: ip is %s, port: %lu\n", ip, *port);
 		break;
 	case AF_LOCAL: ;// AF_UNIX
-		struct sockaddr_un* un_sockaddr;
 		un_sockaddr = (struct sockaddr_un*)basic_sockaddr;
 
 		*port = THEIA_INVALID_PORT;
@@ -12527,7 +12539,6 @@ void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char* i
 		}
 		break;
 	case AF_NETLINK: ;
-		struct sockaddr_nl* nl_sockaddr;
 		nl_sockaddr = (struct sockaddr_nl*)basic_sockaddr;
 
 		*port = nl_sockaddr->nl_pid; 
@@ -12549,7 +12560,10 @@ void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_f
 	struct sockaddr *sockaddr;
 	int len;
 	int err = 1;
-        int fput_needed;
+  unsigned char* cc;
+  struct sockaddr_in* in_sockaddr;
+  struct sockaddr_un* un_sockaddr;
+  struct sockaddr_nl* nl_sockaddr;
 	struct socket *sock = sockfd_lookup(sockfd, &err);
 
 	if (sock != NULL) {
@@ -12557,7 +12571,6 @@ void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_f
 			err = sock->ops->getname(sock, (struct sockaddr*)address, &len, 1);
 		else
 			err = sock->ops->getname(sock, (struct sockaddr*)address, &len, 0);
-
 		sockfd_put(sock);
 	}
 
@@ -12565,10 +12578,10 @@ void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_f
   strcpy(ip, "NA");
   strcpy(sun_path, "NA");
 
-	if (err) {
-printk("getname error: err %d, sock is null? %d\n",err, sock==NULL?1:0);
-		return;
-	}
+  if (err) {
+    printk("getname error: err %d, sock is null? %d\n",err, sock==NULL?1:0);
+    return;
+  }
 
 	sockaddr = (struct sockaddr*)address;
 
@@ -12577,8 +12590,6 @@ printk("getname error: err %d, sock is null? %d\n",err, sock==NULL?1:0);
 	switch (*sa_family) {
 	case AF_INET:
 	case AF_UNSPEC: ; /* likely */
-		struct sockaddr_in* in_sockaddr;
-		unsigned char* cc;
 		in_sockaddr = (struct sockaddr_in*)sockaddr;
 
 		*port = ntohs(in_sockaddr->sin_port);
@@ -12588,7 +12599,6 @@ printk("getname error: err %d, sock is null? %d\n",err, sock==NULL?1:0);
 //		TPRINT("get_ip_port_sockfd: ip is %s, port: %lu\n", ip, *port);
 		break;
 	case AF_LOCAL: ;// AF_UNIX
-		struct sockaddr_un* un_sockaddr;
 		un_sockaddr = (struct sockaddr_un*)sockaddr;
 
 		*port = THEIA_INVALID_PORT;
@@ -12602,7 +12612,6 @@ printk("getname error: err %d, sock is null? %d\n",err, sock==NULL?1:0);
 		}
 		break;
 	case AF_NETLINK: ;
-		struct sockaddr_nl* nl_sockaddr;
 		nl_sockaddr = (struct sockaddr_nl*)sockaddr;
 
 		*port = nl_sockaddr->nl_pid; 
@@ -12631,6 +12640,8 @@ struct connect_ahgv {
 };
 
 void packahgv_connect(struct connect_ahgv *sys_args) {
+  int size = 0;
+  char uuid_str[THEIA_UUID_LEN+1];
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
@@ -12640,9 +12651,7 @@ void packahgv_connect(struct connect_ahgv *sys_args) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = 0;
 #ifdef THEIA_UUID
-		char uuid_str[THEIA_UUID_LEN+1];
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
 			return; /* no file, socket, ...? */
 		uuid_str[THEIA_UUID_LEN] = '\0';
@@ -12682,6 +12691,8 @@ struct accept_ahgv {
 };
 
 void packahgv_accept(struct accept_ahgv *sys_args) {
+  int size=0;
+  char uuid_str[THEIA_UUID_LEN+1];
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
@@ -12690,9 +12701,7 @@ void packahgv_accept(struct accept_ahgv *sys_args) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size=0;
 #ifdef THEIA_UUID
-		char uuid_str[THEIA_UUID_LEN+1];
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
 			return; /* no file, socket, ...? */
 
@@ -12734,6 +12743,8 @@ struct sendto_ahgv {
 };
 
 void packahgv_sendto(struct sendto_ahgv *sys_args) {
+  int size = 0;
+  char uuid_str[THEIA_UUID_LEN+1];
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
@@ -12743,13 +12754,11 @@ void packahgv_sendto(struct sendto_ahgv *sys_args) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = 0;
 #ifdef THEIA_UUID
-		char uuid_str[THEIA_UUID_LEN+1];
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
 			return; /* no file, socket, ...? */
 
-		size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|%u|endahg\n",
+		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n",
 				44, sys_args->pid, current->start_time.tv_sec, 
 				uuid_str, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
 #else
@@ -12789,6 +12798,8 @@ struct recvfrom_ahgv {
 };
 
 void packahgv_recvfrom(struct recvfrom_ahgv *sys_args) {
+  int size = 0;
+  char uuid_str[THEIA_UUID_LEN+1];
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
@@ -12798,13 +12809,11 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = 0;
 #ifdef THEIA_UUID
-		char uuid_str[THEIA_UUID_LEN+1];
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
 			return; /* no file, socket, ...? */
 
-		size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|%u|endahg\n",
+		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n",
 				45, sys_args->pid, current->start_time.tv_sec, 
 				uuid_str, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
 #else
@@ -12842,6 +12851,8 @@ struct sendmsg_ahgv {
 };
 
 void packahgv_sendmsg(struct sendmsg_ahgv *sys_args) {
+  int size = 0;
+  char uuid_str[THEIA_UUID_LEN+1];
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
@@ -12851,9 +12862,7 @@ void packahgv_sendmsg(struct sendmsg_ahgv *sys_args) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = 0;
 #ifdef THEIA_UUID
-		char uuid_str[THEIA_UUID_LEN+1];
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
 			return; /* no file, socket, ...? */
 
@@ -12901,6 +12910,8 @@ struct recvmsg_ahgv {
 };
 
 void packahgv_recvmsg(struct recvmsg_ahgv *sys_args) {
+  int size = 0;
+  char uuid_str[THEIA_UUID_LEN+1];
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
@@ -12910,13 +12921,11 @@ void packahgv_recvmsg(struct recvmsg_ahgv *sys_args) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = 0;
 #ifdef THEIA_UUID
-		char uuid_str[THEIA_UUID_LEN+1];
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
 			return; /* no file, socket, ...? */
 
-		size = sprintf(buf, "startahg|%d|%d|%d|%s|%d|%d|%ld|%ld|%u|endahg\n",
+		size = sprintf(buf, "startahg|%d|%d|%lu|%s|%ld|%d|%ld|%ld|%u|endahg\n",
 				47, sys_args->pid, current->start_time.tv_sec, 
 				uuid_str, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
 #else
@@ -13290,6 +13299,7 @@ static asmlinkage long
 record_socket(int family, int type, int protocol)
 {
 	long rc = 0;
+  struct generic_socket_retvals* pretvals = NULL;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -13302,7 +13312,6 @@ record_socket(int family, int type, int protocol)
 
 	DPRINT ("Pid %d records socket  returning %ld\n", current->pid, rc);
 
-  struct generic_socket_retvals* pretvals = NULL;
   pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
   if (pretvals == NULL) {
     printk("record_socketcall(socket): can't allocate buffer\n");
@@ -13317,6 +13326,7 @@ static asmlinkage long
 record_connect(int fd, struct sockaddr __user *uservaddr, int addrlen)
 {
 	long rc = 0;
+  struct generic_socket_retvals* pretvals = NULL;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -13331,7 +13341,6 @@ record_connect(int fd, struct sockaddr __user *uservaddr, int addrlen)
 
   new_syscall_done (42, rc);
 
-  struct generic_socket_retvals* pretvals = NULL;
   pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
   if (pretvals == NULL) {
     printk("record_socketcall(socket): can't allocate buffer\n");
@@ -13346,6 +13355,8 @@ static asmlinkage long
 record_accept(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen)
 {
 	long rc = 0;
+  struct accept_retvals* pretvals = NULL;
+  long addrlen;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -13360,8 +13371,6 @@ record_accept(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_
 
 	new_syscall_done (43, rc);
 
-  struct accept_retvals* pretvals = NULL;
-  long addrlen;
   DPRINT ("Pid %d record_accept\n", current->pid);
   if (rc >= 0) {
     if (upeer_sockaddr) {
@@ -13392,6 +13401,8 @@ static asmlinkage long
 record_accept4(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_addrlen, int flags)
 {
 	long rc = 0;
+  struct accept_retvals* pretvals = NULL;
+  long addrlen;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -13407,8 +13418,6 @@ record_accept4(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer
 
 	new_syscall_done (288, rc);
 
-  struct accept_retvals* pretvals = NULL;
-  long addrlen;
   DPRINT ("Pid %d record_accept\n", current->pid);
   if (rc >= 0) {
     if (upeer_sockaddr) {
@@ -13438,16 +13447,19 @@ record_accept4(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer
 static asmlinkage long 
 record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct sockaddr __user *addr, int addr_len)
 {
-	long rc = 0;
+  long rc = 0;
+  int err = 0;
+  struct socket* sock;
+  char *puuid;
+  struct generic_socket_retvals* pretvals = NULL;
 #ifdef TIME_TRICK
-	int shift_clock = 1;
+  int shift_clock = 1;
 #endif
 
-	new_syscall_enter (44);
+  new_syscall_enter (44);
 
 #ifdef TRACE_SOCKET_READ_WRITE
-  int err = 0;
-  struct socket *sock = sockfd_lookup(fd, &err);
+  sock = sockfd_lookup(fd, &err);
 
   if (sock != NULL && (sock->ops == &unix_stream_ops || sock->ops == &unix_seqpacket_ops)) {
     int ret;
@@ -13461,29 +13473,27 @@ record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct 
   }
 #endif
 
-	rc = sys_sendto (fd, buff, len, flags, addr, addr_len);
+  rc = sys_sendto (fd, buff, len, flags, addr, addr_len);
 
-// Yang also needed at recording
-	if (rc != -EAGAIN) /* ignore some less meaningful errors */
-		theia_sendto_ahg(rc, fd, buff, len, flags, addr, addr_len);
+  // Yang also needed at recording
+  if (rc != -EAGAIN) /* ignore some less meaningful errors */
+    theia_sendto_ahg(rc, fd, buff, len, flags, addr, addr_len);
 
-//Yang: we get the inode 
-char *puuid;
-puuid = ARGSKMALLOC (strlen(rec_uuid_str)+1, GFP_KERNEL);
-if (puuid == NULL) {
-  printk ("record_sendto: can't allocate pos buffer for rec_uuid_str\n"); 
-  return -ENOMEM;
-}
-strcpy((char*)puuid, rec_uuid_str);
-printk("sendto: rec_uuid_str is %s,clock %lu\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
-printk("sendto: copied to pretval is (%s)\n", (char*)puuid);
+  //Yang: we get the inode 
+  puuid = ARGSKMALLOC (strlen(rec_uuid_str)+1, GFP_KERNEL);
+  if (puuid == NULL) {
+    printk ("record_sendto: can't allocate pos buffer for rec_uuid_str\n"); 
+    return -ENOMEM;
+  }
+  strcpy((char*)puuid, rec_uuid_str);
+  pr_debug("sendto: rec_uuid_str is %s,clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
+  pr_debug("sendto: copied to pretval is (%s)\n", (char*)puuid);
 
   new_syscall_done (44, rc);
 
-  DPRINT ("Pid %d records sendto returning %d\n", current->pid, rc);
+  DPRINT ("Pid %d records sendto returning %ld\n", current->pid, rc);
 
 #ifdef TRACE_SOCKET_READ_WRITE
-  struct generic_socket_retvals* pretvals = NULL;
   pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
   if (pretvals == NULL) {
     printk("record_socketcall(socket): can't allocate buffer\n");
@@ -13537,35 +13547,35 @@ printk("sendto: copied to pretval is (%s)\n", (char*)puuid);
 static asmlinkage long 
 record_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, struct sockaddr __user *addr, int __user *addr_len)
 {
-	long rc = 0;
+  long rc = 0;
+  char *puuid;
+  struct recvfrom_retvals* pretvals = NULL;
 #ifdef TIME_TRICK
-	int shift_clock = 1;
+  int shift_clock = 1;
 #endif
 
-	new_syscall_enter (45);
+  new_syscall_enter (45);
 
-	rc = sys_recvfrom (fd, ubuf, size, flags, addr, addr_len);
+  rc = sys_recvfrom (fd, ubuf, size, flags, addr, addr_len);
 
-// Yang also needed at recording
-	if (rc != -EAGAIN) /* ignore some less meaningful errors */
+  // Yang also needed at recording
+  if (rc != -EAGAIN) /* ignore some less meaningful errors */
     theia_recvfrom_ahg(rc, fd, ubuf, size, flags, addr, addr_len);
 
-//Yang: we get the inode 
-char *puuid;
-puuid = ARGSKMALLOC (strlen(rec_uuid_str)+1, GFP_KERNEL);
-if (puuid == NULL) {
-  printk ("record_recvfrom: can't allocate pos buffer for rec_uuid_str\n"); 
-  return -ENOMEM;
-}
-strcpy((char*)puuid, rec_uuid_str);
-printk("recvfrom: rec_uuid_str is %s, clock %lu\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
-printk("recvfrom: copied to pretval is (%s)\n", (char*)puuid);
+  //Yang: we get the inode 
+  puuid = ARGSKMALLOC (strlen(rec_uuid_str)+1, GFP_KERNEL);
+  if (puuid == NULL) {
+    printk ("record_recvfrom: can't allocate pos buffer for rec_uuid_str\n"); 
+    return -ENOMEM;
+  }
+  strcpy((char*)puuid, rec_uuid_str);
+  pr_debug("recvfrom: rec_uuid_str is %s, clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
+  pr_debug("recvfrom: copied to pretval is (%s)\n", (char*)puuid);
 
   new_syscall_done (45, rc);
 
   DPRINT ("Pid %d records recvfrom returning %ld\n", current->pid, rc);
 
-  struct recvfrom_retvals* pretvals = NULL;
   if (rc >= 0) {
     pretvals = ARGSKMALLOC(sizeof(struct recvfrom_retvals)+rc-1, GFP_KERNEL);
     if (pretvals == NULL) {
@@ -13622,38 +13632,38 @@ printk("recvfrom: copied to pretval is (%s)\n", (char*)puuid);
   return rc;
 }
 
-static asmlinkage long 
+  static asmlinkage long 
 record_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags)
 {
-	long rc = 0;
+  long rc = 0;
+  char *puuid;
+  struct generic_socket_retvals* pretvals = NULL;
 #ifdef TIME_TRICK
-	int shift_clock = 1;
+  int shift_clock = 1;
 #endif
 
-	new_syscall_enter (46);
+  new_syscall_enter (46);
 
-	rc = sys_sendmsg (fd, msg, flags);
+  rc = sys_sendmsg (fd, msg, flags);
 
-// Yang also needed at recording
-	if (rc != -EAGAIN) /* ignore some less meaningful errors */
-		theia_sendmsg_ahg(rc, fd, msg, flags);
+  // Yang also needed at recording
+  if (rc != -EAGAIN) /* ignore some less meaningful errors */
+    theia_sendmsg_ahg(rc, fd, msg, flags);
 
-//Yang: we get the inode 
-char *puuid;
-puuid = ARGSKMALLOC (strlen(rec_uuid_str)+1, GFP_KERNEL);
-if (puuid == NULL) {
-  printk ("record_sendmsg: can't allocate pos buffer for rec_uuid_str\n"); 
-  return -ENOMEM;
-}
-strcpy((char*)puuid, rec_uuid_str);
-printk("sendmsg: rec_uuid_str is %s, clock %lu\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
-printk("sendmsg: copied to pretval is (%s)\n", (char*)puuid);
+  //Yang: we get the inode 
+  puuid = ARGSKMALLOC (strlen(rec_uuid_str)+1, GFP_KERNEL);
+  if (puuid == NULL) {
+    printk ("record_sendmsg: can't allocate pos buffer for rec_uuid_str\n"); 
+    return -ENOMEM;
+  }
+  strcpy((char*)puuid, rec_uuid_str);
+  pr_debug("sendmsg: rec_uuid_str is %s, clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
+  pr_debug("sendmsg: copied to pretval is (%s)\n", (char*)puuid);
 
 	new_syscall_done (46, rc);
 
 	DPRINT ("Pid %d records sendmsg returning %ld\n", current->pid, rc);
 
-  struct generic_socket_retvals* pretvals = NULL;
   pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
   if (pretvals == NULL) {
     printk("record_socketcall(socket): can't allocate buffer\n");
@@ -13667,48 +13677,49 @@ printk("sendmsg: copied to pretval is (%s)\n", (char*)puuid);
 static asmlinkage long 
 record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
 {
-	long rc = 0;
+  long rc = 0;
+  char *puuid;
+  struct recvmsg_retvals* pretvals = NULL;
+  struct msghdr __user *pmsghdr;
+  char* pdata;
+  long iovlen, rem_size, to_copy, i;
 #ifdef TIME_TRICK
-	int shift_clock = 1;
+  int shift_clock = 1;
 #endif
 
-	new_syscall_enter (47);
+  new_syscall_enter (47);
 
-	rc = sys_recvmsg (fd, msg, flags);
-printk("[%s|%d] pid %d, fd %d, rc %ld\n",__func__,__LINE__,current->pid,fd,rc);
+  rc = sys_recvmsg (fd, msg, flags);
+  printk("[%s|%d] pid %d, fd %d, rc %ld\n",__func__,__LINE__,current->pid,fd,rc);
 
-// Yang also needed at recording
-	if (rc != -EAGAIN) /* ignore some less meaningful errors */
-		theia_recvmsg_ahg(rc, fd, msg, flags);
+  // Yang also needed at recording
+  if (rc != -EAGAIN) /* ignore some less meaningful errors */
+    theia_recvmsg_ahg(rc, fd, msg, flags);
 
-//Yang: we get the inode 
-char *puuid;
-puuid = ARGSKMALLOC (strlen(rec_uuid_str)+1, GFP_KERNEL);
-if (puuid == NULL) {
-  printk ("record_recvmsg: can't allocate pos buffer for rec_uuid_str\n"); 
-  return -ENOMEM;
-}
-strcpy((char*)puuid, rec_uuid_str);
-printk("recvmsg: rec_uuid_str is %s, clock %lu\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
-printk("recvmsg: copied to pretval is (%s)\n", (char*)puuid);
+  //Yang: we get the inode 
+  puuid = ARGSKMALLOC (strlen(rec_uuid_str)+1, GFP_KERNEL);
+  if (puuid == NULL) {
+    printk ("record_recvmsg: can't allocate pos buffer for rec_uuid_str\n"); 
+    return -ENOMEM;
+  }
+  strcpy((char*)puuid, rec_uuid_str);
+  pr_debug("recvmsg: rec_uuid_str is %s, clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
+  pr_debug("recvmsg: copied to pretval is (%s)\n", (char*)puuid);
 
 #ifdef TIME_TRICK
   shift_clock = 0;
-	cnew_syscall_done (47, rc, -1, shift_clock);
+  cnew_syscall_done (47, rc, -1, shift_clock);
 #else
-	new_syscall_done (47, rc);
+  new_syscall_done (47, rc);
 #endif
 
   DPRINT ("Pid %d records recvmsg returning %ld\n", current->pid, rc);
 
-  struct recvmsg_retvals* pretvals = NULL;
-  struct msghdr __user *pmsghdr = (struct msghdr __user *) msg;
-  char* pdata;
-  long iovlen, rem_size, to_copy, i;
+  pmsghdr = (struct msghdr __user *) msg;
 
   if (rc >= 0) {
 
-    DPRINT ("record_recvmsg: namelen: %d, controllen %ld iov_len %d rc %ld\n", pmsghdr->msg_namelen, (long) pmsghdr->msg_controllen, pmsghdr->msg_iovlen, rc);
+    DPRINT ("record_recvmsg: namelen: %d, controllen %ld iov_len %lu rc %ld\n", pmsghdr->msg_namelen, (long) pmsghdr->msg_controllen, pmsghdr->msg_iovlen, rc);
 
     pretvals = ARGSKMALLOC(sizeof(struct recvmsg_retvals) + pmsghdr->msg_namelen + pmsghdr->msg_controllen + rc, GFP_KERNEL);
     if (pretvals == NULL) {
@@ -13771,6 +13782,7 @@ static asmlinkage long
 record_shutdown(int fd, int how)
 {
 	long rc = 0;
+  struct generic_socket_retvals* pretvals = NULL;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -13783,21 +13795,21 @@ record_shutdown(int fd, int how)
 
 	DPRINT ("Pid %d records bind returning %ld\n", current->pid, rc);
 
-		struct generic_socket_retvals* pretvals = NULL;
-		pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
-		if (pretvals == NULL) {
-			printk("record_socketcall(socket): can't allocate buffer\n");
-			return -ENOMEM;
-		}
-		pretvals->call = SYS_SHUTDOWN;
-		new_syscall_exit (48, pretvals);
-		return rc;
+  pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
+  if (pretvals == NULL) {
+    printk("record_socketcall(socket): can't allocate buffer\n");
+    return -ENOMEM;
+  }
+  pretvals->call = SYS_SHUTDOWN;
+  new_syscall_exit (48, pretvals);
+  return rc;
 }
 
 static asmlinkage long 
 record_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
 {
 	long rc = 0;
+  struct generic_socket_retvals* pretvals = NULL;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -13810,7 +13822,6 @@ record_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
 
 	DPRINT ("Pid %d records bind returning %ld\n", current->pid, rc);
 
-  struct generic_socket_retvals* pretvals = NULL;
   pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
   if (pretvals == NULL) {
     printk("record_socketcall(socket): can't allocate buffer\n");
@@ -13825,6 +13836,7 @@ static asmlinkage long
 record_listen(int fd, int backlog)
 {
 	long rc = 0;
+  struct generic_socket_retvals* pretvals = NULL;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -13837,7 +13849,6 @@ record_listen(int fd, int backlog)
 
 	DPRINT ("Pid %d records listen returning %ld\n", current->pid, rc);
 
-  struct generic_socket_retvals* pretvals = NULL;
   pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
   if (pretvals == NULL) {
     printk("record_socketcall(socket): can't allocate buffer\n");
@@ -13852,6 +13863,8 @@ record_listen(int fd, int backlog)
 record_getsockname(int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len)
 {
   long rc = 0;
+  struct accept_retvals* pretvals = NULL;
+  long addrlen;
 #ifdef TIME_TRICK
   int shift_clock = 1;
 #endif
@@ -13864,8 +13877,6 @@ record_getsockname(int fd, struct sockaddr __user *usockaddr, int __user *usocka
 
   DPRINT ("Pid %d records getsockname returning %ld\n", current->pid, rc);
 
-  struct accept_retvals* pretvals = NULL;
-  long addrlen;
   DPRINT ("Pid %d record_getsockname\n", current->pid);
   if (rc >= 0) {
     if (usockaddr) {
@@ -13896,6 +13907,8 @@ static asmlinkage long
 record_getpeername(int fd, struct sockaddr __user *usockaddr, int __user *usockaddr_len)
 {
 	long rc = 0;
+  struct accept_retvals* pretvals = NULL;
+  long addrlen;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -13908,8 +13921,6 @@ record_getpeername(int fd, struct sockaddr __user *usockaddr, int __user *usocka
 
   DPRINT ("Pid %d records getpeername returning %ld\n", current->pid, rc);
 
-  struct accept_retvals* pretvals = NULL;
-  long addrlen;
   DPRINT ("Pid %d record_getsockname\n", current->pid);
   if (rc >= 0) {
     if (usockaddr) {
@@ -13940,6 +13951,8 @@ static asmlinkage long
 record_socketpair(int family, int type, int protocol, int __user *usockvec)
 {
 	long rc = 0;
+  struct socketpair_retvals* pretvals = NULL;
+  int* sv;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -13952,8 +13965,6 @@ record_socketpair(int family, int type, int protocol, int __user *usockvec)
 
   DPRINT ("Pid %d records socketpair returning %ld\n", current->pid, rc);
 
-  struct socketpair_retvals* pretvals = NULL;
-  int* sv;
   if (rc >= 0) {
     sv = (int *) usockvec;
     pretvals = ARGSKMALLOC(sizeof(struct socketpair_retvals), GFP_KERNEL);
@@ -13974,6 +13985,7 @@ static asmlinkage long
 record_setsockopt(int fd, int level, int optname, char __user *optval, int optlen)
 {
 	long rc = 0;
+  struct generic_socket_retvals* pretvals = NULL;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -13986,7 +13998,6 @@ record_setsockopt(int fd, int level, int optname, char __user *optval, int optle
 
   DPRINT ("Pid %d records setsockopt returning %ld\n", current->pid, rc);
 
-  struct generic_socket_retvals* pretvals = NULL;
   pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
   if (pretvals == NULL) {
     printk("record_socketcall(socket): can't allocate buffer\n");
@@ -14001,6 +14012,7 @@ static asmlinkage long
 record_getsockopt(int fd, int level, int optname, char __user *optval, int __user *optlen)
 {
 	long rc = 0;
+  struct generic_socket_retvals* pretvals = NULL;
 #ifdef TIME_TRICK
 	int shift_clock = 1;
 #endif
@@ -14013,7 +14025,6 @@ record_getsockopt(int fd, int level, int optname, char __user *optval, int __use
 
   DPRINT ("Pid %d records getsockopt returning %ld\n", current->pid, rc);
 
-  struct generic_socket_retvals* pretvals = NULL;
   pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
   if (pretvals == NULL) {
     printk("record_socketcall(socket): can't allocate buffer\n");
@@ -14031,7 +14042,7 @@ replay_socket (int family, int type, int protocol)
 	char* retparams = NULL;
 	long rc; 
 
-	DPRINT ("Pid %d in replay_socket(%d)\n", current->pid);
+	DPRINT ("Pid %d in replay_socket\n", current->pid);
 
 	rc = get_next_syscall (41, &retparams);
 
@@ -14042,11 +14053,11 @@ replay_socket (int family, int type, int protocol)
   return rc;
 #else
   if (x_proxy) {
-    int retval = sys_socket (family, type, protocol);
+    long retval = sys_socket (family, type, protocol);
     if (retval <= 0) 
-      printk ("Pid %d create socket fails, expected:%ld, actual:%ld\n", current->pid, rc, retval);
+      pr_debug ("Pid %d create socket fails, expected:%ld, actual:%ld\n", current->pid, rc, retval);
     else {
-      if (x_detail) printk ("Pid %d create socket, recorded fd is %ld, actual fd is %ld\n", current->pid, rc, retval);
+      if (x_detail) pr_debug ("Pid %d create socket, recorded fd is %ld, actual fd is %ld\n", current->pid, rc, retval);
       X_STRUCT_REP.last_fd = retval;
     }
   }
@@ -14215,9 +14226,9 @@ replay_recvmsg (int fd, struct msghdr __user *msg, unsigned int flags)
 //			struct msghdr *msg = (struct msghdr __user *) msg;
 			long rem_size, to_copy, i, iovlen;
 
-printk("[%s|%d] replay_recvmsg, msg %p\n",__func__,__LINE__, msg);
-			put_user (retvals->msg_controllen, &msg->msg_controllen); // This is a in-out parameter
-printk("[%s|%d] replay_recvmsg, retvals msg_controllen size %u, msg->msg_controllen size %u, retvals msg_flags size %u, msg->msg_flags size %u, retvals->msg_flags %u, msg_flags ptr %p\n",__func__,__LINE__, sizeof(retvals->msg_controllen), sizeof(&msg->msg_controllen), sizeof(retvals->msg_flags), sizeof(msg->msg_flags),retvals->msg_flags, &(msg->msg_flags));
+pr_debug("[%s|%d] replay_recvmsg, msg %p\n",__func__,__LINE__, msg);
+			put_user (retvals->msg_controllen, &msg->msg_controllen); // This is an in-out parameter
+pr_debug("[%s|%d] replay_recvmsg, retvals msg_controllen size %lu, msg->msg_controllen size %lu, retvals msg_flags size %lu, msg->msg_flags size %lu, retvals->msg_flags %u, msg_flags ptr %p\n",__func__,__LINE__, sizeof(retvals->msg_controllen), sizeof(&msg->msg_controllen), sizeof(retvals->msg_flags), sizeof(msg->msg_flags),retvals->msg_flags, &(msg->msg_flags));
 			put_user (retvals->msg_flags, &(msg->msg_flags));           // Out parameter
 printk("[%s|%d] replay_recvmsg, msg_namelen %d, msg->msg_namelen %d\n",__func__,__LINE__, retvals->msg_namelen, msg->msg_namelen);
 
@@ -14491,7 +14502,7 @@ asmlinkage long shim_socketpair (int family, int type, int protocol, int __user 
 SHIM_CALL_MAIN(53, record_socketpair(family, type, protocol, usockvec), replay_socketpair(family, type, protocol, usockvec), theia_sys_socketpair(family, type, protocol, usockvec))
 
 asmlinkage long shim_setsockopt (int fd, int level, int optname, char __user *optval, int optlen)
-SHIM_CALL_MAIN(54, record_setsockopt(fd, level, optname, optval, optlen), replay_setsockopt(fd, level, optname, optval, optlen), theia_sys_setsockopt(fd, level, optname, optval, optlen))
+SHIM_CALL_MAIN(54, record_setsockopt(fd, level, optname, optval, optlen), replay_setsockopt(fd, level, optname, optval, &optlen), theia_sys_setsockopt(fd, level, optname, optval, optlen))
 
 asmlinkage long shim_getsockopt (int fd, int level, int optname, char __user *optval, int __user *optlen)
 SHIM_CALL_MAIN(55, record_getsockopt(fd, level, optname, optval, optlen), replay_getsockopt(fd, level, optname, optval, optlen), theia_sys_getsockopt(fd, level, optname, optval, optlen))
@@ -14618,6 +14629,7 @@ struct shmget_ahgv {
 
 void packahgv_shmget(struct shmget_ahgv *sys_args)
 {
+  int size;
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
@@ -14626,27 +14638,24 @@ void packahgv_shmget(struct shmget_ahgv *sys_args)
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
-		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%ld|%d|%lu|%d|%d|%ld|%ld|%u|endahg\n",
+		size = sprintf(buf, "startahg|%d|%d|%d|%ld|%ld|%d|%lu|%d|%d|%ld|%ld|%u|endahg\n",
 				29, SHMGET, sys_args->pid, current->start_time.tv_sec,
 				sys_args->rc, sys_args->key, sys_args->size, sys_args->shmflg,
 				current->tgid, sec, nsec, current->no_syscalls++);
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
-		theia_file_write(buf, size);
+    if(size <= 0)
+      printk("[%d]strange size %d\n", __LINE__,size);
+    theia_file_write(buf, size);
 	} 
 }
 
 void theia_shmget_ahg(long rc, key_t key, size_t size, int flag) {
-	int ret;
+	struct shmget_ahgv* pahgv_shmget = NULL;
 
 	if (theia_check_channel() == false)
 		return;
 
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
-
-	struct shmget_ahgv* pahgv_shmget = NULL;
-	struct shmat_ahgv* pahgv_shmat = NULL;
 
 	pahgv_shmget = (struct shmget_ahgv*)KMALLOC(sizeof(struct shmget_ahgv), GFP_KERNEL);
 	if(pahgv_shmget == NULL) {
@@ -14676,9 +14685,7 @@ int theia_sys_shmget(key_t key, size_t size, int flag)
 static asmlinkage long
 record_shmget(key_t key, size_t size, int flag)
 {
-	mm_segment_t old_fs;
 	char* pretval = NULL;
-	u_long len = 0;
 	long rc;
 
 	new_syscall_enter (29);
@@ -14698,7 +14705,6 @@ replay_shmget(key_t key, size_t size, int flag)
 	char* retparams;
 	long retval;
 	long rc = get_next_syscall(29, (char **) &retparams);
-	int repid, cmd;
 
 	retval = sys_shmget(key, size, flag);
 	if ((rc < 0 && retval >= 0) || (rc >= 0 && retval < 0)) {
@@ -14732,6 +14738,8 @@ struct shmat_ahgv {
 
 void packahgv_shmat(struct shmat_ahgv *sys_args)
 {
+		int size;
+		char uuid_str[THEIA_UUID_LEN+1];
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
@@ -14745,16 +14753,15 @@ void packahgv_shmat(struct shmat_ahgv *sys_args)
 		shm_segsz = get_shm_segsz(sys_args->shmid);
 
 #ifdef THEIA_UUID
-		char uuid_str[THEIA_UUID_LEN+1];
 		if (file2uuid(sys_args->file, uuid_str, -1) == false)
 			return; /* no file, socket, ...? */
 
-		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%s|%lx|%d|%lu|%d|%lx|%lx|%d|%ld|%ld|%u|endahg\n",
+		size = sprintf(buf, "startahg|%d|%d|%d|%ld|%s|%lx|%d|%lu|%d|%lx|%lx|%d|%ld|%ld|%u|endahg\n",
 				30, SHMAT, sys_args->pid, current->start_time.tv_sec, uuid_str,
-				sys_args->rc, sys_args->shmid, sys_args->shmaddr, sys_args->shmflg,
+				sys_args->rc, sys_args->shmid, (unsigned long)sys_args->shmaddr, sys_args->shmflg,
 				shm_segsz, sys_args->raddr, current->tgid, sec, nsec, current->no_syscalls++);
 #else
-		int size = sprintf(buf, "startahg|%d|%d|%d|%ld|%lx|%d|%lu|%d|%lx|%lx|%d|%ld|%ld|%u|endahg\n",
+		size = sprintf(buf, "startahg|%d|%d|%d|%ld|%lx|%d|%lu|%d|%lx|%lx|%d|%ld|%ld|%u|endahg\n",
 				30, SHMAT, sys_args->pid, current->start_time.tv_sec,
 				sys_args->rc, sys_args->shmid, sys_args->shmaddr, sys_args->shmflg,
 				shm_segsz, sys_args->raddr, current->tgid, sec, nsec, current->no_syscalls++);
@@ -14766,9 +14773,7 @@ if(size <= 0)
 }
 
 void theia_shmat_ahg(long rc, int shmid, char __user *shmaddr, int shmflg, struct file *file) {
-	int ret;
 	unsigned long raddr;
-	struct shmget_ahgv* pahgv_shmget = NULL;
 	struct shmat_ahgv* pahgv_shmat = NULL;
 
 	get_user(raddr, (unsigned long __user *) rc);
@@ -14799,14 +14804,14 @@ void theia_shmat_ahg(long rc, int shmid, char __user *shmaddr, int shmflg, struc
 long theia_sys_shmat(int shmid, char __user *shmaddr, int shmflg)
 {
 	long rc;
-
-	rc = sys_shmat(shmid, shmaddr, shmflg);
-
 	unsigned long raddr;
 	struct shmid_kernel* shp;
 	u_long size;
-	struct ipc_namespace* ns = current->nsproxy->ipc_ns;
+	struct ipc_namespace* ns;
 	struct kern_ipc_perm *ipcp;
+
+	rc = sys_shmat(shmid, shmaddr, shmflg);
+	ns = current->nsproxy->ipc_ns;
 
 	get_user(raddr, (unsigned long __user *) rc);
 
@@ -14848,21 +14853,18 @@ long theia_sys_shmat(int shmid, char __user *shmaddr, int shmflg)
 static asmlinkage long
 record_shmat(int shmid, char __user *shmaddr, int shmflg)
 {
-	mm_segment_t old_fs;
 	char* pretval = NULL;
-	u_long len = 0;
 	long rc;
 	unsigned long raddr;
+	struct shmid_kernel* shp;
+	struct ipc_namespace* ns;
+	struct kern_ipc_perm *ipcp;
 
 	new_syscall_enter (30);
 	rc = sys_shmat(shmid, shmaddr, shmflg);
 
 	get_user(raddr, (unsigned long __user *) rc);
-
-	struct shmid_kernel* shp;
-	struct ipc_namespace* ns = current->nsproxy->ipc_ns;
-	struct kern_ipc_perm *ipcp;
-
+	ns = current->nsproxy->ipc_ns;
 	get_user(raddr, (unsigned long __user *) rc);
 
 
@@ -14945,7 +14947,7 @@ replay_shmat(int shmid, char __user *shmaddr, int shmflg)
 	char* retparams;
 	long retval;
 	long rc = get_next_syscall (30, (char **) &retparams);
-	int repid, cmd;
+	int repid;
 
 	if (rc > 0) {
 		struct shmat_retvals* atretparams = (struct shmat_retvals *) retparams;
@@ -15003,7 +15005,6 @@ theia_sys_shmat(shmid, shmaddr, shmflg))
 static asmlinkage long
 record_shmctl(int shmid, int cmd, struct shmid_ds __user *buf)
 {
-	mm_segment_t old_fs;
 	char* pretval = NULL;
 	u_long len = 0;
 	long rc;
@@ -15014,7 +15015,7 @@ record_shmctl(int shmid, int cmd, struct shmid_ds __user *buf)
 	new_syscall_done(31, rc);
 
 	if (rc >= 0) {
-		ipc_parse_version(&cmd);
+		(void)ipc_parse_version(&cmd);
 		switch (cmd) {
 			case IPC_STAT:
 			case SHM_STAT:
@@ -15049,11 +15050,10 @@ static asmlinkage long
 replay_shmctl(int shmid, int cmd, struct shmid_ds __user *buf)
 {
 	char* retparams;
-	long retval;
 	long rc = get_next_syscall (31, (char **) &retparams);
 	int repid;
 
-	ipc_parse_version(&cmd);
+	(void)ipc_parse_version(&cmd);
 	switch (cmd) {
 		case IPC_STAT:
 		case IPC_INFO:
@@ -15140,9 +15140,7 @@ static asmlinkage long
 replay_semctl(int semid, int semnum, int cmd, union semun arg)
 {
 	char* retparams;
-	long retval;
 	long rc = get_next_syscall(66, (char **) &retparams);
-	int repid;
 
 	if (retparams && arg.buf) {
 		u_long len = *((u_long *) retparams);
@@ -15165,9 +15163,6 @@ SIMPLE_SHIM4(semtimedop, 220, int, semid, struct sembuf __user *, sops, unsigned
 static asmlinkage long
 record_shmdt(char __user *shmaddr)
 {
-	mm_segment_t old_fs;
-	char* pretval = NULL;
-	u_long len = 0;
 	long rc;
 
 	new_syscall_enter(67);
@@ -15183,7 +15178,6 @@ replay_shmdt(char __user *shmaddr)
 	char* retparams;
 	long retval;
 	long rc = get_next_syscall(67, (char **) &retparams);
-	int repid, cmd;
 
 	retval = sys_shmdt(shmaddr);
 	if (retval != rc) {
@@ -15227,9 +15221,7 @@ SIMPLE_SHIM4(msgsnd, 69, int, msqid, struct msgbuf __user *, msgp, size_t, msgsz
 static asmlinkage long
 record_msgrcv(int msqid, struct msgbuf __user *msgp, size_t msgsz, long msgtyp, int msgflg)
 {
-	mm_segment_t old_fs;
 	char* pretval = NULL;
-	u_long len = 0;
 	long rc;
 
 	new_syscall_enter(70);
@@ -15257,9 +15249,7 @@ static asmlinkage long
 replay_msgrcv(int msqid, struct msgbuf __user *msgp, size_t msgsz, long msgtyp, int msgflg)
 {
 	char* retparams;
-	long retval;
 	long rc = get_next_syscall(70, (char **) &retparams);
-	int repid, cmd;
 
 	if (retparams && msgp) {
 		u_long len = *((u_long *) retparams);
@@ -15280,7 +15270,6 @@ sys_msgrcv(msqid, msgp, msgsz, msgtyp, msgflg))
 static asmlinkage long
 record_msgctl(int msqid, int cmd, struct msqid_ds __user *buf)
 {
-	mm_segment_t old_fs;
 	char* pretval = NULL;
 	u_long len = 0;
 	long rc;
@@ -15323,9 +15312,7 @@ static asmlinkage long
 replay_msgctl(int msqid, int cmd, struct msqid_ds __user *buf)
 {
 	char* retparams;
-	long retval;
 	long rc = get_next_syscall(71, (char **) &retparams);
-	int repid;
 
 	if (retparams && buf) {
 		u_long len = *((u_long *) retparams);
@@ -15349,7 +15336,6 @@ void theia_ipc_ahg(long rc, uint call, int first, u_long second,
 
 	struct shmget_ahgv* pahgv_shmget = NULL;
 	struct shmat_ahgv* pahgv_shmat = NULL;
-	int ret;
 
 	if (theia_check_channel() == false)
 		return;
@@ -15605,7 +15591,6 @@ record_ipc (uint call, int first, u_long second, u_long third, void __user *ptr,
 		}
 		case SHMCTL: {
 			int cmd = second;
-			ipc_parse_version(&cmd);
 			switch (cmd) {
 			case IPC_STAT:
 			case SHM_STAT:
@@ -15749,30 +15734,30 @@ replay_ipc (uint call, int first, u_long second, u_long third, void __user *ptr,
 			return syscall_mismatch();
 		}
 		return rc;
-	case SHMCTL: 
-		cmd = second;
-		ipc_parse_version(&cmd);
-		switch (cmd) {
-		case IPC_STAT:
-		case IPC_INFO:
-		case SHM_STAT:
-		case SHM_INFO:
-			if (retparams && ptr) {
-				u_long len = *((u_long *) retparams);
-				if (copy_to_user (ptr, retparams+sizeof(u_long)+sizeof(int), len-sizeof(int))) {
-					printk ("replay_ipc (call %d): pid %d cannot copy to user\n", call, current->pid);
-					return syscall_mismatch();
-				}
-				argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + len);
-			}
-			break;
-		case IPC_RMID:
-			repid = find_sysv_mapping (current->replay_thrd, first);
-			return sys_ipc (call, repid, second, third, ptr, fifth);
-		}
-		return rc;
-	}
-	return rc;
+  case SHMCTL: 
+    cmd = second;
+    (void)ipc_parse_version(&cmd);
+    switch (cmd) {
+      case IPC_STAT:
+      case IPC_INFO:
+      case SHM_STAT:
+      case SHM_INFO:
+        if (retparams && ptr) {
+          u_long len = *((u_long *) retparams);
+          if (copy_to_user (ptr, retparams+sizeof(u_long)+sizeof(int), len-sizeof(int))) {
+            printk ("replay_ipc (call %d): pid %d cannot copy to user\n", call, current->pid);
+            return syscall_mismatch();
+          }
+          argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + len);
+        }
+        break;
+      case IPC_RMID:
+        repid = find_sysv_mapping (current->replay_thrd, first);
+        return sys_ipc (call, repid, second, third, ptr, fifth);
+    }
+    return rc;
+  }
+  return rc;
 }
 
 asmlinkage long shim_ipc (uint call, int first, u_long second, u_long third, void __user *ptr, long fifth)
@@ -16104,6 +16089,9 @@ struct clone_ahgv {
 };
 
 void packahgv_clone (struct clone_ahgv *sys_args) {
+  struct task_struct* tsk;	
+  int size = 0;
+  int is_child_remote = 0;
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
@@ -16115,9 +16103,7 @@ void packahgv_clone (struct clone_ahgv *sys_args) {
 		char ids[50];
 		get_ids(ids);
 		get_curr_time(&sec, &nsec);
-		int size = 0;
-		int is_child_remote = 0;
-		struct task_struct *tsk = pid_task(find_vpid(sys_args->new_pid), PIDTYPE_PID);	
+		tsk = pid_task(find_vpid(sys_args->new_pid), PIDTYPE_PID);	
 /*
 
 		if (sys_args->pid == sys_args->new_pid) {
@@ -16134,25 +16120,24 @@ void packahgv_clone (struct clone_ahgv *sys_args) {
 
 		if(tsk) {
 			is_child_remote = is_remote(tsk);
-			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%d|%d|%ld|%ld|%u|endahg\n", 
+			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%li|%d|%d|%ld|%ld|%u|endahg\n", 
 					56, sys_args->pid, current->start_time.tv_sec, ids, sys_args->new_pid, 
 					tsk->start_time.tv_sec, is_child_remote, current->tgid, sec, nsec, current->no_syscalls++);
 		}
 		else {
 			size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%d|%d|%ld|%ld|%u|endahg\n", 
 					56, sys_args->pid, current->start_time.tv_sec, ids, sys_args->new_pid, 
-					-1, -1, current->tgid, sec, nsec, current->no_syscalls++);
+					(long)-1, -1, current->tgid, sec, nsec, current->no_syscalls++);
 		}
-
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
-		theia_file_write(buf, size);
+    if(size <= 0)
+      printk("[%d]strange size %d\n", __LINE__,size);
+    theia_file_write(buf, size);
 	}
 }
 
 void theia_clone_ahg(long new_pid) {
-	int ret;
 	struct clone_ahgv* pahgv = NULL;
+  struct task_struct* new_tsk;
 
 	if (theia_check_channel() == false)
 		return;
@@ -16161,7 +16146,7 @@ void theia_clone_ahg(long new_pid) {
 		recursive_packahgv_process();
 
   rcu_read_lock();
-  struct task_struct *new_tsk = find_task_by_vpid(new_pid);
+  new_tsk = find_task_by_vpid(new_pid);
   rcu_read_unlock();
   if(new_tsk) {
     if(is_process_new2(new_tsk->pid, new_tsk->start_time.tv_sec))
@@ -16179,8 +16164,8 @@ void theia_clone_ahg(long new_pid) {
 		packahgv_clone(pahgv);
 		KFREE(pahgv);	
 	}
-
 }
+
 int theia_sys_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_regs *regs, unsigned long stack_size, int __user *parent_tidptr, int __user *child_tidptr) {
 	long rc;
 	rc = do_fork(clone_flags, stack_start, regs, stack_size, parent_tidptr, child_tidptr);
@@ -16245,6 +16230,7 @@ struct mprotect_ahgv {
 };
 
 void packahgv_mprotect (struct mprotect_ahgv *sys_args) {
+		int size; 
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
@@ -16255,18 +16241,17 @@ void packahgv_mprotect (struct mprotect_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%lx|%lx|%lx|%d|%d|%ld|%ld|%u|endahg\n", 
-				10, sys_args->pid, current->start_time.tv_sec, 
-				sys_args->retval, sys_args->address, sys_args->length, 
-				sys_args->protection, current->tgid, sec, nsec, current->no_syscalls++);
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
-		theia_file_write(buf, size);
-	}
+    size = sprintf(buf, "startahg|%d|%d|%ld|%lx|%lx|%lx|%d|%d|%ld|%ld|%u|endahg\n", 
+        10, sys_args->pid, current->start_time.tv_sec, 
+        sys_args->retval, sys_args->address, sys_args->length, 
+        sys_args->protection, current->tgid, sec, nsec, current->no_syscalls++);
+    if(size <= 0)
+      printk("[%d]strange size %d\n", __LINE__,size);
+    theia_file_write(buf, size);
+  }
 }
 
 void theia_mprotect_ahg(u_long address, u_long len, uint16_t prot, long rc) {
-	int ret;
 	struct mprotect_ahgv* pahgv = NULL;
 
 	if (theia_check_channel() == false)
@@ -16354,7 +16339,7 @@ RET1_SHIM3(sigprocmask, 126, old_sigset_t, oset, int, how, old_sigset_t __user *
 inline void theia_init_module_ahgx(void __user *umod, unsigned long len, const char __user * uargs, long rc, int sysnum)
 {
 	/* let's ignore uargs for now */
-	theia_dump_dd((int)umod, len, rc, sysnum);
+	theia_dump_dd((long)umod, len, rc, sysnum);
 }
 
 inline void theia_delete_module_ahgx(const char __user * name_user, unsigned int flags, long rc, int sysnum)
@@ -17379,7 +17364,6 @@ asmlinkage long
 record_arch_prctl (int code, unsigned long addr)
 {
 	char* pretval = NULL;
-	u_long len = 0;
 	long rc;
 
 	new_syscall_enter (158);
@@ -17593,7 +17577,8 @@ printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__,__LINE_
 
 	if (retparams) {
 		size = *((size_t *) retparams);
-		if (size != sigsetsize) printk ("Pid %d has diff sigsetsize %d than %d\n", current->pid, sigsetsize, size);
+		if (size != sigsetsize)
+      printk ("Pid %d has diff sigsetsize %lu than %lu\n", current->pid, sigsetsize, size);
 		if (copy_to_user (oset, retparams+sizeof(size_t), size)) printk ("Pid %d cannot copy to user\n", current->pid);
 		argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + size);
 	}
@@ -17828,7 +17813,7 @@ record_pwrite64(unsigned int fd, const char __user *buf, size_t count, loff_t po
 	new_syscall_enter (18);
 	size = sys_pwrite64 (fd, buf, count, pos);
 
-	DPRINT ("Pid %d records write returning %d\n", current->pid,size);
+	DPRINT ("Pid %d records write returning %zd\n", current->pid,size);
 #ifdef LOG_COMPRESS
 	cnew_syscall_done (18, size, count, 1);
 #else
@@ -17881,7 +17866,7 @@ replay_pwrite64(unsigned int fd, const char __user *buf, size_t count, loff_t po
 	char *pretparams = NULL;
 
 	rc = get_next_syscall (18, &pretparams);
-	DPRINT ("Pid %d replays write returning %d\n", current->pid,rc);
+	DPRINT ("Pid %d replays write returning %zd\n", current->pid,rc);
 
 	return rc;
 }
@@ -17895,12 +17880,12 @@ void theia_pread64_ahgx(unsigned int fd, const char __user *buf, size_t count, l
 	if (fd2uuid(fd, uuid_str) == false)
 		return; /* TODO: report openat errors? */
 
-	sprintf(theia_buf1, "%s|%d|%d", uuid_str, count, pos);
+	sprintf(theia_buf1, "%s|%lu|%lli", uuid_str, count, pos);
 	theia_dump_str(theia_buf1, rc, sysnum);
 }
 
 static asmlinkage long
-theia_sys_pread64(unsigned int fd, const char __user *buf, size_t count, loff_t pos)
+theia_sys_pread64(unsigned int fd, char __user *buf, size_t count, loff_t pos)
 {
 	long rc;
 	rc = sys_pread64(fd, buf, count, pos);
@@ -17918,7 +17903,7 @@ void theia_pwrite64_ahgx(unsigned int fd, const char __user *buf, size_t count, 
 	if (fd2uuid(fd, uuid_str) == false)
 		return; /* TODO: report openat errors? */
 
-	sprintf(theia_buf1, "%s|%d|%d", uuid_str, count, pos);
+	sprintf(theia_buf1, "%s|%lu|%lli", uuid_str, count, pos);
 	theia_dump_str(theia_buf1, rc, sysnum);
 }
 
@@ -18044,10 +18029,10 @@ replay_capget (cap_user_header_t header, cap_user_data_t dataptr)
 asmlinkage long shim_capget (cap_user_header_t header, cap_user_data_t dataptr) SHIM_CALL(capget, 125, header, dataptr)
 RET1_SHIM2(capset, 126, struct __user_cap_header_struct, header, cap_user_header_t, header, const cap_user_data_t, data);
 
-void theia_sendfile64_ahgx (int out_fd, int in_fd, off_t __user * offset, size_t count, long rc) {
+void theia_sendfile64_ahgx (int out_fd, int in_fd, loff_t __user * offset, size_t count, long rc) {
 	char socket_uuid_str[THEIA_UUID_LEN+1];
 	char file_uuid_str[THEIA_UUID_LEN+1];
-	off_t location;
+	loff_t location;
 	struct file *file;
 	int fput_needed;
 	char *fpath;
@@ -18071,13 +18056,13 @@ void theia_sendfile64_ahgx (int out_fd, int in_fd, off_t __user * offset, size_t
 			theia_retbuf[0] = '\0';
 			fpath = theia_retbuf;
 		}
-		sprintf(theia_buf1, "%s|%s|%s|%u|%u", file_uuid_str, fpath, socket_uuid_str, location, count);
+		sprintf(theia_buf1, "%s|%s|%s|%lli|%lu", file_uuid_str, fpath, socket_uuid_str, location, count);
 		theia_dump_str(theia_buf1, rc, 40);
 	}
 }
 
 static asmlinkage long 
-theia_sys_sendfile64 (int out_fd, int in_fd, off_t __user * offset, size_t count)
+theia_sys_sendfile64 (int out_fd, int in_fd, loff_t __user * offset, size_t count)
 {
 	long rc;
 
@@ -18090,9 +18075,9 @@ theia_sys_sendfile64 (int out_fd, int in_fd, off_t __user * offset, size_t count
 }
 
 //RET1_SHIM4(sendfile64, 40, off_t, offset, int, out_fd, int, in_fd, off_t __user *, offset, size_t, count);
-RET1_RECORD4 (sendfile64, 40, off_t, offset, int, out_fd, int, in_fd, off_t __user *, offset, size_t, count);
-RET1_REPLAY (sendfile64, 40, off_t, offset, int out_fd, int in_fd, off_t __user * offset, size_t count);
-asmlinkage long shim_sendfile64 (int out_fd, int in_fd, off_t __user * offset, size_t count)
+RET1_RECORD4 (sendfile64, 40, loff_t, offset, int, out_fd, int, in_fd, loff_t __user *, offset, size_t, count);
+RET1_REPLAY  (sendfile64, 40, loff_t, offset, int  out_fd, int  in_fd, loff_t __user *  offset, size_t  count);
+asmlinkage long shim_sendfile64 (int out_fd, int in_fd, loff_t __user * offset, size_t count)
 SHIM_CALL_MAIN(40, record_sendfile64(out_fd, in_fd, offset, count), replay_sendfile64(out_fd, in_fd, offset, count), theia_sys_sendfile64(out_fd, in_fd, offset, count)); 
 
 void 
@@ -18330,6 +18315,7 @@ printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__,__LINE_
 long 
 shim_vfork(unsigned long clone_flags, unsigned long stack_start, struct pt_regs *regs, unsigned long stack_size, int __user *parent_tidptr, int __user *child_tidptr)
 {
+	long rc;
 	if (current->record_thrd) return record_vfork(clone_flags, stack_start, regs, stack_size, parent_tidptr, child_tidptr);
 	if (current->replay_thrd) {
 		int child_pid;
@@ -18350,7 +18336,7 @@ shim_vfork(unsigned long clone_flags, unsigned long stack_start, struct pt_regs 
 		return child_pid;
 	}
 
-	long rc = do_fork(clone_flags, stack_start, regs, stack_size, parent_tidptr, child_tidptr);
+	rc = do_fork(clone_flags, stack_start, regs, stack_size, parent_tidptr, child_tidptr);
 	theia_clone_ahg(rc); // TODO?: define vfork_ahg?
 	return rc;
 }
@@ -18370,6 +18356,8 @@ struct mmap_ahgv {
 };
 
 void packahgv_mmap (struct mmap_ahgv *sys_args) {
+  char uuid_str[THEIA_UUID_LEN+1];
+  int size;
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
@@ -18379,7 +18367,6 @@ void packahgv_mmap (struct mmap_ahgv *sys_args) {
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
-		char uuid_str[THEIA_UUID_LEN+1];
 		if (sys_args->fd != -1) {
 			if (fd2uuid(sys_args->fd, uuid_str) == false)
 				strcpy(uuid_str, "anon_page");
@@ -18388,7 +18375,7 @@ void packahgv_mmap (struct mmap_ahgv *sys_args) {
 			strcpy(uuid_str, "anon_page");
 		}
 
-		int size = sprintf(buf, "startahg|%d|%d|%ld|%s|%lx|%lu|%d|%lx|%lx|%d|%ld|%ld|%u|endahg\n", 
+		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%lx|%lu|%d|%lx|%lx|%d|%ld|%ld|%u|endahg\n", 
 				9, sys_args->pid, current->start_time.tv_sec, 
 				uuid_str, sys_args->address, sys_args->length, sys_args->prot_type,
 				sys_args->flag, sys_args->offset, current->tgid, sec, nsec, current->no_syscalls++);
@@ -18406,7 +18393,6 @@ if(size <= 0)
 
 void theia_mmap_ahg(int fd, u_long address, u_long len, uint16_t prot, 
 u_long flags, u_long pgoff, long rc, u_long clock) {
-	int ret;
 	struct mmap_ahgv* pahgv = NULL;
 
 	if (theia_check_channel() == false)
@@ -18437,7 +18423,6 @@ static asmlinkage long
 record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff)
 {
 	long rc;
-	int ret;
 	struct mmap_pgoff_retvals* recbuf = NULL;
 
 //	char vm_file_path[PATH_MAX];
@@ -18547,6 +18532,10 @@ replay_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 	struct mmap_pgoff_retvals* recbuf = NULL;
 	struct replay_thread* prt = current->replay_thrd;
 	struct syscall_result* psr;
+  struct argsalloc_node* node;
+	char vm_file_path[30];
+	struct vm_area_struct *vma;
+	struct mm_struct* mm;
 
 	if (is_pin_attached()) {
 		rc = prt->rp_saved_rc;
@@ -18576,7 +18565,6 @@ printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__,__LINE_
 	}
 
 	retval = sys_mmap_pgoff (rc, len, prot, (flags | MAP_FIXED), given_fd, pgoff);
- struct argsalloc_node* node;
  node = list_first_entry(&(current->replay_thrd->rp_record_thread)->rp_argsalloc_list, struct argsalloc_node, list);
 printk("base addr: %p\n", node->pos);
 //print_mem(node->pos, 1024);
@@ -18590,9 +18578,7 @@ printk("base addr: %p\n", node->pos);
 	if (recbuf && given_fd > 0 && !is_cache_file) sys_close(given_fd);
 
 //Yang
-	char vm_file_path[30];
-	struct vm_area_struct *vma;
-	struct mm_struct *mm = current->mm;
+	mm = current->mm;
 	down_read(&mm->mmap_sem);
 	vma = find_vma(mm, rc);
 //	if (vma && rc >= vma->vm_start && vma->vm_file) {
@@ -18639,10 +18625,6 @@ printk("base addr2: %p\n", node->pos);
 static asmlinkage long 
 theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff) {
 	long rc;
-	int ret;
-	char vm_file_path[PATH_MAX];
-	char *path = NULL;
-	bool is_shmem = false;
 
 	rc = sys_mmap_pgoff(addr, len, prot, flags, fd, pgoff);	
 
@@ -18655,6 +18637,7 @@ theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsign
 		return rc;
 
 #ifdef THEIA_TRACK_SHM_OPEN
+	char vm_file_path[PATH_MAX];
 	memset(vm_file_path, '\0', PATH_MAX);
 	if ((rc > 0 || rc < -1024) && ((long) fd) >= 0) {
 		struct vm_area_struct *vma;
@@ -18788,7 +18771,7 @@ record_newfstat(int fd, struct stat __user *statbuf) {
 	if (rc >= 0 && statbuf) {
 
 		pretval = ARGSKMALLOC (sizeof(struct stat), GFP_KERNEL);
-printk("[%s|%d] in record_newfstat: sizeof stat: %d\n", __func__, __LINE__, sizeof(struct stat));
+printk("[%s|%d] in record_newfstat: sizeof stat: %lu\n", __func__, __LINE__, sizeof(struct stat));
 
 		if (pretval == NULL) {
 			printk ("record_fstat: can't allocate buffer\n");
@@ -18810,7 +18793,7 @@ printk("[%s|%d] in record_newfstat: sizeof stat: %d\n", __func__, __LINE__, size
 RET1_REPLAY (newfstat, 5, struct stat, statbuf, int fd, struct stat __user *statbuf);
 
 //64port
-asmlinkage long shim_newfstat(int fd, struct stat64 __user *statbuf) SHIM_CALL(newfstat, 5, fd, statbuf);
+asmlinkage long shim_newfstat(int fd, struct stat __user *statbuf) SHIM_CALL(newfstat, 5, fd, statbuf);
 
 //64port
 SIMPLE_SHIM0(getuid, 102);
@@ -18991,31 +18974,31 @@ struct setuid_ahgv {
 
 
 void packahgv_setuid (struct setuid_ahgv *sys_args) {
+  char ids[50];
+  int size = 0;
+  int is_newuser_remote;
 #ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
+  theia_dump_auxdata();
 #endif
 
-	//Yang
-	if(theia_logging_toggle) {
-		char *buf = theia_buf2;
-		long sec, nsec;
-		get_curr_time(&sec, &nsec);
-		char ids[50];
-		get_ids(ids);
-		int size = 0;
-		int is_newuser_remote = is_remote(current);
-		size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%d|%d|%d|%ld|%ld|%u|endahg\n", 
-				105, sys_args->pid, current->start_time.tv_sec, 
-				sys_args->newuid, ids, sys_args->rc, is_newuser_remote, current->tgid, 
-				sec, nsec, current->no_syscalls++);
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
-		theia_file_write(buf, size);
-	}
+  //Yang
+  if(theia_logging_toggle) {
+    char *buf = theia_buf2;
+    long sec, nsec;
+    get_curr_time(&sec, &nsec);
+    get_ids(ids);
+    is_newuser_remote = is_remote(current);
+    size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%d|%d|%d|%ld|%ld|%u|endahg\n", 
+        105, sys_args->pid, current->start_time.tv_sec, 
+        sys_args->newuid, ids, sys_args->rc, is_newuser_remote, current->tgid, 
+        sec, nsec, current->no_syscalls++);
+    if(size <= 0)
+      printk("[%d]strange size %d\n", __LINE__,size);
+    theia_file_write(buf, size);
+  }
 }
 
 void theia_setuid_ahg(uid_t uid, int rc, u_long clock) {
-	int ret;
 	struct setuid_ahgv* pahgv = NULL;
 
 	if (theia_check_channel() == false)
@@ -19932,7 +19915,7 @@ SIMPLE_SHIM3(mkdirat, 258, int, dfd, const char __user *, pathname, int, mode);
 SIMPLE_SHIM4(mknodat, 259, int, dfd, const char __user *, filename, int, mode, unsigned, dev);
 // THEIA_SHIM4(mknodat, 259, int, dfd, const char __user *, filename, int, mode, unsigned, dev);
 //SIMPLE_SHIM5(fchownat, 260, int, dfd, const char __user *, filename, uid_t, user, gid_t, group, int, flag);
-THEIA_SHIM5(fchownat, 260, int, dfd, const char __user *, filename, uid_t, user, gid_t, group, int, flag);
+THEIA_SHIM5(fchownat, 260, int, dfd, char __user *, filename, uid_t, user, gid_t, group, int, flag);
 
 SIMPLE_SHIM3(futimesat, 261, int, dfd, char __user *, filename, struct timeval __user *,utimes);
 //64port
@@ -19950,7 +19933,7 @@ SIMPLE_SHIM3(symlinkat, 266, const char __user *, oldname, int, newdfd, const ch
 RET1_COUNT_SHIM4(readlinkat, 267, buf, int, dfd, const char __user *, path, char __user *, buf, int, bufsiz)
 
 //SIMPLE_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
-THEIA_SHIM3(fchmodat, 268, int, dfd, const char __user *, filename, mode_t, mode);
+THEIA_SHIM3(fchmodat, 268, int, dfd, char __user *, filename, mode_t, mode);
 SIMPLE_SHIM3(faccessat, 269, int, dfd, const char __user *, filename, int, mode);
 // THEIA_SHIM3(faccessat, 269, int, dfd, const char __user *, filename, int, mode);
 
@@ -20636,7 +20619,6 @@ static asmlinkage long
 theia_sys_sendmmsg (int fd, struct mmsghdr __user * msg, unsigned int vlen, unsigned flags)
 {
 	long rc;
-	int i;
 
 	rc = sys_sendmmsg(fd, msg, vlen, flags);
 printk("sendmmsg is called!, pid %d, ret %ld\n", current->pid,rc);
@@ -20960,25 +20942,25 @@ void write_begin_log (struct file* file, loff_t* ppos, struct record_thread* pre
 
 	copyed = vfs_write(file, (char *) &hpc1, sizeof(unsigned long long), ppos);
 	if (copyed != sizeof(unsigned long long)) {
-		printk("[WARN] Pid %d write_hpc_calibration, expected to write %d got %d (1)\n",
+		printk("[WARN] Pid %d write_hpc_calibration, expected to write %lu got %d (1)\n",
 				current->pid, sizeof(unsigned long long), copyed);
 	}
 
 	copyed = vfs_write(file, (char *) &tv1, sizeof(struct timeval), ppos);
 	if (copyed != sizeof(struct timeval)) {
-		printk("[WARN] Pid %d write_hpc_calibration, expected to write %d got %d (2)\n",
+		printk("[WARN] Pid %d write_hpc_calibration, expected to write %lu got %d (2)\n",
 				current->pid, sizeof(struct timeval), copyed);
 	}
 
 	copyed = vfs_write(file, (char *) &hpc2, sizeof(unsigned long long), ppos);
 	if (copyed != sizeof(unsigned long long)) {
-		printk("[WARN] Pid %d write_hpc_calibration, expected to write %d got %d (3)\n",
+		printk("[WARN] Pid %d write_hpc_calibration, expected to write %lu got %d (3)\n",
 				current->pid, sizeof(unsigned long long), copyed);
 	}
 
 	copyed = vfs_write(file, (char *) &tv2, sizeof(struct timeval), ppos);
 	if (copyed != sizeof(struct timeval)) {
-		printk("[WARN] Pid %d write_hpc_calibration, expected to write %d got %d (4)\n",
+		printk("[WARN] Pid %d write_hpc_calibration, expected to write %lu got %d (4)\n",
 				current->pid, sizeof(struct timeval), copyed);
 	}
 }
@@ -21038,16 +21020,16 @@ static ssize_t write_log_data (struct file* file, loff_t* ppos, struct record_th
 	/* First write out syscall records in a bunch */
 	copyed = vfs_write(file, (char *) &count, sizeof(count), ppos);
 	if (copyed != sizeof(count)) {
-		printk ("write_log_data: tried to write record count, got rc %d\n", copyed);
+		printk ("write_log_data: tried to write record count, got rc %zd\n", copyed);
 		KFREE (pvec);
 		return -EINVAL;
 	}
 
-	MPRINT ("Pid %d write_log_data count %d, size %d\n", current->pid, count, sizeof(struct syscall_result)*count);
+	MPRINT ("Pid %d write_log_data count %d, size %lu\n", current->pid, count, sizeof(struct syscall_result)*count);
 
 	copyed = vfs_write(file, (char *) psr, sizeof(struct syscall_result)*count, ppos);
 	if (copyed != sizeof(struct syscall_result)*count) {
-		printk ("write_log_data: tried to write %d, got rc %d\n", sizeof(struct syscall_result)*count, copyed);
+		printk ("write_log_data: tried to write %lu, got rc %zd\n", sizeof(struct syscall_result)*count, copyed);
 		KFREE (pvec);
 		return -EINVAL;
 	}
@@ -21060,12 +21042,12 @@ static ssize_t write_log_data (struct file* file, loff_t* ppos, struct record_th
 	MPRINT ("Ancillary data written is %lu\n", data_len);
 	copyed = vfs_write(file, (char *) &data_len, sizeof(data_len), ppos);
 	if (copyed != sizeof(data_len)) {
-		printk ("write_log_data: tried to write ancillary data length, got rc %d, sizeof(count): %d, sizeof(data_len): %d\n", copyed, sizeof(count), sizeof(data_len));
+		printk ("write_log_data: tried to write ancillary data length, got rc %zd, sizeof(count): %lu, sizeof(data_len): %lu\n", copyed, sizeof(count), sizeof(data_len));
 		KFREE (pvec);
 		return -EINVAL;
   }
     list_for_each_entry_reverse (node, &prect->rp_argsalloc_list, list) {
-      MPRINT ("Pid %d argssize write buffer slab size %d\n", current->pid, node->pos - node->head);
+      MPRINT ("Pid %d argssize write buffer slab size %li\n", current->pid, node->pos - node->head);
       pvec[kcnt].iov_base = node->head;
       pvec[kcnt].iov_len = node->pos - node->head;
       if (++kcnt == UIO_MAXIOV) {
@@ -21075,7 +21057,7 @@ static ssize_t write_log_data (struct file* file, loff_t* ppos, struct record_th
     }
 	vfs_writev (file, pvec, kcnt, ppos); // Write any remaining data before exit
 	
-	DPRINT ("Wrote %d bytes to the file for sysnum %d\n", copyed, psr->sysnum);
+	DPRINT ("Wrote %zd bytes to the file for sysnum %d\n", copyed, psr->sysnum);
 	KFREE (pvec);
 
 	return copyed;
@@ -21086,7 +21068,7 @@ int read_log_data (struct record_thread* prect)
  	int rc;
  	int count = 0; // num syscalls returned by read
  	rc = read_log_data_internal (prect, prect->rp_log, prect->rp_record_pid, &count, &prect->rp_read_log_pos);
-	MPRINT("Pid %d read_log_data_internal returned %d syscalls, rc %d\n", current->pid, count);
+	MPRINT("Pid %d read_log_data_internal returned %d syscalls, rc %d\n", current->pid, count, rc);
 	prect->rp_in_ptr = count;
  	return rc;
 }
@@ -21137,7 +21119,7 @@ int read_log_data_internal (struct record_thread* prect, struct syscall_result* 
 	// read one section of the log (array of syscall results and then the args/retvals/signals)
 	rc = vfs_read (file, (char *) &count, sizeof(count), pos);
 	if (rc != sizeof(count)) {
-		MPRINT ("vfs_read returns %d, sizeof(count) %d\n", rc, sizeof(count));
+		MPRINT ("vfs_read returns %d, sizeof(count) %lu\n", rc, sizeof(count));
 		*syscall_count = 0;
 		goto error;
 	}
@@ -21146,13 +21128,13 @@ int read_log_data_internal (struct record_thread* prect, struct syscall_result* 
 
 	rc = vfs_read (file, (char *) &psr[0], sizeof(struct syscall_result)*count, pos);
 	if (rc != sizeof(struct syscall_result)*count) {
-		printk ("vfs_read returns %d when %d of records expected\n", rc, sizeof(struct syscall_result)*count);
+		printk ("vfs_read returns %d when %lu of records expected\n", rc, sizeof(struct syscall_result)*count);
 		goto error;
 	}
 
 	rc = vfs_read (file, (char *) &data_len, sizeof(data_len), pos);
 	if (rc != sizeof(data_len)) {
-		printk ("vfs_read returns %d, sizeof(data_len) %d\n", rc, sizeof(data_len));
+		printk ("vfs_read returns %d, sizeof(data_len) %lu\n", rc, sizeof(data_len));
 		*syscall_count = 0;
 		goto error;
 	}
@@ -21239,7 +21221,7 @@ void write_mmap_log (struct record_group* prg)
 				current->pid, pmapping->m_begin, pmapping->m_end);
 		copyed = vfs_write(file, (char *) pmapping, sizeof(struct reserved_mapping), &pos);
 		if (copyed != sizeof(struct reserved_mapping)) {
-			printk("[WARN] Pid %d write reserved_mapping, expected to write %d got %d\n", current->pid, sizeof(struct reserved_mapping), copyed);
+			printk("[WARN] Pid %d write reserved_mapping, expected to write %lu got %d\n", current->pid, sizeof(struct reserved_mapping), copyed);
 		}
 	}
 	ds_list_iter_destroy (iter);
@@ -21251,10 +21233,10 @@ void write_mmap_log (struct record_group* prg)
 }
 
 /* Reads in a list of memory regions that will be used in a replay */
-int read_mmap_log (struct record_group* precg)
+long read_mmap_log (struct record_group* precg)
 {
 	int fd;
-	int rc = 0;
+	long rc = 0;
 	char filename[MAX_LOGDIR_STRLEN+20];
 	struct file* file;
 	mm_segment_t old_fs;
@@ -21284,7 +21266,7 @@ int read_mmap_log (struct record_group* precg)
 //64port
 	rc = sys_newstat(filename, &st);
 	if (rc < 0) {
-		printk("read_mmap_log: cannot stat file %s, %d\n", filename, rc);
+		printk("read_mmap_log: cannot stat file %s, %ld\n", filename, rc);
 		return -EINVAL;
 	}
 	num_entries = st.st_size / (sizeof(struct reserved_mapping));
@@ -21298,12 +21280,12 @@ int read_mmap_log (struct record_group* precg)
 		}
 		rc = vfs_read(file, (char *) pmapping, sizeof(struct reserved_mapping), &pos);
 		if (rc < 0) {
-			printk("Pid %d problem reading in a reserved mapping, rc %d\n", current->pid, rc);
+			printk("Pid %d problem reading in a reserved mapping, rc %ld\n", current->pid, rc);
 			KFREE (pmapping);
 			return rc;
 		}
 		if (rc != sizeof(struct reserved_mapping)) {
-			printk("Pid %d read reserved_mapping expected %d, got %d\n", current->pid, sizeof(struct reserved_mapping), rc);
+			pr_debug("Pid %d read reserved_mapping expected %lu, got %lu\n", current->pid, sizeof(struct reserved_mapping), rc);
 			KFREE(pmapping);
 			return rc;	
 		}
@@ -21312,8 +21294,8 @@ int read_mmap_log (struct record_group* precg)
 	}
 
 	fput(file);
-	rc = sys_close (fd);
-	if (rc < 0) printk ("read_log_data: file close failed with rc %d\n", rc);
+	rc = sys_close ((unsigned int)fd);
+	if (rc < 0) printk ("read_log_data: file close failed with rc %ld\n", rc);
 	set_fs (old_fs);
 	return rc;
 }
@@ -21882,19 +21864,20 @@ static struct ctl_table replay_ctl_root[] = {
 
 static int __init replay_init(void)
 {
-#ifdef CONFIG_SYSCTL
-	register_sysctl_table(replay_ctl_root);
-#endif
-
+  mm_segment_t old_fs;                                                
 	// setup default for theia_linker
 	//const char* theia_linker_default = "/home/theia/theia-es/eglibc-2.15/prefix/lib/ld-linux-x86-64.so.2";
 	//const char* theia_linker_default = "/usr/local/eglibc/lib/ld-linux-x86-64.so.2";
 	const char* theia_linker_default = "/usr/local/eglibc/lib/ld-2.15.so";
-	strncpy(theia_linker, theia_linker_default, MAX_LOGDIR_STRLEN+1);
 	// setup default for theia_libpath
 	//const char* theia_libpath_default = "LD_LIBRARY_PATH=/home/theia/theia-es/eglibc-2.15/prefix/lib:/lib/theia_libs:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/lib:/usr/lib:/lib";
 	const char* theia_libpath_default = "LD_LIBRARY_PATH=/usr/local/eglibc/lib:/usr/local/lib:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu";
+
+	strncpy(theia_linker, theia_linker_default, MAX_LOGDIR_STRLEN+1);
 	strncpy(theia_libpath, theia_libpath_default, MAX_LOGDIR_STRLEN+1);
+#ifdef CONFIG_SYSCTL
+	register_sysctl_table(replay_ctl_root);
+#endif
 
 	/* Performance monitoring */
 	perftimer_init();
@@ -21907,7 +21890,7 @@ static int __init replay_init(void)
   theia_replay_register_data.pid = 0;
   
   //theia create relay cpu
-  mm_segment_t old_fs = get_fs();                                                
+  old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
 
   if(theia_dir == NULL) {
@@ -21952,7 +21935,7 @@ static int __init replay_init(void)
 	close_intercept_timer = perftimer_create("Close Intercept", "Close");
 
 #ifdef TRACE_PIPE_READ_WRITE
-	btree_init32(&pipe_tree);
+	btree_init64(&pipe_tree);
 #endif
 	btree_init64(&inode_tree);
 

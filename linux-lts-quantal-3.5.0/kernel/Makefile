@@ -22,6 +22,9 @@ CFLAGS_REMOVE_cgroup-debug.o = -pg
 CFLAGS_REMOVE_irq_work.o = -pg
 endif
 
+#Theia stuff
+CFLAGS_replay.o := -Werror
+
 obj-y += sched/
 obj-y += power/
 obj-y += replay_graph/
