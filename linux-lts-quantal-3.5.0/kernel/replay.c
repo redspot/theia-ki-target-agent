@@ -17912,7 +17912,6 @@ theia_sys_pwrite64(unsigned int fd, const char __user *buf, size_t count, loff_t
 {
 	long rc;
 	rc = sys_pwrite64(fd, buf, count, pos);
-printk("pwrite64 is called! pid %d, ret %ld\n", current->pid,rc);
 	if (theia_logging_toggle)
 		theia_pwrite64_ahgx(fd, buf, count, pos, rc, SYS_PWRITE64);
 	return rc;
@@ -20467,7 +20466,6 @@ theia_sys_pwritev (unsigned long fd, const struct iovec __user *vec,  unsigned l
 {
 	long rc;
 	rc = sys_pwritev(fd, vec, vlen, pos_l, pos_h);
-printk("pwritev is called! pid %d, ret %ld\n", current->pid,rc);
 	if (theia_logging_toggle)
 		theia_pwritev_ahgx(fd, vec, vlen, pos_l, pos_h, rc, SYS_PWRITEV);
 	return rc;
@@ -20621,7 +20619,6 @@ theia_sys_sendmmsg (int fd, struct mmsghdr __user * msg, unsigned int vlen, unsi
 	long rc;
 
 	rc = sys_sendmmsg(fd, msg, vlen, flags);
-printk("sendmmsg is called!, pid %d, ret %ld\n", current->pid,rc);
 /*
 	for (i = 0; i < vlen; ++i) {
 		theia_sendmsg_ahg(msg[i].msg_len, fd, &(msg[i].msg_hdr), flags);
@@ -20743,7 +20740,6 @@ theia_sys_process_vm_writev (pid_t pid, const struct iovec __user *lvec,
 {
   long rc;
   rc = sys_process_vm_writev(pid, lvec, liovcnt, rvec, riovcnt, flags); 
-printk("shim_process_vm_writev is called!, pid %d, ret :%ld\n", pid, rc);
   return rc;
 
 }
