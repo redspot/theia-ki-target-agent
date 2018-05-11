@@ -12583,7 +12583,7 @@ void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_f
     return;
   }
   if (!len) {
-    pr_err("getname error: len = %lu\n", len);
+    pr_err("getname error: len = %i\n", len);
     return;
   }
 
