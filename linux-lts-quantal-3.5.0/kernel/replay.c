@@ -12579,13 +12579,22 @@ void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_f
   strcpy(sun_path, "NA");
 
   if (err) {
-    printk("getname error: err %d, sock is null? %d\n",err, sock==NULL?1:0);
+    pr_err("getname error: err %d, sock is null? %d\n",err, sock==NULL?1:0);
+    return;
+  }
+  if (!len) {
+    pr_err("getname error: len = %lu\n", len);
     return;
   }
 
 	sockaddr = (struct sockaddr*)address;
 
-	*sa_family = sockaddr->sa_family;
+  if (IS_ERR_OR_NULL(sockaddr)) {
+    pr_err("get_ip_port_sockfd: sockaddr is NULL\n");
+    return;
+  } else {
+    *sa_family = sockaddr->sa_family;
+  }
 
 	switch (*sa_family) {
 	case AF_INET:
@@ -12620,11 +12629,13 @@ void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_f
 		strcpy(sun_path, "NETLINK");
 		break;
 	case AF_INET6: /* TODO */
+    break;
 	default:
-		printk("get_ip_port_sockfd: sa_family problem %d\n", sockaddr->sa_family);
+		pr_debug("get_ip_port_sockfd: sa_family problem %d\n", sockaddr->sa_family);
 		*port = THEIA_INVALID_PORT;
 		strcpy(ip, "NA");
 		strcpy(sun_path, "NA");
+    break;
 	}
 }
 
