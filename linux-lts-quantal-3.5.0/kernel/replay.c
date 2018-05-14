@@ -448,8 +448,8 @@ bool file2uuid(struct file* file, char *uuid_str, int fd) {
 			sock = sockfd_lookup(fd, &err);
 			if (sock) {
 				sockfd_put(sock);
-				get_peer_ip_port_sockfd(fd, ip, (u_long*)&port, sun_path, sa_family); 
-				get_local_ip_port_sockfd(fd, local_ip, (u_long*)&local_port, local_sun_path, sa_family); 
+				get_peer_ip_port_sockfd(fd, ip, (u_long*)&port, sun_path, &sa_family);
+				get_local_ip_port_sockfd(fd, local_ip, (u_long*)&local_port, local_sun_path, &sa_family);
 				if (strcmp(ip, "LOCAL") == 0) {
 					snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", sun_path, port, local_sun_path, local_port);
 //					if (strcmp(sun_path, "LOCAL") == 0 || sun_path[0] == '\0')
