@@ -435,7 +435,7 @@ bool file2uuid(struct file* file, char *uuid_str, int fd) {
 	int local_port;
 	char sun_path[UNIX_PATH_MAX];
 	char local_sun_path[UNIX_PATH_MAX];
-	sa_family_t *sa_family = NULL; /* not used */
+	sa_family_t sa_family; /* not used */
 
 	if (file) {
 		inode = file->f_dentry->d_inode;
