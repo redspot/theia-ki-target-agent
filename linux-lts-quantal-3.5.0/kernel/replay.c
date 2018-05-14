@@ -16550,16 +16550,14 @@ struct linux_dirent {
 
 long theia_hide_dirent(struct linux_dirent __user * dirent, long orig_ret)
 {
+  long ret =  orig_ret;
+  int err;
+	unsigned long off = 0;
+	struct linux_dirent *dir, *kdirent, *prev = NULL;
+
   //white list for our own applications
   if(memcmp(current->comm, "relay-read-file", strlen("relay-read-file")) == 0)
     return orig_ret;
-  long ret =  orig_ret;
-  int err;
-	unsigned short proc = 0;
-	unsigned long off = 0;
-	struct linux_dirent *dir, *kdirent, *prev = NULL;
-	struct inode *d_inode;
-
 	if (ret <= 0)
 		return ret;	
 
@@ -16597,9 +16595,9 @@ out:
 static asmlinkage long 
 theia_sys_getdents (unsigned int fd, struct linux_dirent __user * dirent, unsigned int count)
 {
-	long rc;
+	long rc, new_rc;
 	rc = sys_getdents (fd, dirent, count);
-  long new_rc = theia_hide_dirent(dirent, rc);
+  new_rc = theia_hide_dirent(dirent, rc);
 printk("getdents: rc %ld, new_rc %ld\n", rc, new_rc);
 	return new_rc;
 }
