@@ -245,6 +245,15 @@ EXPORT_SYMBOL(theia_linker);
 char theia_libpath[MAX_LOGDIR_STRLEN+1];
 EXPORT_SYMBOL(theia_libpath);
 
+char theia_proc_whitelist[MAX_LOGDIR_STRLEN+1];
+EXPORT_SYMBOL(theia_proc_whitelist);
+size_t theia_proc_whitelist_len;
+EXPORT_SYMBOL(theia_proc_whitelist_len);
+char theia_dirent_prefix[MAX_LOGDIR_STRLEN+1];
+EXPORT_SYMBOL(theia_dirent_prefix);
+size_t theia_dirent_prefix_len;
+EXPORT_SYMBOL(theia_dirent_prefix_len);
+
 //we use pid (and more) to identify the replay process
 
 struct theia_replay_register_data_type {
@@ -16539,7 +16548,6 @@ SIMPLE_SHIM1(personality, 135, u_long, parm);
 RET1_SHIM5(llseek, 140, loff_t, result, unsigned int, fd, unsigned long, offset_high, unsigned long, offset_low, loff_t __user *, result, unsigned int, origin);
 //RET1_COUNT_SHIM3(getdents, 78, dirent, unsigned int, fd, struct linux_dirent __user *, dirent, unsigned int, count);
 
-#define MAGIC_PREFIX "diamorphine_secret"
 struct linux_dirent {
 	unsigned long	d_ino;
 	unsigned long	d_off;
@@ -16547,16 +16555,45 @@ struct linux_dirent {
 	char		d_name[1];
 };
 
+inline bool in_nullterm_list(char* target, char* list, size_t list_len) {
+  int end_pos = 0;
+  int start_pos = 0;
+  char c;
+  char* buf;
+  size_t buf_len = 0;
 
-long theia_hide_dirent(struct linux_dirent __user * dirent, long orig_ret)
+  while (end_pos < list_len) {
+    c = list[end_pos];
+    if (!c) {
+      buf = list + start_pos;
+      buf_len = end_pos - start_pos;
+      if ( memcmp(target, buf, buf_len) == 0 ) {
+        return true;
+      }
+      end_pos++;
+      start_pos = end_pos;
+    }
+    end_pos++;
+  }
+  return false;
+}
+
+long theia_hide_dirent(unsigned int fd, struct linux_dirent __user * dirent, long orig_ret)
 {
   long ret =  orig_ret;
   int err;
-	unsigned long off = 0;
-	struct linux_dirent *dir, *kdirent, *prev = NULL;
+  unsigned long off = 0;
+  struct linux_dirent *dir, *kdirent, *prev = NULL;
+
+  struct file* file = NULL;
+  int fput_needed = 0;
+  char* dpathbuf;
+  char* dirpath;
+  size_t dirpath_offset = 0;
+  char* fullpath = NULL;
 
   //white list for our own applications
-  if(memcmp(current->comm, "relay-read-file", strlen("relay-read-file")) == 0)
+  if(in_nullterm_list(current->comm, theia_proc_whitelist, theia_proc_whitelist_len))
     return orig_ret;
 	if (ret <= 0)
 		return ret;	
@@ -16569,11 +16606,29 @@ long theia_hide_dirent(struct linux_dirent __user * dirent, long orig_ret)
 	if (err)
 		goto out;
 
-	while (off < ret) {
+  //convert dir fd to dir path, then store in front of fullpath
+  if (fd >= 0)
+    file = fget_light(fd, &fput_needed);
+  if (file) {
+    dpathbuf = (char*)vmalloc(PATH_MAX);
+    dirpath = get_file_fullpath(file, dpathbuf, PATH_MAX);
+    fput_light(file, fput_needed);
+    if (!IS_ERR(dirpath)) {
+      fullpath = (char*)vmalloc(PATH_MAX);
+      dirpath_offset = strlen(dirpath);
+      strncpy(fullpath, dirpath, dirpath_offset);
+      fullpath[dirpath_offset] = '/';
+      dirpath_offset++;
+    }
+    vfree(dpathbuf);
+  }
+
+	while (fullpath && off < ret) {
 		dir = (void *)kdirent + off;
-		if (memcmp(MAGIC_PREFIX, dir->d_name, strlen(MAGIC_PREFIX)) == 0)
+    strcpy(fullpath+dirpath_offset, dir->d_name);
+    if (in_nullterm_list(fullpath, theia_dirent_prefix, theia_dirent_prefix_len))
 		{
-    printk("magic prefix: dir->d_name: %s\n", dir->d_name);
+      pr_debug("dropping dirent: dir->d_name: %s, fullpath: %s\n", dir->d_name, fullpath);
 			if (dir == kdirent) {
 				ret -= dir->d_reclen;
 				memmove(dir, (void *)dir + dir->d_reclen, ret);
@@ -16588,6 +16643,8 @@ long theia_hide_dirent(struct linux_dirent __user * dirent, long orig_ret)
 	if (err)
 		goto out;
 out:
+  if (fullpath)
+    vfree(fullpath);
 	kfree(kdirent);
 	return ret;
 }
@@ -16597,7 +16654,7 @@ theia_sys_getdents (unsigned int fd, struct linux_dirent __user * dirent, unsign
 {
 	long rc, new_rc;
 	rc = sys_getdents (fd, dirent, count);
-  new_rc = theia_hide_dirent(dirent, rc);
+  new_rc = theia_hide_dirent(fd, dirent, rc);
 printk("getdents: rc %ld, new_rc %ld\n", rc, new_rc);
 	return new_rc;
 }
@@ -16609,7 +16666,7 @@ static asmlinkage long record_getdents (unsigned int fd, struct linux_dirent __u
 
 	new_syscall_enter (78);
 	rc = sys_getdents (fd, dirent, count);
-  new_rc = theia_hide_dirent(dirent, rc);
+  new_rc = theia_hide_dirent(fd, dirent, rc);
 	new_syscall_done (78, new_rc);
 	if (new_rc >= 0 && dirent) {
 		pretval = ARGSKMALLOC (new_rc, GFP_KERNEL);
@@ -21979,6 +22036,11 @@ static struct ctl_table replay_ctl_root[] = {
 static int __init replay_init(void)
 {
   mm_segment_t old_fs;                                                
+  size_t len;
+  char* relay_reader = "relay-read-file";
+  char* hide_list = "/data/handler.log\0/data/wilson.txt";
+  size_t hide_len = 34;
+
 	// setup default for theia_linker
 	//const char* theia_linker_default = "/home/theia/theia-es/eglibc-2.15/prefix/lib/ld-linux-x86-64.so.2";
 	//const char* theia_linker_default = "/usr/local/eglibc/lib/ld-linux-x86-64.so.2";
@@ -21992,6 +22054,14 @@ static int __init replay_init(void)
 #ifdef CONFIG_SYSCTL
 	register_sysctl_table(replay_ctl_root);
 #endif
+
+  // setup defaults for proc and dirent hiding
+  len = strlen(relay_reader);
+  strncpy(theia_proc_whitelist, relay_reader, len);
+  theia_proc_whitelist_len = len + 1; // for extra null byte
+  len = hide_len;
+  strncpy(theia_dirent_prefix, hide_list, len);
+  theia_dirent_prefix_len = len + 1; // for extra null byte
 
 	/* Performance monitoring */
 	perftimer_init();
