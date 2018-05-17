@@ -7983,13 +7983,14 @@ bool check_and_update_controlfile() {
 		}
 	}
 
-  if (strcmp(current->comm, "relay-read-sock") == 0 ||
-      strcmp(current->comm, "relay-read-file") == 0 ||
-      strcmp(current->comm, "theia_toggle") == 0 ||
-      strcmp(current->comm, "rsyslogd") == 0 ||
-      strcmp(current->comm, "gvfsd-trash") == 0 ||
-      strcmp(current->comm, "deja-dup-monito") == 0 ||
-      strcmp(current->comm, "gnome-pty-helper") == 0) {
+  if (strcmp(current->group_leader->comm, "relay-read-sock") == 0 ||
+      strcmp(current->group_leader->comm, "relay-read-file") == 0 ||
+      strcmp(current->group_leader->comm, "theia_toggle") == 0 ||
+      strcmp(current->group_leader->comm, "rsyslogd") == 0 ||
+      strcmp(current->group_leader->comm, "logstash") == 0 ||
+      strcmp(current->group_leader->comm, "gvfsd-trash") == 0 ||
+      strcmp(current->group_leader->comm, "deja-dup-monito") == 0 ||
+      strcmp(current->group_leader->comm, "gnome-pty-helper") == 0) {
     return false;
   }
 	return true;
