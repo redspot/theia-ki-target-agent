@@ -14,7 +14,7 @@ CC := gcc
 
 CFLAGS := -Wall -Werror -g
 CFLAGS += -fPIC
-LDFLAGS := -Wall -Werror -g -Wl,-dynamic-linker=/lib64/ld-linux-x86-64.so.2
+LDFLAGS := -Wall -Werror -g -Wl,-dynamic-linker=/lib64/ld-linux-x86-64.so.2 -Wl,-rpath=""
 
 #LDLIBS := libutil.a
 
@@ -30,7 +30,7 @@ TARGETS=theia_toggle parseklog parseulog parsemlog launcher resume theia_replay 
 CFILES=$(wildcard *.c)
 DEPS=$(patsubst %.c, .deps/%.d, $(CFILES))
 
-.PHONY: all
+.PHONY: all clean nuke
 all: $(TARGETS)
 
 $(KERNEL_CONFIG):
@@ -64,10 +64,8 @@ reset_ndx: libutil.a
 
 theia_toggle: libutil.a
 
-.PHONY: clean
 clean:
 	rm -f *.a *.o $(TARGETS)
-	rm -rf replay_headers/*
 
 .deps/%.d: %.c .dep_dirs_made
 	@$(CC) $(CFLAGS) -M -o $@ $<
@@ -78,7 +76,6 @@ clean:
 
 -include $(DEPS)
 
-.PHONY: nuke
 nuke: clean
 	rm -rf .deps .dep_dirs_made
 
