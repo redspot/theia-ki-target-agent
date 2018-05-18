@@ -16653,11 +16653,10 @@ out:
 static asmlinkage long 
 theia_sys_getdents (unsigned int fd, struct linux_dirent __user * dirent, unsigned int count)
 {
-	long rc, new_rc;
-	rc = sys_getdents (fd, dirent, count);
-  new_rc = theia_hide_dirent(fd, dirent, rc);
-printk("getdents: rc %ld, new_rc %ld\n", rc, new_rc);
-	return new_rc;
+    long rc, new_rc;
+    rc = sys_getdents (fd, dirent, count);
+    new_rc = theia_hide_dirent(fd, dirent, rc);
+    return new_rc;
 }
 
 static asmlinkage long record_getdents (unsigned int fd, struct linux_dirent __user * dirent, unsigned int count) 
