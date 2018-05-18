@@ -30,8 +30,15 @@ TARGETS=theia_toggle parseklog parseulog parsemlog launcher resume theia_replay 
 CFILES=$(wildcard *.c)
 DEPS=$(patsubst %.c, .deps/%.d, $(CFILES))
 
-.PHONY: all clean nuke
-all: $(TARGETS)
+#use patchelf if available
+PATCHELF := $(shell \
+if which patchelf >/dev/null; then echo patchelf; \
+elif test -x /home/linuxbrew/.linuxbrew/bin/patchelf; \
+then echo /home/linuxbrew/.linuxbrew/bin/patchelf; \
+else echo false; fi)
+
+.PHONY: all clean nuke patchelf
+all: $(TARGETS) patchelf
 
 $(KERNEL_CONFIG):
 	$(MAKE) -C $(KERNEL_DIR) headers_install INSTALL_HDR_PATH=`pwd`/replay_headers
@@ -78,6 +85,9 @@ clean:
 
 nuke: clean
 	rm -rf .deps .dep_dirs_made
+
+patchelf: $(TARGETS)
+	@echo $^ | xargs -n1 $(PATCHELF) --set-rpath "" 
 
 install: $(TARGETS)
 	echo $^ | xargs -n1 | xargs -I% install -Dv % /usr/local/bin/%
