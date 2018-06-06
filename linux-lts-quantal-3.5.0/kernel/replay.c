@@ -165,6 +165,9 @@ bool startsWith(const char *pre, const char *str)
 // used by theia_file_write() to add logs to relayfs ring buffer
 static DEFINE_MUTEX(relay_write_lock);
 
+// used as temporary buffer space for sprintf(), d_path(), etc.
+static kmem_cache_t theia_buffers;
+
 void theia_file_write(char *buf, size_t size) {
   unsigned long flags;
   void* reserved = NULL;
@@ -21985,13 +21988,16 @@ static int __init replay_init(void)
   //theia_replay_register init
   theia_replay_register_data.pid = 0;
   
-  //theia create relay cpu
-  //
   //init the wait queue before trying to use it
   init_waitqueue_head(&theia_relay_write_q);
+
+  // init temp buffers
+  theia_buffers = kmem_cache_create("theia_buffers", PAGE_SIZE, 0, 0, NULL);
+
   old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
 
+  //theia create relay cpu
   if(theia_dir == NULL) {
     pr_info("init: creating relay app dir\n");
     theia_dir = debugfs_create_dir(APP_DIR, NULL);
