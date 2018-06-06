@@ -583,12 +583,12 @@ void theia_dump_str(char *str, int rc, int sysnum) {
 	if(is_process_new2(current->pid, current->start_time.tv_sec))
 		recursive_packahgv_process();
 
+	/* packahgv */
+	if(theia_logging_toggle) {
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
 
-	/* packahgv */
-	if(theia_logging_toggle) {
 		long sec, nsec;
 		int size;
 		get_curr_time(&sec, &nsec);
@@ -8156,14 +8156,14 @@ void packahgv_read (struct read_ahgv *sys_args) {
   char uuid_str[THEIA_UUID_LEN+1];
   int size;
 
+	//Yang
+	if(theia_logging_toggle) {
 #ifdef THEIA_AUX_DATA
 //      too many events are generated and system hangs
 if(strcmp(current->comm, "pthread-lock") == 0) {
   theia_dump_auxdata();
 }
 #endif
-	//Yang
-	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
@@ -8744,14 +8744,14 @@ void packahgv_write (struct write_ahgv *sys_args) {
   char uuid_str[THEIA_UUID_LEN+1];
   int size;
 
+	//Yang
+	if(theia_logging_toggle) {
 #ifdef THEIA_AUX_DATA
 //      too many events are generated and system hangs
 if(strcmp(current->comm, "pthread-lock") == 0) {
   theia_dump_auxdata();
 }
 #endif
-	//Yang
-	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
@@ -9153,14 +9153,13 @@ void packahgv_open (struct open_ahgv *sys_args) {
   char* filename_b64;
   uint32_t buf_size;
 
-#ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
-#endif
-
 	if(theia_logging_toggle) {
     char *buf;
 		long sec, nsec;
 		int size;
+#ifdef THEIA_AUX_DATA
+    theia_dump_auxdata();
+#endif
 
 		get_curr_time(&sec, &nsec);
 
@@ -9845,12 +9844,12 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
   char* args_b64;
   uint32_t buf_size;
   char* buf;
- #ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();	
- #endif
 	//Yang
 	if(theia_logging_toggle) {
 		long sec, nsec;
+ #ifdef THEIA_AUX_DATA
+    theia_dump_auxdata();
+ #endif
 		get_curr_time(&sec, &nsec);
 		get_ids(ids);
 		is_user_remote = is_remote(current);
@@ -10755,10 +10754,13 @@ void packahgv_mount (struct mount_ahgv *sys_args) {
   char *fpath_b64;
   uint32_t buf_size;
   char* buf;
+	//Yang
+	if(theia_logging_toggle) {
+		long sec, nsec;
+		int size;
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
-
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
 	fd = sys_open(sys_args->devname, O_RDONLY, 0);
@@ -10790,10 +10792,6 @@ void packahgv_mount (struct mount_ahgv *sys_args) {
 	}
 	set_fs(old_fs);
 
-	//Yang
-	if(theia_logging_toggle) {
-		long sec, nsec;
-		int size;
 
 		get_curr_time(&sec, &nsec);
 
@@ -11012,13 +11010,13 @@ struct pipe_ahgv {
 void packahgv_pipe (struct pipe_ahgv *sys_args) {
   char uuid_str[THEIA_UUID_LEN+1];
   int size;
-#ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
-#endif
 	//Yang
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
+#ifdef THEIA_AUX_DATA
+    theia_dump_auxdata();
+#endif
 		get_curr_time(&sec, &nsec);
 		/* TODO: publish both ends' data: dev1, dev2, ino1, ino2 */
 #ifdef THEIA_UUID
@@ -11320,13 +11318,13 @@ struct ioctl_ahgv {
 void packahgv_ioctl (struct ioctl_ahgv *sys_args) {
   char uuid_str[THEIA_UUID_LEN+1];
   int size;
-#ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
-#endif
 	//Yang
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
+#ifdef THEIA_AUX_DATA
+    theia_dump_auxdata();
+#endif
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
 		if (fd2uuid(sys_args->fd, uuid_str) == false)
@@ -12120,14 +12118,14 @@ struct munmap_ahgv {
 
 void packahgv_munmap (struct munmap_ahgv *sys_args) {
   int size;
-#ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
-#endif
 
 	//Yang
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
+#ifdef THEIA_AUX_DATA
+    theia_dump_auxdata();
+#endif
 		get_curr_time(&sec, &nsec);
 		size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%lx|%ld|%d|%ld|%ld|%u|endahg\n", 
 				11, sys_args->pid, current->start_time.tv_sec, sys_args->rc, 
@@ -12577,14 +12575,14 @@ struct connect_ahgv {
 void packahgv_connect(struct connect_ahgv *sys_args) {
   int size = 0;
   char uuid_str[THEIA_UUID_LEN+1];
-#ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
-#endif
 
 	//Yang
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
+#ifdef THEIA_AUX_DATA
+    theia_dump_auxdata();
+#endif
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
@@ -12628,13 +12626,13 @@ struct accept_ahgv {
 void packahgv_accept(struct accept_ahgv *sys_args) {
   int size=0;
   char uuid_str[THEIA_UUID_LEN+1];
-#ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
-#endif
 	//Yang
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
+#ifdef THEIA_AUX_DATA
+    theia_dump_auxdata();
+#endif
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
@@ -12680,14 +12678,14 @@ struct sendto_ahgv {
 void packahgv_sendto(struct sendto_ahgv *sys_args) {
   int size = 0;
   char uuid_str[THEIA_UUID_LEN+1];
-#ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
-#endif
 
 	//Yang
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
+#ifdef THEIA_AUX_DATA
+    theia_dump_auxdata();
+#endif
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
@@ -12735,14 +12733,14 @@ struct recvfrom_ahgv {
 void packahgv_recvfrom(struct recvfrom_ahgv *sys_args) {
   int size = 0;
   char uuid_str[THEIA_UUID_LEN+1];
-#ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
-#endif
 
 	//Yang
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
+#ifdef THEIA_AUX_DATA
+    theia_dump_auxdata();
+#endif
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
@@ -12788,14 +12786,14 @@ struct sendmsg_ahgv {
 void packahgv_sendmsg(struct sendmsg_ahgv *sys_args) {
   int size = 0;
   char uuid_str[THEIA_UUID_LEN+1];
-#ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
-#endif
 
 	//Yang
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
+#ifdef THEIA_AUX_DATA
+    theia_dump_auxdata();
+#endif
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
@@ -12847,14 +12845,14 @@ struct recvmsg_ahgv {
 void packahgv_recvmsg(struct recvmsg_ahgv *sys_args) {
   int size = 0;
   char uuid_str[THEIA_UUID_LEN+1];
-#ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
-#endif
 
 	//Yang
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
+#ifdef THEIA_AUX_DATA
+    theia_dump_auxdata();
+#endif
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
@@ -14565,13 +14563,13 @@ struct shmget_ahgv {
 void packahgv_shmget(struct shmget_ahgv *sys_args)
 {
   int size;
-#ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
-#endif
 
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
+#ifdef THEIA_AUX_DATA
+    theia_dump_auxdata();
+#endif
 		get_curr_time(&sec, &nsec);
 		size = sprintf(buf, "startahg|%d|%d|%d|%ld|%ld|%d|%lu|%d|%d|%ld|%ld|%u|endahg\n",
 				29, SHMGET, sys_args->pid, current->start_time.tv_sec,
@@ -14675,14 +14673,14 @@ void packahgv_shmat(struct shmat_ahgv *sys_args)
 {
 		int size;
 		char uuid_str[THEIA_UUID_LEN+1];
-#ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
-#endif
 
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		unsigned long shm_segsz = 0;
+#ifdef THEIA_AUX_DATA
+    theia_dump_auxdata();
+#endif
 		get_curr_time(&sec, &nsec);
 
 		shm_segsz = get_shm_segsz(sys_args->shmid);
@@ -16027,15 +16025,15 @@ void packahgv_clone (struct clone_ahgv *sys_args) {
   struct task_struct* tsk;	
   int size = 0;
   int is_child_remote = 0;
-#ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
-#endif
 
 	//Yang
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
 		char ids[50];
+#ifdef THEIA_AUX_DATA
+    theia_dump_auxdata();
+#endif
 		get_ids(ids);
 		get_curr_time(&sec, &nsec);
 		tsk = pid_task(find_vpid(sys_args->new_pid), PIDTYPE_PID);	
@@ -16166,14 +16164,14 @@ struct mprotect_ahgv {
 
 void packahgv_mprotect (struct mprotect_ahgv *sys_args) {
 		int size; 
-#ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
-#endif
 
 	//Yang
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
+#ifdef THEIA_AUX_DATA
+    theia_dump_auxdata();
+#endif
 		get_curr_time(&sec, &nsec);
 
     size = sprintf(buf, "startahg|%d|%d|%ld|%lx|%lx|%lx|%d|%d|%ld|%ld|%u|endahg\n", 
@@ -18446,13 +18444,13 @@ struct mmap_ahgv {
 void packahgv_mmap (struct mmap_ahgv *sys_args) {
   char uuid_str[THEIA_UUID_LEN+1];
   int size;
-#ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
-#endif
 	//Yang
 	if(theia_logging_toggle) {
 		char *buf = theia_buf2;
 		long sec, nsec;
+#ifdef THEIA_AUX_DATA
+    theia_dump_auxdata();
+#endif
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
 		if (sys_args->fd != -1) {
@@ -19065,14 +19063,14 @@ void packahgv_setuid (struct setuid_ahgv *sys_args) {
   char ids[50];
   int size = 0;
   int is_newuser_remote;
-#ifdef THEIA_AUX_DATA
-  theia_dump_auxdata();
-#endif
 
   //Yang
   if(theia_logging_toggle) {
     char *buf = theia_buf2;
     long sec, nsec;
+#ifdef THEIA_AUX_DATA
+    theia_dump_auxdata();
+#endif
     get_curr_time(&sec, &nsec);
     get_ids(ids);
     is_newuser_remote = is_remote(current);
