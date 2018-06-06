@@ -130,6 +130,8 @@ int debug_flag = 0;
 
 #define SUBBUF_SIZE 262144
 #define N_SUBBUFS 4
+bool theia_active_path = 0;
+EXPORT_SYMBOL(theia_active_path);
 
 //#define APP_DIR		"theia_logs"
 struct rchan* theia_chan = NULL;
@@ -162,72 +164,51 @@ bool startsWith(const char *pre, const char *str)
 
 const char* theia_dump_fname = "/data/ahg.dump2.1";
 void theia_file_write(char *buf, size_t size);
+// used by theia_file_write() to add logs to relayfs ring buffer
+static DEFINE_MUTEX(relay_write_lock);
 
 void theia_file_write(char *buf, size_t size) {
-#ifdef THEIA_DIRECT_FILE_WRITE
-	loff_t pos = 0;
-	mm_segment_t old_fs;
-	size_t written = 0;
-
-	if (theia_filp == NULL) {
-		theia_filp = filp_open(theia_dump_fname, O_RDWR|O_APPEND|O_LARGEFILE|O_CREAT, 0777);
-
-		if (IS_ERR(theia_filp)) {
-			printk("XXX: WHAT?: %d\n", PTR_ERR(theia_filp));
-			theia_filp = NULL;
-			return;
-		}
-	}
-
-	if (!theia_prevbuf) theia_prevbuf = vmalloc(4096);
-
-	if (theia_prevbuf_size == 0 && (buf[9] == '0' || buf[9] == '1')) {
-		memset(theia_prevbuf, 0, 4096);
-		memcpy(theia_prevbuf, buf, size);
-		theia_prevbuf_size = size;
-		return;
-	}
-
-	if (theia_prevbuf_size != 0 && (buf[9] == '0' || buf[9] == '1')) {
-		int sysno1, pid1, tv_sec1, fd1, bytes1, tgid1, sec1, nsec1;
-		int sysno2, pid2, tv_sec2, fd2, bytes2, tgid2, sec2, nsec2;
-
-		sscanf(theia_prevbuf, "startahg|%d|%d|%d|%d|%d|%d|%d|%d|endahg", 
-			&sysno1, &pid1, &tv_sec1, &fd1, &bytes1, &tgid1, &sec1, &nsec1);
-		sscanf(buf, "startahg|%d|%d|%d|%d|%d|%d|%d|%d|endahg", 
-			&sysno2, &pid2, &tv_sec2, &fd2, &bytes2, &tgid2, &sec2, &nsec2);
-
-		if (sysno1 == sysno2 && pid1 == pid2 && tv_sec1 == tv_sec2 && fd1 == fd2 && tgid1 == tgid2) {
-			bytes1 += bytes2;
-			nsec1 = 777777; /* mark */
-			memset(theia_prevbuf, 0, 4096);
-			theia_prevbuf_size = sprintf(theia_prevbuf, "startahg|%d|%d|%d|%d|%d|%d|%d|%d|endahg\n", 
-				sysno1, pid1, tv_sec1, fd1, bytes1, tgid1, sec1, nsec1);	
-		}
-		else {
-			old_fs = get_fs();
-			set_fs(KERNEL_DS);
-			written = vfs_write(theia_filp, (char*)theia_prevbuf, theia_prevbuf_size, &pos);
-			set_fs(old_fs);
-			memset(theia_prevbuf, 0, 4096);
-			memcpy(theia_prevbuf, buf, size);
-			theia_prevbuf_size = size;
-		}
-	}
-	else {
-		old_fs = get_fs();
-		set_fs(KERNEL_DS);
-		written = vfs_write(theia_filp, (char*)theia_prevbuf, theia_prevbuf_size, &pos);
-		written = vfs_write(theia_filp, (char*)buf, size, &pos);
-		set_fs(old_fs);
-		memset(theia_prevbuf, 0, 4096);
-		theia_prevbuf_size = 0;
-	}
-#else
-if(size <= 0)
-  printk("strange relay_write size %zu\n", size);
-	relay_write(theia_chan, buf, size);
-#endif
+  unsigned long flags;
+  void* reserved = NULL;
+  DEFINE_WAIT(wait);
+  // wait no more than about 120 seconds
+  int __ret = HZ*120;
+  if(size <= 0)
+    printk("strange relay_write size %zu\n", size);
+  mutex_lock(&relay_write_lock);
+  local_irq_save(flags);
+  if (theia_active_path) {
+    pr_debug_ratelimited("theia_file_write() in active path\n");
+    for (;;) {
+      prepare_to_wait(theia_chan->private_data, &wait, TASK_UNINTERRUPTIBLE);
+      reserved = relay_reserve(theia_chan, size);
+      if (reserved) {
+        break;
+      } else {
+        pr_warn("deferring relay_write() for pid %d on cpu %d with seq %u\n",
+          current->pid, smp_processor_id(), current->no_syscalls);
+        local_irq_restore(flags);
+        __ret = schedule_timeout(__ret);
+        local_irq_save(flags);
+        if (!__ret) {
+          pr_err("theia relay buffer is still unconsumed. disabling active_path.\n");
+          theia_active_path = 0;
+          break;
+        }
+        pr_warn("deferred relay_write() is continuing for pid %d on cpu %d with seq %u\n",
+          current->pid, smp_processor_id(), current->no_syscalls);
+      }
+    }
+    finish_wait(theia_chan->private_data, &wait);
+    //this is relay_write()
+    memcpy(reserved, buf, size);
+    local_irq_restore(flags);
+  } else {
+    local_irq_restore(flags);
+    pr_debug_ratelimited("theia_file_write() in original path\n");
+    relay_write(theia_chan, buf, size);
+  }
+  mutex_unlock(&relay_write_lock);
 }
 
 //Yang
@@ -782,25 +763,27 @@ bool is_pid_match(int taskid_to_avoid[], int length) {
  * Defined so that we know when events are dropped due to the buffer-full
  * condition.
  */
-ulong dropped_count = 0;
+static int suspended;
+static ulong dropped_count = 0;
+static wait_queue_head_t theia_relay_write_q;
+
 static int subbuf_start_handler(struct rchan_buf *buf,
 				  void *subbuf,
 				  void *prev_subbuf,
 				  size_t prev_padding)
 {
-	if (relay_buf_full(buf)) {
-		if (!suspended) {
-			suspended = 1;
-			printk("cpu %d buffer full!!!, dropped_count: %lu\n", smp_processor_id(), dropped_count);
-		}
-		dropped_count++;
-		return 0;
-	} else if (suspended) {
-		suspended = 0;
-		printk("cpu %d buffer no longer full.\n", smp_processor_id());
-	}
-
-	return 1;
+  if (relay_buf_full(buf)) {
+    if (!suspended) {
+      suspended = 1;
+      printk("cpu %d buffer full!!!, dropped_count: %lu\n", smp_processor_id(), dropped_count);
+    }
+    dropped_count++;
+    return 0;
+  } else if (suspended) {
+    suspended = 0;
+    printk("cpu %d buffer no longer full.\n", smp_processor_id());
+  }
+  return 1;
 }
 
 /*
@@ -831,6 +814,22 @@ static int remove_buf_file_handler(struct dentry *dentry)
 }
 
 /*
+ * wake up any tasks that could not relay_write() because the buffer was full
+ */
+static void after_subbufs_consumed_handler(struct rchan *chan,
+          unsigned int cpu,
+          size_t subbufs_consumed)
+{
+  if (theia_active_path) {
+    if (chan->private_data && waitqueue_active(chan->private_data)) {
+      pr_warn("theia:after_subbufs_consumed() # of bufs consumed = %lu\n", subbufs_consumed);
+      //wake_up_interruptible(chan->private_data);
+      wake_up(chan->private_data);
+    }
+  }
+}
+
+/*
  * relay callbacks
  */
 static struct rchan_callbacks relay_callbacks =
@@ -838,6 +837,7 @@ static struct rchan_callbacks relay_callbacks =
 	.subbuf_start = subbuf_start_handler,
 	.create_buf_file = create_buf_file_handler,
 	.remove_buf_file = remove_buf_file_handler,
+  .after_subbufs_consumed = after_subbufs_consumed_handler,
 };
 
 
@@ -852,7 +852,7 @@ struct rchan* create_channel(size_t size, size_t n)
 {
 	struct rchan *channel;
 	
-	channel = relay_open("cpu", theia_dir, size, n, &relay_callbacks, NULL);
+	channel = relay_open("cpu", theia_dir, size, n, &relay_callbacks, &theia_relay_write_q);
 	
 	if (!channel) {
 		pr_warn_ratelimited("relay app channel creation failed\n");
@@ -6663,6 +6663,16 @@ printk("SHIM_CALL_MAIN: Pid %d, non replay meets syscall %d\n", current->pid, nu
 		return rc;						\
 	}								
 
+#define THEIA_SIMPLE_SHIM0(name, sysnum)		\
+	static asmlinkage long						\
+	theia_sys_##name (void)				\
+	{								\
+		long rc;						\
+		rc = sys_##name();				\
+		if (theia_logging_toggle) theia_##name##_ahgx(rc, sysnum);               \
+		return rc;						\
+	}								
+
 #define THEIA_SIMPLE_SHIM1(name, sysnum, arg0type, arg0name)		\
 	static asmlinkage long						\
 	theia_sys_##name (arg0type arg0name)				\
@@ -6734,6 +6744,14 @@ printk("SHIM_CALL_MAIN: Pid %d, non replay meets syscall %d\n", current->pid, nu
 	SIMPLE_RECORD0(name, sysnum);					\
 	SIMPLE_REPLAY (name, sysnum, void);				\
 	asmlinkage long shim_##name (void) SHIM_CALL(name, sysnum);	
+
+#define THEIA_SHIM0(name, sysnum)			\
+	SIMPLE_RECORD0(name, sysnum);		\
+	SIMPLE_REPLAY (name, sysnum, void);		\
+	THEIA_SIMPLE_SHIM0(name, sysnum);		\
+	asmlinkage long shim_##name (void)                 \
+	SHIM_CALL_MAIN(sysnum, record_##name(), replay_##name(),	\
+		       theia_sys_##name());
 
 #define SIMPLE_SHIM1(name, sysnum, arg0type, arg0name)			\
 	SIMPLE_RECORD1(name, sysnum, arg0type, arg0name);		\
@@ -7925,63 +7943,6 @@ struct read_ahgv {
 
 bool check_and_update_controlfile() {
 
-	int ret = 0, file_size = 0;
-	struct black_pid* pblackpid;
-	loff_t pos = 0;
-	struct file* filp = NULL;
-	int taskid_to_avoid[12];
-	
-	taskid_to_avoid[0] = current->pid;
-	taskid_to_avoid[1] = current->tgid;
-	taskid_to_avoid[2] = current->parent->pid;
-	taskid_to_avoid[3] = current->parent->tgid;
-	taskid_to_avoid[4] = current->parent->parent->pid;
-	taskid_to_avoid[5] = current->parent->parent->tgid;
-	taskid_to_avoid[6] = current->parent->parent->parent->pid;
-	taskid_to_avoid[7] = current->parent->parent->parent->tgid;
-	taskid_to_avoid[8] = current->parent->parent->parent->parent->pid;
-	taskid_to_avoid[9] = current->parent->parent->parent->parent->tgid;
-	taskid_to_avoid[10] = current->parent->parent->parent->parent->parent->pid;
-	taskid_to_avoid[11] = current->parent->parent->parent->parent->parent->tgid;
-	
-	if(glb_blackpid.pid[0] == 0 || glb_blackpid.pid[1] == 0 || glb_blackpid.pid[2] == 0) {
-		filp = filp_open(control_file, O_RDONLY, 0);
-
-		if(IS_ERR(filp)) {
-		//	printk("error in opening: %s\n", control_file);
-			return false;
-		}
-		pblackpid = KMALLOC (sizeof(struct black_pid), GFP_KERNEL);
-		memset(pblackpid, 0x0, sizeof(struct black_pid));
-		file_size = vfs_llseek(filp, 0, SEEK_END);
-		ret = vfs_read(filp, (char *) pblackpid, file_size, &pos);
-		if(ret < file_size) {
-			printk("read from theia-control.conf fails, read size: %d, should be %d\n", ret, file_size);
-			filp_close(filp, NULL);
-			return false;
-		}
-		else {
-			printk("first pid is %d, second pid is %d, third pid is %d\n", glb_blackpid.pid[0], glb_blackpid.pid[1], glb_blackpid.pid[2]);
-			put_blackpid(pblackpid->pid[0]);
-			put_blackpid(pblackpid->pid[1]);
-			put_blackpid(pblackpid->pid[2]);
-
-			if(is_pid_match(taskid_to_avoid, 12)) {
-//				printk("we do not track this syscall, pgrp %d\n", current->tgid);
-				filp_close(filp, NULL);
-				return false;
-			}
-			filp_close(filp, NULL);
-		}
-		KFREE(pblackpid);	
-	}
-	else {
-//		printk("glb_blackpid is already filled. first pid is %d, second pid is %d, third is %d\n",glb_blackpid.pid[0], glb_blackpid.pid[1],glb_blackpid.pid[2] );
-		if(is_pid_match(taskid_to_avoid, 12)) {
-//			printk("we do not track this syscall, pgrp %d\n", current->tgid);
-			return false;
-		}
-	}
 
   if (strcmp(current->group_leader->comm, "relay-read-sock") == 0 ||
       strcmp(current->group_leader->comm, "relay-read-file") == 0 ||
@@ -22074,19 +22035,28 @@ static int __init replay_init(void)
   theia_replay_register_data.pid = 0;
   
   //theia create relay cpu
+  //
+  //init the wait queue before trying to use it
+  init_waitqueue_head(&theia_relay_write_q);
   old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
 
   if(theia_dir == NULL) {
+    pr_info("init: creating relay app dir\n");
     theia_dir = debugfs_create_dir(APP_DIR, NULL);
     if (!theia_dir) {
-      printk("Couldn't create relay app directory.\n");
+      pr_err("init: failed to create relay app directory.\n");
     }
     else {
+      pr_info("init: created relay app dir\n");
       if(theia_chan == NULL) {
+        pr_info("init: creating relay app channel\n");
         theia_chan = create_channel(subbuf_size, n_subbufs);
         if (!theia_chan) {
+          pr_err("init: failed to create relay app channel.\n");
           debugfs_remove(theia_dir);
+        } else {
+          pr_info("init: created relay app channel\n");
         }
       }
     }

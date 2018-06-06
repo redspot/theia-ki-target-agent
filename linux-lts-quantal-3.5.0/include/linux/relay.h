@@ -160,6 +160,16 @@ struct rchan_callbacks
 	 * The callback should return 0 if successful, negative if not.
 	 */
 	int (*remove_buf_file)(struct dentry *dentry);
+
+    /*
+     * after_subbuf_consumed - optional utility function
+     *
+     * Called after relay_subbuf_consumed(). if not defined,
+     * no default is called.
+     */
+    void (*after_subbufs_consumed)(struct rchan *chan,
+            unsigned int cpu,
+            size_t consumed);
 };
 
 /*

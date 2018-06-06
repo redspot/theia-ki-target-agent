@@ -803,6 +803,9 @@ void relay_subbufs_consumed(struct rchan *chan,
 		buf->subbufs_consumed = buf->subbufs_produced;
 	else
 		buf->subbufs_consumed += subbufs_consumed;
+
+  if (buf->chan->cb->after_subbufs_consumed)
+    buf->chan->cb->after_subbufs_consumed(chan, cpu, subbufs_consumed);
 }
 EXPORT_SYMBOL_GPL(relay_subbufs_consumed);
 

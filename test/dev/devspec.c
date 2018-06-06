@@ -28,6 +28,7 @@ MODULE_LICENSE("GPL");
 extern bool theia_logging_toggle;
 extern bool theia_recording_toggle;
 extern bool theia_cross_toggle;
+extern bool theia_active_path;
 extern struct theia_replay_register_data_type theia_replay_register_data;
 extern char theia_linker[];
 extern char theia_libpath[];
@@ -115,6 +116,8 @@ static ssize_t flag_show(struct kobject *kobj, struct kobj_attribute *attr,
     flag = theia_logging_toggle;
   else if (strcmp(attr->attr.name, "theia_recording_toggle") == 0)
     flag = theia_recording_toggle;
+  else if (strcmp(attr->attr.name, "theia_active_path") == 0)
+    flag = theia_active_path;
   else
     return -EINVAL;
   return sprintf(buf, "%d\n", flag);
@@ -129,11 +132,14 @@ static ssize_t flag_store(struct kobject *kobj, struct kobj_attribute *attr,
   if (error || flag > 1) return -EINVAL;
 
   if (strcmp(attr->attr.name, "theia_logging_toggle") == 0) {
-    if(theia_logging_toggle == 0 && flag == 1)
+    if(theia_logging_toggle == 0 && flag == 1) {
       packahgv_reboot();
+    }
     theia_logging_toggle = flag;
   } else if (strcmp(attr->attr.name, "theia_recording_toggle") == 0) {
     theia_recording_toggle = flag;
+  } else if (strcmp(attr->attr.name, "theia_active_path") == 0) {
+    theia_active_path = flag;
   } else
     return -EINVAL;
   pr_info("%s set to %d\n", attr->attr.name, flag);
@@ -144,12 +150,15 @@ static struct kobj_attribute logging_toggle_attribute =
 __ATTR(theia_logging_toggle, 0600, flag_show, flag_store);
 static struct kobj_attribute recording_toggle_attribute =
 __ATTR(theia_recording_toggle, 0600, flag_show, flag_store);
+static struct kobj_attribute active_path_attribute =
+__ATTR(theia_active_path, 0600, flag_show, flag_store);
 
 static struct attribute *theia_attrs[] = {
   &linker_attribute.attr,
   &libpath_attribute.attr,
   &logging_toggle_attribute.attr,
   &recording_toggle_attribute.attr,
+  &active_path_attribute.attr,
   NULL,	/* need to NULL terminate the list of attributes */
 };
 static struct attribute_group theia_attr_group = {

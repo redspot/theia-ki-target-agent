@@ -12,7 +12,6 @@
 //static struct dentry	*theia_dir = NULL;
 static size_t		subbuf_size = 262144*16;
 static size_t		n_subbufs = 16;
-static int suspended;
 
 struct rchan* create_channel(size_t size, size_t n);
 
