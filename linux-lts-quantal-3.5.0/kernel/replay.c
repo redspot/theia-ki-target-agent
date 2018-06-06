@@ -162,8 +162,6 @@ bool startsWith(const char *pre, const char *str)
 #define THEIA_DIRECT_FILE_WRITE 1
 #undef THEIA_DIRECT_FILE_WRITE
 
-const char* theia_dump_fname = "/data/ahg.dump2.1";
-void theia_file_write(char *buf, size_t size);
 // used by theia_file_write() to add logs to relayfs ring buffer
 static DEFINE_MUTEX(relay_write_lock);
 
@@ -543,7 +541,7 @@ bool fd2uuid(int fd, char *uuid_str) {
       			return false;
 	}
 	else {
-		printk("[fd2uuid]: Failed to get file. fd %d\n", fd);
+		pr_debug("[fd2uuid]: Failed to get file. fd %d\n", fd);
 		return false;
 	}
 
@@ -687,39 +685,6 @@ void theia_dump_sdd(const char __user *str, int val1, int val2, int rc, int sysn
 }
 
 void theia_dump_at_sd(int dfd, const char __user *str, int val, int rc, int sysnum) {
-	
-	/*
-	char *ptr = NULL;
-	struct path path;
-	int res;
-
-	res = user_path_at(dfd, str, LOOKUP_FOLLOW, &path);
-	if (res == 0) {
-		ptr = d_path(&path, theia_buf2, 4096);
-		if (IS_ERR(ptr))
-                    ptr = str;
-        }
-	else {
-		ptr = str;
-        }
-
-	if (ptr[0] == '/') {
-		sprintf(theia_buf1, "%s|%d", ptr, val);
-	}
-	else {
-		if (current->fs) {
-			get_fs_pwd(current->fs, &path);
-			ptr = d_path(&path, theia_buf2, 4096);	
-			if (IS_ERR(ptr))
-				ptr = ".";
-		}
-		else {
-			ptr = ".";
-		}
-		sprintf(theia_buf1, "%s/%s|%d", ptr, str, val);
-	}
-	theia_dump_str(theia_buf1, rc, sysnum);
-	*/
 }
 
 void theia_dump_dd(long val1, long val2, int rc, int sysnum) {
@@ -7942,8 +7907,6 @@ struct read_ahgv {
 
 
 bool check_and_update_controlfile() {
-
-
   if (strcmp(current->group_leader->comm, "relay-read-sock") == 0 ||
       strcmp(current->group_leader->comm, "relay-read-file") == 0 ||
       strcmp(current->group_leader->comm, "theia_toggle") == 0 ||
@@ -12160,15 +12123,6 @@ void packahgv_munmap (struct munmap_ahgv *sys_args) {
 #ifdef THEIA_AUX_DATA
 	theia_dump_auxdata();
 #endif
-/*
-	struct vm_area_struct *vma = find_vma(current->mm, sys_args->addr);
-	char *fpath = NULL;
-	if (vma->vm_file) {
-		fpath = d_path(&(vma->vm_file->f_path), theia_retbuf, 4096);
-		if (!IS_ERR(fpath))
-			printk("XXX: munmap: %s\n", fpath);
-	}
-*/
 
 	//Yang
 	if(theia_logging_toggle) {
@@ -12504,7 +12458,6 @@ void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char* i
 			strncpy(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX);
 		else
 			strncpy(sun_path, un_sockaddr->sun_path+1, UNIX_PATH_MAX);
-                printk("AF_LOCAL: %s\n", sun_path);
 		if (strlen(sun_path) == 0) {
 			strcpy(sun_path, "LOCAL");
 		}
@@ -12549,8 +12502,8 @@ void get_ip_port_sockfd(int sockfd, char* ip, u_long* port, char* sun_path, sa_f
   strcpy(ip, "NA");
   strcpy(sun_path, "NA");
 
-  if (err) {
-    pr_err("getname error: err %d, sock is null? %d\n",err, sock==NULL?1:0);
+  if (err && err != -ENOTCONN) {
+    pr_debug("getname error: err %d, sock is null? %d\n",err, sock==NULL);
     return;
   }
   if (!len) {
