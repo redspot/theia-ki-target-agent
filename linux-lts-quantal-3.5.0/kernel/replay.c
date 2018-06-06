@@ -371,14 +371,6 @@ bool theia_check_channel(void) {
     memset(theia_retbuf, 0x0, THEIA_RETBUF_LEN);
   }
 
-#ifdef THEIA_DIRECT_FILE_WRITE
-	if(theia_logging_toggle == 0) {
-		return false;
-	}
-	else {
-		return true;
-	}
-#else
 	if(theia_logging_toggle == 0) {
 		return false;
 	} 
@@ -411,7 +403,6 @@ bool theia_check_channel(void) {
 	set_fs(old_fs);                                                              
 
 	return true;
-#endif
 }
 
 bool file2uuid(struct file* file, char *uuid_str, int fd) {
@@ -564,45 +555,44 @@ bool fd2uuid(int fd, char *uuid_str) {
 
 // dump aux data: callstack, ids, ...
 void theia_dump_auxdata() {
-	char ids[50];
-	get_ids(ids);
-	get_user_callstack(theia_retbuf, 4096);
+  char ids[50];
+  get_ids(ids);
+  get_user_callstack(theia_retbuf, 4096);
 
-	if(theia_logging_toggle) {
-		int size;
+  if(theia_logging_toggle) {
+    int size;
 
-		size = snprintf(theia_buf2, THEIA_BUF2_LEN, "startahg|700|%d|%s|%s|endahg\n", current->pid, theia_retbuf, ids);
-if(theia_buf2[0] != 's' || theia_buf2[1] != 't')
-  printk("strange auxdata \n");
-		theia_file_write(theia_buf2, size);
-	}
+    size = snprintf(theia_buf2, THEIA_BUF2_LEN, "startahg|700|%d|%s|%s|endahg\n", current->pid, theia_retbuf, ids);
+    if(theia_buf2[0] != 's' || theia_buf2[1] != 't')
+      printk("strange auxdata \n");
+    theia_file_write(theia_buf2, size);
+  }
 }
 
-/* str == theia_buf1 */
 void theia_dump_str(char *str, int rc, int sysnum) {
-	if (theia_check_channel() == false)
-		return;
+  if (theia_check_channel() == false)
+    return;
 
-	if(is_process_new2(current->pid, current->start_time.tv_sec))
-		recursive_packahgv_process();
+  if(is_process_new2(current->pid, current->start_time.tv_sec))
+    recursive_packahgv_process();
 
-	/* packahgv */
-	if(theia_logging_toggle) {
+  /* packahgv */
+  if(theia_logging_toggle) {
 #ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
+    theia_dump_auxdata();
 #endif
 
-		long sec, nsec;
-		int size;
-		get_curr_time(&sec, &nsec);
+    long sec, nsec;
+    int size;
+    get_curr_time(&sec, &nsec);
 
-		/* str will be theia_buf1 */
-		size = sprintf(theia_buf2, "startahg|%d|%d|%li|%d|%s|%d|%ld|%ld|%u|endahg\n", \
-			sysnum, current->pid, current->start_time.tv_sec, \
-			rc, str, \
-			current->tgid, sec, nsec, current->no_syscalls++);
-		theia_file_write(theia_buf2, size);
-	}
+    /* str will be theia_buf1 */
+    size = sprintf(theia_buf2, "startahg|%d|%d|%li|%d|%s|%d|%ld|%ld|%u|endahg\n", \
+        sysnum, current->pid, current->start_time.tv_sec, \
+        rc, str, \
+        current->tgid, sec, nsec, current->no_syscalls++);
+    theia_file_write(theia_buf2, size);
+  }
 }
 
 void theia_dump_ss(const char __user *str1, const char __user *str2, int rc, int sysnum) {
@@ -3008,51 +2998,51 @@ get_pt_regs(struct task_struct* tsk)
 #define NO_STACK_ENTRIES 100
 // SL: to dump return addresses
 void get_user_callstack(char* buffer, size_t bufsize) {
-	struct stack_trace trace;
-	unsigned long entries[NO_STACK_ENTRIES];
-	int i;
-	
-	struct mm_struct *mm = current->mm;
-	struct vm_area_struct *vma;
-	struct inode *inode;
-	char *ret_str = theia_buf2;
-	char *ptr;
-	char *path = NULL;
+  struct stack_trace trace;
+  unsigned long entries[NO_STACK_ENTRIES];
+  int i;
 
-	trace.nr_entries  = 0;
-	trace.max_entries = NO_STACK_ENTRIES;
-	trace.skip        = 0;
-	trace.entries     = entries;
+  struct mm_struct *mm = current->mm;
+  struct vm_area_struct *vma;
+  struct inode *inode;
+  char *ret_str = theia_buf2;
+  char *ptr;
+  char *path = NULL;
 
-	save_stack_trace_user(&trace);
+  trace.nr_entries  = 0;
+  trace.max_entries = NO_STACK_ENTRIES;
+  trace.skip        = 0;
+  trace.entries     = entries;
 
-	buffer[0] = '\0';
-	for (i = 0; i < trace.nr_entries; ++i) {
-		vma = find_vma(mm, trace.entries[i]);
-		if (!vma)
-			continue;
+  save_stack_trace_user(&trace);
 
-		if (vma->vm_file) {
-			inode = vma->vm_file->f_dentry->d_inode;
-			path = d_path(&(vma->vm_file->f_path), theia_buf2, 4096);
-			if (IS_ERR(path)) {
-				path = "anon_page";
-			}
-			sprintf(ret_str, "%s[%x:%lx]=%lx", path, inode->i_sb->s_dev, inode->i_ino, trace.entries[i]);
-			ptr = ret_str;
-		}
-		else {
-			sprintf(ret_str, "anon_page=%lx", trace.entries[i]);
-			ptr = ret_str;
-		}
+  buffer[0] = '\0';
+  for (i = 0; i < trace.nr_entries; ++i) {
+    vma = find_vma(mm, trace.entries[i]);
+    if (!vma)
+      continue;
 
-		if (strlen(buffer) + strlen(ptr) > bufsize-1)
-			break;
-		strcat(buffer, ptr);
-		strcat(buffer, ";");
-	}
+    if (vma->vm_file) {
+      inode = vma->vm_file->f_dentry->d_inode;
+      path = d_path(&(vma->vm_file->f_path), theia_buf2, 4096);
+      if (IS_ERR(path)) {
+        path = "anon_page";
+      }
+      sprintf(ret_str, "%s[%x:%lx]=%lx", path, inode->i_sb->s_dev, inode->i_ino, trace.entries[i]);
+      ptr = ret_str;
+    }
+    else {
+      sprintf(ret_str, "anon_page=%lx", trace.entries[i]);
+      ptr = ret_str;
+    }
 
-        return;
+    if (strlen(buffer) + strlen(ptr) > bufsize-1)
+      break;
+    strcat(buffer, ptr);
+    strcat(buffer, ";");
+  }
+
+  return;
 }
 
 void 
