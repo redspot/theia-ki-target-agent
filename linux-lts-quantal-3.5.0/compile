@@ -15,10 +15,12 @@ fi
 num_cores=`cat /proc/cpuinfo | grep processor | wc -l`
 build_parallel=$(($num_cores+1))
 
-CC=gcc
+if [ -z "${CC}" ]; then
+  CC=gcc
+fi
 #use ccache if available
 if which ccache >/dev/null; then
-  CC="ccache gcc"
+  CC="ccache $CC"
 fi
 
 #create build dir if needed
