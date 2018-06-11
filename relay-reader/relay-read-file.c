@@ -44,6 +44,8 @@
 #include <linux/unistd.h>
 #include <linux/kernel.h>
 
+// I have no idea why string.h doesnt have this
+void *memrchr(const void *s, int c, size_t n);
 
 /* name of directory containing relay files */
 char *app_dirname = "/debug/theia_logs";
@@ -68,25 +70,19 @@ int portno = 10000;
 
 /* maximum number of CPUs we can handle - change if more */
 #define NR_CPUS 256
+static size_t READ_BUF_LEN = 256 * 1024;
+static size_t ROTATE_SIZE = (1*1024*1024*1024);
 
 /* internal variables */
 static unsigned int ncpus;
-
-static unsigned prev_seq = -1;
 
 /* per-cpu internal variables */
 static int relay_file[NR_CPUS];
 static int out_file[NR_CPUS];
 static pthread_t reader[NR_CPUS];
 
-static size_t control_read(const char *dirname,
-		const char *filename);
-static void control_write(const char *dirname,
-		const char *filename,
-		size_t val);
 static int open_app_files(void);
 static void close_app_files(void);
-static int summarize(void);
 static int kill_percpu_threads(int n);
 static int create_percpu_threads(void);
 
@@ -98,12 +94,15 @@ int main(int argc, char **argv)
 	sigemptyset(&signals);
 	sigaddset(&signals, SIGINT);
 	sigaddset(&signals, SIGTERM);
+#if defined(SIGQUIT)
+	sigaddset(&signals, SIGQUIT);
+#endif
 	pthread_sigmask(SIG_BLOCK, &signals, NULL);
 
 	ncpus = sysconf(_SC_NPROCESSORS_ONLN);
 
 	pid_t pid = getpgrp();
-	printf("pgrp in main: %d\n", pid);
+	printf("relay-read-file starting: pid=%d\n", pid);
 
 	if (open_app_files())
 		return -1;
@@ -113,36 +112,29 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	sigemptyset(&signals);
-	sigaddset(&signals, SIGINT);
-	sigaddset(&signals, SIGTERM);
-
 	while (sigwait(&signals, &signal) == 0) {
-		switch(signal) {
-			case SIGINT:
-			case SIGTERM:
-				kill_percpu_threads(ncpus);
-				close_app_files();
-				exit(0);
-		}
-	}
+    printf("relay-read-file exiting\n");
+    kill_percpu_threads(ncpus);
+    close_app_files();
+  }
+  return 0;
 }
 
-
-void get_curr_time(long *sec, long *nsec) {
-	struct timeval curr_time;
-	gettimeofday(&curr_time, NULL);
-	*sec = curr_time.tv_sec;
-	*nsec = curr_time.tv_usec; //granuality is microsec
-	return;
-}
-
-size_t get_file_size(const char* filename) {
+size_t get_fd_size(int fd) {
   struct stat st;
-  if(stat(filename, &st) != 0) {
+  if(fstat(fd, &st) != 0) {
     return 0;
   }
   return st.st_size;   
+}
+
+inline ssize_t chk_write(int fd, const void *buf, size_t count) {
+  int n = write(fd, buf, count);
+  if (n < 0) {
+    perror("ERROR writing to file");
+    exit(1);
+  }
+  return n;
 }
 
 /**
@@ -150,59 +142,22 @@ size_t get_file_size(const char* filename) {
  */
 static void *reader_thread(void *data)
 {
-	int hostfd = -1, n = 0; 
+	int hostfd = -1;
   char filename[50];
   int dump_ctr = 1;
-  struct sockaddr_in serv_addr;
-  struct hostent *server;
-	FILE *fp;
-	char output[10];
-	pid_t rsyslogd_pid;
+	char buf[READ_BUF_LEN + 1];
+  char* newline;
+	int rc, cpu = (int)(long)data;
+	struct pollfd pollfd;
+  size_t fsize, slen;
 
-	/*get the pid of rsyslogd*/
-	fp = popen("pgrep -f rsyslogd", "r");
-	if (fp == NULL) {
-		printf("Failed to run command\n" );
-		exit(1);
-	}
-	/* Read the output a line at a time - output it. */
-	while (fgets(output, sizeof(output)-1, fp) != NULL) {
-		rsyslogd_pid = atoi(output);	
-		break;
-	}
-	/* close */
-	pclose(fp);
-
-
-	pid_t pid = getpgrp();
-	printf("pgrp in reader_thread: %d\n", pid);
-	int ret = remove(control_file);
-	if(ret < 0) {
-		printf("control file delete fails. first time?\n");
-	}
-	int fd = open(control_file, O_RDWR|O_CREAT, 0666);
-	if(fd < 0) {
-		printf("control_file open fails %d\n",fd);
-	}
-	else {
-		lseek(fd, 0, SEEK_SET);
-		write(fd, (char*)&pid, sizeof(pid_t));
-		write(fd, (char*)&rsyslogd_pid, sizeof(pid_t));
-		close(fd);
-	}
+  printf("reader thread starting for cpu %i\n", cpu);
 
 	// use a file
   sprintf(filename, "/data/ahg.dump.%d", dump_ctr);
 	hostfd = open(filename, O_RDWR|O_CREAT, 0777);
 
-
-	char buf[40960 + 1];
-	int rc, cpu = (int)(long)data;
-	unsigned seq;
-	struct pollfd pollfd;
-
 	do {
-
 		pollfd.fd = relay_file[cpu];
 		pollfd.events = POLLIN;
 		rc = poll(&pollfd, 1, 1);
@@ -213,7 +168,7 @@ static void *reader_thread(void *data)
 			}
 			printf("poll warning: %s\n",strerror(errno));
 		}
-		rc = read(relay_file[cpu], buf, 40960);
+		rc = read(relay_file[cpu], buf, READ_BUF_LEN);
 		if (!rc)
 			continue;
 		if (rc < 0) {
@@ -223,32 +178,31 @@ static void *reader_thread(void *data)
 			break;
 		}
 
-//		printf("rc = %d\n", rc);
+    //printf("rc = %d\n", rc);
 
-		//Theia: we send the traces off the host
-		n = write(hostfd, buf, rc);
-		if (n < 0) {
-			perror("ERROR writing to socket");
-			exit(1);
-		}
-
-		//		sleep(1);
-    if(get_file_size(filename) >= 1000000000 /*1GB*/) {
-      //Adding end of file tag.
-      n = write(hostfd, eof_tag, strlen(eof_tag));
-      if (n != strlen(eof_tag)) {
-          perror("ERROR writing eof_tag.");
-          exit(1);
-      }
-         
+    fsize = get_fd_size(hostfd);
+    if (fsize + rc < ROTATE_SIZE) {
+      // normal write
+      chk_write(hostfd, buf, rc);
+    } else {
+      // split write on last newline
+      // then write first half
+      // then close, open next file
+      // then write second half
+      newline = memrchr(buf, '\n', rc);
+      slen = (newline - buf) + 1;
+      chk_write(hostfd, buf, slen);
+      chk_write(hostfd, eof_tag, strlen(eof_tag));
       close(hostfd);
       dump_ctr ++;
       sprintf(filename, "/data/ahg.dump.%d", dump_ctr);
       hostfd = open(filename, O_RDWR|O_CREAT, 0777);
+      chk_write(hostfd, newline + 1, rc - slen);
     }
-
-		
 	} while (1);
+  printf("reader thread exiting for cpu %i\n", cpu);
+  pthread_exit(NULL);
+  return NULL;
 }
 
 /**
@@ -260,8 +214,7 @@ static int create_percpu_threads(void)
 
 	for (i = 0; i < ncpus; i++) {
 		/* create a thread for each per-cpu buffer */
-		if (pthread_create(&reader[i], NULL, reader_thread,
-					(void *)(long)i) < 0) {
+		if (pthread_create(&reader[i], NULL, reader_thread, (void *)(long)i) < 0) {
 			printf("Couldn't create thread\n");
 			return -1;
 		}
