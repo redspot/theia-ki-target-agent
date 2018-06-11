@@ -60,6 +60,7 @@
 #include <linux/msg.h>
 #include "../ipc/util.h" // For shm utility functions
 #include <asm/user_64.h>
+#include <linux/slab.h>
 
 #include <linux/stacktrace.h>
 #include <asm/stacktrace.h>
@@ -166,7 +167,17 @@ bool startsWith(const char *pre, const char *str)
 static DEFINE_MUTEX(relay_write_lock);
 
 // used as temporary buffer space for sprintf(), d_path(), etc.
-static kmem_cache_t theia_buffers;
+static struct kmem_cache* theia_buffers;
+#define THEIA_KMEM_SIZE PAGE_SIZE
+
+//if defined, then calls to d_path() will use a stack allocated
+//buffer. otherwise, d_path() will use a buffer from kmem_cache
+#define DPATH_USE_STACK
+#ifdef DPATH_USE_STACK
+#define THEIA_DPATH_LEN MAX_LOGDIR_STRLEN+1
+#else
+#define THEIA_DPATH_LEN PAGE_SIZE
+#endif
 
 void theia_file_write(char *buf, size_t size) {
   unsigned long flags;
@@ -174,8 +185,10 @@ void theia_file_write(char *buf, size_t size) {
   DEFINE_WAIT(wait);
   // wait no more than about 120 seconds
   int __ret = HZ*120;
-  if(size <= 0)
-    printk("strange relay_write size %zu\n", size);
+  if(size == 0) {
+    pr_warn("theia_file_write() called with size 0\n");
+    return;
+  }
   mutex_lock(&relay_write_lock);
   local_irq_save(flags);
   if (theia_active_path) {
@@ -272,7 +285,6 @@ EXPORT_SYMBOL(theia_replay_register_data);
 // If defined, use file cache for reads of read-only files
 #define CACHE_READS
 
-
 /* These #defines can be found in replay_config.h */
 int verify_debug = 0;
 #ifdef VERIFY_COMPRESSED_DATA
@@ -343,33 +355,12 @@ unsigned int replay_pause_tool = 0;
 #define new_syscall_exit(sysnum, retparam) _new_syscall_exit(sysnum, retparam, NULL)
 #define ahg_new_syscall_exit(sysnum, retparam, ahgparam) _new_syscall_exit(sysnum, retparam, ahgparam)
 
-// let's reuse vmalloced buffer for storing filepath and more
-char *theia_buf1   = NULL;
-char *theia_buf2   = NULL;
-char *theia_retbuf = NULL;
-#define THEIA_BUF1_LEN PAGE_SIZE
-#define THEIA_BUF2_LEN PAGE_SIZE
-#define THEIA_RETBUF_LEN PAGE_SIZE
-
 //Yang: inode etc for replay and pin
 char rec_uuid_str[THEIA_UUID_LEN+1];
 char repl_uuid_str[THEIA_UUID_LEN+1] = "initial";
 
 bool theia_check_channel(void) {
 	mm_segment_t old_fs;                                                
-
-	if (!theia_buf1) {
-    theia_buf1   = vmalloc(THEIA_BUF1_LEN);
-    memset(theia_buf1, 0x0, THEIA_BUF1_LEN);
-  }
-	if (!theia_buf2) {
-    theia_buf2   = vmalloc(THEIA_BUF2_LEN);
-    memset(theia_buf2, 0x0, THEIA_BUF2_LEN);
-  }
-	if (!theia_retbuf) {
-    theia_retbuf = vmalloc(THEIA_RETBUF_LEN);
-    memset(theia_retbuf, 0x0, THEIA_RETBUF_LEN);
-  }
 
 	if(theia_logging_toggle == 0) {
 		return false;
@@ -476,8 +467,6 @@ bool file2uuid(struct file* file, char *uuid_str, int fd) {
 			}
 		}
 		else { /* pipe, anon_inode, or others */
-//			fpath = get_file_fullpath(file, theia_retbuf, 4096); /* it returns detailed path */
-//			strncpy(uuid_str, fpath, THEIA_UUID_LEN);
 //Yang: get offset
 #ifdef THEIA_PROVIDE_OFFSET
       loff_t offset = vfs_llseek(file, 0, SEEK_CUR);
@@ -556,16 +545,22 @@ bool fd2uuid(int fd, char *uuid_str) {
 // dump aux data: callstack, ids, ...
 void theia_dump_auxdata() {
   char ids[50];
-  get_ids(ids);
-  get_user_callstack(theia_retbuf, 4096);
+  char* callstack;
+  char* auxdata;
+  int size = 0;
 
   if(theia_logging_toggle) {
-    int size;
-
-    size = snprintf(theia_buf2, THEIA_BUF2_LEN, "startahg|700|%d|%s|%s|endahg\n", current->pid, theia_retbuf, ids);
-    if(theia_buf2[0] != 's' || theia_buf2[1] != 't')
-      printk("strange auxdata \n");
-    theia_file_write(theia_buf2, size);
+    get_ids(ids);
+    callstack = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+    get_user_callstack(callstack, PAGE_SIZE);
+    auxdata = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+    size = sprintf(auxdata, "startahg|700|%d|%s|%s|endahg\n", current->pid, callstack, ids);
+    kmem_cache_free(theia_buffers, callstack);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(auxdata, size);
+    kmem_cache_free(theia_buffers, auxdata);
   }
 }
 
@@ -583,29 +578,42 @@ void theia_dump_str(char *str, int rc, int sysnum) {
 #endif
 
     long sec, nsec;
-    int size;
+    int size = 0;
+    char* buf;
     get_curr_time(&sec, &nsec);
 
-    /* str will be theia_buf1 */
-    size = sprintf(theia_buf2, "startahg|%d|%d|%li|%d|%s|%d|%ld|%ld|%u|endahg\n", \
+    buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+    size = sprintf(buf, "startahg|%d|%d|%li|%d|%s|%d|%ld|%ld|%u|endahg\n", \
         sysnum, current->pid, current->start_time.tv_sec, \
         rc, str, \
         current->tgid, sec, nsec, current->no_syscalls++);
-    theia_file_write(theia_buf2, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
+    kmem_cache_free(theia_buffers, buf);
   }
 }
 
 void theia_dump_ss(const char __user *str1, const char __user *str2, int rc, int sysnum) {
 	char *pcwd = NULL;
 	struct path path;
+  char* buf;
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char* pbuf;
+  pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
 	if (str1[0] == '/' && str2[0] == '/') {
-		sprintf(theia_buf1, "%s|%s", str1, str2);
+		sprintf(buf, "%s|%s", str1, str2);
 	}
 	else {
 		if (current->fs) {
 			get_fs_pwd(current->fs, &path);
-			pcwd = d_path(&path, theia_buf2, 4096);	
+			pcwd = d_path(&path, pbuf, THEIA_DPATH_LEN);
 			if (IS_ERR(pcwd))
 				pcwd = ".";
 		}
@@ -614,32 +622,44 @@ void theia_dump_ss(const char __user *str1, const char __user *str2, int rc, int
 		}
 
 		if (!pcwd) {
-			sprintf(theia_buf1, "%s|%s", str1, str2);
+			sprintf(buf, "%s|%s", str1, str2);
 		}
 		else if (str1[0] == '/') {
-			sprintf(theia_buf1, "%s|%s/%s", str1, pcwd, str2);
+			sprintf(buf, "%s|%s/%s", str1, pcwd, str2);
 		}
 		else if (str2[0] == '/') {
-			sprintf(theia_buf1, "%s/%s|%s", pcwd, str1, str2);
+			sprintf(buf, "%s/%s|%s", pcwd, str1, str2);
 		}
 		else {
-			sprintf(theia_buf1, "%s/%s|%s/%s", pcwd, str1, pcwd, str2);
+			sprintf(buf, "%s/%s|%s/%s", pcwd, str1, pcwd, str2);
 		}
 	}
-	theia_dump_str(theia_buf1, rc, sysnum);
+	theia_dump_str(buf, rc, sysnum);
+  kmem_cache_free(theia_buffers, buf);
+#ifndef DPATH_USE_STACK
+  kmem_cache_free(theia_buffers, pbuf);
+#endif
 }
 
 void theia_dump_sd(const char __user *str, int val, int rc, int sysnum) {
 	char *pcwd = NULL;
 	struct path path;
+  char* buf;
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char* pbuf;
+  pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
 	if (str[0] == '/') {
-		sprintf(theia_buf1, "%s|%d", str, val);
+		sprintf(buf, "%s|%d", str, val);
 	}
 	else {
 		if (current->fs) {
 			get_fs_pwd(current->fs, &path);
-			pcwd = d_path(&path, theia_buf2, 4096);	
+      pcwd = d_path(&path, pbuf, THEIA_DPATH_LEN);
 			if (IS_ERR(pcwd))
 				pcwd = ".";
 		}
@@ -647,23 +667,35 @@ void theia_dump_sd(const char __user *str, int val, int rc, int sysnum) {
 			pcwd = ".";
 		}
 
-		sprintf(theia_buf1, "%s/%s|%d", pcwd, str, val);
+		sprintf(buf, "%s/%s|%d", pcwd, str, val);
 	}
 
-	theia_dump_str(theia_buf1, rc, sysnum);
+	theia_dump_str(buf, rc, sysnum);
+  kmem_cache_free(theia_buffers, buf);
+#ifndef DPATH_USE_STACK
+  kmem_cache_free(theia_buffers, pbuf);
+#endif
 }
 
 void theia_dump_sdd(const char __user *str, int val1, int val2, int rc, int sysnum) {
 	char *pcwd = NULL;
 	struct path path;
+  char* buf;
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char* pbuf;
+  pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
 	if (str[0] == '/') {
-		sprintf(theia_buf1, "%s|%d|%d", str, val1, val2);
+		sprintf(buf, "%s|%d|%d", str, val1, val2);
 	}
 	else {
 		if (current->fs) {
 			get_fs_pwd(current->fs, &path);
-			pcwd = d_path(&path, theia_buf2, 4096);	
+      pcwd = d_path(&path, pbuf, THEIA_DPATH_LEN);
 			if (IS_ERR(pcwd))
 				pcwd = ".";
 		}
@@ -671,23 +703,33 @@ void theia_dump_sdd(const char __user *str, int val1, int val2, int rc, int sysn
 			pcwd = ".";
 		}
 
-		sprintf(theia_buf1, "%s/%s|%d|%d", pcwd, str, val1, val2);
+		sprintf(buf, "%s/%s|%d|%d", pcwd, str, val1, val2);
 	}
 
-	theia_dump_str(theia_buf1, rc, sysnum);
+	theia_dump_str(buf, rc, sysnum);
+  kmem_cache_free(theia_buffers, buf);
+#ifndef DPATH_USE_STACK
+  kmem_cache_free(theia_buffers, pbuf);
+#endif
 }
 
 void theia_dump_at_sd(int dfd, const char __user *str, int val, int rc, int sysnum) {
 }
 
 void theia_dump_dd(long val1, long val2, int rc, int sysnum) {
-	sprintf(theia_buf1, "%li|%li", val1, val2);
-	theia_dump_str(theia_buf1, rc, sysnum);
+  char* buf;
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+	sprintf(buf, "%li|%li", val1, val2);
+	theia_dump_str(buf, rc, sysnum);
+  kmem_cache_free(theia_buffers, buf);
 }
 
 void theia_dump_ddd(int val1, int val2, int val3, int rc, int sysnum) {
-	sprintf(theia_buf1, "%d|%d|%d", val1, val2, val3);
-	theia_dump_str(theia_buf1, rc, sysnum);
+  char* buf;
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+	sprintf(buf, "%d|%d|%d", val1, val2, val3);
+	theia_dump_str(buf, rc, sysnum);
+  kmem_cache_free(theia_buffers, buf);
 }
 
 struct black_pid {
@@ -733,7 +775,7 @@ static int subbuf_start_handler(struct rchan_buf *buf,
   if (relay_buf_full(buf)) {
     if (!suspended) {
       suspended = 1;
-      printk("cpu %d buffer full!!!, dropped_count: %lu\n", smp_processor_id(), dropped_count);
+      printk("cpu %d buffer full, dropped_count: %lu\n", smp_processor_id(), dropped_count);
     }
     dropped_count++;
     return 0;
@@ -781,7 +823,6 @@ static void after_subbufs_consumed_handler(struct rchan *chan,
   if (theia_active_path) {
     if (chan->private_data && waitqueue_active(chan->private_data)) {
       pr_warn("theia:after_subbufs_consumed() # of bufs consumed = %lu\n", subbufs_consumed);
-      //wake_up_interruptible(chan->private_data);
       wake_up(chan->private_data);
     }
   }
@@ -792,9 +833,9 @@ static void after_subbufs_consumed_handler(struct rchan *chan,
  */
 static struct rchan_callbacks relay_callbacks =
 {
-	.subbuf_start = subbuf_start_handler,
-	.create_buf_file = create_buf_file_handler,
-	.remove_buf_file = remove_buf_file_handler,
+  .subbuf_start = subbuf_start_handler,
+  .create_buf_file = create_buf_file_handler,
+  .remove_buf_file = remove_buf_file_handler,
   .after_subbufs_consumed = after_subbufs_consumed_handler,
 };
 
@@ -3005,9 +3046,12 @@ void get_user_callstack(char* buffer, size_t bufsize) {
   struct mm_struct *mm = current->mm;
   struct vm_area_struct *vma;
   struct inode *inode;
-  char *ret_str = theia_buf2;
+  char *ret_str;
   char *ptr;
   char *path = NULL;
+  char* pbuf;
+  pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+  ret_str = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
   trace.nr_entries  = 0;
   trace.max_entries = NO_STACK_ENTRIES;
@@ -3024,7 +3068,7 @@ void get_user_callstack(char* buffer, size_t bufsize) {
 
     if (vma->vm_file) {
       inode = vma->vm_file->f_dentry->d_inode;
-      path = d_path(&(vma->vm_file->f_path), theia_buf2, 4096);
+      path = d_path(&(vma->vm_file->f_path), pbuf, THEIA_DPATH_LEN);
       if (IS_ERR(path)) {
         path = "anon_page";
       }
@@ -3042,7 +3086,8 @@ void get_user_callstack(char* buffer, size_t bufsize) {
     strcat(buffer, ";");
   }
 
-  return;
+  kmem_cache_free(theia_buffers, ret_str);
+  kmem_cache_free(theia_buffers, pbuf);
 }
 
 void 
@@ -8041,9 +8086,10 @@ void packahgv_process(struct task_struct *tsk) {
 					ids, tsk->real_parent->pid, 
 				  -1, fpath_b64, args_b64, is_user_remote, tsk->tgid, sec, nsec);
 		}
-    if(size <= 0)
-      DPRINT("[%d]strange size %d\n", __LINE__,size); 
-		theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
 		vfree(fpathbuf);
     vfree(fpath_b64);
     vfree(buf);
@@ -8058,7 +8104,7 @@ void packahgv_process_bin(struct task_struct *tsk) {
   struct process_pack_ahg *buf_ahg;
   char *fpathbuf;
   char *fpath;
-  int size;
+  int size = 0;
   void *buf;
   void *curr_ptr;
 
@@ -8114,7 +8160,10 @@ void packahgv_process_bin(struct task_struct *tsk) {
 		curr_ptr += buf_ahg->size_fpathbuf;
 		sprintf((char*)curr_ptr, "endahg");
 
-		theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
 
 		vfree(buf_ahg);
 		vfree(fpathbuf);
@@ -8147,7 +8196,7 @@ void recursive_packahgv_process() {
 
 void packahgv_read (struct read_ahgv *sys_args) {
   char uuid_str[THEIA_UUID_LEN+1];
-  int size;
+  int size = 0;
 
 	//Yang
 	if(theia_logging_toggle) {
@@ -8157,13 +8206,13 @@ if(strcmp(current->comm, "pthread-lock") == 0) {
   theia_dump_auxdata();
 }
 #endif
-		char *buf = theia_buf2;
+    char* buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
     if (fd2uuid(sys_args->fd, uuid_str) == false) {
       printk("fd2uuid returns false, pid %d, fd %d\n", current->pid, sys_args->fd);
-      return; /* no file, socket, ...? */
+      goto err; /* no file, socket, ...? */
     }
 
 		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n", 
@@ -8174,11 +8223,12 @@ if(strcmp(current->comm, "pthread-lock") == 0) {
 				0, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, 
 				sec, nsec);
 #endif
-    if(buf[0] != 's' || buf[1] != 't')
-      pr_warn("strange read \n");
-    if(size <= 0)
-      pr_warn("[%d]strange size %d\n", __LINE__,size);
-    theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
+err:
+    kmem_cache_free(theia_buffers, buf);
   }
 }
 
@@ -8735,22 +8785,22 @@ struct write_ahgv {
 
 void packahgv_write (struct write_ahgv *sys_args) {
   char uuid_str[THEIA_UUID_LEN+1];
-  int size;
+  int size = 0;
 
 	//Yang
 	if(theia_logging_toggle) {
 #ifdef THEIA_AUX_DATA
-//      too many events are generated and system hangs
-if(strcmp(current->comm, "pthread-lock") == 0) {
-  theia_dump_auxdata();
-}
+    //      too many events are generated and system hangs
+    if(strcmp(current->comm, "pthread-lock") == 0) {
+      theia_dump_auxdata();
+    }
 #endif
-		char *buf = theia_buf2;
+    char* buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
 		if (fd2uuid(sys_args->fd, uuid_str) == false)
-			return; /* no file, socket, ...? */
+			goto err; /* no file, socket, ...? */
 
 		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n", 
 				1, sys_args->pid, current->start_time.tv_sec, uuid_str, sys_args->bytes, current->tgid, sec, nsec, current->no_syscalls++);
@@ -8758,11 +8808,12 @@ if(strcmp(current->comm, "pthread-lock") == 0) {
 		size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
 				1, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, sec, nsec);
 #endif
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
-if(buf[0] != 's' || buf[1] != 't')
-  printk("strange write \n");
-		theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
+err:
+    kmem_cache_free(theia_buffers, buf);
 	}
 }
 
@@ -9148,12 +9199,18 @@ void packahgv_open (struct open_ahgv *sys_args) {
 
 	if(theia_logging_toggle) {
     char *buf;
+#ifndef THEIA_UUID
+#ifdef DPATH_USE_STACK
+    char pbuf[THEIA_DPATH_LEN];
+#else
+    char* pbuf;
+#endif
+#endif
 		long sec, nsec;
-		int size;
+		int size = 0;
 #ifdef THEIA_AUX_DATA
     theia_dump_auxdata();
 #endif
-
 		get_curr_time(&sec, &nsec);
 
 #ifdef THEIA_UUID
@@ -9166,16 +9223,21 @@ void packahgv_open (struct open_ahgv *sys_args) {
     buf_size = strlen(filename_b64)+256;
     buf = vmalloc(buf_size);
 
-
 		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%s|%d|%d|%d|%d|%ld|%ld|%u|endahg\n", 
 				2, sys_args->pid, current->start_time.tv_sec, uuid_str, filename_b64, sys_args->flags, sys_args->mode, 
 				sys_args->is_new, current->tgid, sec, nsec, current->no_syscalls++);
 
-		theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
     vfree(filename_b64);
     vfree(buf);
 #else
-    buf = theia_buf1;
+    buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#ifndef DPATH_USE_STACK
+    pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
 		if (sys_args->filename[0] == '/') {
 			size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%d|%d|%lx|%lx|%d|%d|%ld|%ld|endahg\n", 
 					2, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->filename, sys_args->flags, sys_args->mode,
@@ -9184,7 +9246,7 @@ void packahgv_open (struct open_ahgv *sys_args) {
 		else {
 			if (current->fs) {
 				get_fs_pwd(current->fs, &path);
-				pcwd = d_path(&path, theia_buf2, 4096);	
+        pcwd = d_path(&path, pbuf, THEIA_DPATH_LEN);
 				if (IS_ERR(pcwd))
 					pcwd = ".";
 			}
@@ -9196,11 +9258,15 @@ void packahgv_open (struct open_ahgv *sys_args) {
 					2, sys_args->pid, current->start_time.tv_sec, sys_args->fd, pcwd, sys_args->filename, sys_args->flags, sys_args->mode,
 					sys_args->dev, sys_args->ino, sys_args->is_new, current->tgid, sec, nsec);
 		}
-		theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
+    kmem_cache_free(theia_buffers, buf);
+#ifndef DPATH_USE_STACK
+    kmem_cache_free(theia_buffers, pbuf);
 #endif
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
-
+#endif
 	}
 }
 
@@ -9406,15 +9472,17 @@ struct close_ahgv {
 void packahgv_close (struct close_ahgv *sys_args) {
 	//Yang
 	if(theia_logging_toggle) {
-		char *buf = theia_buf2;
+    char* buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 		long sec, nsec;
-    int size;
+    int size = 0;
 		get_curr_time(&sec, &nsec);
 		size = sprintf(buf, "startahg|%d|%d|%ld|%d|%d|%ld|%ld|endahg\n", 3, 
-		sys_args->pid, current->start_time.tv_sec, sys_args->fd, current->tgid, sec, nsec);
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
-		theia_file_write(buf, size);
+        sys_args->pid, current->start_time.tv_sec, sys_args->fd, current->tgid, sec, nsec);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
+    kmem_cache_free(theia_buffers, buf);
 	}
 }
 
@@ -9544,6 +9612,14 @@ void theia_fullpath_ahgx(char __user * pathname, long rc, int sysnum)
 {
 	char *pcwd = NULL;
 	struct path path;
+  char* buf;
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char* pbuf;
+  pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
 	if (pathname[0] == '/') {
 		theia_dump_str(pathname, rc, sysnum);
@@ -9551,7 +9627,7 @@ void theia_fullpath_ahgx(char __user * pathname, long rc, int sysnum)
 	else {
 		if (current->fs) {
 			get_fs_pwd(current->fs, &path);
-			pcwd = d_path(&path, theia_buf2, 4096);	
+      pcwd = d_path(&path, pbuf, THEIA_DPATH_LEN);
 			if (IS_ERR(pcwd))
 				pcwd = ".";
 		}
@@ -9559,9 +9635,13 @@ void theia_fullpath_ahgx(char __user * pathname, long rc, int sysnum)
 			pcwd = ".";
 		}
 
-		sprintf(theia_buf1, "%s/%s", pcwd, pathname);
-		theia_dump_str(theia_buf1, rc, sysnum);
+		sprintf(buf, "%s/%s", pcwd, pathname);
+		theia_dump_str(buf, rc, sysnum);
 	}
+  kmem_cache_free(theia_buffers, buf);
+#ifndef DPATH_USE_STACK
+  kmem_cache_free(theia_buffers, pbuf);
+#endif
 }
 
 inline void theia_symlink_ahgx(const char __user * oldname, const char __user * newname, long rc, int sysnum)
@@ -9580,30 +9660,44 @@ void theia_unlink_ahgx(const char __user * filename) {
 	char uuid_str[THEIA_UUID_LEN+1];
 	struct file *file;
 	int fd, fput_needed;
-	char *fpath;
+	char *fpath = NULL;
+  char* buf;
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char* pbuf;
+  pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
 	fd = sys_open(filename, O_RDWR, 0);
 	if (fd >= 0) {
 		if (fd2uuid(fd, uuid_str) == false) {
 			sys_close(fd);
-			return;
+			goto err;
 		}
 
 		file = fget_light(fd, &fput_needed);
 		if (file) {
-			fpath = get_file_fullpath(file, theia_retbuf, 4096);
-			if (IS_ERR(fpath)) {
-				strncpy(theia_retbuf, filename, 4096);
-				fpath = theia_retbuf;
+			fpath = get_file_fullpath(file, pbuf, THEIA_DPATH_LEN);
+			if (IS_ERR_OR_NULL(fpath)) {
+				strncpy(pbuf, filename, THEIA_DPATH_LEN);
+        pbuf[THEIA_DPATH_LEN-1] = 0x0;
+				fpath = pbuf;
 			}
 
-			sprintf(theia_buf1, "%s|%s", uuid_str, fpath);
-			theia_dump_str(theia_buf1, 0, SYS_UNLINK);
+			sprintf(buf, "%s|%s", uuid_str, fpath);
+			theia_dump_str(buf, 0, SYS_UNLINK);
 			fput_light(file, fput_needed);
 		}
 
 		sys_close(fd);
 	}
+err:
+  kmem_cache_free(theia_buffers, buf);
+#ifndef DPATH_USE_STACK
+  kmem_cache_free(theia_buffers, pbuf);
+#endif
 }
 
 static asmlinkage long 
@@ -9645,29 +9739,43 @@ void theia_unlinkat_ahgx(int dfd, const char __user * filename, int flag) {
 	struct file *file;
 	int fd, fput_needed;
 	char *fpath;
+  char* buf;
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char* pbuf;
+  pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
 	fd = sys_openat(dfd, filename, O_RDWR, 0);
 	if (fd >= 0) {
 		if (fd2uuid(fd, uuid_str) == false) {
 			sys_close(fd);
-			return;
+			goto err;
 		}
 
 		file = fget_light(fd, &fput_needed);
 		if (file) {
-			fpath = get_file_fullpath(file, theia_retbuf, 4096);
-			if (IS_ERR(fpath)) {
-				strncpy(theia_retbuf, filename, 4096);
-				fpath = theia_retbuf;
+			fpath = get_file_fullpath(file, pbuf, THEIA_DPATH_LEN);
+      if (IS_ERR_OR_NULL(fpath)) {
+				strncpy(pbuf, filename, THEIA_DPATH_LEN);
+        pbuf[THEIA_DPATH_LEN-1] = 0x0;
+				fpath = pbuf;
 			}
 
-			sprintf(theia_buf1, "%s|%s|%d", uuid_str, fpath, flag);
-			theia_dump_str(theia_buf1, 0, SYS_UNLINKAT);
+			sprintf(buf, "%s|%s|%d", uuid_str, fpath, flag);
+			theia_dump_str(buf, 0, SYS_UNLINKAT);
 			fput_light(file, fput_needed);
 		}
 
 		sys_close(fd);
 	}
+err:
+  kmem_cache_free(theia_buffers, buf);
+#ifndef DPATH_USE_STACK
+  kmem_cache_free(theia_buffers, pbuf);
+#endif
 }
 
 static asmlinkage long 
@@ -9712,28 +9820,42 @@ void theia_openat_ahgx(int fd, const char __user * filename, int flag, int mode)
 	int fput_needed;
 	char *fpath;
   char* fpath_b64;
+  char* buf;
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char* pbuf;
+  pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
 	if (fd < 0) return; /* TODO */
 
 	if (fd2uuid(fd, uuid_str) == false)
-		return; /* TODO: report openat errors? */
+		goto err; /* TODO: report openat errors? */
 
 	file = fget_light(fd, &fput_needed);
 	if (file) {
-		fpath = get_file_fullpath(file, theia_retbuf, 4096);
-		if (IS_ERR(fpath)) {
-			strncpy(theia_retbuf, filename, 4096);
-			fpath = theia_retbuf;
-		}
+    fpath = get_file_fullpath(file, pbuf, THEIA_DPATH_LEN);
+    if (IS_ERR_OR_NULL(fpath)) {
+      strncpy(pbuf, filename, THEIA_DPATH_LEN);
+      pbuf[THEIA_DPATH_LEN-1] = 0x0;
+      fpath = pbuf;
+    }
 
 		fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
 		if (!fpath_b64) fpath_b64 = "";
 
-		sprintf(theia_buf1, "%s|%s|%d|%d", uuid_str, fpath_b64, flag, mode);
-		theia_dump_str(theia_buf1, fd, SYS_OPENAT);
+		sprintf(buf, "%s|%s|%d|%d", uuid_str, fpath_b64, flag, mode);
+		theia_dump_str(buf, fd, SYS_OPENAT);
 		fput_light(file, fput_needed);
     vfree(fpath_b64);
 	}
+err:
+  kmem_cache_free(theia_buffers, buf);
+#ifndef DPATH_USE_STACK
+  kmem_cache_free(theia_buffers, pbuf);
+#endif
 }
 
 static asmlinkage long 
@@ -9828,7 +9950,7 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
   char ids[50];
   int is_user_remote;
   char *fpath = NULL;
-  int size;
+  int size = 0;
   char uuid_str[THEIA_UUID_LEN+1];
   struct file *file;
   int fd, fput_needed;
@@ -9837,12 +9959,20 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
   char* args_b64;
   uint32_t buf_size;
   char* buf;
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char* pbuf;
+#endif
 	//Yang
 	if(theia_logging_toggle) {
 		long sec, nsec;
  #ifdef THEIA_AUX_DATA
     theia_dump_auxdata();
  #endif
+#ifndef DPATH_USE_STACK
+    pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
 		get_curr_time(&sec, &nsec);
 		get_ids(ids);
 		is_user_remote = is_remote(current);
@@ -9854,16 +9984,17 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 			if (fd2uuid(fd, uuid_str) == false) {
 				sys_close(fd);
 				set_fs(old_fs);                                                              
-				return;
+				goto err;
 			}
 
 			file = fget_light(fd, &fput_needed);
 			if (file) {
-				fpath = get_file_fullpath(file, theia_retbuf, 4096);
-				if (IS_ERR(fpath)) {
-					strncpy(theia_retbuf, sys_args->filename, 4096);
-					fpath = theia_retbuf;
-				}
+        fpath = get_file_fullpath(file, pbuf, THEIA_DPATH_LEN);
+        if (IS_ERR_OR_NULL(fpath)) {
+          strncpy(pbuf, sys_args->filename, THEIA_DPATH_LEN);
+          pbuf[THEIA_DPATH_LEN-1] = 0x0;
+          fpath = pbuf;
+        }
 				fput_light(file, fput_needed);
 			}
 			sys_close(fd);
@@ -9871,7 +10002,7 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 		else {
 			printk("XXX: %s %d\n", sys_args->filename, fd);
 			set_fs(old_fs);                                                              
-			return; /* TODO: error handling */
+			goto err; /* TODO: error handling */
 		}
 		set_fs(old_fs);                                                              
 
@@ -9887,13 +10018,18 @@ void packahgv_execve (struct execve_ahgv *sys_args) {
 		size = sprintf(buf, "startahg|%d|%d|%ld|%d|%s|%s|%s|%s|%d|%d|%ld|%ld|%u|endahg\n", 
 				59, sys_args->pid, current->start_time.tv_sec, sys_args->rc, 
 				uuid_str, fpath_b64, args_b64, ids, is_user_remote, current->tgid, sec, nsec, current->no_syscalls++);
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
-		theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
 
 		vfree(buf);
 		vfree(args_b64);
 		vfree(fpath_b64);
+err: ;
+#ifndef DPATH_USE_STACK
+    kmem_cache_free(theia_buffers, pbuf);
+#endif
 	}
 }
 
@@ -10502,18 +10638,31 @@ inline void theia_chmod_ahgx(char __user * filename, mode_t mode, long rc, int s
 	char *fpath;
 	char uuid_str[THEIA_UUID_LEN+1];
 	int error;
+  char* buf;
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char* pbuf;
+  pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
 	error = user_path(filename, &path);
 	if (error)
-		return;
+		goto err;
 	
-	fpath = d_path(&path, theia_buf2, 4096);
+  fpath = d_path(&path, pbuf, THEIA_DPATH_LEN);
 	if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
 		fpath = filename;
 
 	path2uuid(path, uuid_str);
-	sprintf(theia_buf1, "%s|%s|%d", uuid_str, fpath, mode);
-	theia_dump_str(theia_buf1, rc, sysnum);
+	sprintf(buf, "%s|%s|%d", uuid_str, fpath, mode);
+	theia_dump_str(buf, rc, sysnum);
+err:
+  kmem_cache_free(theia_buffers, buf);
+#ifndef DPATH_USE_STACK
+  kmem_cache_free(theia_buffers, pbuf);
+#endif
 }
 
 inline void theia_fchmod_ahgx(unsigned int fd, mode_t mode, long rc, int sysnum)
@@ -10522,28 +10671,41 @@ inline void theia_fchmod_ahgx(unsigned int fd, mode_t mode, long rc, int sysnum)
 	char uuid_str[THEIA_UUID_LEN+1];
 	char *fpath;
 	int fput_needed;
+  char* buf;
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char* pbuf;
+  pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
 	file = fget_light(fd, &fput_needed);
 	if (!file) {
 		//XXX(joey): Call fput_light if call fails?
-		return;
+		goto err;
 	}
 
-	fpath = get_file_fullpath(file, theia_retbuf, 4096);
+  fpath = get_file_fullpath(file, pbuf, THEIA_DPATH_LEN);
 	if (IS_ERR(fpath)) {
 		fput_light(file, fput_needed);
-		return;
+		goto err;
 	}
 	
 	if(file2uuid(file, uuid_str, fd) == false) {
 		fput_light(file, fput_needed);
-		return;
+		goto err;
 	}
 
 	fput_light(file, fput_needed);
 	
-	sprintf(theia_buf1, "%s|%s|%d", uuid_str, fpath, mode);
-	theia_dump_str(theia_buf1, rc, sysnum);
+	sprintf(buf, "%s|%s|%d", uuid_str, fpath, mode);
+	theia_dump_str(buf, rc, sysnum);
+err:
+  kmem_cache_free(theia_buffers, buf);
+#ifndef DPATH_USE_STACK
+  kmem_cache_free(theia_buffers, pbuf);
+#endif
 }
 
 inline void theia_fchmodat_ahgx(int dfd, char __user * filename, int mode, 
@@ -10554,10 +10716,18 @@ inline void theia_fchmodat_ahgx(int dfd, char __user * filename, int mode,
 	int error;
 	char uuid_str[THEIA_UUID_LEN+1];
 	unsigned int lookup_flags = LOOKUP_FOLLOW;
+  char* buf;
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char* pbuf;
+  pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
 	error = user_path_at(dfd, filename, lookup_flags, &path);
 	if (!error) {
-		fpath = d_path(&path, theia_buf2, 4096);
+    fpath = d_path(&path, pbuf, THEIA_DPATH_LEN);
 		if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
 			fpath = filename;
 		else {
@@ -10566,9 +10736,9 @@ inline void theia_fchmodat_ahgx(int dfd, char __user * filename, int mode,
 	} else {
 		error = user_path(filename, &path);
 		if (error)
-			return;
+			goto err;
 
-		fpath = d_path(&path, theia_buf2, 4096);
+    fpath = d_path(&path, pbuf, THEIA_DPATH_LEN);
 		if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
 			fpath = filename;
 		else {
@@ -10577,11 +10747,16 @@ inline void theia_fchmodat_ahgx(int dfd, char __user * filename, int mode,
 	}
 
 	if (fpath == NULL)
-		return;
+		goto err;
 	
 	path2uuid(path, uuid_str);
-	sprintf(theia_buf1, "%s|%s|%d", uuid_str, fpath, mode);
-	theia_dump_str(theia_buf1, rc, sysnum);
+	sprintf(buf, "%s|%s|%d", uuid_str, fpath, mode);
+	theia_dump_str(buf, rc, sysnum);
+err:
+  kmem_cache_free(theia_buffers, buf);
+#ifndef DPATH_USE_STACK
+  kmem_cache_free(theia_buffers, pbuf);
+#endif
 }
 
 inline void theia_fchown_ahgx(unsigned int fd, uid_t user, gid_t group, long rc, int sysnum)
@@ -10591,29 +10766,42 @@ inline void theia_fchown_ahgx(unsigned int fd, uid_t user, gid_t group, long rc,
 	char *fpath;
 	int fput_needed;
 	umode_t mode;
+  char* buf;
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char* pbuf;
+  pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
 	file = fget_light(fd, &fput_needed);
 	if (!file) {
 		//XXX(joey): Call fput_light if call fails?
-		return;
+		goto err;
 	}
 
-	fpath = get_file_fullpath(file, theia_retbuf, 4096);
+  fpath = get_file_fullpath(file, pbuf, THEIA_DPATH_LEN);
 	if (IS_ERR(fpath)) {
 		fput_light(file, fput_needed);
-		return;
+		goto err;
 	}
 	
 	if(file2uuid(file, uuid_str, fd) == false) {
 		fput_light(file, fput_needed);
-		return;
+		goto err;
 	}
 
 	mode = file->f_path.dentry->d_inode->i_mode;
 	fput_light(file, fput_needed);
 
-	sprintf(theia_buf1, "%s|%s|%u|%d/%d", uuid_str, fpath, mode, user, group);
-	theia_dump_str(theia_buf1, rc, sysnum);
+	sprintf(buf, "%s|%s|%u|%d/%d", uuid_str, fpath, mode, user, group);
+	theia_dump_str(buf, rc, sysnum);
+err:
+  kmem_cache_free(theia_buffers, buf);
+#ifndef DPATH_USE_STACK
+  kmem_cache_free(theia_buffers, pbuf);
+#endif
 }
 
 inline void theia_lchown_ahgx(char __user * filename, uid_t user, gid_t group, 
@@ -10624,19 +10812,32 @@ inline void theia_lchown_ahgx(char __user * filename, uid_t user, gid_t group,
 	char *fpath;
 	char uuid_str[THEIA_UUID_LEN+1];
 	int error;
+  char* buf;
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char* pbuf;
+  pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
 	error = user_lpath(filename, &path);
 	if (error)
-		return;
+		goto err;
 
 	mode = path.dentry->d_inode->i_mode;
-	fpath = d_path(&path, theia_buf2, 4096);
+  fpath = d_path(&path, pbuf, THEIA_DPATH_LEN);
 	if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
 		fpath = filename;
 	
 	path2uuid(path, uuid_str);
-	sprintf(theia_buf1, "%s|%s|%u|%d/%d", uuid_str, fpath, mode, user, group);
-	theia_dump_str(theia_buf1, rc, sysnum);
+	sprintf(buf, "%s|%s|%u|%d/%d", uuid_str, fpath, mode, user, group);
+	theia_dump_str(buf, rc, sysnum);
+err:
+  kmem_cache_free(theia_buffers, buf);
+#ifndef DPATH_USE_STACK
+  kmem_cache_free(theia_buffers, pbuf);
+#endif
 }
 
 inline void theia_chown_ahgx(char __user * filename, uid_t user, 
@@ -10647,19 +10848,32 @@ inline void theia_chown_ahgx(char __user * filename, uid_t user,
 	char *fpath;
 	char uuid_str[THEIA_UUID_LEN+1];
 	int error;
+  char* buf;
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char* pbuf;
+  pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
 	error = user_path(filename, &path);
 	if (error)
-		return;
+		goto err;
 	
-	fpath = d_path(&path, theia_buf2, 4096);
+  fpath = d_path(&path, pbuf, THEIA_DPATH_LEN);
 	if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
 		fpath = filename;
 
 	mode = path.dentry->d_inode->i_mode;
 	path2uuid(path, uuid_str);
-	sprintf(theia_buf1, "%s|%s|%u|%d/%d", uuid_str, fpath, mode, user, group);
-	theia_dump_str(theia_buf1, rc, sysnum);
+	sprintf(buf, "%s|%s|%u|%d/%d", uuid_str, fpath, mode, user, group);
+	theia_dump_str(buf, rc, sysnum);
+err:
+  kmem_cache_free(theia_buffers, buf);
+#ifndef DPATH_USE_STACK
+  kmem_cache_free(theia_buffers, pbuf);
+#endif
 }
 
 
@@ -10672,33 +10886,45 @@ inline void theia_fchownat_ahgx(int dfd, char __user * filename, uid_t user,
 	umode_t mode;
 	struct path path;
 	char uuid_str[THEIA_UUID_LEN+1];
+  char* buf;
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char* pbuf;
+  pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
 	res = user_path_at(dfd, filename, LOOKUP_FOLLOW, &path);
 	if (res == 0) {
-		fpath = d_path(&path, theia_buf2, 4096);
+    fpath = d_path(&path, pbuf, THEIA_DPATH_LEN);
 		if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
 			fpath = filename;
 
 		path2uuid(path, uuid_str);
 		mode = path.dentry->d_inode->i_mode;
-		sprintf(theia_buf1, "%s|%s|%u|%d/%d", uuid_str, fpath, mode, user, group);
-		theia_dump_str(theia_buf1, rc, sysnum);
+		sprintf(buf, "%s|%s|%u|%d/%d", uuid_str, fpath, mode, user, group);
+		theia_dump_str(buf, rc, sysnum);
 	} else {
 		if (current->fs) {
 			get_fs_pwd(current->fs, &path);
-			fpath = d_path(&path, theia_buf2, 4096);	
+      fpath = d_path(&path, pbuf, THEIA_DPATH_LEN);
 			if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
 				fpath = filename;
 
 			path2uuid(path, uuid_str);
 			mode = path.dentry->d_inode->i_mode;
-			sprintf(theia_buf1, "%s|%s||%u|%d/%d", uuid_str, fpath, mode, user, group);
-			theia_dump_str(theia_buf1, rc, sysnum);
+			sprintf(buf, "%s|%s||%u|%d/%d", uuid_str, fpath, mode, user, group);
+			theia_dump_str(buf, rc, sysnum);
 		}
 		else {
 			printk("[fchownat]: dfd & current->fs invalid.\n");
 		}
 	}
+  kmem_cache_free(theia_buffers, buf);
+#ifndef DPATH_USE_STACK
+  kmem_cache_free(theia_buffers, pbuf);
+#endif
 }
 
 inline void theia_lseek_ahgx(unsigned int fd, off_t offset, unsigned int origin, long rc, int sysnum)
@@ -10739,72 +10965,85 @@ struct mount_ahgv {
 
 
 void packahgv_mount (struct mount_ahgv *sys_args) {
-	char uuid_str[THEIA_UUID_LEN+1];
-	struct file *file;
-	int fd, fput_needed;
-	char *fpath = NULL;
-	mm_segment_t old_fs;	
+  char uuid_str[THEIA_UUID_LEN+1];
+  struct file *file;
+  int fd, fput_needed;
+  char *fpath = NULL;
+  mm_segment_t old_fs;
   char *fpath_b64;
   uint32_t buf_size;
   char* buf;
-	//Yang
-	if(theia_logging_toggle) {
-		long sec, nsec;
-		int size;
-#ifdef THEIA_AUX_DATA
-	theia_dump_auxdata();
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char* pbuf;
 #endif
-	old_fs = get_fs();
-	set_fs(KERNEL_DS);
-	fd = sys_open(sys_args->devname, O_RDONLY, 0);
-	if (fd >= 0) {
-		if (fd2uuid(fd, uuid_str) == false) {
-			sys_close(fd);
-			set_fs(old_fs);
-			return;
-		}
+  //Yang
+  if(theia_logging_toggle) {
+    long sec, nsec;
+    int size = 0;
+#ifdef THEIA_AUX_DATA
+    theia_dump_auxdata();
+#endif
+#ifndef DPATH_USE_STACK
+    pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
+    old_fs = get_fs();
+    set_fs(KERNEL_DS);
+    fd = sys_open(sys_args->devname, O_RDONLY, 0);
+    if (fd >= 0) {
+      if (fd2uuid(fd, uuid_str) == false) {
+        sys_close(fd);
+        set_fs(old_fs);
+        goto err;
+      }
 
-		if (uuid_str[0] == '\0')
-			strcpy(uuid_str, "I|0|0|0|0|-1/-1");
+      if (uuid_str[0] == '\0')
+        strcpy(uuid_str, "I|0|0|0|0|-1/-1");
 
-		file = fget_light(fd, &fput_needed);
-		if (file) {
-			fpath = get_file_fullpath(file, theia_retbuf, 4096);
-			if (IS_ERR(fpath)) {
-				strncpy(theia_retbuf, sys_args->devname, 4096);
-				fpath = theia_retbuf;
-			}
-			fput_light(file, fput_needed);
-		}
-		sys_close(fd);
-	}
-	else {
-		strcpy(uuid_str, "I|0|0|0|0|-1/-1"); /* imaginary file, e.g., debugfs */
-		strncpy(theia_retbuf, sys_args->devname, 4096);
-		fpath = theia_retbuf;
-	}
-	set_fs(old_fs);
+      file = fget_light(fd, &fput_needed);
+      if (file) {
+        fpath = get_file_fullpath(file, pbuf, THEIA_DPATH_LEN);
+        if (IS_ERR_OR_NULL(fpath)) {
+          strncpy(pbuf, sys_args->devname, THEIA_DPATH_LEN);
+          pbuf[THEIA_DPATH_LEN-1] = 0x0;
+          fpath = pbuf;
+        }
+        fput_light(file, fput_needed);
+      }
+      sys_close(fd);
+    }
+    else {
+      strcpy(uuid_str, "I|0|0|0|0|-1/-1"); /* imaginary file, e.g., debugfs */
+      strncpy(pbuf, sys_args->devname, THEIA_DPATH_LEN);
+      pbuf[THEIA_DPATH_LEN-1] = 0x0;
+      fpath = pbuf;
+    }
+    set_fs(old_fs);
 
+    get_curr_time(&sec, &nsec);
 
-		get_curr_time(&sec, &nsec);
+    fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+    if (!fpath_b64) fpath_b64 = "";
 
-		fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
-		if (!fpath_b64) fpath_b64 = "";
-    
     buf_size = strlen(fpath_b64)+256;
     buf = vmalloc(buf_size);
 
-		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%s|%s|%s|%lu|%d|%d|%ld|%ld|%u|endahg\n", 
-				165, sys_args->pid, current->start_time.tv_sec, uuid_str, fpath_b64, sys_args->dirname, sys_args->type, 
-				sys_args->flags, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
+    size = sprintf(buf, "startahg|%d|%d|%ld|%s|%s|%s|%s|%lu|%d|%d|%ld|%ld|%u|endahg\n",
+        165, sys_args->pid, current->start_time.tv_sec, uuid_str, fpath_b64, sys_args->dirname, sys_args->type,
+        sys_args->flags, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
 
-    if(size <= 0)
-      printk("[%d]strange size %d\n", __LINE__,size);
-
-    theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
 
     vfree(fpath_b64);
     vfree(buf);
+err: ;
+#ifndef DPATH_USE_STACK
+    kmem_cache_free(theia_buffers, pbuf);
+#endif
   }
 }
 
@@ -11002,33 +11241,35 @@ struct pipe_ahgv {
 
 void packahgv_pipe (struct pipe_ahgv *sys_args) {
   char uuid_str[THEIA_UUID_LEN+1];
-  int size;
-	//Yang
-	if(theia_logging_toggle) {
-		char *buf = theia_buf2;
-		long sec, nsec;
+  int size = 0;
+  //Yang
+  if(theia_logging_toggle) {
+    char* buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+    long sec, nsec;
 #ifdef THEIA_AUX_DATA
     theia_dump_auxdata();
 #endif
-		get_curr_time(&sec, &nsec);
-		/* TODO: publish both ends' data: dev1, dev2, ino1, ino2 */
+    get_curr_time(&sec, &nsec);
+    /* TODO: publish both ends' data: dev1, dev2, ino1, ino2 */
 #ifdef THEIA_UUID
-		if (fd2uuid(sys_args->pfd1, uuid_str) == false)
-			return; /* no pipe? */
+    if (fd2uuid(sys_args->pfd1, uuid_str) == false)
+      goto err; /* no pipe? */
 
-		size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%s|%d|%ld|%ld|%u|endahg\n", 
-				22, sys_args->pid, current->start_time.tv_sec, sys_args->retval, 
-				uuid_str, current->tgid, sec, nsec, current->no_syscalls++);
+    size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%s|%d|%ld|%ld|%u|endahg\n",
+        22, sys_args->pid, current->start_time.tv_sec, sys_args->retval,
+        uuid_str, current->tgid, sec, nsec, current->no_syscalls++);
 #else
-		size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%d|%d|%lx|%lx|%d|%ld|%ld|endahg\n", 
-				22, sys_args->pid, current->start_time.tv_sec, sys_args->retval, sys_args->pfd1, sys_args->pfd2, 
-				sys_args->dev1, sys_args->ino1, current->tgid, sec, nsec); // let's focus on pipe inode (dev,ino) itself
-//				sys_args->inode1, sys_args->inode2, current->tgid, sec, nsec);
+    size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%d|%d|%lx|%lx|%d|%ld|%ld|endahg\n",
+        22, sys_args->pid, current->start_time.tv_sec, sys_args->retval, sys_args->pfd1, sys_args->pfd2,
+        sys_args->dev1, sys_args->ino1, current->tgid, sec, nsec); // let's focus on pipe inode (dev,ino) itself
 #endif
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
-		theia_file_write(buf, size);
-	}
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
+err:
+    kmem_cache_free(theia_buffers, buf);
+  }
 }
 
 void theia_pipe_ahg(u_long retval, int pfd1, int pfd2) {
@@ -11310,10 +11551,10 @@ struct ioctl_ahgv {
 
 void packahgv_ioctl (struct ioctl_ahgv *sys_args) {
   char uuid_str[THEIA_UUID_LEN+1];
-  int size;
+  int size = 0;
 	//Yang
 	if(theia_logging_toggle) {
-		char *buf = theia_buf2;
+    char* buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 		long sec, nsec;
 #ifdef THEIA_AUX_DATA
     theia_dump_auxdata();
@@ -11321,7 +11562,7 @@ void packahgv_ioctl (struct ioctl_ahgv *sys_args) {
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
 		if (fd2uuid(sys_args->fd, uuid_str) == false)
-			return;
+			goto err;
 
 		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%d|%ld|%ld|%d|%ld|%ld|%u|endahg\n", 
 				16, sys_args->pid, current->start_time.tv_sec, 
@@ -11333,9 +11574,12 @@ void packahgv_ioctl (struct ioctl_ahgv *sys_args) {
 				sys_args->fd, sys_args->cmd, sys_args->arg, sys_args->rc, current->tgid, 
 				sec, nsec);
 #endif
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
-		theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
+err:
+    kmem_cache_free(theia_buffers, buf);
 	}
 }
 
@@ -11635,7 +11879,7 @@ replay_fcntl (unsigned int fd, unsigned int cmd, unsigned long arg)
 
 void theia_fcntl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long rc)
 {
-  int size;
+  int size = 0;
 	if (theia_check_channel() == false)
 		return;
 
@@ -11644,12 +11888,16 @@ void theia_fcntl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long 
 
 	/* packahgv */
 	if(theia_logging_toggle) {
-		char *buf = theia_buf2;
+    char* buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 		long sec, nsec;
 		get_curr_time(&sec, &nsec);
 		size = sprintf(buf, "startahg|%d|%d|%ld|%d|%d|%lu|%d|%ld|%ld|%u|endahg\n", 
 				72, current->pid, current->start_time.tv_sec, fd, cmd, arg, current->tgid, sec, nsec, current->no_syscalls++);
-		theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
+    kmem_cache_free(theia_buffers, buf);
 	}
 }
 
@@ -12110,11 +12358,11 @@ struct munmap_ahgv {
 };
 
 void packahgv_munmap (struct munmap_ahgv *sys_args) {
-  int size;
+  int size = 0;
 
 	//Yang
 	if(theia_logging_toggle) {
-		char *buf = theia_buf2;
+    char* buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 		long sec, nsec;
 #ifdef THEIA_AUX_DATA
     theia_dump_auxdata();
@@ -12123,9 +12371,11 @@ void packahgv_munmap (struct munmap_ahgv *sys_args) {
 		size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%lx|%ld|%d|%ld|%ld|%u|endahg\n", 
 				11, sys_args->pid, current->start_time.tv_sec, sys_args->rc, 
 				sys_args->addr, sys_args->len, current->tgid, sec, nsec, current->no_syscalls++);
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
-		theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
+    kmem_cache_free(theia_buffers, buf);
 	}
 }
 
@@ -12571,38 +12821,40 @@ void packahgv_connect(struct connect_ahgv *sys_args) {
 
 	//Yang
 	if(theia_logging_toggle) {
-		char *buf = theia_buf2;
+    char* buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 		long sec, nsec;
+    buf[0] = 0x0;
 #ifdef THEIA_AUX_DATA
     theia_dump_auxdata();
 #endif
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
-			return; /* no file, socket, ...? */
+			goto err; /* no file, socket, ...? */
 		uuid_str[THEIA_UUID_LEN] = '\0';
 
-		size = snprintf(buf, THEIA_BUF2_LEN-1, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n", 
-			42, sys_args->pid, current->start_time.tv_sec, 
+		size = snprintf(buf, THEIA_KMEM_SIZE, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n",
+			42, sys_args->pid, current->start_time.tv_sec,
 			uuid_str, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
 #else
 		if(sys_args->sa_family == AF_LOCAL){
-			size = snprintf(buf, THEIA_BUF2_LEN-1, "startahg|%d|%d|%ld|%ld|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
-					42, sys_args->pid, current->start_time.tv_sec, 
+			size = snprintf(buf, THEIA_KMEM_SIZE, "startahg|%d|%d|%ld|%ld|%d|%s|%lu|%d|%ld|%ld|endahg\n",
+					42, sys_args->pid, current->start_time.tv_sec,
 					sys_args->rc, sys_args->sock_fd, sys_args->sun_path, sys_args->port, current->tgid, sec, nsec);
 		}
 		else {
-			size = snprintf(buf, THEIA_BUF2_LEN-1, "startahg|%d|%d|%ld|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n", 
-					42, sys_args->pid, current->start_time.tv_sec, 
+			size = snprintf(buf, THEIA_KMEM_SIZE, "startahg|%d|%d|%ld|%d|%d|%s|%lu|%d|%ld|%ld|endahg\n",
+					42, sys_args->pid, current->start_time.tv_sec,
 					sys_args->rc, sys_args->sock_fd, sys_args->ip, sys_args->port, current->tgid, sec, nsec);
 		}
 //		printk("[socketcall connect]: %s", buf);
 #endif
-    buf[THEIA_BUF2_LEN-1] = '\0';
-    if(size <= 0)
-      printk("[%d]strange size %d\n", __LINE__,size);
-    else
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
 		  theia_file_write(buf, size);
+err:
+    kmem_cache_free(theia_buffers, buf);
 	}
 }
 
@@ -12621,7 +12873,7 @@ void packahgv_accept(struct accept_ahgv *sys_args) {
   char uuid_str[THEIA_UUID_LEN+1];
 	//Yang
 	if(theia_logging_toggle) {
-		char *buf = theia_buf2;
+    char* buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 		long sec, nsec;
 #ifdef THEIA_AUX_DATA
     theia_dump_auxdata();
@@ -12629,7 +12881,7 @@ void packahgv_accept(struct accept_ahgv *sys_args) {
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
-			return; /* no file, socket, ...? */
+			goto err; /* no file, socket, ...? */
 
 		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n", 
 			43, sys_args->pid, current->start_time.tv_sec, 
@@ -12651,9 +12903,12 @@ void packahgv_accept(struct accept_ahgv *sys_args) {
 				sys_args->rc, sys_args->sock_fd, ip, sys_args->port, current->tgid, sec, nsec);
 		}
 #endif
-		theia_file_write(buf, size);
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
+err:
+    kmem_cache_free(theia_buffers, buf);
 	}
 }
 
@@ -12674,7 +12929,7 @@ void packahgv_sendto(struct sendto_ahgv *sys_args) {
 
 	//Yang
 	if(theia_logging_toggle) {
-		char *buf = theia_buf2;
+    char* buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 		long sec, nsec;
 #ifdef THEIA_AUX_DATA
     theia_dump_auxdata();
@@ -12682,7 +12937,7 @@ void packahgv_sendto(struct sendto_ahgv *sys_args) {
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
-			return; /* no file, socket, ...? */
+			goto err; /* no file, socket, ...? */
 
 		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n",
 				44, sys_args->pid, current->start_time.tv_sec, 
@@ -12690,7 +12945,7 @@ void packahgv_sendto(struct sendto_ahgv *sys_args) {
 #else
 		if(sys_args->sa_family == AF_LOCAL){
 			if (strcmp(sys_args->sun_path, "LOCAL") == 0)
-				return;
+				goto err;
 			size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%s|%lu|%d|%ld|%ld|endahg\n", 
 					44, sys_args->pid, current->start_time.tv_sec, 
 					sys_args->sock_fd, sys_args->rc, sys_args->sun_path, 
@@ -12698,7 +12953,7 @@ void packahgv_sendto(struct sendto_ahgv *sys_args) {
 		}
 		else {
 			if (strcmp(sys_args->ip, "LOCAL") == 0 || strcmp(sys_args->ip, "NA") == 0)
-				return;
+				goto err;
 			size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%s|%lu|%d|%ld|%ld|endahg\n", 
 					44, sys_args->pid, current->start_time.tv_sec, 
 					sys_args->sock_fd, sys_args->rc, sys_args->ip, 
@@ -12706,9 +12961,12 @@ void packahgv_sendto(struct sendto_ahgv *sys_args) {
 
 		}
 #endif
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
-		theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
+err:
+    kmem_cache_free(theia_buffers, buf);
 	}
 }
 
@@ -12729,7 +12987,7 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args) {
 
 	//Yang
 	if(theia_logging_toggle) {
-		char *buf = theia_buf2;
+    char* buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 		long sec, nsec;
 #ifdef THEIA_AUX_DATA
     theia_dump_auxdata();
@@ -12737,7 +12995,7 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args) {
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
-			return; /* no file, socket, ...? */
+			goto err; /* no file, socket, ...? */
 
 		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n",
 				45, sys_args->pid, current->start_time.tv_sec, 
@@ -12745,7 +13003,7 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args) {
 #else
 		if(sys_args->sa_family == AF_LOCAL){
 			if (strcmp(sys_args->sun_path, "LOCAL") == 0)
-				return;
+				goto err;
 			size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%s|%lu|%d|%ld|%ld|endahg\n", 
 				45, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->sock_fd, sys_args->rc, sys_args->sun_path, 
@@ -12753,16 +13011,19 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args) {
 		}
 		else {
 			if (strcmp(sys_args->ip, "LOCAL") == 0 || strcmp(sys_args->ip, "NA") == 0)
-				return;
+				goto err;
 			size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%s|%lu|%d|%ld|%ld|endahg\n", 
 				45, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->sock_fd, sys_args->rc, sys_args->ip, 
 				sys_args->port, current->tgid, sec, nsec);
 		}
 #endif
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
-		theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
+err:
+    kmem_cache_free(theia_buffers, buf);
 	}
 }
 
@@ -12782,7 +13043,7 @@ void packahgv_sendmsg(struct sendmsg_ahgv *sys_args) {
 
 	//Yang
 	if(theia_logging_toggle) {
-		char *buf = theia_buf2;
+    char* buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 		long sec, nsec;
 #ifdef THEIA_AUX_DATA
     theia_dump_auxdata();
@@ -12790,38 +13051,23 @@ void packahgv_sendmsg(struct sendmsg_ahgv *sys_args) {
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
-			return; /* no file, socket, ...? */
+			goto err; /* no file, socket, ...? */
 
 		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n", 
 			46, sys_args->pid, current->start_time.tv_sec, 
 			uuid_str, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
-/*
-		if (sys_args->sa_family == AF_LOCAL) {
-			if (strcmp(sys_args->sun_path, "LOCAL") == 0)
-				return;	
-			size = sprintf(buf, "startahg|%d|%d|%ld|%s:%d|%ld|%d|%ld|%ld|endahg\n", 
-				46, sys_args->pid, current->start_time.tv_sec, 
-				sys_args->sun_path, sys_args->port, sys_args->rc, current->tgid, 
-				sec, nsec);
-		}
-		else {
-			if (strcmp(sys_args->ip, "LOCAL") == 0 || strcmp(sys_args->ip, "NA") == 0)
-				return;	
-			size = sprintf(buf, "startahg|%d|%d|%ld|%s:%d|%ld|%d|%ld|%ld|endahg\n", 
-				46, sys_args->pid, current->start_time.tv_sec, 
-				sys_args->ip, sys_args->port, sys_args->rc, current->tgid, 
-				sec, nsec);
-		}
-*/
 #else
 		size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
 				46, sys_args->pid, current->start_time.tv_sec, 
 				sys_args->sock_fd, sys_args->rc, current->tgid, 
 				sec, nsec);
 #endif
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
-		theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
+err:
+    kmem_cache_free(theia_buffers, buf);
 	}
 }
 
@@ -12841,7 +13087,7 @@ void packahgv_recvmsg(struct recvmsg_ahgv *sys_args) {
 
 	//Yang
 	if(theia_logging_toggle) {
-		char *buf = theia_buf2;
+    char* buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 		long sec, nsec;
 #ifdef THEIA_AUX_DATA
     theia_dump_auxdata();
@@ -12849,7 +13095,7 @@ void packahgv_recvmsg(struct recvmsg_ahgv *sys_args) {
 		get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
 		if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
-			return; /* no file, socket, ...? */
+			goto err; /* no file, socket, ...? */
 
 		size = sprintf(buf, "startahg|%d|%d|%lu|%s|%ld|%d|%ld|%ld|%u|endahg\n",
 				47, sys_args->pid, current->start_time.tv_sec, 
@@ -12860,9 +13106,12 @@ void packahgv_recvmsg(struct recvmsg_ahgv *sys_args) {
 			sys_args->sock_fd, sys_args->rc, current->tgid, 
 			sec, nsec);
 #endif
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
-		theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
+err:
+    kmem_cache_free(theia_buffers, buf);
 	}
 }
 
@@ -14555,10 +14804,10 @@ struct shmget_ahgv {
 
 void packahgv_shmget(struct shmget_ahgv *sys_args)
 {
-  int size;
+  int size = 0;
 
 	if(theia_logging_toggle) {
-		char *buf = theia_buf2;
+    char* buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 		long sec, nsec;
 #ifdef THEIA_AUX_DATA
     theia_dump_auxdata();
@@ -14568,9 +14817,11 @@ void packahgv_shmget(struct shmget_ahgv *sys_args)
 				29, SHMGET, sys_args->pid, current->start_time.tv_sec,
 				sys_args->rc, sys_args->key, sys_args->size, sys_args->shmflg,
 				current->tgid, sec, nsec, current->no_syscalls++);
-    if(size <= 0)
-      printk("[%d]strange size %d\n", __LINE__,size);
-    theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
+    kmem_cache_free(theia_buffers, buf);
 	} 
 }
 
@@ -14664,11 +14915,11 @@ struct shmat_ahgv {
 
 void packahgv_shmat(struct shmat_ahgv *sys_args)
 {
-		int size;
+		int size = 0;
 		char uuid_str[THEIA_UUID_LEN+1];
 
 	if(theia_logging_toggle) {
-		char *buf = theia_buf2;
+    char* buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 		long sec, nsec;
 		unsigned long shm_segsz = 0;
 #ifdef THEIA_AUX_DATA
@@ -14680,7 +14931,7 @@ void packahgv_shmat(struct shmat_ahgv *sys_args)
 
 #ifdef THEIA_UUID
 		if (file2uuid(sys_args->file, uuid_str, -1) == false)
-			return; /* no file, socket, ...? */
+			goto err; /* no file, socket, ...? */
 
 		size = sprintf(buf, "startahg|%d|%d|%d|%ld|%s|%lx|%d|%lu|%d|%lx|%lx|%d|%ld|%ld|%u|endahg\n",
 				30, SHMAT, sys_args->pid, current->start_time.tv_sec, uuid_str,
@@ -14692,9 +14943,12 @@ void packahgv_shmat(struct shmat_ahgv *sys_args)
 				sys_args->rc, sys_args->shmid, sys_args->shmaddr, sys_args->shmflg,
 				shm_segsz, sys_args->raddr, current->tgid, sec, nsec, current->no_syscalls++);
 #endif
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
-		theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
+err:
+    kmem_cache_free(theia_buffers, buf);
 	} 
 }
 
@@ -16021,7 +16275,7 @@ void packahgv_clone (struct clone_ahgv *sys_args) {
 
 	//Yang
 	if(theia_logging_toggle) {
-		char *buf = theia_buf2;
+    char* buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 		long sec, nsec;
 		char ids[50];
 #ifdef THEIA_AUX_DATA
@@ -16030,19 +16284,6 @@ void packahgv_clone (struct clone_ahgv *sys_args) {
 		get_ids(ids);
 		get_curr_time(&sec, &nsec);
 		tsk = pid_task(find_vpid(sys_args->new_pid), PIDTYPE_PID);	
-/*
-
-		if (sys_args->pid == sys_args->new_pid) {
-			printk("pid %d == new_pid %d!\n", sys_args->pid, sys_args->new_pid);
-			if (tsk) {
-				sys_args->pid = tsk->real_parent->pid;
-			}
-			else {
-				sys_args->pid = current->real_parent->pid;
-			}
-			printk("use ppid %d instead\n", sys_args->pid);
-		}
-*/
 
 		if(tsk) {
 			is_child_remote = is_remote(tsk);
@@ -16055,9 +16296,11 @@ void packahgv_clone (struct clone_ahgv *sys_args) {
 					56, sys_args->pid, current->start_time.tv_sec, ids, sys_args->new_pid, 
 					(long)-1, -1, current->tgid, sec, nsec, current->no_syscalls++);
 		}
-    if(size <= 0)
-      printk("[%d]strange size %d\n", __LINE__,size);
-    theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
+    kmem_cache_free(theia_buffers, buf);
 	}
 }
 
@@ -16156,11 +16399,11 @@ struct mprotect_ahgv {
 };
 
 void packahgv_mprotect (struct mprotect_ahgv *sys_args) {
-		int size; 
+  int size = 0;
 
 	//Yang
 	if(theia_logging_toggle) {
-		char *buf = theia_buf2;
+    char* buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 		long sec, nsec;
 #ifdef THEIA_AUX_DATA
     theia_dump_auxdata();
@@ -16171,9 +16414,11 @@ void packahgv_mprotect (struct mprotect_ahgv *sys_args) {
         10, sys_args->pid, current->start_time.tv_sec, 
         sys_args->retval, sys_args->address, sys_args->length, 
         sys_args->protection, current->tgid, sec, nsec, current->no_syscalls++);
-    if(size <= 0)
-      printk("[%d]strange size %d\n", __LINE__,size);
-    theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
+    kmem_cache_free(theia_buffers, buf);
   }
 }
 
@@ -16797,8 +17042,7 @@ void theia_readv_ahgx (unsigned long fd, const struct iovec __user *vec, unsigne
 		return; /* TODO: report openat errors? */
 
 	/* TODO: parse iovec */
-	sprintf(theia_buf1, "%s", uuid_str);
-	theia_dump_str(theia_buf1, rc, sysnum);
+	theia_dump_str(uuid_str, rc, sysnum);
 }
 
 static asmlinkage long 
@@ -16920,8 +17164,7 @@ void theia_writev_ahgx (unsigned long fd, const struct iovec __user *vec, unsign
 		return; /* TODO: report openat errors? */
 
 	/* TODO: parse iovec */
-	sprintf(theia_buf1, "%s", uuid_str);
-	theia_dump_str(theia_buf1, rc, sysnum);
+	theia_dump_str(uuid_str, rc, sysnum);
 }
 
 static asmlinkage long 
@@ -16949,8 +17192,7 @@ void theia_writev_ahgx (unsigned long fd, const struct iovec __user *vec, unsign
 		return; /* TODO: report openat errors? */
 
 	/* TODO: parse iovec */
-	sprintf(theia_buf1, "%s", uuid_str);
-	theia_dump_str(theia_buf1, rc, sysnum);
+	theia_dump_str(uuid_str, rc, sysnum);
 }
 
 static asmlinkage long 
@@ -17952,16 +18194,19 @@ replay_pwrite64(unsigned int fd, const char __user *buf, size_t count, loff_t po
 }
 
 #define SYS_PREAD64 17
-void theia_pread64_ahgx(unsigned int fd, const char __user *buf, size_t count, loff_t pos, long rc, int sysnum) {
+void theia_pread64_ahgx(unsigned int fd, const char __user *ubuf, size_t count, loff_t pos, long rc, int sysnum) {
 	char uuid_str[THEIA_UUID_LEN+1];
+  char* buf;
 
 	if (fd < 0) return; /* TODO */
 
 	if (fd2uuid(fd, uuid_str) == false)
 		return; /* TODO: report openat errors? */
 
-	sprintf(theia_buf1, "%s|%lu|%lli", uuid_str, count, pos);
-	theia_dump_str(theia_buf1, rc, sysnum);
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+	sprintf(buf, "%s|%lu|%lli", uuid_str, count, pos);
+	theia_dump_str(buf, rc, sysnum);
+  kmem_cache_free(theia_buffers, buf);
 }
 
 static asmlinkage long
@@ -17975,16 +18220,19 @@ theia_sys_pread64(unsigned int fd, char __user *buf, size_t count, loff_t pos)
 }
 
 #define SYS_PWRITE64 18
-void theia_pwrite64_ahgx(unsigned int fd, const char __user *buf, size_t count, loff_t pos, long rc, int sysnum) {
+void theia_pwrite64_ahgx(unsigned int fd, const char __user *ubuf, size_t count, loff_t pos, long rc, int sysnum) {
 	char uuid_str[THEIA_UUID_LEN+1];
+  char* buf;
 
 	if (fd < 0) return; /* TODO */
 
 	if (fd2uuid(fd, uuid_str) == false)
 		return; /* TODO: report openat errors? */
 
-	sprintf(theia_buf1, "%s|%lu|%lli", uuid_str, count, pos);
-	theia_dump_str(theia_buf1, rc, sysnum);
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+	sprintf(buf, "%s|%lu|%lli", uuid_str, count, pos);
+	theia_dump_str(buf, rc, sysnum);
+  kmem_cache_free(theia_buffers, buf);
 }
 
 static asmlinkage long
@@ -18115,29 +18363,42 @@ void theia_sendfile64_ahgx (int out_fd, int in_fd, loff_t __user * offset, size_
 	struct file *file;
 	int fput_needed;
 	char *fpath;
+  char* buf;
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char* pbuf;
+  pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
 	if (out_fd >= 0 && in_fd >= 0) {
-		if (!fd2uuid(out_fd, socket_uuid_str)) return;
-		if (!fd2uuid(in_fd, file_uuid_str)) return;
+		if (!fd2uuid(out_fd, socket_uuid_str)) goto err;
+		if (!fd2uuid(in_fd, file_uuid_str)) goto err;
 
 		get_user (location, offset);
 
 		file = fget_light(in_fd, &fput_needed);
 		if (file) {
-			fpath = get_file_fullpath(file, theia_retbuf, 4096);
-			if (IS_ERR(fpath)) {
-				theia_retbuf[0] = '\0';
-				fpath = theia_retbuf;
-			}
+      fpath = get_file_fullpath(file, pbuf, THEIA_DPATH_LEN);
+      if (IS_ERR_OR_NULL(fpath)) {
+        pbuf[0] = 0x0;
+        fpath = pbuf;
+      }
 			fput_light(file, fput_needed);
 		}
 		else {
-			theia_retbuf[0] = '\0';
-			fpath = theia_retbuf;
+      pbuf[0] = 0x0;
+      fpath = pbuf;
 		}
-		sprintf(theia_buf1, "%s|%s|%s|%lli|%lu", file_uuid_str, fpath, socket_uuid_str, location, count);
-		theia_dump_str(theia_buf1, rc, 40);
+		sprintf(buf, "%s|%s|%s|%lli|%lu", file_uuid_str, fpath, socket_uuid_str, location, count);
+		theia_dump_str(buf, rc, 40);
 	}
+err:
+  kmem_cache_free(theia_buffers, buf);
+#ifndef DPATH_USE_STACK
+  kmem_cache_free(theia_buffers, pbuf);
+#endif
 }
 
 static asmlinkage long 
@@ -18436,10 +18697,10 @@ struct mmap_ahgv {
 
 void packahgv_mmap (struct mmap_ahgv *sys_args) {
   char uuid_str[THEIA_UUID_LEN+1];
-  int size;
+  int size = 0;
 	//Yang
 	if(theia_logging_toggle) {
-		char *buf = theia_buf2;
+    char* buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 		long sec, nsec;
 #ifdef THEIA_AUX_DATA
     theia_dump_auxdata();
@@ -18464,9 +18725,11 @@ void packahgv_mmap (struct mmap_ahgv *sys_args) {
 				sys_args->fd, sys_args->address, sys_args->length, sys_args->prot_type,
 				sys_args->flag, sys_args->offset, current->tgid, sec, nsec, current->no_syscalls++);
 #endif
-if(size <= 0)
-  printk("[%d]strange size %d\n", __LINE__,size);
-		theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
+    kmem_cache_free(theia_buffers, buf);
 	}
 }
 
@@ -18504,10 +18767,10 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 	long rc;
 	struct mmap_pgoff_retvals* recbuf = NULL;
 
-//	char vm_file_path[PATH_MAX];
-	char *vm_file_path = theia_buf2;
+	char *vm_file_path = NULL;
 	char *path = NULL;
 	bool is_shmem = false;
+  vm_file_path = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 	memset(vm_file_path, '\0', PATH_MAX);
 	
 	rg_lock(current->record_thrd->rp_group);
@@ -18542,11 +18805,8 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 			//			sprintf(vm_file_path, "%s", vma->vm_file->f_dentry->d_iname);
 			
 			path = d_path(&(vma->vm_file->f_path), vm_file_path, PATH_MAX);
-			if (!IS_ERR(path)) {
-//				printk("d_path: %s\n", path);
-			}
-			else {
-				printk("d_path returned an error!\n");
+			if (IS_ERR(path)) {
+				pr_err("record_mmap_pgoff() d_path returned an error\n");
 				path = current->comm;
 			}
 
@@ -18556,6 +18816,8 @@ record_mmap_pgoff (unsigned long addr, unsigned long len, unsigned long prot, un
 				// shared memory under /dev/shm
 				is_shmem = true;
 			}
+      if (vm_file_path)
+        kmem_cache_free(theia_buffers, vm_file_path);
 		}
 		up_read(&mm->mmap_sem);
 	}
@@ -18703,20 +18965,21 @@ printk("base addr2: %p\n", node->pos);
 
 static asmlinkage long 
 theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long fd, unsigned long pgoff) {
-	long rc;
+  long rc;
 
-	rc = sys_mmap_pgoff(addr, len, prot, flags, fd, pgoff);	
+  rc = sys_mmap_pgoff(addr, len, prot, flags, fd, pgoff);
 
-        if (theia_logging_toggle == 0)
-		return rc;
+  if (theia_logging_toggle == 0)
+    return rc;
 
-	theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc, 0);
+  theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc, 0);
 
-        if ((flags & MAP_SHARED) == 0)
-		return rc;
+  if ((flags & MAP_SHARED) == 0)
+    return rc;
 
 #ifdef THEIA_TRACK_SHM_OPEN
-	char vm_file_path[PATH_MAX];
+	char *vm_file_path = NULL;
+  vm_file_path = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 	memset(vm_file_path, '\0', PATH_MAX);
 	if ((rc > 0 || rc < -1024) && ((long) fd) >= 0) {
 		struct vm_area_struct *vma;
@@ -18741,6 +19004,8 @@ theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsign
 			}
 		}
 		up_read(&mm->mmap_sem);
+    if (vm_file_path)
+      kmem_cache_free(theia_buffers, vm_file_path);
 	}
 
 	if (flags & MAP_SHARED && is_shmem) {
@@ -19059,7 +19324,7 @@ void packahgv_setuid (struct setuid_ahgv *sys_args) {
 
   //Yang
   if(theia_logging_toggle) {
-    char *buf = theia_buf2;
+    char* buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
     long sec, nsec;
 #ifdef THEIA_AUX_DATA
     theia_dump_auxdata();
@@ -19071,9 +19336,11 @@ void packahgv_setuid (struct setuid_ahgv *sys_args) {
         105, sys_args->pid, current->start_time.tv_sec, 
         sys_args->newuid, ids, sys_args->rc, is_newuser_remote, current->tgid, 
         sec, nsec, current->no_syscalls++);
-    if(size <= 0)
-      printk("[%d]strange size %d\n", __LINE__,size);
-    theia_file_write(buf, size);
+    if (size < 0) {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    } else
+      theia_file_write(buf, size);
+    kmem_cache_free(theia_buffers, buf);
   }
 }
 
@@ -20480,8 +20747,7 @@ void theia_preadv_ahgx (unsigned long fd, const struct iovec __user *vec,  unsig
 		return; /* TODO: report openat errors? */
 
 	/* TODO: parse iovec */
-	sprintf(theia_buf1, "%s", uuid_str);
-	theia_dump_str(theia_buf1, rc, sysnum);
+	theia_dump_str(uuid_str, rc, sysnum);
 }
 
 static asmlinkage long 
@@ -20537,8 +20803,7 @@ void theia_pwritev_ahgx (unsigned long fd, const struct iovec __user *vec,  unsi
 		return; /* TODO: report openat errors? */
 
 	/* TODO: parse iovec */
-	sprintf(theia_buf1, "%s", uuid_str);
-	theia_dump_str(theia_buf1, rc, sysnum);
+	theia_dump_str(uuid_str, rc, sysnum);
 }
 
 static asmlinkage long 
@@ -21982,7 +22247,7 @@ static int __init replay_init(void)
   init_waitqueue_head(&theia_relay_write_q);
 
   // init temp buffers
-  theia_buffers = kmem_cache_create("theia_buffers", PAGE_SIZE, 0, 0, NULL);
+  theia_buffers = kmem_cache_create("theia_buffers", THEIA_KMEM_SIZE, 0, 0, NULL);
 
   old_fs = get_fs();                                                
   set_fs(KERNEL_DS);
