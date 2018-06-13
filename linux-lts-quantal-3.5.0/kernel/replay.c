@@ -131,7 +131,7 @@ int debug_flag = 0;
 
 #define SUBBUF_SIZE 262144
 #define N_SUBBUFS 4
-bool theia_active_path = 0;
+bool theia_active_path = 1;
 EXPORT_SYMBOL(theia_active_path);
 
 //#define APP_DIR		"theia_logs"
