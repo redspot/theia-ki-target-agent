@@ -355,6 +355,8 @@ unsigned int replay_pause_tool = 0;
 char rec_uuid_str[THEIA_UUID_LEN+1];
 char repl_uuid_str[THEIA_UUID_LEN+1] = "initial";
 
+bool in_nullterm_list(char* target, char* list, size_t list_len);
+
 bool theia_check_channel(void) {
 	mm_segment_t old_fs;                                                
 
