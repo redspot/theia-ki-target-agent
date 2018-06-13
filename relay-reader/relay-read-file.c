@@ -85,6 +85,7 @@ static int open_app_files(void);
 static void close_app_files(void);
 static int kill_percpu_threads(int n);
 static int create_percpu_threads(void);
+ssize_t chk_write(int fd, const void *buf, size_t count);
 
 int main(int argc, char **argv)
 {
