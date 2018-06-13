@@ -225,12 +225,6 @@ void theia_file_write(char *buf, size_t size) {
   mutex_unlock(&relay_write_lock);
 }
 
-//Yang
-
-//const char* togglefile = "/home/yang/theia-on.conf";
-const char* control_file = "/tmp/theia-control.conf";
-//const char* toggle_record_file = "/home/yang/theia-record-on.conf";
-
 bool theia_logging_toggle = 0;
 EXPORT_SYMBOL(theia_logging_toggle);
 bool theia_recording_toggle = 0;
