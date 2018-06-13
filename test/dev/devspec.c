@@ -29,9 +29,14 @@ extern bool theia_logging_toggle;
 extern bool theia_recording_toggle;
 extern bool theia_cross_toggle;
 extern bool theia_active_path;
+extern unsigned long theia_active_path_timeout;
 extern struct theia_replay_register_data_type theia_replay_register_data;
 extern char theia_linker[];
 extern char theia_libpath[];
+extern char theia_proc_whitelist[];
+extern size_t theia_proc_whitelist_len;
+extern char theia_dirent_prefix[];
+extern size_t theia_dirent_prefix_len;
 extern struct rchan *theia_chan;
 
 static int majorNumber;
@@ -79,6 +84,7 @@ static ssize_t str_store(struct kobject *kobj,
     struct kobj_attribute *attr, const char *buf, size_t count)
 {
   char* str_attr;
+  bool log_str = true;
 
   /* MAX_LOGDIR_STRLEN is in include/linux/replay.h
    * and gets used as a generic buffer size in replay.c
@@ -92,6 +98,16 @@ static ssize_t str_store(struct kobject *kobj,
     str_attr = theia_linker;
   else if (strcmp(attr->attr.name, "theia_libpath") == 0)
     str_attr = theia_libpath;
+  else if (strcmp(attr->attr.name, "channel_filter") == 0) {
+    str_attr = theia_proc_whitelist;
+    theia_proc_whitelist_len = count;
+    log_str = false;
+  }
+  else if (strcmp(attr->attr.name, "dirent_prefix") == 0) {
+    str_attr = theia_dirent_prefix;
+    theia_dirent_prefix_len = count;
+    log_str = false;
+  }
   else
     return -EINVAL;
 
@@ -99,13 +115,26 @@ static ssize_t str_store(struct kobject *kobj,
   str_attr[count] = '\0';
   if (count && str_attr[count-1] == '\n')
     str_attr[count-1] = '\0';
-  pr_info("%s set to %s\n", attr->attr.name, str_attr);
+  if (log_str)
+    pr_info("%s set to %s\n", attr->attr.name, str_attr);
   return count;
 }
 static struct kobj_attribute linker_attribute =
 __ATTR(theia_linker, 0600, str_show, str_store);
 static struct kobj_attribute libpath_attribute =
 __ATTR(theia_libpath, 0600, str_show, str_store);
+static struct kobj_attribute proc_whitelist_attribute =
+{
+  .attr = {.name = "channel_filter", .mode = 0600},
+  .show = str_show,
+  .store = str_store,
+};
+static struct kobj_attribute dirent_prefix_attribute =
+{
+  .attr = {.name = "dirent_prefix", .mode = 0600},
+  .show = str_show,
+  .store = str_store,
+};
 
 static ssize_t flag_show(struct kobject *kobj, struct kobj_attribute *attr,
     char *buf)
@@ -128,6 +157,7 @@ static ssize_t flag_store(struct kobject *kobj, struct kobj_attribute *attr,
   unsigned int flag;
   int error;
 
+  //10 means base 10 number
   error = kstrtouint(buf, 10, &flag);
   if (error || flag > 1) return -EINVAL;
 
@@ -145,7 +175,6 @@ static ssize_t flag_store(struct kobject *kobj, struct kobj_attribute *attr,
   pr_info("%s set to %d\n", attr->attr.name, flag);
   return count;
 }
-
 static struct kobj_attribute logging_toggle_attribute =
 __ATTR(theia_logging_toggle, 0600, flag_show, flag_store);
 static struct kobj_attribute recording_toggle_attribute =
@@ -153,12 +182,46 @@ __ATTR(theia_recording_toggle, 0600, flag_show, flag_store);
 static struct kobj_attribute active_path_attribute =
 __ATTR(theia_active_path, 0600, flag_show, flag_store);
 
+static ssize_t ulong_show(struct kobject *kobj, struct kobj_attribute *attr,
+    char *buf)
+{
+  unsigned long val;
+
+  if (strcmp(attr->attr.name, "theia_active_path_timeout") == 0)
+    val = theia_active_path_timeout;
+  else
+    return -EINVAL;
+  return sprintf(buf, "%lu\n", val);
+}
+static ssize_t ulong_store(struct kobject *kobj, struct kobj_attribute *attr,
+    const char *buf, size_t count)
+{
+  unsigned long val;
+  int error;
+
+  //10 means base 10 number
+  error = kstrtoul(buf, 10, &val);
+  if (error) return -EINVAL;
+
+  if (strcmp(attr->attr.name, "theia_active_path_timeout") == 0) {
+    theia_active_path_timeout = val;
+  } else
+    return -EINVAL;
+  pr_info("%s set to %lu\n", attr->attr.name, val);
+  return count;
+}
+static struct kobj_attribute active_path_timeout_attribute =
+__ATTR(theia_active_path_timeout, 0600, ulong_show, ulong_store);
+
 static struct attribute *theia_attrs[] = {
   &linker_attribute.attr,
   &libpath_attribute.attr,
   &logging_toggle_attribute.attr,
   &recording_toggle_attribute.attr,
   &active_path_attribute.attr,
+  &active_path_timeout_attribute.attr,
+  &proc_whitelist_attribute.attr,
+  &dirent_prefix_attribute.attr,
   NULL,	/* need to NULL terminate the list of attributes */
 };
 static struct attribute_group theia_attr_group = {
@@ -411,14 +474,14 @@ int init_module(void)
   //allocate dynamic major number
   majorNumber = register_chrdev(0, DEVICE_NAME, &spec_psdev_fops);
   if(majorNumber<0) {
-    printk(KERN_ERR DEVICE_NAME": unable to get major dynamically\n");
+    pr_err(DEVICE_NAME": unable to get major dynamically\n");
     return majorNumber;
   }
   //register device class
   charClass = class_create(THIS_MODULE, CLASS_NAME);
   if (IS_ERR(charClass)) {
     unregister_chrdev(majorNumber, DEVICE_NAME);
-    printk(KERN_ALERT DEVICE_NAME": Failed to register device class\n");
+    pr_err(DEVICE_NAME": Failed to register device class\n");
     return PTR_ERR(charClass);
   }
   //register the device driver
@@ -426,7 +489,7 @@ int init_module(void)
   if (IS_ERR(charDevice)) {
     class_destroy(charClass);
     unregister_chrdev(majorNumber, DEVICE_NAME);
-    printk(KERN_ALERT DEVICE_NAME": Failed to create the device\n");
+    pr_err(DEVICE_NAME": Failed to create the device\n");
     return PTR_ERR(charDevice);
   }
 
@@ -448,13 +511,13 @@ int init_module(void)
   if (retval)
     kobject_put(theia_kobj);  // decrement the ref count
 
-  printk(KERN_INFO "User-level speculation module version 1.0, major=%d\n", majorNumber);
+  pr_info("User-level speculation module version 1.0, major=%d\n", majorNumber);
   return 0;
 }
 
 void cleanup_module(void)
 {
-  printk (KERN_INFO DEVICE_NAME": destroying device and class.\n");
+  pr_info(DEVICE_NAME": destroying device and class.\n");
   device_destroy(charClass, MKDEV(majorNumber, 0));
   class_unregister(charClass);
   class_destroy(charClass);
@@ -464,7 +527,7 @@ void cleanup_module(void)
     relay_close(theia_chan);
     theia_chan = NULL;
   }
-  printk (KERN_INFO "User-Level speculation module 1.0 exiting.\n");
+  pr_info("User-Level speculation module 1.0 exiting.\n");
 }
 
 #endif
