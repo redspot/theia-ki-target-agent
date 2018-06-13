@@ -133,6 +133,9 @@ int debug_flag = 0;
 #define N_SUBBUFS 4
 bool theia_active_path = 1;
 EXPORT_SYMBOL(theia_active_path);
+// stored as seconds
+unsigned int theia_active_path_timeout = 120;
+EXPORT_SYMBOL(theia_active_path_timeout);
 
 //#define APP_DIR		"theia_logs"
 struct rchan* theia_chan = NULL;
@@ -183,8 +186,7 @@ void theia_file_write(char *buf, size_t size) {
   unsigned long flags;
   void* reserved = NULL;
   DEFINE_WAIT(wait);
-  // wait no more than about 120 seconds
-  int __ret = HZ*120;
+  int __ret = msecs_to_jiffies(theia_active_path_timeout*1000);
   if(size == 0) {
     pr_warn("theia_file_write() called with size 0\n");
     return;
