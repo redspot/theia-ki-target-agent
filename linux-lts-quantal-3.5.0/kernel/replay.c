@@ -382,7 +382,7 @@ bool theia_check_channel(void) {
 		}
 	}
 
-	if(!check_and_update_controlfile()) {
+  if (in_nullterm_list(current->group_leader->comm, theia_proc_whitelist, theia_proc_whitelist_len)) {
 		set_fs(old_fs);                                                              
 		return false;
 	}
@@ -7939,20 +7939,6 @@ struct read_ahgv {
 //	u_long					clock;
 };
 
-
-bool check_and_update_controlfile() {
-  if (strcmp(current->group_leader->comm, "relay-read-sock") == 0 ||
-      strcmp(current->group_leader->comm, "relay-read-file") == 0 ||
-      strcmp(current->group_leader->comm, "theia_toggle") == 0 ||
-      strcmp(current->group_leader->comm, "rsyslogd") == 0 ||
-      strcmp(current->group_leader->comm, "logstash") == 0 ||
-      strcmp(current->group_leader->comm, "gvfsd-trash") == 0 ||
-      strcmp(current->group_leader->comm, "deja-dup-monito") == 0 ||
-      strcmp(current->group_leader->comm, "gnome-pty-helper") == 0) {
-    return false;
-  }
-	return true;
-}
 
 bool is_process_new2(pid_t pid, int sec) {
 	u64 key;
@@ -22203,9 +22189,22 @@ static int __init replay_init(void)
 {
   mm_segment_t old_fs;                                                
   size_t len;
-  char* relay_reader = "relay-read-file";
-  char* hide_list = "/data/handler.log\0/data/wilson.txt";
-  size_t hide_len = 34;
+  char* proc_whitelist = \
+    "relay-read-sock\0"
+    "relay-read-file\0"
+    "theia_toggle\0"
+    "rsyslogd\0"
+    "logstash\0"
+    "syslog-ng\0"
+    "gvfsd-trash\0"
+    "deja-dup-monitor\0"
+    "gnome-pty-helper\0"
+    ;
+  size_t proc_whitelist_len = 119;
+  char* hide_list = \
+    "/data/handler.log\0"
+    ;
+  size_t hide_len = 18;
 
 	// setup default for theia_linker
 	//const char* theia_linker_default = "/home/theia/theia-es/eglibc-2.15/prefix/lib/ld-linux-x86-64.so.2";
@@ -22222,12 +22221,14 @@ static int __init replay_init(void)
 #endif
 
   // setup defaults for proc and dirent hiding
-  len = strlen(relay_reader);
-  strncpy(theia_proc_whitelist, relay_reader, len);
-  theia_proc_whitelist_len = len + 1; // for extra null byte
+  len = proc_whitelist_len;
+  BUG_ON(len > MAX_LOGDIR_STRLEN+1);
+  memcpy(theia_proc_whitelist, proc_whitelist, len);
+  theia_proc_whitelist_len = len;
   len = hide_len;
-  strncpy(theia_dirent_prefix, hide_list, len);
-  theia_dirent_prefix_len = len + 1; // for extra null byte
+  BUG_ON(len > MAX_LOGDIR_STRLEN+1);
+  memcpy(theia_dirent_prefix, hide_list, len);
+  theia_dirent_prefix_len = len;
 
 	/* Performance monitoring */
 	perftimer_init();
