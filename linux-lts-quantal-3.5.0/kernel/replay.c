@@ -8049,7 +8049,7 @@ void packahgv_process(struct task_struct *tsk) {
           args[i] = ' ';
       }
     }
-    if(args && !IS_ERR(args))
+    if(args && !IS_ERR(args) && strlen(args) > 0)
       args_b64 = base64_encode(args, strlen(args), NULL);
 		if (!args_b64) 
       args_b64 = args_bkp;
