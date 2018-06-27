@@ -10476,13 +10476,13 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
 
   ret = sys_access(devfile, 0/*F_OK*/);
   if(ret < 0) { //for ensure the inert_spec.sh is done before record starts.
-    printk("/dev/spec0 not accessible yet. ret %d\n", ret);
+    printk("%s not accessible yet. ret %d\n", devfile, ret);
     theia_recording_toggle = 0;
     goto out_norm;
   }
-  fd = sys_open ("/dev/spec0", O_RDWR, 0777 /*mode should be ignored anyway*/);
+  fd = sys_open (devfile, O_RDWR, 0777 /*mode should be ignored anyway*/);
   if (fd < 0) {
-    printk("/dev/spec0 not open yet. ret %d\n", ret);
+    printk("%s not open yet. fd %d\n", devfile, fd);
     theia_recording_toggle = 0;
     goto out_norm;
   }
