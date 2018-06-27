@@ -1,4 +1,5 @@
 #!/bin/bash
-WRAP=/home/linuxbrew/.linuxbrew/bin/gcc-ar-4.8
+WRAP_CMD=gcc-ar
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source "${DIR}/compiler.sh"
 source "${DIR}/wrapper.sh"

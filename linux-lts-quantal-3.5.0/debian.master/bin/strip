@@ -1,4 +1,6 @@
 #!/bin/bash
+WRAP_CMD=strip
 WRAP=/usr/bin/strip
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source "${DIR}/compiler.sh"
 source "${DIR}/wrapper.sh"

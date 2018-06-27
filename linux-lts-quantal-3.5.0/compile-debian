@@ -13,7 +13,8 @@ git describe --always --long | tr - +)/" \
 
 #example w/ clean
 #DO_CLEAN=1 ./compile-debian
-#off by default
+#on by default
+DO_CLEAN=1
 if [ ! -z "$DO_CLEAN" ]; then
     rm -rf debian
     cp -r debian.theia debian
@@ -25,7 +26,13 @@ if [ -d security/tomoyo/policy ]; then
 	cp -r security/tomoyo/policy debian/build/build-generic/security/tomoyo/
 fi
 
-DEB_BUILD_OPTIONS=parallel=8 \
+if which distcc 2>/dev/null; then
+    para=32
+else
+    para=8
+fi
+
+DEB_BUILD_OPTIONS=parallel=$para \
 NOEXTRAS=1 \
 CROSS_COMPILE=`pwd`/debian.master/bin/ \
 AUTOBUILD=1 \
@@ -34,7 +41,7 @@ fakeroot debian/rules binary-generic skipdbg=false
 # The previous command sometimes fails on the first try
 
 if [[ $? -ne 0 ]]; then
-DEB_BUILD_OPTIONS=parallel=8 \
+DEB_BUILD_OPTIONS=parallel=$para \
 NOEXTRAS=1 \
 CROSS_COMPILE=`pwd`/debian.master/bin/ \
 AUTOBUILD=1 \
@@ -47,7 +54,7 @@ if [[ $? -ne 0 ]]; then
 	exit $?
 fi
 
-DEB_BUILD_OPTIONS=parallel=8 \
+DEB_BUILD_OPTIONS=parallel=$para \
 NOEXTRAS=1 \
 CROSS_COMPILE=`pwd`/debian.master/bin/ \
 AUTOBUILD=1 \
@@ -56,7 +63,7 @@ fakeroot debian/rules binary-headers skipdbg=false
 # The previous command sometimes fails on the first try
 
 if [[ $? -ne 0 ]]; then
-DEB_BUILD_OPTIONS=parallel=8 \
+DEB_BUILD_OPTIONS=parallel=$para \
 NOEXTRAS=1 \
 CROSS_COMPILE=`pwd`/debian.master/bin/ \
 AUTOBUILD=1 \

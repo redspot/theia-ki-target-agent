@@ -12,8 +12,10 @@ if [ -z "${BUILD_DIR}" ]; then
   BUILD_DIR=theia_build
 fi
 
-num_cores=`cat /proc/cpuinfo | grep processor | wc -l`
-build_parallel=$(($num_cores+1))
+if [ -z "${build_parallel}" ]; then
+    num_cores=`cat /proc/cpuinfo | grep processor | wc -l`
+    build_parallel=$(($num_cores+1))
+fi
 
 if [ -z "${CC}" ]; then
   CC=gcc

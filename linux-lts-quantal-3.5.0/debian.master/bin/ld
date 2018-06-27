@@ -1,4 +1,6 @@
 #!/bin/bash
+WRAP_CMD=ld
 WRAP=/usr/bin/ld
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source "${DIR}/compiler.sh"
 source "${DIR}/wrapper.sh"
