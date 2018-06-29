@@ -12,3 +12,8 @@ $ ./theia_replay <dir> -p --pthread $OMNIPLAY_DIR/eglibc-2.15/prefix/lib
 
 ## Then, at another bash, run pin:
 libdft64/pin-2.13/intel64/bin/pinbin -pid <pid> -t libdft64/libdft64/build/tools/.libs/libdft-dta64.so
+
+# Formatting
+
+From the root directory of this repo (where this README is located), run `./astyle/run.sh`.
+See `astyle/run.sh` and `astyle/astyle.conf` for settings and details.
