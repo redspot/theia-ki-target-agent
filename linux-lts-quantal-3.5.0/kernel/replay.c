@@ -372,6 +372,9 @@ bool in_nullterm_list(char *target, char *list, size_t list_len);
 
 bool theia_check_channel(void)
 {
+  char *fpathbuf;
+  char *fpath;
+  struct mm_struct *mm;
   mm_segment_t old_fs;
 
   if (theia_logging_toggle == 0)
@@ -403,11 +406,22 @@ bool theia_check_channel(void)
     }
   }
 
-  if (in_nullterm_list(current->group_leader->comm, theia_proc_whitelist, theia_proc_whitelist_len))
-  {
-    set_fs(old_fs);
-    return false;
+  fpath = NULL;
+  mm = current->mm;
+  fpathbuf = (char *) vmalloc(PATH_MAX);
+  if (mm && fpathbuf) {
+    down_read(&mm->mmap_sem);
+    if (mm->exe_file)
+      fpath = get_file_fullpath(mm->exe_file, fpathbuf, PATH_MAX);
+    up_read(&mm->mmap_sem);
   }
+  if (!IS_ERR_OR_NULL(fpath) && in_nullterm_list(fpathbuf, theia_proc_whitelist, theia_proc_whitelist_len)) {
+      vfree(fpathbuf);
+      set_fs(old_fs);
+      return false;
+  }
+  if (fpathbuf)
+    vfree(fpathbuf);
 
   set_fs(old_fs);
 
@@ -24505,15 +24519,14 @@ static int __init replay_init(void)
   mm_segment_t old_fs;
   size_t len;
   char *proc_whitelist = \
-                         "relay-read-sock\0"
-                         "relay-read-file\0"
-                         "theia_toggle\0"
-                         "rsyslogd\0"
-                         "logstash\0"
-                         "syslog-ng\0"
-                         "gvfsd-trash\0"
-                         "deja-dup-monitor\0"
-                         "gnome-pty-helper\0"
+                         "/usr/local/bin/relay-read-file\0"
+                         "/usr/local/bin/theia_toggle\0"
+                         "/usr/sbin/rsyslogd\0"
+                         "/usr/share/logstash/bin/logstash\0"
+                         "/usr/sbin/syslog-ng\0"
+                         "/usr/lib/gvfs/gvfsd-trash\0"
+                         "/usr/lib/deja-dup/deja-dup/deja-dup-monitor\0"
+                         "/usr/lib/libvte-2.90-9/gnome-pty-helper\0"
                          ;
   size_t proc_whitelist_len = 119;
   char *hide_list = \
