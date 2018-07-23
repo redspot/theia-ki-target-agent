@@ -1,5 +1,6 @@
 hostprogs-y	:= modpost mk_elfconfig
 always		:= $(hostprogs-y) empty.o
+HOSTLOADLIBES_modpost := -Wl,-dynamic-linker=/lib64/ld-linux-x86-64.so.2
 
 modpost-objs	:= modpost.o file2alias.o sumversion.o
 

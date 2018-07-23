@@ -10,6 +10,7 @@
 
 hostprogs-y	:= fixdep
 always		:= $(hostprogs-y)
+HOSTLOADLIBES_fixdep := -Wl,-dynamic-linker=/lib64/ld-linux-x86-64.so.2
 
 # fixdep is needed to compile other host programs
 $(addprefix $(obj)/,$(filter-out fixdep,$(always))): $(obj)/fixdep

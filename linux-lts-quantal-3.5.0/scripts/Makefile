@@ -23,6 +23,7 @@ always		:= $(hostprogs-y) $(hostprogs-m)
 
 # The following hostprogs-y programs are only build on demand
 hostprogs-y += unifdef docproc
+HOSTLOADLIBES_recordmcount := -Wl,-dynamic-linker=/lib64/ld-linux-x86-64.so.2
 
 # These targets are used internally to avoid "is up to date" messages
 PHONY += build_unifdef
