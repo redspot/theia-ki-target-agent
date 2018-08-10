@@ -687,6 +687,7 @@ static int __cpuinit do_boot_cpu(int apicid, int cpu, struct task_struct *idle)
 	irq_ctx_init(cpu);
 #else
 	clear_tsk_thread_flag(idle, TIF_FORK);
+	clear_tsk_thread_flag(idle, TIF_FORK_2);
 	initial_gs = per_cpu_offset(cpu);
 	per_cpu(kernel_stack, cpu) =
 		(unsigned long)task_stack_page(idle) -

@@ -17931,7 +17931,8 @@ replay_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_reg
     prept = current->replay_thrd;
     tsk->replay_thrd->rp_status = REPLAY_STATUS_ELIGIBLE; // This lets the parent run first - will this make Pin happy?
     //    tsk->thread.ip = (u_long) ret_from_fork_2;
-    KSTK_EIP(tsk) = (u_long) ret_from_fork_2;
+    //KSTK_EIP(tsk) = (u_long) ret_from_fork_2;
+    set_tsk_thread_flag(tsk, TIF_FORK_2);
 
     rg_unlock(prg->rg_rec_group);
 
