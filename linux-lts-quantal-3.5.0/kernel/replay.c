@@ -8152,7 +8152,7 @@ record_restart_syscall(struct restart_block *restart)
 #endif
     if (rc > 0)
     {
-      pretvals = ARGSKMALLOC(sizeof(int) + restart->poll.nfds * sizeof(short), GFP_KERNEL);
+      pretvals = ARGSKMALLOC(sizeof(u_long) + restart->poll.nfds * sizeof(short), GFP_KERNEL);
       if (pretvals == NULL)
       {
         printk("restart_record_poll: can't allocate buffer\n");
@@ -13076,7 +13076,7 @@ record_fcntl(unsigned int fd, unsigned int cmd, unsigned long arg)
   {
     if (cmd == F_GETLK)
     {
-      recbuf = ARGSKMALLOC(sizeof(int) + sizeof(struct flock), GFP_KERNEL);
+      recbuf = ARGSKMALLOC(sizeof(u_long) + sizeof(struct flock), GFP_KERNEL);
       if (!recbuf)
       {
         printk("record_fcntl: can't allocate return buffer\n");
@@ -13092,14 +13092,14 @@ record_fcntl(unsigned int fd, unsigned int cmd, unsigned long arg)
     }
     else if (cmd == F_GETOWN_EX)
     {
-      recbuf = ARGSKMALLOC(sizeof(int) + sizeof(struct f_owner_ex), GFP_KERNEL);
+      recbuf = ARGSKMALLOC(sizeof(u_long) + sizeof(struct f_owner_ex), GFP_KERNEL);
       if (!recbuf)
       {
         printk("record_fcntl: can't allocate return buffer\n");
         return -ENOMEM;
       }
       *(u_long *) recbuf = sizeof(struct f_owner_ex);
-      if (copy_from_user(recbuf + sizeof(int), (struct f_owner_ex __user *)arg, sizeof(struct f_owner_ex)))
+      if (copy_from_user(recbuf + sizeof(u_long), (struct f_owner_ex __user *)arg, sizeof(struct f_owner_ex)))
       {
         printk("record_fcntl: faulted on readback\n");
         KFREE(recbuf);
@@ -19351,7 +19351,7 @@ record_poll(struct pollfd __user *ufds, unsigned int nfds, long timeout_msecs)
 #endif
   if (rc > 0)
   {
-    pretvals = ARGSKMALLOC(sizeof(int) + nfds * sizeof(short), GFP_KERNEL);
+    pretvals = ARGSKMALLOC(sizeof(u_long) + nfds * sizeof(short), GFP_KERNEL);
     if (pretvals == NULL)
     {
       printk("record_poll: can't allocate buffer\n");
@@ -20531,7 +20531,9 @@ replay_vfork_handler(struct task_struct *tsk)
   prept = current->replay_thrd;
   tsk->replay_thrd->rp_status = REPLAY_STATUS_RUNNING; // Child needs to run first to complete vfork
   //  tsk->thread.ip = (u_long) ret_from_fork_2;
-  KSTK_EIP(tsk) = (u_long) ret_from_fork_2;
+  //KSTK_EIP(tsk) = (u_long) ret_from_fork_2;
+  set_tsk_thread_flag(tsk, TIF_FORK_2);
+
   current->replay_thrd->rp_status = REPLAY_STATUS_ELIGIBLE; // So we need to wait
   rg_unlock(prg->rg_rec_group);
 }
