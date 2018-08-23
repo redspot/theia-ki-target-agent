@@ -10703,13 +10703,14 @@ SIMPLE_SHIM2(link, 86, const char __user *, oldname, const char __user *, newnam
 
 /* unlink/unlinkat begin */
 #define SYS_UNLINK    87
-void theia_unlink_ahgx(const char __user *filename)
+void theia_unlink_ahgx(const char *kfilename)
 {
   char uuid_str[THEIA_UUID_LEN + 1];
   struct file *file;
   int fd, fput_needed;
   char *fpath = NULL;
   char *buf;
+  mm_segment_t old_fs;
 #ifdef DPATH_USE_STACK
   char pbuf[THEIA_DPATH_LEN];
 #else
@@ -10718,7 +10719,10 @@ void theia_unlink_ahgx(const char __user *filename)
 #endif
   buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
-  fd = sys_open(filename, O_RDWR, 0);
+  old_fs = get_fs();
+  set_fs(KERNEL_DS);
+  fd = sys_open(kfilename, O_RDWR, 0);
+  set_fs(old_fs);
   if (fd >= 0)
   {
     if (fd2uuid(fd, uuid_str) == false)
@@ -10733,7 +10737,7 @@ void theia_unlink_ahgx(const char __user *filename)
       fpath = get_file_fullpath(file, pbuf, THEIA_DPATH_LEN);
       if (IS_ERR_OR_NULL(fpath))
       {
-        strncpy(pbuf, filename, THEIA_DPATH_LEN);
+        strncpy(pbuf, kfilename, THEIA_DPATH_LEN);
         pbuf[THEIA_DPATH_LEN - 1] = 0x0;
         fpath = pbuf;
       }
@@ -10756,15 +10760,30 @@ static asmlinkage long
 record_unlink(const char __user *filename)
 {
   long rc;
+  mm_segment_t old_fs;
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char *pbuf;
+  pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
+
+  strncpy_from_user(pbuf, filename, THEIA_DPATH_LEN);
 
   /* we should call theia_unlink_ahgx before sys_unlink */
   if (theia_check_channel())
-    theia_unlink_ahgx(filename);
+    theia_unlink_ahgx(pbuf);
 
   new_syscall_enter(SYS_UNLINK);
-  rc = sys_unlink(filename);
+  old_fs = get_fs();
+  set_fs(KERNEL_DS);
+  rc = sys_unlink(pbuf);
+  set_fs(old_fs);
   new_syscall_done(SYS_UNLINK, rc);
   new_syscall_exit(SYS_UNLINK, NULL);
+#ifndef DPATH_USE_STACK
+  kmem_cache_free(theia_buffers, pbuf);
+#endif
   return rc;
 }
 
@@ -10778,10 +10797,27 @@ static asmlinkage long
 theia_sys_unlink(const char __user *filename)
 {
   long rc;
+  mm_segment_t old_fs;
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char *pbuf;
+  pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
+
+  strncpy_from_user(pbuf, filename, THEIA_DPATH_LEN);
+
   /* we should call theia_unlink_ahgx before sys_unlink */
   if (theia_logging_toggle)
-    theia_unlink_ahgx(filename);
-  rc = sys_unlink(filename);
+    theia_unlink_ahgx(pbuf);
+
+  old_fs = get_fs();
+  set_fs(KERNEL_DS);
+  rc = sys_unlink(pbuf);
+  set_fs(old_fs);
+#ifndef DPATH_USE_STACK
+  kmem_cache_free(theia_buffers, pbuf);
+#endif
   return rc;
 }
 
@@ -10789,13 +10825,14 @@ asmlinkage long shim_unlink(const char __user *filename)
 SHIM_CALL_MAIN(SYS_UNLINK, record_unlink(filename), replay_unlink(filename), theia_sys_unlink(filename));
 
 #define SYS_UNLINKAT 263
-void theia_unlinkat_ahgx(int dfd, const char __user *filename, int flag)
+void theia_unlinkat_ahgx(int dfd, const char *kfilename, int flag)
 {
   char uuid_str[THEIA_UUID_LEN + 1];
   struct file *file;
   int fd, fput_needed;
   char *fpath;
   char *buf;
+  mm_segment_t old_fs;
 #ifdef DPATH_USE_STACK
   char pbuf[THEIA_DPATH_LEN];
 #else
@@ -10804,7 +10841,10 @@ void theia_unlinkat_ahgx(int dfd, const char __user *filename, int flag)
 #endif
   buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
-  fd = sys_openat(dfd, filename, O_RDWR, 0);
+  old_fs = get_fs();
+  set_fs(KERNEL_DS);
+  fd = sys_openat(dfd, kfilename, O_RDWR, 0);
+  set_fs(old_fs);
   if (fd >= 0)
   {
     if (fd2uuid(fd, uuid_str) == false)
@@ -10819,7 +10859,7 @@ void theia_unlinkat_ahgx(int dfd, const char __user *filename, int flag)
       fpath = get_file_fullpath(file, pbuf, THEIA_DPATH_LEN);
       if (IS_ERR_OR_NULL(fpath))
       {
-        strncpy(pbuf, filename, THEIA_DPATH_LEN);
+        strncpy(pbuf, kfilename, THEIA_DPATH_LEN);
         pbuf[THEIA_DPATH_LEN - 1] = 0x0;
         fpath = pbuf;
       }
@@ -10842,15 +10882,30 @@ static asmlinkage long
 record_unlinkat(int dfd, const char __user *filename, int flag)
 {
   long rc;
+  mm_segment_t old_fs;
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char *pbuf;
+  pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
+  
+  strncpy_from_user(pbuf, filename, THEIA_DPATH_LEN);
 
   /* we should call theia_unlink_ahgx before sys_unlink */
   if (theia_check_channel())
-    theia_unlinkat_ahgx(dfd, filename, flag);
+    theia_unlinkat_ahgx(dfd, pbuf, flag);
 
   new_syscall_enter(SYS_UNLINKAT);
-  rc = sys_unlinkat(dfd, filename, flag);
+  old_fs = get_fs();
+  set_fs(KERNEL_DS);
+  rc = sys_unlinkat(dfd, pbuf, flag);
+  set_fs(old_fs);
   new_syscall_done(SYS_UNLINKAT, rc);
   new_syscall_exit(SYS_UNLINKAT, NULL);
+#ifndef DPATH_USE_STACK
+  kmem_cache_free(theia_buffers, pbuf);
+#endif
   return rc;
 }
 
@@ -10864,10 +10919,27 @@ static asmlinkage long
 theia_sys_unlinkat(int dfd, const char __user *filename, int flag)
 {
   long rc;
+  mm_segment_t old_fs;
+#ifdef DPATH_USE_STACK
+  char pbuf[THEIA_DPATH_LEN];
+#else
+  char *pbuf;
+  pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+#endif
+
+  strncpy_from_user(pbuf, filename, THEIA_DPATH_LEN);
+
   /* we should call theia_unlink_ahgx before sys_unlink */
   if (theia_logging_toggle)
-    theia_unlinkat_ahgx(dfd, filename, flag);
-  rc = sys_unlinkat(dfd, filename, flag);
+    theia_unlinkat_ahgx(dfd, pbuf, flag);
+
+  old_fs = get_fs();
+  set_fs(KERNEL_DS);
+  rc = sys_unlinkat(dfd, pbuf, flag);
+  set_fs(old_fs);
+#ifndef DPATH_USE_STACK
+  kmem_cache_free(theia_buffers, pbuf);
+#endif
   return rc;
 }
 
