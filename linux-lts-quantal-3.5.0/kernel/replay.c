@@ -14094,8 +14094,11 @@ void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char *i
       strcpy(ip, "LOCAL");
       if (un_sockaddr->sun_path[0] != '\0')
         strncpy(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX);
-      else
-        strncpy(sun_path, un_sockaddr->sun_path + 1, UNIX_PATH_MAX);
+      else { /* an abstract socket address */
+        strncpy(sun_path, un_sockaddr->sun_path + 1, addrlen-sizeof(sa_family_t));
+        if (addrlen != sizeof(sa_family_t))
+            sun_path[addrlen-sizeof(sa_family_t)-1] = '\0';
+      }
       if (strlen(sun_path) == 0)
       {
         strcpy(sun_path, "LOCAL");
@@ -14185,8 +14188,11 @@ void get_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_f
       strcpy(ip, "LOCAL");
       if (un_sockaddr->sun_path[0] != '\0')
         strncpy(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX);
-      else
-        strncpy(sun_path, un_sockaddr->sun_path + 1, UNIX_PATH_MAX);
+      else { /* an abstract socket address */
+        strncpy(sun_path, un_sockaddr->sun_path + 1, len-sizeof(sa_family_t));
+        if (len != sizeof(sa_family_t))
+            sun_path[len-sizeof(sa_family_t)-1] = '\0';
+      }
       if (strlen(sun_path) == 0)
       {
         strcpy(sun_path, "LOCAL");
