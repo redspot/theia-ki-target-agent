@@ -12661,24 +12661,12 @@ static asmlinkage long replay_pipe(int __user *fildes)
 int theia_sys_pipe(int __user *fildes)
 {
   long rc;
-  int *pretval = NULL;
 
   rc = sys_pipe(fildes);
 
   if (rc == 0)
   {
-    pretval = KMALLOC(2 * sizeof(int), GFP_KERNEL);
-    if (copy_from_user(pretval, fildes, 2 * sizeof(int)))
-    {
-      KFREE(pretval);
-      return -EFAULT;
-    }
-    theia_pipe_ahg((u_long)rc, *pretval, *(pretval + sizeof(int)));
-    KFREE(pretval);
-  }
-  else
-  {
-    theia_pipe_ahg((u_long)rc, -1, -1);
+    theia_pipe_ahg((u_long)rc, fildes[0], fildes[1]);
   }
 
   return rc;
