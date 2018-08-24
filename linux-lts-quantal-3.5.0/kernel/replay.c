@@ -14303,8 +14303,13 @@ void packahgv_accept(struct accept_ahgv *sys_args)
 #endif
     get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
-    if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
-      goto err; /* no file, socket, ...? */
+//    if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
+//      goto err; /* no file, socket, ...? */
+
+    if (sys_args->sa_family == AF_LOCAL)
+      snprintf(uuid_str, THEIA_UUID_LEN, "S|NA|%lu|LOCAL|0", sys_args->port);
+    else
+      snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%lu|NA|0", sys_args->ip, sys_args->port);
 
     size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n",
                    43, sys_args->pid, current->start_time.tv_sec,
@@ -14334,7 +14339,7 @@ void packahgv_accept(struct accept_ahgv *sys_args)
     }
     else
       theia_file_write(buf, size);
-err:
+/* err: */
     kmem_cache_free(theia_buffers, buf);
   }
 }
@@ -14617,9 +14622,9 @@ void theia_accept_ahg(long rc, int fd, struct sockaddr __user *upeer_sockaddr, i
   pahgv_accept->rc = rc;
   pahgv_accept->sock_fd = fd;
   //  if (upeer_sockaddr != NULL)
-  //    get_ip_port_sockaddr(upeer_sockaddr, *upeer_addrlen, pahgv_accept->ip, &(pahgv_accept->port), pahgv_accept->sun_path, &(pahgv_accept->sa_family));
+  get_ip_port_sockaddr(upeer_sockaddr, *upeer_addrlen, pahgv_accept->ip, &(pahgv_accept->port), pahgv_accept->sun_path, &(pahgv_accept->sa_family));
   //  else
-  get_peer_ip_port_sockfd(fd, pahgv_accept->ip, &(pahgv_accept->port), pahgv_accept->sun_path, &(pahgv_accept->sa_family));
+//  get_peer_ip_port_sockfd(fd, pahgv_accept->ip, &(pahgv_accept->port), pahgv_accept->sun_path, &(pahgv_accept->sa_family));
   packahgv_accept(pahgv_accept);
   KFREE(pahgv_accept);
 
