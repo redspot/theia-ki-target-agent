@@ -110,7 +110,7 @@ char *get_file_fullpath(struct file *opened_file, char *buf, size_t buflen);
 void theia_dump_str(char *str, int rc, int sysum);
 void theia_dump_auxdata(void);
 
-void theia_setuid_ahg(uid_t uid, int rc, u_long clock);
+void theia_setuid_ahg(uid_t uid, int rc);
 
 #define MAX_SOCK_ADDR      128
 #define THEIA_INVALID_PORT 0
@@ -462,15 +462,8 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
         if (strcmp(ip, "LOCAL") == 0)
         {
           snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", sun_path, port, local_sun_path, local_port);
-          //          if (strcmp(sun_path, "LOCAL") == 0 || sun_path[0] == '\0')
-          //            return false;
-          //          else
-          //            sprintf(uuid_str, "ip:[%s:%d]", sun_path, port);
-          //            sprintf(uuid_str, "ip:[%s:%d]|local_ip:[%s:%d]", sun_path, port, local_sun_path, local_port);
         }
         else
-          //          sprintf(uuid_str, "ip:[%s:%d]", ip, port);
-          //          sprintf(uuid_str, "ip:[%s:%d]|local_ip:[%s:%d]", ip, port, local_ip, local_port);
           snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", ip, port, local_ip, local_port);
       }
       else
@@ -481,7 +474,6 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
     //    else if (dev == 0xfd00001 /* in-disk file */ || dev == 0xf /* in-memory file */ || dev == 0x5 /* ptmx */ || dev == 0xb /* pts */ || dev == 0x3 /* procfs */) {
     else if (S_ISBLK(mode) || S_ISCHR(mode) || S_ISDIR(mode) || S_ISREG(mode) || S_ISLNK(mode))
     {
-      //      sprintf(uuid_str, "inode:[%lx:%lx]", dev, ino);
       //Yang: get offset
 #ifdef THEIA_PROVIDE_OFFSET
       loff_t offset = vfs_llseek(file, 0, SEEK_CUR);
@@ -490,7 +482,6 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
       if (dev == 0xfd00001)
       {
         struct timespec ts = ext4_get_crtime(inode);
-        //        sprintf(uuid_str, "inode:[%lx:%lx:%d]", dev, ino, ts.tv_sec); /* do we need nanosec? */
 #ifdef THEIA_PROVIDE_OFFSET
         sprintf(uuid_str, "I|%lx|%lx|%lx|%llx", dev, ino, ts.tv_sec, offset);
 #else
@@ -499,7 +490,6 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
       }
       else
       {
-        //        sprintf(uuid_str, "inode:[%lx:%lx:0]", dev, ino);
 #ifdef THEIA_PROVIDE_OFFSET
         sprintf(uuid_str, "I|%lx|%lx|0|%llx", dev, ino, offset);
 #else
@@ -531,8 +521,6 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
 
   return true;
 }
-
-
 
 void path2uuid(const struct path path, char *uuid_str)
 {
@@ -8806,7 +8794,6 @@ struct read_ahgv
   int             pid;
   int             fd;
   u_long          bytes;
-  //  u_long          clock;
 };
 
 
@@ -9115,7 +9102,7 @@ err:
   }
 }
 
-void theia_read_ahg(unsigned int fd, long rc, u_long clock)
+void theia_read_ahg(unsigned int fd, long rc)
 {
   struct read_ahgv *pahgv = NULL;
 
@@ -9138,7 +9125,6 @@ void theia_read_ahg(unsigned int fd, long rc, u_long clock)
     pahgv->pid = current->pid;
     pahgv->fd = (int)fd;
     pahgv->bytes = rc;
-    //    pahgv->clock = clock;
     packahgv_read(pahgv);
     KFREE(pahgv);
   }
@@ -9208,7 +9194,7 @@ record_read(unsigned int fd, char __user *buf, size_t count)
 
   //Yang
   if (rc != -EAGAIN) /* ignore some less meaningful errors */
-    theia_read_ahg(fd, rc, atomic_read(current->record_thrd->rp_precord_clock));
+    theia_read_ahg(fd, rc);
 
   //Yang: we get the inode
   puuid = ARGSKMALLOC(strlen(rec_uuid_str) + 1, GFP_KERNEL);
@@ -9721,7 +9707,7 @@ int theia_sys_read(unsigned int fd, char __user *buf, size_t count)
   // Yang: regardless of the return value, passes the failed syscall also
   if (rc != -EAGAIN)
   {
-    theia_read_ahg(fd, rc, 0);
+    theia_read_ahg(fd, rc);
   }
   return rc;
 }
@@ -9738,7 +9724,6 @@ struct write_ahgv
   int             pid;
   int             fd;
   u_long          bytes;
-  //  u_long          clock;
 };
 
 void packahgv_write(struct write_ahgv *sys_args)
@@ -9780,7 +9765,7 @@ err:
   }
 }
 
-void theia_write_ahg(unsigned int fd, long rc, u_long clock)
+void theia_write_ahg(unsigned int fd, long rc)
 {
   struct write_ahgv *pahgv = NULL;
 
@@ -9799,9 +9784,7 @@ void theia_write_ahg(unsigned int fd, long rc, u_long clock)
   pahgv->pid = current->pid;
   pahgv->fd = (int)fd;
   pahgv->bytes = (u_long)rc;
-  //  pahgv->clock = clock;
   packahgv_write(pahgv);
-  //printk("[%s|%d] pid %d, fd %d, rc %lu\n", __func__,__LINE__,pahgv->pid, pahgv->fd, pahgv->bytes);
   KFREE(pahgv);
 
 }
@@ -9819,7 +9802,6 @@ record_write(unsigned int fd, const char __user *buf, size_t count)
   //perftimer_tick(write_btwn_timer);
   //  perftimer_start(write_in_timer);
 
-  // TODO: fd 99999?
   if (fd == 99999)    // Hack that assists in debugging user-level code
   {
     new_syscall_enter(1);
@@ -9853,36 +9835,12 @@ record_write(unsigned int fd, const char __user *buf, size_t count)
     //Yang
     fput(filp);
   }
-  //printk("[%s|%d] fd %u, count %d\n", __func__,__LINE__,fd,count);
-  //#ifdef TRACE_SOCKET_READ_WRITE
-#if 0
-  do
-  {
-    int err = 0;
-    struct socket *sock = sockfd_lookup(fd, &err);
-
-    if (sock != NULL && (sock->ops == &unix_stream_ops || sock->ops == &unix_seqpacket_ops))
-    {
-      int ret;
-      struct sock *peer;
-      struct sock *sk = sock->sk;
-      peer = unix_peer_get(sk);
-      ret = track_usually_pt2pt_write_begin(peer, sock->file);
-      sock_put(peer);
-
-      fput(sock->file);
-    }
-  }
-  while (0);
-#endif
-  /* Okay... this is tricky... */
-  //  perftimer_start(write_sys_timer);
   new_syscall_enter(1);
   size = sys_write(fd, buf, count);
 
   //Yang
   if (size != -EAGAIN)
-    theia_write_ahg(fd, size, atomic_read(current->record_thrd->rp_precord_clock));
+    theia_write_ahg(fd, size);
 
   //Yang: we get the inode
   puuid = ARGSKMALLOC(strlen(rec_uuid_str) + 1, GFP_KERNEL);
@@ -9912,190 +9870,6 @@ record_write(unsigned int fd, const char __user *buf, size_t count)
   //  perftimer_stop(write_sys_timer);
 
   //#ifdef TRACE_READ_WRITE
-#if 0
-  if (size > 0)
-  {
-    struct file *filp;
-    struct inode *inode;
-
-    //    perftimer_start(write_traceread_timer);
-
-    filp = fget(fd);
-    inode = filp->f_dentry->d_inode;
-
-    /*if (inode->i_rdev == 0 && MAJOR(inode->i_sb->s_dev) != 0 && filp->)*/
-    if (filp->replayfs_filemap)
-    {
-      loff_t fpos;
-      struct replayfs_filemap *map;
-      map = filp->replayfs_filemap;
-      if (map == NULL)
-      {
-        replayfs_file_opened(filp);
-        map = filp->replayfs_filemap;
-      }
-
-      BUG_ON(map == NULL);
-      //replayfs_filemap_init(&map, replayfs_alloc, filp);
-
-      fpos = filp->f_pos - size;
-      if (fpos >= 0)
-      {
-        //        perftimer_start(write_filemap_timer);
-        replayfs_filemap_write(map, current->record_thrd->rp_group->rg_id, current->record_thrd->rp_record_pid,
-                               current->record_thrd->rp_count, 0, fpos, size);
-        //        perftimer_stop(write_filemap_timer);
-      }
-
-      replayfs_diskalloc_sync(map->entries.allocator);
-
-      //replayfs_filemap_destroy(&map);
-#  ifdef TRACE_PIPE_READ_WRITE
-      /* If this is is a pipe */
-    }
-    else if (is_pipe(filp))
-    {
-      u64 rg_id = current->record_thrd->rp_group->rg_id;
-      struct pipe_track *info;
-      /* Wohoo, we have a pipe.  Lets track its writer */
-
-      /* We have to lock our pipe tree externally */
-      mutex_lock(&pipe_tree_mutex);
-
-      info = btree_lookup32(&pipe_tree, (u32)filp->f_dentry->d_inode->i_pipe);
-
-      /* The pipe is not in the tree, this is its first write (by a recorded process) */
-      if (info == NULL)
-      {
-        /* Create a new pipe_track */
-        info = kmalloc(sizeof(struct pipe_track), GFP_KERNEL);
-        /* Crap... */
-        if (info == NULL)
-        {
-          /* FIXME: fail cleanly */
-          BUG();
-        }
-
-        mutex_init(&info->lock);
-
-        /* Now initialize the structure */
-        info->owner_read_id = 0;
-        info->owner_write_id = rg_id;
-        info->id = atomic_inc_return(&glbl_pipe_id);
-
-        info->owner_write_pos = size;
-        info->owner_read_pos = 0;
-
-        info->key.id1 = filp->f_dentry->d_inode->i_ino;
-        info->key.id2 = filp->f_dentry->d_inode->i_sb->s_dev;
-
-        info->shared = 0;
-        if (btree_insert32(&pipe_tree, (u32)filp->f_dentry->d_inode->i_pipe, info, GFP_KERNEL))
-        {
-          /* FIXME: fail cleanly */
-          BUG();
-        }
-
-        pretparams = ARGSKMALLOC(sizeof(int), GFP_KERNEL);
-        BUG_ON(pretparams == NULL);
-        *((int *)pretparams) = info->id;
-
-        mutex_unlock(&pipe_tree_mutex);
-      }
-      else
-      {
-        mutex_lock(&info->lock);
-        mutex_unlock(&pipe_tree_mutex);
-
-        if (info->shared == 0)
-        {
-          if (info->owner_write_id == 0)
-          {
-            info->owner_write_id = rg_id;
-            BUG_ON(info->owner_write_pos != 0);
-            info->owner_write_pos = size;
-            pretparams = ARGSKMALLOC(sizeof(int), GFP_KERNEL);
-            BUG_ON(pretparams == NULL);
-            *((int *)pretparams) = info->id;
-          }
-          else if (likely(info->owner_write_id == rg_id))
-          {
-            info->owner_write_pos += size;
-            pretparams = ARGSKMALLOC(sizeof(int), GFP_KERNEL);
-            BUG_ON(pretparams == NULL);
-            *((int *)pretparams) = info->id;
-            /* This is the un-sharing write */
-          }
-          else
-          {
-            struct replayfs_filemap map;
-            info->shared = 1;
-
-            /* Okay, we need to allocate a filemap for this file */
-            replayfs_filemap_init(&map, replayfs_alloc, filp);
-
-            /* Write a record of the old data, special case of 0 means held linearly in pipe */
-            replayfs_filemap_write(&map, info->owner_write_id, 0, info->id, 0, 0, info->owner_write_pos);
-
-            /* Write a record of our data */
-            replayfs_filemap_write(&map, rg_id, current->record_thrd->rp_record_pid, current->record_thrd->rp_count, 0, info->owner_write_pos, size);
-
-            replayfs_filemap_destroy(&map);
-
-            info->owner_write_pos += size;
-          }
-        }
-        else
-        {
-          struct replayfs_filemap map;
-
-          /* Okay, we need to allocate a filemap for this file */
-          replayfs_filemap_init(&map, replayfs_alloc, filp);
-
-          /* Write a record of our data */
-          replayfs_filemap_write(&map, rg_id, current->record_thrd->rp_record_pid, current->record_thrd->rp_count, 0, info->owner_write_pos, size);
-
-          replayfs_filemap_destroy(&map);
-
-          info->owner_write_pos += size;
-        }
-
-        mutex_unlock(&info->lock);
-      }
-#  endif
-#ifdef TRACE_SOCKET_READ_WRITE
-    }
-    else if (sock_from_file(filp, &err))
-    {
-      struct socket *sock = sock_from_file(filp, &err);
-
-
-      if (sock->ops == &unix_stream_ops || sock->ops == &unix_seqpacket_ops)
-      {
-        int ret;
-        struct sock *peer;
-        struct sock *sk = sock->sk;
-        peer = unix_peer_get(sk);
-        ret = track_usually_pt2pt_write(peer, size, filp, 0);
-        sock_put(peer);
-        if (ret)
-        {
-          //ARGSKFREE(pretvals, sizeof(struct generic_socket_retvals));
-          size = ret;
-        }
-        else
-        {
-          /* FIXME: in all honesty, new_syscall_exit is just looking for NULL/non-NULL, but this is hacky */
-          pretparams = (void *)1;
-        }
-      }
-#endif
-    }
-    fput(filp);
-
-    //    perftimer_stop(write_traceread_timer);
-  }
-#endif
   new_syscall_exit(1, pretparams);
 
   //  perftimer_stop(write_in_timer);
@@ -10174,7 +9948,7 @@ int theia_sys_write(unsigned int fd, const char __user *buf, size_t count)
   //  if (rc >= 0)
   if (rc != -EAGAIN)
   {
-    theia_write_ahg(fd, rc, 0);
+    theia_write_ahg(fd, rc);
   }
   return rc;
 }
@@ -12187,7 +11961,6 @@ struct mount_ahgv
   char            type[30];
   unsigned long   flags;
   int             rc;
-  //  u_long          clock;
 };
 
 
@@ -12283,7 +12056,7 @@ err: ;
   }
 }
 
-void theia_mount_ahg(char __user *dev_name, char __user *dir_name, char __user *type, unsigned long flags, int rc, u_long clock)
+void theia_mount_ahg(char __user *dev_name, char __user *dir_name, char __user *type, unsigned long flags, int rc)
 {
   struct mount_ahgv *pahgv = NULL;
   int copied_length = 0;
@@ -12326,7 +12099,6 @@ void theia_mount_ahg(char __user *dev_name, char __user *dir_name, char __user *
     }
 
     pahgv->flags = flags;
-    //    pahgv->clock = clock;
     pahgv->rc = rc;
     packahgv_mount(pahgv);
     KFREE(pahgv);
@@ -12342,7 +12114,7 @@ int theia_sys_mount(char __user *dev_name, char __user *dir_name, char __user *t
   // Yang: regardless of the return value, passes the failed syscall also
   //  if (rc >= 0)
   {
-    theia_mount_ahg(dev_name, dir_name, type, flags, rc, 0);
+    theia_mount_ahg(dev_name, dir_name, type, flags, rc);
   }
   return rc;
 }
@@ -12353,7 +12125,7 @@ record_mount(char __user *dev_name, char __user *dir_name, char __user *type, un
   long rc;
   new_syscall_enter(165);
   rc = sys_mount(dev_name, dir_name, type, flags, data);
-  theia_mount_ahg(dev_name, dir_name, type, flags, (int)rc, atomic_read(current->record_thrd->rp_precord_clock));
+  theia_mount_ahg(dev_name, dir_name, type, flags, (int)rc);
   new_syscall_done(165, rc);
   new_syscall_exit(165, NULL);
   return rc;
@@ -12830,7 +12602,6 @@ struct ioctl_ahgv
   unsigned int    cmd;
   unsigned long   arg;
   long            rc;
-  //  u_long          clock;
 };
 
 void packahgv_ioctl(struct ioctl_ahgv *sys_args)
@@ -12871,7 +12642,7 @@ err:
   }
 }
 
-void theia_ioctl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long rc, u_long clock)
+void theia_ioctl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long rc)
 {
   struct ioctl_ahgv *pahgv = NULL;
 
@@ -12896,7 +12667,6 @@ void theia_ioctl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long 
     pahgv->cmd = cmd;
     pahgv->arg = arg;
     pahgv->rc = rc;
-    //    pahgv->clock = clock;
     packahgv_ioctl(pahgv);
     KFREE(pahgv);
   }
@@ -13057,7 +12827,7 @@ record_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg)
 
   new_syscall_enter(16);
   if (rc == 0) rc = sys_ioctl(fd, cmd, arg);
-  theia_ioctl_ahg(fd, cmd, arg, rc, atomic_read(current->record_thrd->rp_precord_clock));
+  theia_ioctl_ahg(fd, cmd, arg, rc);
   new_syscall_done(16, rc);
 
   DPRINT("Pid %d records ioctl fd %d cmd 0x%x arg 0x%lx returning %ld\n", current->pid, fd, cmd, arg, rc);
@@ -13115,7 +12885,7 @@ int theia_sys_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg)
   // Yang: regardless of the return value, passes the failed syscall also
   //  if (rc >= 0)
   {
-    theia_ioctl_ahg(fd, cmd, arg, rc, 0);
+    theia_ioctl_ahg(fd, cmd, arg, rc);
   }
   return rc;
 }
@@ -13712,7 +13482,6 @@ struct munmap_ahgv
   u_long          addr;
   size_t          len;
   long            rc;
-  //  u_long          clock;
 };
 
 void packahgv_munmap(struct munmap_ahgv *sys_args)
@@ -13741,7 +13510,7 @@ void packahgv_munmap(struct munmap_ahgv *sys_args)
   }
 }
 
-void theia_munmap_ahg(unsigned long addr, size_t len, long rc, u_long clock)
+void theia_munmap_ahg(unsigned long addr, size_t len, long rc)
 {
   struct munmap_ahgv *pahgv = NULL;
 
@@ -13761,7 +13530,6 @@ void theia_munmap_ahg(unsigned long addr, size_t len, long rc, u_long clock)
   pahgv->addr = addr;
   pahgv->len = len;
   pahgv->rc = rc;
-  //  pahgv->clock = clock;
   packahgv_munmap(pahgv);
   KFREE(pahgv);
 }
@@ -13774,7 +13542,7 @@ int theia_sys_munmap(unsigned long addr, size_t len)
   // Yang: regardless of the return value, passes the failed syscall also
   //  if (rc >= 0)
   {
-    theia_munmap_ahg(addr, len, rc, 0);
+    theia_munmap_ahg(addr, len, rc);
   }
   return rc;
 }
@@ -14351,7 +14119,6 @@ struct sendto_ahgv
   char            ip[16];
   u_long          port;
   long            rc;
-  //  u_long          clock;
   sa_family_t     sa_family;
   char            sun_path[UNIX_PATH_MAX];
 };
@@ -14416,7 +14183,6 @@ struct recvfrom_ahgv
   char            ip[16];
   u_long          port;
   long            rc;
-  //  u_long          clock;
   sa_family_t     sa_family;
   char            sun_path[UNIX_PATH_MAX];
 };
@@ -14621,10 +14387,7 @@ void theia_accept_ahg(long rc, int fd, struct sockaddr __user *upeer_sockaddr, i
   pahgv_accept->pid = current->pid;
   pahgv_accept->rc = rc;
   pahgv_accept->sock_fd = fd;
-  //  if (upeer_sockaddr != NULL)
   get_ip_port_sockaddr(upeer_sockaddr, *upeer_addrlen, pahgv_accept->ip, &(pahgv_accept->port), pahgv_accept->sun_path, &(pahgv_accept->sa_family));
-  //  else
-//  get_peer_ip_port_sockfd(fd, pahgv_accept->ip, &(pahgv_accept->port), pahgv_accept->sun_path, &(pahgv_accept->sa_family));
   packahgv_accept(pahgv_accept);
   KFREE(pahgv_accept);
 
@@ -14651,12 +14414,6 @@ void theia_sendto_ahg(long rc, int fd, void __user *buff, size_t len, unsigned i
   pahgv_sendto->pid = current->pid;
   pahgv_sendto->sock_fd = fd;
   pahgv_sendto->rc = rc;
-#if 0
-  if (addr != NULL) /* via sendto syscall */
-    get_ip_port_sockaddr(addr, addr_len, pahgv_sendto->ip, &(pahgv_sendto->port), pahgv_sendto->sun_path, &(pahgv_sendto->sa_family));
-  else /* via send syscall */
-    get_peer_ip_port_sockfd(fd, pahgv_sendto->ip, &(pahgv_sendto->port), pahgv_sendto->sun_path, &(pahgv_sendto->sa_family));
-#endif
   packahgv_sendto(pahgv_sendto);
   KFREE(pahgv_sendto);
 
@@ -14682,14 +14439,7 @@ void theia_recvfrom_ahg(long rc, int fd, void __user *ubuf, size_t size, unsigne
   }
   pahgv_recvfrom->pid = current->pid;
   pahgv_recvfrom->sock_fd = fd;
-  /*
-    if (addr != NULL)
-      get_ip_port_sockaddr(addr, *addr_len, pahgv_recvfrom->ip, &(pahgv_recvfrom->port), pahgv_recvfrom->sun_path, &(pahgv_recvfrom->sa_family));
-    else
-      get_peer_ip_port_sockfd(fd, pahgv_recvfrom->ip, &(pahgv_recvfrom->port), pahgv_recvfrom->sun_path, &(pahgv_recvfrom->sa_family));
-  */
   pahgv_recvfrom->rc = rc;
-  //        pahgv_recvfrom->clock = clock;
   packahgv_recvfrom(pahgv_recvfrom);
   KFREE(pahgv_recvfrom);
 
@@ -14716,21 +14466,6 @@ void theia_sendmsg_ahg(long rc, int fd, struct msghdr __user *msg, unsigned int 
   pahgv_sendmsg->pid = current->pid;
   pahgv_sendmsg->sock_fd = fd;
   pahgv_sendmsg->rc = rc;
-  //        pahgv_sendmsg->clock = clock;
-
-  /*
-    struct msghdr msghdr;
-    struct sockaddr __user *addr;
-
-    copy_from_user(&msghdr, msg, sizeof(struct msghdr));
-    addr     = (struct sockaddr __user*)(msghdr.msg_name);
-
-    get_ip_port_sockaddr(addr, msghdr.msg_namelen, pahgv_sendmsg->ip, &(pahgv_sendmsg->port), pahgv_sendmsg->sun_path, &(pahgv_sendmsg->sa_family));
-  */
-  //  get_peer_ip_port_sockfd(fd, pahgv_sendmsg->ip, &(pahgv_sendmsg->port), pahgv_sendmsg->sun_path, &(pahgv_sendmsg->sa_family));
-
-  //  printk("XXX: ip %s, port %d, sun_path %s\n", pahgv_sendmsg->ip, pahgv_sendmsg->port, pahgv_sendmsg->sun_path);
-
   packahgv_sendmsg(pahgv_sendmsg);
   KFREE(pahgv_sendmsg);
 
@@ -14757,19 +14492,6 @@ void theia_recvmsg_ahg(long rc, int fd, struct msghdr __user *msg, unsigned int 
   pahgv_recvmsg->pid = current->pid;
   pahgv_recvmsg->sock_fd = fd;
   pahgv_recvmsg->rc = rc;
-  //        pahgv_recvmsg->clock = clock;
-
-  /*
-    struct msghdr msghdr;
-    struct sockaddr __user *addr;
-
-    copy_from_user(&msghdr, msg, sizeof(struct msghdr));
-    addr     = (struct sockaddr __user*)(msghdr.msg_name);
-
-    get_ip_port_sockaddr(addr, msghdr.msg_namelen, pahgv_recvmsg->ip, &(pahgv_recvmsg->port), pahgv_recvmsg->sun_path, &(pahgv_recvmsg->sa_family));
-  */
-  //  get_peer_ip_port_sockfd(fd, pahgv_recvmsg->ip, &(pahgv_recvmsg->port), pahgv_recvmsg->sun_path, &(pahgv_recvmsg->sa_family));
-
   packahgv_recvmsg(pahgv_recvmsg);
   KFREE(pahgv_recvmsg);
 
@@ -17190,7 +16912,7 @@ SHIM_CALL_MAIN(71, record_msgctl(msqid, cmd, buf),
 
 //Yang: for now, we only handle shmget, shmat
 void theia_ipc_ahg(long rc, uint call, int first, u_long second,
-                   u_long third, void __user *ptr, long fifth, u_long clock)
+                   u_long third, void __user *ptr, long fifth)
 {
 
   struct shmget_ahgv *pahgv_shmget = NULL;
@@ -17257,7 +16979,7 @@ int theia_sys_ipc(uint call, int first, u_long second,
     struct kern_ipc_perm *ipcp;
 
     get_user(raddr, (unsigned long __user *) third);
-    theia_ipc_ahg(rc, call, first, second, raddr, ptr, fifth, 0);
+    theia_ipc_ahg(rc, call, first, second, raddr, ptr, fifth);
 
     if (theia_logging_toggle == 0)
       return rc;
@@ -17294,7 +17016,7 @@ int theia_sys_ipc(uint call, int first, u_long second,
   }
   else if (call == SHMGET)
   {
-    theia_ipc_ahg(rc, call, first, second, third, ptr, fifth, 0);
+    theia_ipc_ahg(rc, call, first, second, third, ptr, fifth);
   }
 
   return rc;
@@ -17317,11 +17039,11 @@ record_ipc(uint call, int first, u_long second, u_long third, void __user *ptr, 
   {
     unsigned long raddr = 0;
     get_user(raddr, (unsigned long __user *) third);
-    theia_ipc_ahg(rc, call, first, second, raddr, ptr, fifth, 0);
+    theia_ipc_ahg(rc, call, first, second, raddr, ptr, fifth);
   }
   else if (call == SHMGET)
   {
-    theia_ipc_ahg(rc, call, first, second, third, ptr, fifth, 0);
+    theia_ipc_ahg(rc, call, first, second, third, ptr, fifth);
   }
 
   new_syscall_done(117, rc);
@@ -20778,7 +20500,7 @@ void packahgv_mmap(struct mmap_ahgv *sys_args)
 }
 
 void theia_mmap_ahg(int fd, u_long address, u_long len, uint16_t prot,
-                    u_long flags, u_long pgoff, long rc, u_long clock)
+                    u_long flags, u_long pgoff, long rc)
 {
   struct mmap_ahgv *pahgv = NULL;
 
@@ -20801,7 +20523,6 @@ void theia_mmap_ahg(int fd, u_long address, u_long len, uint16_t prot,
   pahgv->prot_type = prot;
   pahgv->flag = flags;
   pahgv->offset = pgoff;
-  //  pahgv->clock = clock;
   packahgv_mmap(pahgv);
   KFREE(pahgv);
 
@@ -20830,8 +20551,7 @@ record_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
   rc = sys_mmap_pgoff(addr, len, prot, flags, fd, pgoff);
   //  printk("mmap record is done. rc:%lx\n", rc);
   //Yang
-  theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc,
-                 atomic_read(current->record_thrd->rp_precord_clock));
+  theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc);
 
   new_syscall_done(9, rc);
 
@@ -21044,7 +20764,7 @@ theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsign
   if (theia_logging_toggle == 0)
     return rc;
 
-  theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc, 0);
+  theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc);
 
   if ((flags & MAP_SHARED) == 0)
     return rc;
@@ -21244,7 +20964,7 @@ SIMPLE_SHIM0(setsid, 112);
 
 inline void theia_setreuid_ahgx(uid_t ruid, uid_t euid, long rc, int sysnum)
 {
-  theia_setuid_ahg(euid, rc, 0); // setreuid -> setuid
+  theia_setuid_ahg(euid, rc); // setreuid -> setuid
 }
 
 THEIA_SHIM2(setreuid, 113, uid_t, ruid, uid_t, euid);
@@ -21299,7 +21019,7 @@ SIMPLE_SHIM2(setgroups, 116, int, gidsetsize, gid_t __user *, grouplist);
 
 inline void theia_setresuid_ahgx(uid_t ruid, uid_t euid, uid_t suid, long rc, int sysnum)
 {
-  theia_setuid_ahg(euid, rc, 0); // setresuid -> setuid
+  theia_setuid_ahg(euid, rc); // setresuid -> setuid
 }
 
 THEIA_SHIM3(setresuid, 117, uid_t, ruid, uid_t, euid, uid_t, suid);
@@ -21426,7 +21146,6 @@ struct setuid_ahgv
   int             pid;
   int             newuid;
   int             rc;
-  //  u_long          clock;
 };
 
 
@@ -21461,7 +21180,7 @@ void packahgv_setuid(struct setuid_ahgv *sys_args)
   }
 }
 
-void theia_setuid_ahg(uid_t uid, int rc, u_long clock)
+void theia_setuid_ahg(uid_t uid, int rc)
 {
   struct setuid_ahgv *pahgv = NULL;
 
@@ -21483,7 +21202,6 @@ void theia_setuid_ahg(uid_t uid, int rc, u_long clock)
     }
     pahgv->pid = current->pid;
     pahgv->newuid = (int)uid;
-    //    pahgv->clock = clock;
     pahgv->rc = rc;
     packahgv_setuid(pahgv);
     KFREE(pahgv);
@@ -21499,7 +21217,7 @@ int theia_sys_setuid(uid_t uid)
   // Yang: regardless of the return value, passes the failed syscall also
   //  if (rc >= 0)
   {
-    theia_setuid_ahg(uid, rc, 0);
+    theia_setuid_ahg(uid, rc);
   }
   return rc;
 }
@@ -21513,7 +21231,7 @@ record_setuid(uid_t uid)
   long rc;
   new_syscall_enter(105);
   rc = sys_setuid(uid);
-  theia_setuid_ahg(uid, (int)rc, atomic_read(current->record_thrd->rp_precord_clock));
+  theia_setuid_ahg(uid, (int)rc);
   new_syscall_done(105, rc);
   new_syscall_exit(105, NULL);
   return rc;
