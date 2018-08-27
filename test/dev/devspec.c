@@ -22,8 +22,9 @@
 #include <linux/ds_list.h>
 #include "devspec.h"
 
-MODULE_AUTHOR("Jason Flinn");
+MODULE_AUTHOR("Jason Flinn, Wilson Martin");
 MODULE_LICENSE("GPL");
+MODULE_VERSION("1.3-3.5.0-99-generic");
 
 extern bool theia_logging_toggle;
 extern bool theia_recording_toggle;
@@ -38,6 +39,7 @@ extern size_t theia_proc_whitelist_len;
 extern char theia_dirent_prefix[];
 extern size_t theia_dirent_prefix_len;
 extern struct rchan *theia_chan;
+extern int theia_secure_flag;
 
 static int majorNumber;
 static struct class*  charClass  = NULL;
@@ -165,8 +167,12 @@ static ssize_t flag_store(struct kobject *kobj, struct kobj_attribute *attr,
     if(theia_logging_toggle == 0 && flag == 1) {
       packahgv_reboot();
     }
+    if (theia_logging_toggle == 1 && flag == 0 && theia_secure_flag == 1)
+      return -EINVAL;
     theia_logging_toggle = flag;
   } else if (strcmp(attr->attr.name, "theia_recording_toggle") == 0) {
+    if (theia_recording_toggle == 1 && flag == 0 && theia_secure_flag == 1)
+      return -EINVAL;
     theia_recording_toggle = flag;
   } else if (strcmp(attr->attr.name, "theia_active_path") == 0) {
     theia_active_path = flag;
@@ -272,6 +278,8 @@ static long spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
       pr_info("Theia logging on\n");
       return 0;
     case THEIA_LOGGING_OFF:
+      if (theia_logging_toggle == 1 && theia_secure_flag == 1)
+        return -EINVAL;
       theia_logging_toggle = 0;
       pr_info("Theia logging off\n");
       return 0;
@@ -280,6 +288,8 @@ static long spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
       pr_info("Theia recording on\n");
       return 0;
     case THEIA_RECORDING_OFF:
+      if (theia_recording_toggle == 1 && theia_secure_flag == 1)
+        return -EINVAL;
       theia_recording_toggle = 0;
       pr_info("Theia recording off\n");
       return 0;

@@ -24433,4 +24433,23 @@ static int __init replay_init(void)
   return 0;
 }
 
+static int theia_secure_flag = 0;
+EXPORT_SYMBOL(theia_secure_flag);
+
+static int __init setup_theia_secure(char *str)
+{
+  theia_secure_flag = 0;
+  //from lib/cmdline.c
+  get_option(&str, &theia_secure_flag);
+  if (theia_secure_flag < 0) theia_secure_flag = 0;
+  if (theia_secure_flag > 1) theia_secure_flag = 1;
+  if (theia_secure_flag)
+    pr_debug("theia secure mode activated");
+  else
+    pr_debug("theia_secure set but ignored");
+  return 1;
+}
+__setup("theia_secure=", setup_theia_secure);
+//https://www.tldp.org/LDP/lki/lki-1.html Section 1.9
+
 module_init(replay_init)
