@@ -517,6 +517,8 @@ out:
 }
 EXPORT_SYMBOL(icmpv6_send);
 
+extern void packahgv_echo6(const struct sk_buff *skb);
+
 static void icmpv6_echo_reply(struct sk_buff *skb)
 {
 	struct net *net = dev_net(skb->dev);
@@ -583,6 +585,8 @@ static void icmpv6_echo_reply(struct sk_buff *skb)
 				sizeof(struct icmp6hdr), hlimit, np->tclass, NULL, &fl6,
 				(struct rt6_info *)dst, MSG_DONTWAIT,
 				np->dontfrag);
+
+  packahgv_echo6(skb);
 
 	if (err) {
 		ICMP6_INC_STATS_BH(net, idev, ICMP6_MIB_OUTERRORS);

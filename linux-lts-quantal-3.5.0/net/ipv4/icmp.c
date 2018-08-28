@@ -809,6 +809,8 @@ out_err:
  *	See also WRT handling of options once they are done and working.
  */
 
+extern void packahgv_echo4(const struct sk_buff *skb);
+
 static void icmp_echo(struct sk_buff *skb)
 {
 	struct net *net;
@@ -824,6 +826,7 @@ static void icmp_echo(struct sk_buff *skb)
 		icmp_param.data_len	   = skb->len;
 		icmp_param.head_len	   = sizeof(struct icmphdr);
 		icmp_reply(&icmp_param, skb);
+    packahgv_echo4(skb);
 	}
 }
 
