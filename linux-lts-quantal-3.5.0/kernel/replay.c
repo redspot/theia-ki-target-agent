@@ -23045,9 +23045,14 @@ record_recvmmsg(int fd, struct mmsghdr __user *msg, unsigned int vlen, unsigned 
 {
   long rc, retval;
   long *plogsize = NULL;
+  int i;
 
   new_syscall_enter(299);
   rc = sys_recvmmsg(fd, msg, vlen, flags, timeout);
+  for (i = 0; i < vlen; ++i) {
+    theia_recvmsg_ahg(msg[i].msg_len, fd, &(msg[i].msg_hdr), flags);
+  }
+
 #ifdef X_COPMRESS
   BUG_ON(is_x_fd(&current->record_thrd->rp_clog.x, fd));
 #endif
@@ -23078,7 +23083,22 @@ replay_recvmmsg(int fd, struct mmsghdr __user *msg, unsigned int vlen, unsigned 
   return rc;
 }
 
-asmlinkage long shim_recvmmsg(int fd, struct mmsghdr __user *msg, unsigned int vlen, unsigned flags, struct timespec __user *timeout) SHIM_CALL(recvmmsg, 299, fd, msg, vlen, flags, timeout);
+static asmlinkage long
+theia_sys_recvmmsg(int fd, struct mmsghdr __user *msg, unsigned int vlen, unsigned flags, struct timespec __user *timeout)
+{
+  long rc;
+  int i;
+
+  rc = sys_recvmmsg(fd, msg, vlen, flags, timeout);
+
+  for (i = 0; i < vlen; ++i) {
+    theia_recvmsg_ahg(msg[i].msg_len, fd, &(msg[i].msg_hdr), flags);
+  }
+  return rc;
+}
+
+asmlinkage long shim_recvmmsg(int fd, struct mmsghdr __user *msg, unsigned int vlen, unsigned flags, struct timespec __user *timeout)
+SHIM_CALL_MAIN(299, record_recvmmsg(fd, msg, vlen, flags, timeout), replay_recvmmsg(fd, msg, vlen, flags, timeout), theia_sys_recvmmsg(fd, msg, vlen, flags, timeout))
 
 SIMPLE_SHIM2(fanotify_init, 300, unsigned int, flags, unsigned int, event_f_flags);
 SIMPLE_SHIM5(fanotify_mark, 301, int, fanotify_fd, unsigned int, flags, u64, mask, int, fd, const char  __user *, pathname);
@@ -23195,20 +23215,32 @@ static asmlinkage long
 theia_sys_sendmmsg(int fd, struct mmsghdr __user *msg, unsigned int vlen, unsigned flags)
 {
   long rc;
+  int i;
 
   rc = sys_sendmmsg(fd, msg, vlen, flags);
-  /*
-    for (i = 0; i < vlen; ++i) {
-      theia_sendmsg_ahg(msg[i].msg_len, fd, &(msg[i].msg_hdr), flags);
-    }
-  */
+  for (i = 0; i < vlen; ++i) {
+    theia_sendmsg_ahg(msg[i].msg_len, fd, &(msg[i].msg_hdr), flags);
+  }
   return rc;
 }
 
 /*
-SIMPLE_SHIM4(sendmmsg, 307, int, fd, struct mmsghdr __user *, msg, unsigned int, vlen, unsigned, flags);
-*/
-SIMPLE_RECORD4(sendmmsg, 307, int, fd, struct mmsghdr __user *, msg, unsigned int, vlen, unsigned, flags);
+   SIMPLE_SHIM4(sendmmsg, 307, int, fd, struct mmsghdr __user *, msg, unsigned int, vlen, unsigned, flags);
+ */
+asmlinkage long record_sendmmsg(int fd, struct mmsghdr __user * msg, unsigned int vlen, unsigned flags) {
+  long rc;
+  int i;
+
+  new_syscall_enter (307);
+  rc = sys_sendmmsg(fd, msg, vlen, flags);
+  for (i = 0; i < vlen; ++i) {
+    theia_sendmsg_ahg(msg[i].msg_len, fd, &(msg[i].msg_hdr), flags);
+  }
+  new_syscall_done (307, rc);
+  new_syscall_exit (307, NULL);
+  return rc;
+}
+
 SIMPLE_REPLAY(sendmmsg, 307, int fd, struct mmsghdr __user *msg, unsigned int vlen, unsigned flags);
 asmlinkage long shim_sendmmsg(int fd, struct mmsghdr __user *msg, unsigned int vlen, unsigned flags)
 SHIM_CALL_MAIN(307, record_sendmmsg(fd, msg, vlen, flags), replay_sendmmsg(fd, msg, vlen, flags), theia_sys_sendmmsg(fd, msg, vlen, flags))
