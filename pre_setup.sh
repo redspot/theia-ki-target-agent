@@ -25,8 +25,8 @@ fi
 
 spec_unpriv() {
     # SPEC_VER is independent from the code base
-    SPEC_VER="1.0-${GO_PIPELINE_COUNTER}"
-    SPEC_PATH="/usr/src/spec-${SPEC_VER}"
+    export SPEC_VER="1.0-${GO_PIPELINE_COUNTER}"
+    export SPEC_PATH="/usr/src/spec-${SPEC_VER}"
     [ -d "${SPEC_PATH}" ]
     sed -i -e "/^PACKAGE_VERSION/ s/0000/${GO_PIPELINE_COUNTER}/" ${DIR}/test/dev/dkms.conf
 }
@@ -51,9 +51,9 @@ pg_unpriv() {
     # AND devs (us) can bump 1.1 up for compat reasons.
     # really, spec mod should be the same way
     sed -i -e "/^MODULE_VERSION/ s/0000/${GO_PIPELINE_COUNTER}/" $patchguard_src
-    PG_VER=$(grep ^MODULE_VERSION ${patchguard_src} | cut -d\" -f2)
+    export PG_VER=$(grep ^MODULE_VERSION ${patchguard_src} | cut -d\" -f2)
     [ x"$PG_VER" != x ]
-    PATCHGUARD_PATH="/usr/src/patchguard-${PG_VER}"
+    export PATCHGUARD_PATH="/usr/src/patchguard-${PG_VER}"
     sed -i -e "/^PACKAGE_VERSION/ s/0000/${PG_VER}/" ${DIR}/patchguard/dkms.conf
 }
 pg_priv() {
@@ -76,7 +76,7 @@ if [ "`whoami`" != 'root' ]; then
     ${pipeline_prefix}_unpriv
     # sudoers allows 'go' to exec target-*/pre_setup.sh
     # but not target-*/subdir/pre_setup.sh
-	exec sudo -E "${DIR}/$(basename $0)"
+    exec sudo -E "${DIR}/$(basename $0)"
 else
     ${pipeline_prefix}_priv
 fi
