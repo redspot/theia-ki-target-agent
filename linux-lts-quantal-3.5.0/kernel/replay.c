@@ -13912,8 +13912,14 @@ void get_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_f
   }
 
   *port = THEIA_INVALID_PORT;
-  strcpy(ip, "NA");
-  strcpy(sun_path, "NA");
+  if(is_peer == false) {//local ip
+    strcpy(ip, "127.0.0.1");
+    strcpy(sun_path, "127.0.0.1");
+  }
+  else {
+    strcpy(ip, "NA");
+    strcpy(sun_path, "NA");
+  }
 
   if (err && err != -ENOTCONN)
   {
@@ -13980,8 +13986,6 @@ void get_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_f
     default:
       pr_debug("get_ip_port_sockfd: sa_family problem %d\n", sockaddr->sa_family);
       *port = THEIA_INVALID_PORT;
-      strcpy(ip, "NA");
-      strcpy(sun_path, "NA");
       break;
   }
 }
