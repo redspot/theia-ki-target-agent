@@ -14113,12 +14113,47 @@ void packahgv_accept(struct accept_ahgv *sys_args)
   }
 }
 
+bool addr2uuid(struct socket *sock, struct sockaddr *dest_addr, char *uuid_str) {
+  struct sockaddr_in* in_sockaddr;
+  unsigned char* cc;
+  u_long port, local_port;
+	char ip[16] = {'\0'};
+	char local_ip[16] = {'\0'};
+  
+  in_sockaddr = (struct sockaddr_in*)dest_addr;
+  port = ntohs(in_sockaddr->sin_port);
+  cc = (unsigned char *)in_sockaddr;
+  snprintf(ip, 16, "%u.%u.%u.%u", cc[4],cc[5],cc[6],cc[7]);
+
+//get src addr
+  if(sock!=NULL) {
+  //  sk_buff * skb = sock->sk->sk_send_head;
+  //  struct flowi4 fl4 = {
+  //    .flowi4_oif = 0,
+  //    .flowi4_tos = 0,
+  //    .daddr = daddr->sin_addr.s_addr,
+  //    .saddr = 0,
+  //  };
+  //  rt = ip_route_output_key(&init_net, &fl4);
+  //  __be32 s_addr = rt->rt_src;
+  //  str = inet_ntop4((u_char*)s_addr, tmp4, IN4_STR_LEN);
+  }
+  else {
+    local_port = 0;
+    sprintf(local_ip, "127.0.0.1");
+  }
+
+  snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%lu|%s|%lu", ip, port, local_ip, local_port);
+  
+  return true;
+
+}
+
 struct sendto_ahgv
 {
   int             pid;
   int             sock_fd;
-  char            ip[16];
-  u_long          port;
+  struct sockaddr dest_addr;
   long            rc;
   sa_family_t     sa_family;
   char            sun_path[UNIX_PATH_MAX];
@@ -14134,13 +14169,23 @@ void packahgv_sendto(struct sendto_ahgv *sys_args)
   {
     char *buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
     long sec, nsec;
+    int error=0;
+    struct socket *sock;
 #ifdef THEIA_AUX_DATA
     theia_dump_auxdata();
 #endif
     get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
-    if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
-      goto err; /* no file, socket, ...? */
+    sock = sockfd_lookup(sys_args->sock_fd, &error);
+    if(sock->type == SOCK_RAW) { // refer to dest_addr when type is RAW
+      if (addr2uuid(NULL, &sys_args->dest_addr, uuid_str) == false)
+        goto err; 
+    }
+    else {
+      if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
+        goto err; 
+    }
+
 
     size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n",
                    44, sys_args->pid, current->start_time.tv_sec,
@@ -14181,8 +14226,7 @@ struct recvfrom_ahgv
 {
   int             pid;
   int             sock_fd;
-  char            ip[16];
-  u_long          port;
+  struct sockaddr src_addr;
   long            rc;
   sa_family_t     sa_family;
   char            sun_path[UNIX_PATH_MAX];
@@ -14198,13 +14242,22 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args)
   {
     char *buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
     long sec, nsec;
+    int error=0;
+    struct socket *sock;
 #ifdef THEIA_AUX_DATA
     theia_dump_auxdata();
 #endif
     get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
-    if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
-      goto err; /* no file, socket, ...? */
+    sock = sockfd_lookup(sys_args->sock_fd, &error);
+    if(sock && sock->type == SOCK_RAW) { // refer to dest_addr when type is RAW
+      if (addr2uuid(NULL, &sys_args->src_addr, uuid_str) == false)
+        goto err;
+    }
+    else {
+      if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
+        goto err;
+    }
 
     size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n",
                    45, sys_args->pid, current->start_time.tv_sec,
@@ -14646,6 +14699,17 @@ void theia_sendto_ahg(long rc, int fd, void __user *buff, size_t len, unsigned i
   pahgv_sendto->pid = current->pid;
   pahgv_sendto->sock_fd = fd;
   pahgv_sendto->rc = rc;
+
+  if (copy_from_user((char*)&pahgv_sendto->dest_addr, (char*)addr, sizeof(struct sockaddr))) {
+		printk ("theia_sendto_ahg: failed to copy dest_addr.\n");
+		return;
+  }
+#if 0
+  if (addr != NULL) /* via sendto syscall */
+    get_ip_port_sockaddr(addr, addr_len, pahgv_sendto->ip, &(pahgv_sendto->port), pahgv_sendto->sun_path, &(pahgv_sendto->sa_family));
+  else /* via send syscall */
+    get_peer_ip_port_sockfd(fd, pahgv_sendto->ip, &(pahgv_sendto->port), pahgv_sendto->sun_path, &(pahgv_sendto->sa_family));
+#endif
   packahgv_sendto(pahgv_sendto);
   KFREE(pahgv_sendto);
 
@@ -14672,6 +14736,12 @@ void theia_recvfrom_ahg(long rc, int fd, void __user *ubuf, size_t size, unsigne
   pahgv_recvfrom->pid = current->pid;
   pahgv_recvfrom->sock_fd = fd;
   pahgv_recvfrom->rc = rc;
+//copy the src_addr to recvfrom_ahgv
+  if (copy_from_user((char*)&pahgv_recvfrom->src_addr, (char*)addr, sizeof(struct sockaddr))) {
+		printk ("theia_recvfrom_ahg: failed to copy src_addr.\n");
+		return;
+  }
+  //        pahgv_recvfrom->clock = clock;
   packahgv_recvfrom(pahgv_recvfrom);
   KFREE(pahgv_recvfrom);
 
