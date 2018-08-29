@@ -14170,22 +14170,26 @@ void packahgv_sendto(struct sendto_ahgv *sys_args)
     char *buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
     long sec, nsec;
     int error=0;
-    struct socket *sock;
+    struct socket *sock = NULL;
 #ifdef THEIA_AUX_DATA
     theia_dump_auxdata();
 #endif
     get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
     sock = sockfd_lookup(sys_args->sock_fd, &error);
-    if(sock->type == SOCK_RAW) { // refer to dest_addr when type is RAW
-      if (addr2uuid(NULL, &sys_args->dest_addr, uuid_str) == false)
-        goto err; 
+    if (sock) {
+      if(sock->type == SOCK_RAW) { // refer to dest_addr when type is RAW
+        if (addr2uuid(NULL, &sys_args->dest_addr, uuid_str) == false)
+          goto err; 
+      }
+      else {
+        if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
+          goto err; 
+      }
     }
     else {
-      if (fd2uuid(sys_args->sock_fd, uuid_str) == false)
-        goto err; 
+      goto err;
     }
-
 
     size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n",
                    44, sys_args->pid, current->start_time.tv_sec,
@@ -14219,6 +14223,8 @@ void packahgv_sendto(struct sendto_ahgv *sys_args)
       theia_file_write(buf, size);
 err:
     kmem_cache_free(theia_buffers, buf);
+    if (sock)
+      sockfd_put(sock);
   }
 }
 
