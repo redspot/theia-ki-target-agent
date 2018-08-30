@@ -10484,6 +10484,7 @@ void theia_unlink_ahgx(const char *kfilename)
   struct file *file;
   int fd, fput_needed;
   char *fpath = NULL;
+  char *fpath_b64;
   char *buf;
   mm_segment_t old_fs;
 #ifdef DPATH_USE_STACK
@@ -10517,9 +10518,13 @@ void theia_unlink_ahgx(const char *kfilename)
         fpath = pbuf;
       }
 
-      sprintf(buf, "%s|%s", uuid_str, fpath);
+      fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+      if (!fpath_b64) fpath_b64 = "";
+
+      sprintf(buf, "%s|%s", uuid_str, fpath_b64);
       theia_dump_str(buf, 0, SYS_UNLINK);
       fput_light(file, fput_needed);
+      vfree(fpath_b64);
     }
 
     sys_close(fd);
@@ -10606,6 +10611,7 @@ void theia_unlinkat_ahgx(int dfd, const char *kfilename, int flag)
   struct file *file;
   int fd, fput_needed;
   char *fpath;
+  char *fpath_b64;
   char *buf;
   mm_segment_t old_fs;
 #ifdef DPATH_USE_STACK
@@ -10639,9 +10645,13 @@ void theia_unlinkat_ahgx(int dfd, const char *kfilename, int flag)
         fpath = pbuf;
       }
 
-      sprintf(buf, "%s|%s|%d", uuid_str, fpath, flag);
+      fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+      if (!fpath_b64) fpath_b64 = "";
+
+      sprintf(buf, "%s|%s|%d", uuid_str, fpath_b64, flag);
       theia_dump_str(buf, 0, SYS_UNLINKAT);
       fput_light(file, fput_needed);
+      vfree(fpath_b64);
     }
 
     sys_close(fd);
