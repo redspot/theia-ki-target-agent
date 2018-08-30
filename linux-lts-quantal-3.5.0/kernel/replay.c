@@ -462,6 +462,7 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
         get_local_ip_port_sockfd(fd, local_ip, (u_long *)&local_port, local_sun_path, &sa_family);
         if (strcmp(ip, "LOCAL") == 0)
         {
+          /* TODO: base64 for sun_path? */
           snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", sun_path, port, local_sun_path, local_port);
         }
         else
@@ -9982,17 +9983,18 @@ struct open_ahgv
 void packahgv_open(struct open_ahgv *sys_args)
 {
   char uuid_str[THEIA_UUID_LEN + 1];
-  char *filename_b64;
+  char *filename_b64 = NULL;
+  bool filename_b64_alloced = false;
   uint32_t buf_size;
 
   if (theia_logging_toggle)
   {
-    char *buf;
+    char *buf = NULL;
 #ifndef THEIA_UUID
 #ifdef DPATH_USE_STACK
     char pbuf[THEIA_DPATH_LEN];
 #else
-    char *pbuf;
+    char *pbuf = NULL;
 #endif
 #endif
     long sec, nsec;
@@ -10007,7 +10009,10 @@ void packahgv_open(struct open_ahgv *sys_args)
       return;
 
     filename_b64 = base64_encode(sys_args->filename, strlen(sys_args->filename), NULL);
-    if (!filename_b64) filename_b64 = "";
+    if (!filename_b64) 
+      filename_b64 = "";
+    else
+      filename_b64_alloced = true;
 
     buf_size = strlen(filename_b64) + 256;
     buf = vmalloc(buf_size);
@@ -10022,7 +10027,8 @@ void packahgv_open(struct open_ahgv *sys_args)
     }
     else
       theia_file_write(buf, size);
-    vfree(filename_b64);
+    if (filename_b64_alloced)
+      vfree(filename_b64);
     vfree(buf);
 #else
     buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
