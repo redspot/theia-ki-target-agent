@@ -8868,16 +8868,17 @@ void packahgv_process(struct task_struct *tsk)
   int size = 0;
   int is_user_remote;
   struct task_struct *ptsk;
-  char *fpathbuf;
-  char *fpath;
-  char *fpath_b64;
+  char *fpathbuf = NULL;
+  char *fpath = NULL;
+  char *fpath_b64 = NULL;
+  bool fpath_b64_alloced = false;
   struct mm_struct *mm;
   char *args = NULL;
   int i;
   char *args_b64 = NULL;
   char args_bkp[2] = "";
   uint32_t buf_size;
-  char *buf;
+  char *buf = NULL;
 
   if (theia_logging_toggle)
   {
@@ -8899,7 +8900,10 @@ void packahgv_process(struct task_struct *tsk)
     }
 
     fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
-    if (!fpath_b64) fpath_b64 = "";
+    if (!fpath_b64) 
+      fpath_b64 = "";
+    else
+      fpath_b64_alloced = true;
 
     //provide cmdline args in new process
     mm = current->mm;
@@ -8947,11 +8951,13 @@ void packahgv_process(struct task_struct *tsk)
     else
       theia_file_write(buf, size);
     vfree(fpathbuf);
-    vfree(fpath_b64);
+    if (fpath_b64_alloced)
+      vfree(fpath_b64);
     vfree(buf);
-    vfree(args);
-    if (args)
+    if (args) {
       vfree(args_b64);
+      vfree(args);
+    }
   }
 }
 
@@ -10484,7 +10490,8 @@ void theia_unlink_ahgx(const char *kfilename)
   struct file *file;
   int fd, fput_needed;
   char *fpath = NULL;
-  char *fpath_b64;
+  char *fpath_b64 = NULL;
+  bool fpath_b64_alloced = false;
   char *buf;
   mm_segment_t old_fs;
 #ifdef DPATH_USE_STACK
@@ -10519,12 +10526,16 @@ void theia_unlink_ahgx(const char *kfilename)
       }
 
       fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
-      if (!fpath_b64) fpath_b64 = "";
+      if (!fpath_b64) 
+        fpath_b64 = "";
+      else
+        fpath_b64_alloced = true;
 
       sprintf(buf, "%s|%s", uuid_str, fpath_b64);
       theia_dump_str(buf, 0, SYS_UNLINK);
       fput_light(file, fput_needed);
-      vfree(fpath_b64);
+      if (fpath_b64_alloced)
+        vfree(fpath_b64);
     }
 
     sys_close(fd);
@@ -10610,8 +10621,9 @@ void theia_unlinkat_ahgx(int dfd, const char *kfilename, int flag)
   char uuid_str[THEIA_UUID_LEN + 1];
   struct file *file;
   int fd, fput_needed;
-  char *fpath;
-  char *fpath_b64;
+  char *fpath = NULL;
+  char *fpath_b64 = NULL;
+  bool fpath_b64_alloced = false;
   char *buf;
   mm_segment_t old_fs;
 #ifdef DPATH_USE_STACK
@@ -10646,12 +10658,16 @@ void theia_unlinkat_ahgx(int dfd, const char *kfilename, int flag)
       }
 
       fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
-      if (!fpath_b64) fpath_b64 = "";
+      if (!fpath_b64) 
+        fpath_b64 = "";
+      else
+        fpath_b64_alloced = true;
 
       sprintf(buf, "%s|%s|%d", uuid_str, fpath_b64, flag);
       theia_dump_str(buf, 0, SYS_UNLINKAT);
       fput_light(file, fput_needed);
-      vfree(fpath_b64);
+      if (fpath_b64_alloced)
+        vfree(fpath_b64);
     }
 
     sys_close(fd);
@@ -10737,15 +10753,16 @@ SHIM_CALL_MAIN(SYS_UNLINKAT, record_unlinkat(dfd, filename, flag), replay_unlink
 void theia_openat_ahgx(int fd, const char __user *filename, int flag, int mode)
 {
   char uuid_str[THEIA_UUID_LEN + 1];
-  struct file *file;
+  struct file *file = NULL;
   int fput_needed;
-  char *fpath;
-  char *fpath_b64;
-  char *buf;
+  char *fpath = NULL;
+  char *fpath_b64 = NULL;
+  bool fpath_b64_alloced = false;
+  char *buf = NULL;
 #ifdef DPATH_USE_STACK
   char pbuf[THEIA_DPATH_LEN];
 #else
-  char *pbuf;
+  char *pbuf = NULL;
   pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 #endif
   buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
@@ -10767,12 +10784,16 @@ void theia_openat_ahgx(int fd, const char __user *filename, int flag, int mode)
     }
 
     fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
-    if (!fpath_b64) fpath_b64 = "";
+    if (!fpath_b64) 
+      fpath_b64 = "";
+    else
+      fpath_b64_alloced = true;
 
     sprintf(buf, "%s|%s|%d|%d", uuid_str, fpath_b64, flag, mode);
     theia_dump_str(buf, fd, SYS_OPENAT);
     fput_light(file, fput_needed);
-    vfree(fpath_b64);
+    if (fpath_b64_alloced)
+      vfree(fpath_b64);
   }
 err:
   kmem_cache_free(theia_buffers, buf);
@@ -10889,8 +10910,10 @@ void packahgv_execve(struct execve_ahgv *sys_args)
   struct file *file;
   int fd, fput_needed;
   mm_segment_t old_fs;
-  char *fpath_b64;
-  char *args_b64;
+  char *fpath_b64 = NULL;
+  bool fpath_b64_alloced = false;
+  char *args_b64 = NULL;
+  bool args_b64_alloced = false;
   uint32_t buf_size;
   char *buf;
 #ifdef DPATH_USE_STACK
@@ -10947,10 +10970,16 @@ void packahgv_execve(struct execve_ahgv *sys_args)
     set_fs(old_fs);
 
     fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
-    if (!fpath_b64) fpath_b64 = "";
+    if (!fpath_b64) 
+      fpath_b64 = "";
+    else
+      fpath_b64_alloced = true;
 
     args_b64 = base64_encode(sys_args->args, strlen(sys_args->args), NULL);
-    if (!args_b64) args_b64 = "";
+    if (!args_b64) 
+      args_b64 = "";
+    else
+      args_b64_alloced = true;
 
     buf_size = strlen(args_b64) + strlen(fpath_b64) + 256;
     buf = vmalloc(buf_size);
@@ -10966,8 +10995,10 @@ void packahgv_execve(struct execve_ahgv *sys_args)
       theia_file_write(buf, size);
 
     vfree(buf);
-    vfree(args_b64);
-    vfree(fpath_b64);
+    if (args_b64_alloced)
+      vfree(args_b64);
+    if (fpath_b64_alloced)
+      vfree(fpath_b64);
 err: ;
 #ifndef DPATH_USE_STACK
     kmem_cache_free(theia_buffers, pbuf);
@@ -11630,7 +11661,9 @@ inline void theia_mknod_ahgx(const char __user *filename, int mode, unsigned dev
 inline void theia_chmod_ahgx(char __user *filename, mode_t mode, long rc, int sysnum)
 {
   struct path path;
-  char *fpath;
+  char *fpath = NULL;
+  char *fpath_b64 = NULL;
+  bool fpath_b64_alloced = false;
   char uuid_str[THEIA_UUID_LEN + 1];
   int error;
   char *buf;
@@ -11650,60 +11683,69 @@ inline void theia_chmod_ahgx(char __user *filename, mode_t mode, long rc, int sy
   if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
     fpath = filename;
 
+  fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+  if (!fpath_b64) 
+    fpath_b64 = "";
+  else
+    fpath_b64_alloced = true;
+
   path2uuid(path, uuid_str);
-  sprintf(buf, "%s|%s|%d", uuid_str, fpath, mode);
+  sprintf(buf, "%s|%s|%d", uuid_str, fpath_b64, mode);
   theia_dump_str(buf, rc, sysnum);
 err:
   kmem_cache_free(theia_buffers, buf);
 #ifndef DPATH_USE_STACK
   kmem_cache_free(theia_buffers, pbuf);
 #endif
+  if (fpath_b64_alloced)
+    vfree(fpath_b64);
 }
 
 inline void theia_fchmod_ahgx(unsigned int fd, mode_t mode, long rc, int sysnum)
 {
-  struct file *file;
+  struct file *file = NULL;
   char uuid_str[THEIA_UUID_LEN + 1];
-  char *fpath;
+  char *fpath = NULL;
+  char *fpath_b64 = NULL;
+  bool fpath_b64_alloced = false;
   int fput_needed;
-  char *buf;
+  char *buf = NULL;
 #ifdef DPATH_USE_STACK
   char pbuf[THEIA_DPATH_LEN];
 #else
-  char *pbuf;
+  char *pbuf = NULL;
   pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 #endif
   buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
   file = fget_light(fd, &fput_needed);
   if (!file)
-  {
-    //XXX(joey): Call fput_light if call fails?
     goto err;
-  }
 
   fpath = get_file_fullpath(file, pbuf, THEIA_DPATH_LEN);
   if (IS_ERR(fpath))
-  {
-    fput_light(file, fput_needed);
     goto err;
-  }
 
   if (file2uuid(file, uuid_str, fd) == false)
-  {
-    fput_light(file, fput_needed);
     goto err;
-  }
 
-  fput_light(file, fput_needed);
+  fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+  if (!fpath_b64) 
+    fpath_b64 = "";
+  else
+    fpath_b64_alloced = true;
 
-  sprintf(buf, "%s|%s|%d", uuid_str, fpath, mode);
+  sprintf(buf, "%s|%s|%d", uuid_str, fpath_b64, mode);
   theia_dump_str(buf, rc, sysnum);
 err:
   kmem_cache_free(theia_buffers, buf);
 #ifndef DPATH_USE_STACK
   kmem_cache_free(theia_buffers, pbuf);
 #endif
+  if (file)
+    fput_light(file, fput_needed);
+  if (fpath_b64_alloced)
+    vfree(fpath_b64);
 }
 
 inline void theia_fchmodat_ahgx(int dfd, char __user *filename, int mode,
@@ -11711,14 +11753,16 @@ inline void theia_fchmodat_ahgx(int dfd, char __user *filename, int mode,
 {
   struct path path;
   char *fpath = NULL;
+  char *fpath_b64 = NULL;
+  bool fpath_b64_alloced = false;
   int error;
   char uuid_str[THEIA_UUID_LEN + 1];
   unsigned int lookup_flags = LOOKUP_FOLLOW;
-  char *buf;
+  char *buf = NULL;
 #ifdef DPATH_USE_STACK
   char pbuf[THEIA_DPATH_LEN];
 #else
-  char *pbuf;
+  char *pbuf = NULL;
   pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 #endif
   buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
@@ -11752,62 +11796,73 @@ inline void theia_fchmodat_ahgx(int dfd, char __user *filename, int mode,
   if (fpath == NULL)
     goto err;
 
+  fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+  if (!fpath_b64) 
+    fpath_b64 = "";
+  else
+    fpath_b64_alloced = true;
+
   path2uuid(path, uuid_str);
-  sprintf(buf, "%s|%s|%d", uuid_str, fpath, mode);
+  sprintf(buf, "%s|%s|%d", uuid_str, fpath_b64, mode);
   theia_dump_str(buf, rc, sysnum);
 err:
   kmem_cache_free(theia_buffers, buf);
 #ifndef DPATH_USE_STACK
   kmem_cache_free(theia_buffers, pbuf);
 #endif
+  if (fpath_b64_alloced)
+    vfree(fpath_b64);
 }
 
 inline void theia_fchown_ahgx(unsigned int fd, uid_t user, gid_t group, long rc, int sysnum)
 {
-  struct file *file;
+  struct file *file = NULL;
   char uuid_str[THEIA_UUID_LEN + 1];
-  char *fpath;
+  char *fpath = NULL;
+  char *fpath_b64 = NULL;
+  bool fpath_b64_alloced = false;
   int fput_needed;
   umode_t mode;
-  char *buf;
+  char *buf = NULL;
 #ifdef DPATH_USE_STACK
   char pbuf[THEIA_DPATH_LEN];
 #else
-  char *pbuf;
+  char *pbuf = NULL;
   pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 #endif
   buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
   file = fget_light(fd, &fput_needed);
   if (!file)
-  {
-    //XXX(joey): Call fput_light if call fails?
     goto err;
-  }
 
   fpath = get_file_fullpath(file, pbuf, THEIA_DPATH_LEN);
   if (IS_ERR(fpath))
-  {
-    fput_light(file, fput_needed);
     goto err;
-  }
 
   if (file2uuid(file, uuid_str, fd) == false)
-  {
-    fput_light(file, fput_needed);
     goto err;
-  }
+
+  fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+  if (!fpath_b64) 
+    fpath_b64 = "";
+  else
+    fpath_b64_alloced = true;
 
   mode = file->f_path.dentry->d_inode->i_mode;
   fput_light(file, fput_needed);
 
-  sprintf(buf, "%s|%s|%u|%d/%d", uuid_str, fpath, mode, user, group);
+  sprintf(buf, "%s|%s|%u|%d/%d", uuid_str, fpath_b64, mode, user, group);
   theia_dump_str(buf, rc, sysnum);
 err:
   kmem_cache_free(theia_buffers, buf);
 #ifndef DPATH_USE_STACK
   kmem_cache_free(theia_buffers, pbuf);
 #endif
+  if (file)
+    fput_light(file, fput_needed);
+  if (fpath_b64_alloced)
+    vfree(fpath_b64);
 }
 
 inline void theia_lchown_ahgx(char __user *filename, uid_t user, gid_t group,
@@ -11815,14 +11870,16 @@ inline void theia_lchown_ahgx(char __user *filename, uid_t user, gid_t group,
 {
   struct path path;
   umode_t mode;
-  char *fpath;
+  char *fpath = NULL;
+  char *fpath_b64 = NULL;
+  bool fpath_b64_alloced = false;
   char uuid_str[THEIA_UUID_LEN + 1];
   int error;
-  char *buf;
+  char *buf = NULL;
 #ifdef DPATH_USE_STACK
   char pbuf[THEIA_DPATH_LEN];
 #else
-  char *pbuf;
+  char *pbuf = NULL;
   pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 #endif
   buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
@@ -11836,14 +11893,22 @@ inline void theia_lchown_ahgx(char __user *filename, uid_t user, gid_t group,
   if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
     fpath = filename;
 
+  fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+  if (!fpath_b64) 
+    fpath_b64 = "";
+  else
+    fpath_b64_alloced = true;
+
   path2uuid(path, uuid_str);
-  sprintf(buf, "%s|%s|%u|%d/%d", uuid_str, fpath, mode, user, group);
+  sprintf(buf, "%s|%s|%u|%d/%d", uuid_str, fpath_b64, mode, user, group);
   theia_dump_str(buf, rc, sysnum);
 err:
   kmem_cache_free(theia_buffers, buf);
 #ifndef DPATH_USE_STACK
   kmem_cache_free(theia_buffers, pbuf);
 #endif
+  if (fpath_b64_alloced)
+    vfree(fpath_b64);
 }
 
 inline void theia_chown_ahgx(char __user *filename, uid_t user,
@@ -11851,14 +11916,16 @@ inline void theia_chown_ahgx(char __user *filename, uid_t user,
 {
   struct path path;
   umode_t mode;
-  char *fpath;
+  char *fpath = NULL;
+  char *fpath_b64 = NULL;
+  bool fpath_b64_alloced = false;
   char uuid_str[THEIA_UUID_LEN + 1];
   int error;
-  char *buf;
+  char *buf = NULL;
 #ifdef DPATH_USE_STACK
   char pbuf[THEIA_DPATH_LEN];
 #else
-  char *pbuf;
+  char *pbuf = NULL;
   pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 #endif
   buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
@@ -11871,15 +11938,23 @@ inline void theia_chown_ahgx(char __user *filename, uid_t user,
   if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
     fpath = filename;
 
+  fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+  if (!fpath_b64) 
+    fpath_b64 = "";
+  else
+    fpath_b64_alloced = true;
+
   mode = path.dentry->d_inode->i_mode;
   path2uuid(path, uuid_str);
-  sprintf(buf, "%s|%s|%u|%d/%d", uuid_str, fpath, mode, user, group);
+  sprintf(buf, "%s|%s|%u|%d/%d", uuid_str, fpath_b64, mode, user, group);
   theia_dump_str(buf, rc, sysnum);
 err:
   kmem_cache_free(theia_buffers, buf);
 #ifndef DPATH_USE_STACK
   kmem_cache_free(theia_buffers, pbuf);
 #endif
+  if (fpath_b64_alloced)
+    vfree(fpath_b64);
 }
 
 
@@ -11888,15 +11963,17 @@ inline void theia_fchownat_ahgx(int dfd, char __user *filename, uid_t user,
                                 gid_t group, int flag, long rc, int sysnum)
 {
   int res;
-  char *fpath;
+  char *fpath = NULL;
+  char *fpath_b64 = NULL;
+  bool fpath_b64_alloced = false;
   umode_t mode;
   struct path path;
   char uuid_str[THEIA_UUID_LEN + 1];
-  char *buf;
+  char *buf = NULL;
 #ifdef DPATH_USE_STACK
   char pbuf[THEIA_DPATH_LEN];
 #else
-  char *pbuf;
+  char *pbuf = NULL;
   pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 #endif
   buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
@@ -11908,9 +11985,15 @@ inline void theia_fchownat_ahgx(int dfd, char __user *filename, uid_t user,
     if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
       fpath = filename;
 
+    fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+    if (!fpath_b64) 
+      fpath_b64 = "";
+    else
+      fpath_b64_alloced = true;
+
     path2uuid(path, uuid_str);
     mode = path.dentry->d_inode->i_mode;
-    sprintf(buf, "%s|%s|%u|%d/%d", uuid_str, fpath, mode, user, group);
+    sprintf(buf, "%s|%s|%u|%d/%d", uuid_str, fpath_b64, mode, user, group);
     theia_dump_str(buf, rc, sysnum);
   }
   else
@@ -11922,9 +12005,15 @@ inline void theia_fchownat_ahgx(int dfd, char __user *filename, uid_t user,
       if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
         fpath = filename;
 
+      fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+      if (!fpath_b64) 
+        fpath_b64 = "";
+      else
+        fpath_b64_alloced = true;
+
       path2uuid(path, uuid_str);
       mode = path.dentry->d_inode->i_mode;
-      sprintf(buf, "%s|%s||%u|%d/%d", uuid_str, fpath, mode, user, group);
+      sprintf(buf, "%s|%s||%u|%d/%d", uuid_str, fpath_b64, mode, user, group);
       theia_dump_str(buf, rc, sysnum);
     }
     else
@@ -11936,6 +12025,8 @@ inline void theia_fchownat_ahgx(int dfd, char __user *filename, uid_t user,
 #ifndef DPATH_USE_STACK
   kmem_cache_free(theia_buffers, pbuf);
 #endif
+  if (fpath_b64_alloced)
+    vfree(fpath_b64);
 }
 
 inline void theia_lseek_ahgx(unsigned int fd, off_t offset, unsigned int origin, long rc, int sysnum)
@@ -11978,17 +12069,18 @@ struct mount_ahgv
 void packahgv_mount(struct mount_ahgv *sys_args)
 {
   char uuid_str[THEIA_UUID_LEN + 1];
-  struct file *file;
+  struct file *file = NULL;
   int fd, fput_needed;
   char *fpath = NULL;
+  char *fpath_b64 = NULL;
+  bool fpath_b64_alloced = false;
   mm_segment_t old_fs;
-  char *fpath_b64;
   uint32_t buf_size;
-  char *buf;
+  char *buf = NULL;
 #ifdef DPATH_USE_STACK
   char pbuf[THEIA_DPATH_LEN];
 #else
-  char *pbuf;
+  char *pbuf = NULL;
 #endif
   //Yang
   if (theia_logging_toggle)
@@ -12042,7 +12134,10 @@ void packahgv_mount(struct mount_ahgv *sys_args)
     get_curr_time(&sec, &nsec);
 
     fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
-    if (!fpath_b64) fpath_b64 = "";
+    if (!fpath_b64) 
+      fpath_b64 = "";
+    else
+      fpath_b64_alloced = true;
 
     buf_size = strlen(fpath_b64) + 256;
     buf = vmalloc(buf_size);
@@ -12058,8 +12153,9 @@ void packahgv_mount(struct mount_ahgv *sys_args)
     else
       theia_file_write(buf, size);
 
-    vfree(fpath_b64);
     vfree(buf);
+    if (fpath_b64_alloced)
+      vfree(fpath_b64);
 err: ;
 #ifndef DPATH_USE_STACK
     kmem_cache_free(theia_buffers, pbuf);
@@ -20411,14 +20507,16 @@ void theia_sendfile64_ahgx(int out_fd, int in_fd, loff_t __user *offset, size_t 
   char socket_uuid_str[THEIA_UUID_LEN + 1];
   char file_uuid_str[THEIA_UUID_LEN + 1];
   loff_t location;
-  struct file *file;
+  struct file *file = NULL;
   int fput_needed;
-  char *fpath;
-  char *buf;
+  char *fpath = NULL;
+  char *fpath_b64 = NULL;
+  bool fpath_b64_alloced = false;
+  char *buf = NULL;
 #ifdef DPATH_USE_STACK
   char pbuf[THEIA_DPATH_LEN];
 #else
-  char *pbuf;
+  char *pbuf = NULL;
   pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 #endif
   buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
@@ -20446,7 +20544,14 @@ void theia_sendfile64_ahgx(int out_fd, int in_fd, loff_t __user *offset, size_t 
       pbuf[0] = 0x0;
       fpath = pbuf;
     }
-    sprintf(buf, "%s|%s|%s|%lli|%lu", file_uuid_str, fpath, socket_uuid_str, location, count);
+
+    fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+    if (!fpath_b64) 
+      fpath_b64 = "";
+    else
+      fpath_b64_alloced = true;
+
+    sprintf(buf, "%s|%s|%s|%lli|%lu", file_uuid_str, fpath_b64, socket_uuid_str, location, count);
     theia_dump_str(buf, rc, 40);
   }
 err:
@@ -20454,6 +20559,8 @@ err:
 #ifndef DPATH_USE_STACK
   kmem_cache_free(theia_buffers, pbuf);
 #endif
+  if (fpath_b64_alloced)
+    vfree(fpath_b64);
 }
 
 static asmlinkage long
