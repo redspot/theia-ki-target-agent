@@ -8907,7 +8907,7 @@ void packahgv_process(struct task_struct *tsk)
       fpath_b64_alloced = true;
 
     //provide cmdline args in new process
-    mm = current->mm;
+    mm = tsk->mm;
     args = NULL;
     if (mm)
     {
