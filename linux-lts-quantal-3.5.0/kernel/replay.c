@@ -280,7 +280,7 @@ EXPORT_SYMBOL(theia_replay_register_data);
 
 /* dump aux data (callstack, user ids, ...) */
 #define THEIA_AUX_DATA 1
-#undef THEIA_AUX_DATA
+//#undef THEIA_AUX_DATA
 
 /*
 #define THEIA_USER_RET_ADDR 1
@@ -607,6 +607,9 @@ void theia_dump_auxdata()
 
 void theia_dump_str(char *str, int rc, int sysnum)
 {
+    long sec, nsec;
+    int size = 0;
+    char *buf;
   if (theia_check_channel() == false)
     return;
 
@@ -620,9 +623,6 @@ void theia_dump_str(char *str, int rc, int sysnum)
     theia_dump_auxdata();
 #endif
 
-    long sec, nsec;
-    int size = 0;
-    char *buf;
     get_curr_time(&sec, &nsec);
 
     buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
@@ -9070,6 +9070,8 @@ void packahgv_read(struct read_ahgv *sys_args)
 {
   char uuid_str[THEIA_UUID_LEN + 1];
   int size = 0;
+  char *buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+  long sec, nsec;
 
   //Yang
   if (theia_logging_toggle)
@@ -9081,8 +9083,6 @@ void packahgv_read(struct read_ahgv *sys_args)
       theia_dump_auxdata();
     }
 #endif
-    char *buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
-    long sec, nsec;
     get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
     if (fd2uuid(sys_args->fd, uuid_str) == false)
@@ -9738,6 +9738,8 @@ void packahgv_write(struct write_ahgv *sys_args)
 {
   char uuid_str[THEIA_UUID_LEN + 1];
   int size = 0;
+  char *buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+  long sec, nsec;
 
   //Yang
   if (theia_logging_toggle)
@@ -9749,8 +9751,6 @@ void packahgv_write(struct write_ahgv *sys_args)
       theia_dump_auxdata();
     }
 #endif
-    char *buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
-    long sec, nsec;
     get_curr_time(&sec, &nsec);
 #ifdef THEIA_UUID
     if (fd2uuid(sys_args->fd, uuid_str) == false)
