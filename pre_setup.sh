@@ -27,7 +27,6 @@ spec_unpriv() {
     # SPEC_VER is independent from the code base
     export SPEC_VER="1.0-${GO_PIPELINE_COUNTER}"
     export SPEC_PATH="/usr/src/spec-${SPEC_VER}"
-    [ -d "${SPEC_PATH}" ]
     sed -i -e "/^PACKAGE_VERSION/ s/0000/${GO_PIPELINE_COUNTER}/" ${DIR}/test/dev/dkms.conf
 }
 spec_priv() {
