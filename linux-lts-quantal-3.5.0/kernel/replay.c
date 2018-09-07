@@ -454,6 +454,8 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
     //    if (dev == 0x7) { /* socket */
     if (S_ISSOCK(mode))
     {
+      if (fd == -1) return false;
+
       sock = sockfd_lookup(fd, &err);
       if (sock)
       {
@@ -3320,7 +3322,7 @@ void get_user_callstack(char *buffer, size_t bufsize)
   struct stack_trace trace;
   unsigned long entries[NO_STACK_ENTRIES];
   int i;
-
+  char uuid_str[THEIA_UUID_LEN + 1];
   struct mm_struct *mm = current->mm;
   struct vm_area_struct *vma;
   struct inode *inode;
@@ -3353,7 +3355,9 @@ void get_user_callstack(char *buffer, size_t bufsize)
       {
         path = "anon_page";
       }
-      sprintf(ret_str, "%s[%x:%lx]=%lx", path, inode->i_sb->s_dev, inode->i_ino, trace.entries[i]);
+//      sprintf(ret_str, "%s[%x:%lx]=%lx", path, inode->i_sb->s_dev, inode->i_ino, trace.entries[i]);
+      file2uuid(vma->vm_file, uuid_str, -1);
+      sprintf(ret_str, "%s[%s]=%lx", path, uuid_str, trace.entries[i]);
       ptr = ret_str;
     }
     else
