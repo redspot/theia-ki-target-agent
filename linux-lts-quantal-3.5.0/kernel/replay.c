@@ -3316,7 +3316,7 @@ get_pt_regs(struct task_struct *tsk)
 }
 
 
-#define NO_STACK_ENTRIES 100
+#define NO_STACK_ENTRIES 64
 // SL: to dump return addresses
 void get_user_callstack(char *buffer, size_t bufsize)
 {
@@ -3331,6 +3331,12 @@ void get_user_callstack(char *buffer, size_t bufsize)
   char *ptr;
   char *path = NULL;
   char *pbuf;
+
+  if (mm == NULL) { /* kernel thread */
+    buffer[0] = '\0';
+    return;
+  }
+
   pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
   ret_str = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
