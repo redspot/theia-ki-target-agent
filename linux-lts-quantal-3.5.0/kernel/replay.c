@@ -14064,11 +14064,6 @@ void get_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_f
     pr_debug("getname error: err %d, sock is null? %d\n", err, sock == NULL);
     return;
   }
-  if (!len)
-  {
-    pr_err("getname error: len = %i\n", len);
-    return;
-  }
 
   sockaddr = (struct sockaddr *)address;
 
@@ -14102,6 +14097,10 @@ void get_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_f
       if (un_sockaddr->sun_path[0] != '\0')
         strncpy(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX);
       else { /* an abstract socket address */
+        if (!len) {
+          pr_err("getname error: len = %i\n", len);
+          return;
+        }
         strncpy(sun_path, un_sockaddr->sun_path + 1, len-sizeof(sa_family_t));
         if (len != sizeof(sa_family_t))
             sun_path[len-sizeof(sa_family_t)-1] = '\0';
