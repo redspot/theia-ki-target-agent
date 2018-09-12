@@ -466,10 +466,17 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
         if (strcmp(ip, "LOCAL") == 0)
         {
           /* TODO: base64 for sun_path? */
-          snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", sun_path, port, local_sun_path, local_port);
+          if (strcmp(local_ip, "LOCAL") == 0)
+            snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", sun_path, port, local_sun_path, local_port);
+          else
+            snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", sun_path, port, local_ip, local_port);
         }
-        else
-          snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", ip, port, local_ip, local_port);
+        else {
+          if (strcmp(local_ip, "LOCAL") == 0)
+            snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", ip, port, local_sun_path, local_port);
+          else
+            snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", ip, port, local_ip, local_port);
+        }
       }
       else
       {
@@ -14003,9 +14010,9 @@ void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char *i
         if (addrlen != sizeof(sa_family_t))
             sun_path[addrlen-sizeof(sa_family_t)-1] = '\0';
       }
-      if (strlen(sun_path) == 0)
-      {
-        strcpy(sun_path, "LOCAL");
+      if (strlen(sun_path) == 0) {
+        pr_err("sun_path error: length is zero\n");
+        return;
       }
       break;
     case AF_NETLINK: ;
@@ -14105,9 +14112,9 @@ void get_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_f
         if (len != sizeof(sa_family_t))
             sun_path[len-sizeof(sa_family_t)-1] = '\0';
       }
-      if (strlen(sun_path) == 0)
-      {
-        strcpy(sun_path, "LOCAL");
+      if (strlen(sun_path) == 0) {
+        pr_err("sun_path error: length is zero\n");
+        return;
       }
       break;
     case AF_NETLINK: ;
