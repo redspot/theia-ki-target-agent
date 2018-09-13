@@ -14006,9 +14006,13 @@ void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char *i
       if (un_sockaddr->sun_path[0] != '\0')
         strncpy(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX);
       else { /* an abstract socket address */
-        strncpy(sun_path, un_sockaddr->sun_path + 1, addrlen-sizeof(sa_family_t));
-        if (addrlen != sizeof(sa_family_t))
-            sun_path[addrlen-sizeof(sa_family_t)-1] = '\0';
+        if (addrlen-sizeof(sa_family_t) > 0) {
+          sun_path[0] = '@';
+          strncpy(sun_path+1, un_sockaddr->sun_path + 1, addrlen-sizeof(sa_family_t));
+          sun_path[addrlen-sizeof(sa_family_t)] = '\0';
+        }
+//        if (addrlen != sizeof(sa_family_t))
+//            sun_path[addrlen-sizeof(sa_family_t)] = '\0';
       }
       if (strlen(sun_path) == 0) {
         pr_err("sun_path error: length is zero\n");
@@ -14108,9 +14112,11 @@ void get_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_f
           pr_err("getname error: len = %i\n", len);
           return;
         }
-        strncpy(sun_path, un_sockaddr->sun_path + 1, len-sizeof(sa_family_t));
-        if (len != sizeof(sa_family_t))
-            sun_path[len-sizeof(sa_family_t)-1] = '\0';
+        if (len-sizeof(sa_family_t) > 0) {
+          sun_path[0] = '@';
+          strncpy(sun_path+1, un_sockaddr->sun_path + 1, len-sizeof(sa_family_t));
+          sun_path[len-sizeof(sa_family_t)] = '\0';
+        }
       }
       if (strlen(sun_path) == 0) {
         pr_err("sun_path error: length is zero\n");
