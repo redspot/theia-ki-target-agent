@@ -444,6 +444,8 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
   char sun_path[UNIX_PATH_MAX];
   char local_sun_path[UNIX_PATH_MAX];
   sa_family_t sa_family; /* not used */
+  char *sun_path_b64 = NULL;
+  char *local_sun_path_b64 = NULL;
 
   if (file)
   {
@@ -465,17 +467,37 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
         get_local_ip_port_sockfd(fd, local_ip, (u_long *)&local_port, local_sun_path, &sa_family);
         if (strcmp(ip, "LOCAL") == 0)
         {
-          /* TODO: base64 for sun_path? */
-          if (strcmp(local_ip, "LOCAL") == 0)
-            snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", sun_path, port, local_sun_path, local_port);
-          else
-            snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", sun_path, port, local_ip, local_port);
+          sun_path_b64 = base64_encode(sun_path, strlen(sun_path), NULL);
+          if (!sun_path_b64) 
+            sun_path_b64 = "";
+
+          if (strcmp(local_ip, "LOCAL") == 0) {
+            local_sun_path_b64 = base64_encode(local_sun_path, strlen(local_sun_path), NULL);
+            if (!local_sun_path_b64) 
+              local_sun_path_b64 = "";
+            snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", sun_path_b64, port, local_sun_path_b64, local_port);
+            if (local_sun_path_b64[0] != '\0')
+              vfree(local_sun_path_b64);
+          }
+          else {
+            snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", sun_path_b64, port, local_ip, local_port);
+          }
+
+          if (sun_path_b64[0] != '\0')
+            vfree(sun_path_b64);
         }
         else {
-          if (strcmp(local_ip, "LOCAL") == 0)
-            snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", ip, port, local_sun_path, local_port);
-          else
+          if (strcmp(local_ip, "LOCAL") == 0) {
+            local_sun_path_b64 = base64_encode(local_sun_path, strlen(local_sun_path), NULL);
+            if (!local_sun_path_b64) 
+              local_sun_path_b64 = "";
+            snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", ip, port, local_sun_path_b64, local_port);
+            if (local_sun_path_b64[0] != '\0')
+              vfree(local_sun_path_b64);
+          }
+          else {
             snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", ip, port, local_ip, local_port);
+          }
         }
       }
       else
