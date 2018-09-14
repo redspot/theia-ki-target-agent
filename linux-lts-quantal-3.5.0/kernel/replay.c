@@ -3397,11 +3397,13 @@ void get_user_callstack(char *buffer, size_t bufsize)
 //      sprintf(ret_str, "%s[%x:%lx]=%lx", path, inode->i_sb->s_dev, inode->i_ino, trace.entries[i]);
       file2uuid(vma->vm_file, uuid_str, -1);
       path_b64 = base64_encode(path, strlen(path), NULL);
-      if (path_b64)
+      if (path_b64) {
         sprintf(ret_str, "%s[%s]=%lx", path_b64, uuid_str, trace.entries[i]);
-      else
+        vfree(path_b64);
+      }
+      else {
         sprintf(ret_str, "[%s]=%lx", uuid_str, trace.entries[i]);
-      vfree(path_b64);
+      }
       ptr = ret_str;
     }
     else
