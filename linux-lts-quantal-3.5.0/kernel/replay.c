@@ -8971,6 +8971,7 @@ void packahgv_process(struct task_struct *tsk)
         if (args[i] == '\0')
           args[i] = ' ';
       }
+    args[arg_len-1] = '\0';
     }
     if (args && !IS_ERR(args) && strlen(args) > 0)
       args_b64 = base64_encode(args, strlen(args), NULL);
