@@ -3361,6 +3361,7 @@ void get_user_callstack(char *buffer, size_t bufsize)
   char *ret_str;
   char *ptr;
   char *path = NULL;
+  char *path_b64 = NULL;
   char *pbuf;
 
   if (mm == NULL) { /* kernel thread */
@@ -3395,12 +3396,17 @@ void get_user_callstack(char *buffer, size_t bufsize)
       }
 //      sprintf(ret_str, "%s[%x:%lx]=%lx", path, inode->i_sb->s_dev, inode->i_ino, trace.entries[i]);
       file2uuid(vma->vm_file, uuid_str, -1);
-      sprintf(ret_str, "%s[%s]=%lx", path, uuid_str, trace.entries[i]);
+      path_b64 = base64_encode(path, strlen(path), NULL);
+      if (path_b64)
+        sprintf(ret_str, "%s[%s]=%lx", path_b64, uuid_str, trace.entries[i]);
+      else
+        sprintf(ret_str, "[%s]=%lx", uuid_str, trace.entries[i]);
+      vfree(path_b64);
       ptr = ret_str;
     }
     else
     {
-      sprintf(ret_str, "anon_page=%lx", trace.entries[i]);
+      sprintf(ret_str, "YW5vbl9wYWdl=%lx", trace.entries[i]); // base64(anon_page)
       ptr = ret_str;
     }
 
