@@ -19728,7 +19728,35 @@ replay_mremap(unsigned long addr, unsigned long old_len, unsigned long new_len, 
   return rc;
 }
 
-asmlinkage unsigned long shim_mremap(unsigned long addr, unsigned long old_len, unsigned long new_len, unsigned long flags, unsigned long new_addr) SHIM_CALL(mremap, 25, addr, old_len, new_len, flags, new_addr);
+#define SYS_MREMAP 25
+void theia_mremap_ahgx(unsigned long old_addr, unsigned long old_len, unsigned long new_addr, unsigned long new_len)
+{
+  char *buf;
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+
+  sprintf(buf, "%lx|%lx|%lx|%lx", old_addr, old_len, new_addr, new_len);
+  theia_dump_str(buf, 0, SYS_MREMAP); // ignore retval (=new_addr)
+
+  kmem_cache_free(theia_buffers, buf);  
+}
+
+unsigned long
+theia_sys_mremap(unsigned long addr, unsigned long old_len, unsigned long new_len, unsigned long flags, unsigned long new_addr)
+{
+  unsigned long rc;
+  rc = sys_mremap(addr, old_len, new_len, flags, new_addr);
+
+  if (rc != -1) {
+//    printk("mremap: (0x%lx, %lu) -> (0x%lx, %lu)\n", addr, old_len, rc, new_len);
+    theia_mremap_ahgx(addr, old_len, rc, new_len);
+  }
+
+  return rc;
+}
+
+asmlinkage unsigned long shim_mremap(unsigned long addr, unsigned long old_len, unsigned long new_len, unsigned long flags, unsigned long new_addr) 
+// SHIM_CALL(mremap, 25, addr, old_len, new_len, flags, new_addr);
+SHIM_CALL_MAIN(25, record_mremap(addr, old_len, new_len, flags, new_addr), replay_mremap(addr, old_len, new_len, flags, new_addr), theia_sys_mremap(addr, old_len, new_len, flags, new_addr));
 
 static asmlinkage long
 record_poll(struct pollfd __user *ufds, unsigned int nfds, long timeout_msecs)
