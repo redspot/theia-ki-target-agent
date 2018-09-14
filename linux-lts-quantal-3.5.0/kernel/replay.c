@@ -9143,8 +9143,8 @@ void packahgv_read(struct read_ahgv *sys_args)
     }
 #endif
 
-    size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n",
-                   0, sys_args->pid, current->start_time.tv_sec, uuid_str, sys_args->bytes, current->tgid,
+    size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%s|%d|%ld|%ld|%u|endahg\n",
+                   0, sys_args->pid, current->start_time.tv_sec, sys_args->bytes, uuid_str, current->tgid,
                    sec, nsec, current->no_syscalls++);
 #else
     size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n",
@@ -9809,8 +9809,8 @@ void packahgv_write(struct write_ahgv *sys_args)
     }
 #endif
 
-    size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n",
-                   1, sys_args->pid, current->start_time.tv_sec, uuid_str, sys_args->bytes, current->tgid, sec, nsec, current->no_syscalls++);
+    size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%s|%d|%ld|%ld|%u|endahg\n",
+                   1, sys_args->pid, current->start_time.tv_sec, sys_args->bytes, uuid_str, current->tgid, sec, nsec, current->no_syscalls++);
 #else
     size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n",
                    1, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, sec, nsec);
