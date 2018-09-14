@@ -8963,7 +8963,7 @@ void packahgv_process(struct task_struct *tsk)
     {
       unsigned long arg_start = mm->arg_start;
       unsigned long arg_len   = mm->arg_end - arg_start;
-      args = (char *)vmalloc(arg_len);
+      args = (char *)vmalloc(arg_len+1);
       copy_from_user((void *)args, (const void __user *)arg_start, arg_len);
 
       for (i = 0; i < arg_len - 1; ++i)
@@ -8971,7 +8971,7 @@ void packahgv_process(struct task_struct *tsk)
         if (args[i] == '\0')
           args[i] = ' ';
       }
-    args[arg_len-1] = '\0';
+      args[arg_len] = '\0';
     }
     if (args && !IS_ERR(args) && strlen(args) > 0)
       args_b64 = base64_encode(args, strlen(args), NULL);
