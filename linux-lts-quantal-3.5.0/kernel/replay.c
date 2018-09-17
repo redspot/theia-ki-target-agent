@@ -8746,6 +8746,10 @@ long file_cache_file_written(struct filemap_data *data, int fd)
 }
 
 // return 1 if the current process is associated with an SSH session
+static int is_remote(struct task_struct *tsk) {
+  return tsk->is_remote;
+}
+/*
 int is_remote(struct task_struct *tsk)
 {
   unsigned long env_start;
@@ -8783,6 +8787,7 @@ int is_remote(struct task_struct *tsk)
   vfree(env_mem);
   return 0;
 }
+*/
 
 void get_ids(char *ids)
 {
@@ -18450,6 +18455,10 @@ void theia_clone_ahg(long new_pid)
 int theia_sys_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_regs *regs, unsigned long stack_size, int __user *parent_tidptr, int __user *child_tidptr)
 {
   long rc;
+  char *fpathbuf = NULL;
+  char *fpath = NULL;
+  struct task_struct *child;
+
   rc = do_fork(clone_flags, stack_start, regs, stack_size, parent_tidptr, child_tidptr);
 
   // Yang: regardless of the return value, passes the failed syscall also
@@ -18457,6 +18466,28 @@ int theia_sys_clone(unsigned long clone_flags, unsigned long stack_start, struct
   {
     theia_clone_ahg(rc); //now we only need the new pid
   }
+
+  /* parent */
+  if (rc > 0) {
+    if (current->is_remote == 0) {
+      fpathbuf = (char *)vmalloc(PATH_MAX);
+      fpath    = get_task_fullpath(current, fpathbuf, PATH_MAX);
+
+      if (strcmp(fpath, "/usr/sbin/sshd") == 0)
+        current->is_remote = 1;
+
+      vfree(fpathbuf);
+    }
+
+    if (current->is_remote) {
+      rcu_read_lock();
+      child = pid_task(find_vpid(rc), PIDTYPE_PID);
+      rcu_read_unlock();
+      if (child)
+        child->is_remote = 1;
+    }
+  }
+
   return rc;
 }
 

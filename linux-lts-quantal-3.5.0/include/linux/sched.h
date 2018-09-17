@@ -1597,6 +1597,8 @@ struct task_struct {
 	__u64 rg_id;
 
 	__u32 no_syscalls; /* THEIA. I think we don't need u64 */
+
+	__u32 is_remote; /* THEIA. I think we don't need u64 */
 };
 
 /* Future-safe accessor for struct task_struct's cpus_allowed. */
