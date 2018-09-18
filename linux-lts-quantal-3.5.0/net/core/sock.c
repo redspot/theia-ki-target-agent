@@ -2122,7 +2122,8 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 	atomic_set(&sk->sk_refcnt, 1);
 	atomic_set(&sk->sk_drops, 0);
 #ifdef CONFIG_THEIA_CROSS
-  sk->theia_udp_tag = 0;
+  sk->theia_udp_send_tag = 0;
+  sk->theia_udp_recv_tag = 0;
 #endif
 }
 EXPORT_SYMBOL(sock_init_data);

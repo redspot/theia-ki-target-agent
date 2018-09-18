@@ -111,38 +111,100 @@
 #include "udp_impl.h"
 
 //Yang
-#include "../theia_cross_track.h"
+#include <net/theia_cross_track.h>
 
 //Yang
-bool theia_is_track_cross()
+bool theia_is_track_cross(struct socket *sock)
 {
-  if(theia_cross_toggle && 
-     (strcmp(current->comm, "test_client") == 0 
-      || strcmp(current->comm, "iperf3") == 0
-      || strcmp(current->comm, "test_server") == 0) )
-    return true;
+	char address[128];	
+	struct sockaddr *sockaddr;
+  int err, len;
+
+  if(!theia_cross_toggle)
+    return false;
+
+	if (sock != NULL) {
+    err = sock->ops->getname(sock, (struct sockaddr*)address, &len, 1);
+	}
   else
     return false;
+
+	sockaddr = (struct sockaddr*)address;
+
+	if (sockaddr->sa_family == AF_INET) {
+		struct sockaddr_in* in_sockaddr;
+    char ip[16] = {'\0'};
+		unsigned char* cc;
+		in_sockaddr = (struct sockaddr_in*)sockaddr;
+
+		cc = (unsigned char *)in_sockaddr;
+		sprintf(ip, "%u.%u.%u.%u",cc[4],cc[5],cc[6],cc[7]);
+
+    //filter IP address
+		if(strcmp(ip, "127.0.0.1") != 0)
+      return false;
+  }
+
+  //filter for applications
+  if(!(strcmp(current->comm, "udp_client") == 0 
+      || strcmp(current->comm, "iperf3") == 0
+      || strcmp(current->comm, "udp_server") == 0) )
+    return false;
+
+  return true;
 }
 EXPORT_SYMBOL(theia_is_track_cross);
 
 //Yang
 //extern bool theia_is_track_cross();
-theia_udp_tag get_theia_udp_tag(struct sock *sk)
+theia_udp_tag get_theia_udp_send_tag(struct sock *sk)
 {
   theia_udp_tag tag;
 
   lock_sock(sk); 
-  tag = sk->theia_udp_tag; 
 
-  if(unlikely(sk->theia_udp_tag == UINT_MAX))
-    sk->theia_udp_tag = 0;
+  if(unlikely(sk->theia_udp_send_tag == UINT_MAX))
+    sk->theia_udp_send_tag = 1;
   else
-    sk->theia_udp_tag++; 
+    sk->theia_udp_send_tag++; 
+  tag = sk->theia_udp_send_tag; 
     
   release_sock(sk); 
 
   return tag;
+}
+
+theia_udp_tag peek_theia_udp_send_tag(struct sock *sk)
+{
+  theia_udp_tag tag;
+
+  lock_sock(sk); 
+  tag = sk->theia_udp_send_tag;
+  release_sock(sk); 
+
+  return tag;
+}
+
+theia_udp_tag peek_theia_udp_recv_tag(struct sock *sk)
+{
+  theia_udp_tag tag;
+
+  lock_sock(sk); 
+  tag = sk->theia_udp_recv_tag;
+  release_sock(sk); 
+
+  return tag;
+}
+
+void set_theia_udp_recv_tag(struct sock *sk, theia_udp_tag tag)
+{
+  lock_sock(sk); 
+
+  sk->theia_udp_recv_tag = tag; 
+    
+  release_sock(sk); 
+
+  return;
 }
 
 

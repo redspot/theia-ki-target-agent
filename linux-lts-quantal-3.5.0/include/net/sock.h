@@ -381,7 +381,8 @@ struct sock {
 
 //Yang
 #ifdef CONFIG_THEIA_CROSS
-  uint32_t  theia_udp_tag;
+  uint32_t  theia_udp_send_tag;
+  uint32_t  theia_udp_recv_tag;
 #endif
 
 };

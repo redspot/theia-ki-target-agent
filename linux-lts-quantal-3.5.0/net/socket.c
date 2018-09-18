@@ -105,7 +105,7 @@
 #include <linux/sockios.h>
 #include <linux/atalk.h>
 
-#include "theia_cross_track.h"
+#include <net/theia_cross_track.h>
 #include <asm-generic/mman-common.h>
 
 bool theia_cross_toggle = 0;
@@ -577,11 +577,11 @@ static inline int __sock_sendmsg(struct kiocb *iocb, struct socket *sock,
   void *extended_ubuf;
   void *original_ubuf;
   if(sock->sk->sk_type == SOCK_DGRAM) {
-    if(theia_is_track_cross() ) {//we only care positive received packets
+    if(theia_is_track_cross(sock) ) {//we only care positive received packets
       //get the tag
       extended_ubuf = sys_mmap_pgoff(0, size + sizeof(theia_udp_tag), 
         PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-      *(theia_udp_tag*)extended_ubuf = get_theia_udp_tag(sock->sk);
+      *(theia_udp_tag*)extended_ubuf = get_theia_udp_send_tag(sock->sk);
       memcpy(extended_ubuf+sizeof(theia_udp_tag), msg->msg_iov->iov_base, size);
       
       //adjust the parameters
@@ -597,8 +597,16 @@ static inline int __sock_sendmsg(struct kiocb *iocb, struct socket *sock,
   int ret = err ?: __sock_sendmsg_nosec(iocb, sock, msg, size);
 
   if(sock->sk->sk_type == SOCK_DGRAM) {
-    if(theia_is_track_cross() ) {//we only care positive received packets
-printk("[%s|%d] original_ubuf %p, ret is %lu, tag is %u\n", __func__,__LINE__,original_ubuf,ret-sizeof(theia_udp_tag),*(theia_udp_tag*)extended_ubuf);
+    if(theia_is_track_cross(sock) ) {//we only care positive received packets
+      char remote_ip[16]={'\0'}, local_ip = {'\0'};
+      int remote_port, local_port;
+      char local_sun_path[108];
+      char remote_sun_path[108];
+      sa_family_t sa_family; 
+      //get_ip_port_sock(sock, remote_ip, &remote_port, remote_sun_path, &sa_family, 1);
+      //get_ip_port_sock(sock, local_ip, &local_port, local_sun_path, &sa_family, 0);
+//printk("[%s|%d] original_ubuf %p, remote ip(%s), remote port(%d), local ip(%s), local port(%d), ret is %lu, tag is %u\n", __func__,__LINE__,original_ubuf, remote_ip, remote_port, local_ip, local_port, ret-sizeof(theia_udp_tag),*(theia_udp_tag*)extended_ubuf);
+printk("[%s|%d|%d] original_ubuf %p, ret is %lu, tag is %u\n", __func__,__LINE__,current->pid,original_ubuf, ret-sizeof(theia_udp_tag),*(theia_udp_tag*)extended_ubuf);
       sys_munmap(extended_ubuf, size);
       msg->msg_iov->iov_base = original_ubuf;
       msg->msg_iov->iov_len -= sizeof(theia_udp_tag);
@@ -776,7 +784,7 @@ static inline int __sock_recvmsg(struct kiocb *iocb, struct socket *sock,
   void *original_ubuf;
   //handle the truncation
   if(sock->sk->sk_type == SOCK_DGRAM) {
-    if(theia_is_track_cross() ) {//we only care positive received packets
+    if(theia_is_track_cross(sock) ) {//we only care positive received packets
       extended_ubuf = sys_mmap_pgoff(0, size + sizeof(theia_udp_tag), 
         PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
       original_ubuf = msg->msg_iov->iov_base;
@@ -791,16 +799,24 @@ static inline int __sock_recvmsg(struct kiocb *iocb, struct socket *sock,
   int ret = err ?: __sock_recvmsg_nosec(iocb, sock, msg, size, flags);
 
   if(sock->sk->sk_type == SOCK_DGRAM) {
-    if(theia_is_track_cross() ) {
+    if(theia_is_track_cross(sock) ) {
       if(ret > 0 ){//we only care positive received packets
         //get the tag
         void *u_buf = msg->msg_iov->iov_base - ret;
         theia_udp_tag tag = *(theia_udp_tag*)(u_buf);
+        set_theia_udp_recv_tag(sock->sk, tag);
         if(ret-sizeof(theia_udp_tag) > 0) {
           memcpy(original_ubuf, u_buf+sizeof(theia_udp_tag), ret-sizeof(theia_udp_tag));
         }
+      char remote_ip[16]={'\0'}, local_ip = {'\0'};
+      int remote_port, local_port;
+      char local_sun_path[108];
+      char remote_sun_path[108];
+      sa_family_t sa_family; 
+      //get_ip_port_sock(sock, remote_ip, &remote_port, remote_sun_path, &sa_family, 1);
+      //get_ip_port_sock(sock, local_ip, &local_port, local_sun_path, &sa_family, 0);
         //      memset(u_buf+ret-sizeof(theia_udp_tag), 0x0, sizeof(theia_udp_tag));
-        printk("[%s|%d]received tag %u, ret %lu\n", __func__,__LINE__, tag, ret-sizeof(theia_udp_tag));
+        printk("[%s|%d|%d]received tag %u, ret %lu, \n", __func__,__LINE__, current->pid, tag, ret-sizeof(theia_udp_tag));
 
         //strip the tag
         ret -= sizeof(theia_udp_tag);
