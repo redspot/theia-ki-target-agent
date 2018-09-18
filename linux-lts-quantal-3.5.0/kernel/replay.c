@@ -435,6 +435,7 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
   struct inode *inode;
   struct socket *sock;
   u_long dev, ino;
+  u_long ldev, lino;
   umode_t mode;
   int err;
   char ip[16] = {'\0'};
@@ -446,6 +447,9 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
   sa_family_t sa_family; /* not used */
   char *sun_path_b64 = NULL;
   char *local_sun_path_b64 = NULL;
+  struct stat st;
+  mm_segment_t old_fs = get_fs();
+  long rc; 
 
   if (file)
   {
@@ -453,6 +457,8 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
     mode = inode->i_mode;
     dev = inode->i_sb->s_dev;
     ino = inode->i_ino;
+    ldev = dev;
+    lino = ino;
 
     //    if (dev == 0x7) { /* socket */
     if (S_ISSOCK(mode))
@@ -471,16 +477,35 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
           if (!sun_path_b64) 
             sun_path_b64 = "";
 
+          if (sun_path[0] == '/') {
+            set_fs(KERNEL_DS);
+            rc = sys_newstat(sun_path, &st);
+            set_fs(old_fs);
+            if (rc == 0) {
+              dev = st.st_dev;
+              ino = st.st_ino;
+            }
+          }
+
           if (strcmp(local_ip, "LOCAL") == 0) {
+            if (local_sun_path[0] == '/') {
+              set_fs(KERNEL_DS);
+              rc = sys_newstat(local_sun_path, &st);
+              set_fs(old_fs);
+              if (rc == 0) {
+                ldev = st.st_dev;
+                lino = st.st_ino;
+              }
+            }
             local_sun_path_b64 = base64_encode(local_sun_path, strlen(local_sun_path), NULL);
             if (!local_sun_path_b64) 
               local_sun_path_b64 = "";
-            snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", sun_path_b64, port, local_sun_path_b64, local_port);
+            snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%lx/%lx|%s|%lx/%lx", sun_path_b64, dev, ino, local_sun_path_b64, ldev, lino);
             if (local_sun_path_b64[0] != '\0')
               vfree(local_sun_path_b64);
           }
           else {
-            snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", sun_path_b64, port, local_ip, local_port);
+            snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%lx/%lx|%s|%d", sun_path_b64, dev, ino, local_ip, local_port);
           }
 
           if (sun_path_b64[0] != '\0')
@@ -488,10 +513,19 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
         }
         else {
           if (strcmp(local_ip, "LOCAL") == 0) {
+            if (local_sun_path[0] == '/') {
+              set_fs(KERNEL_DS);
+              rc = sys_newstat(local_sun_path, &st);
+              set_fs(old_fs);
+              if (rc == 0) {
+                ldev = st.st_dev;
+                lino = st.st_ino;
+              }
+            }
             local_sun_path_b64 = base64_encode(local_sun_path, strlen(local_sun_path), NULL);
             if (!local_sun_path_b64) 
               local_sun_path_b64 = "";
-            snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", ip, port, local_sun_path_b64, local_port);
+            snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%lx/%lx", ip, port, local_sun_path_b64, ldev, lino);
             if (local_sun_path_b64[0] != '\0')
               vfree(local_sun_path_b64);
           }
@@ -15279,7 +15313,7 @@ void theia_socketpair_ahgx(int family, int type, int protocol, int __user *usock
   struct file *file = NULL;
   int fput_needed;
   struct inode *inode;
-  u_long ino;
+  u_long dev, ino;
 
   buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
@@ -15288,13 +15322,14 @@ void theia_socketpair_ahgx(int family, int type, int protocol, int __user *usock
     goto err; 
 
   inode = file->f_dentry->d_inode;
+  dev = inode->i_sb->s_dev;
   ino = inode->i_ino;
 
 #ifdef THEIA_AUX_DATA
   theia_dump_auxdata();
 #endif
 
-  sprintf(buf, "%lx", ino);
+  sprintf(buf, "%lx|%lx", dev, ino);
   theia_dump_str(buf, 0, 53);
 
 err:
