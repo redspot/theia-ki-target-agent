@@ -82,6 +82,9 @@
 #include <linux/theia_channel.h>
 #include <linux/theia_ahglog.h>
 #include <linux/theia.h> /* TODO: move stuffs to here */
+#include <linux/dirent.h>
+#include <linux/netlink.h>
+#include <net/theia_cross_track.h>
 
 //xdou
 #include <linux/xcomp.h>
@@ -9129,6 +9132,11 @@ void packahgv_read(struct read_ahgv *sys_args)
   char *buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
   long sec, nsec;
 
+  uint32_t recv_tag = 0;
+  struct socket *sock;
+  struct sock *sk;
+  int err;
+
   //Yang
   if (theia_logging_toggle)
   {
@@ -9148,13 +9156,32 @@ void packahgv_read(struct read_ahgv *sys_args)
     }
 #endif
 
-    size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%s|%d|%ld|%ld|%u|endahg\n",
-                   0, sys_args->pid, current->start_time.tv_sec, sys_args->bytes, uuid_str, current->tgid,
-                   sec, nsec, current->no_syscalls++);
+    if(theia_cross_toggle && sys_args->fd >= 0){
+      sock = sockfd_lookup(sys_args->fd, &err);
+      if(sock) {
+        sk = sock->sk;
+        if(sk->sk_type == SOCK_DGRAM)
+          recv_tag = peek_theia_udp_recv_tag(sk);
+      }
+    }
+    else {
+      recv_tag = 0;
+    }
+    int size;
+    if(recv_tag > 0) {
+		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%u|%ld|%d|%ld|%ld|%u|endahg\n", 
+				0, sys_args->pid, current->start_time.tv_sec, uuid_str, recv_tag, sys_args->bytes, current->tgid, 
+				sec, nsec, current->no_syscalls++);
+    }
+    else {
+      size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n", 
+          0, sys_args->pid, current->start_time.tv_sec, uuid_str, sys_args->bytes, current->tgid, 
+          sec, nsec, current->no_syscalls++);
+    }
 #else
-    size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n",
-                   0, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid,
-                   sec, nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
+				0, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, 
+				sec, nsec);
 #endif
     if (size < 0)
     {
@@ -9798,6 +9825,11 @@ void packahgv_write(struct write_ahgv *sys_args)
   char *buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
   long sec, nsec;
 
+  uint32_t send_tag = 0;
+  struct socket *sock;
+  struct sock *sk;
+  int err;
+
   //Yang
   if (theia_logging_toggle)
   {
@@ -9814,11 +9846,29 @@ void packahgv_write(struct write_ahgv *sys_args)
     }
 #endif
 
-    size = sprintf(buf, "startahg|%d|%d|%ld|%ld|%s|%d|%ld|%ld|%u|endahg\n",
-                   1, sys_args->pid, current->start_time.tv_sec, sys_args->bytes, uuid_str, current->tgid, sec, nsec, current->no_syscalls++);
+    if(theia_cross_toggle && sys_args->fd >= 0){
+      sock = sockfd_lookup(sys_args->fd, &err);
+      if(sock) {
+        sk = sock->sk;
+        if(sk->sk_type == SOCK_DGRAM)
+          send_tag = peek_theia_udp_send_tag(sk);
+      }
+    }
+    else {
+      send_tag = 0;
+    }
+    int size;
+    if(send_tag > 0) {
+      size = sprintf(buf, "startahg|%d|%d|%ld|%s|%u|%ld|%d|%ld|%ld|%u|endahg\n", 
+          1, sys_args->pid, current->start_time.tv_sec, uuid_str, send_tag, sys_args->bytes, current->tgid, sec, nsec, current->no_syscalls++);
+    }
+    else {
+      size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n", 
+          1, sys_args->pid, current->start_time.tv_sec, uuid_str, sys_args->bytes, current->tgid, sec, nsec, current->no_syscalls++);
+    }
 #else
-    size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n",
-                   1, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, sec, nsec);
+		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
+				1, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, sec, nsec);
 #endif
     if (size < 0)
     {
@@ -14349,6 +14399,7 @@ struct sendto_ahgv
   long            rc;
   sa_family_t     sa_family;
   char            sun_path[UNIX_PATH_MAX];
+  theia_udp_tag   send_tag;
 };
 
 void packahgv_sendto(struct sendto_ahgv *sys_args)
@@ -14376,9 +14427,9 @@ void packahgv_sendto(struct sendto_ahgv *sys_args)
     theia_dump_auxdata();
 #endif
 
-    size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n",
-                   44, sys_args->pid, current->start_time.tv_sec,
-                   uuid_str, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
+    size = sprintf(buf, "startahg|%d|%d|%d|%s|%u|%d|%d|%ld|%ld|%u|endahg\n",
+        44, sys_args->pid, current->start_time.tv_sec, 
+        uuid_str, sys_args->send_tag, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
 #else
     if (sys_args->sa_family == AF_LOCAL)
     {
@@ -14419,6 +14470,7 @@ struct recvfrom_ahgv
   long            rc;
   sa_family_t     sa_family;
   char            sun_path[UNIX_PATH_MAX];
+  theia_udp_tag   recv_tag;
 };
 
 void packahgv_recvfrom(struct recvfrom_ahgv *sys_args)
@@ -14446,9 +14498,9 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args)
     theia_dump_auxdata();
 #endif
 
-    size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n",
-                   45, sys_args->pid, current->start_time.tv_sec,
-                   uuid_str, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
+    size = sprintf(buf, "startahg|%d|%d|%d|%s|%u|%d|%d|%ld|%ld|%u|endahg\n",
+        45, sys_args->pid, current->start_time.tv_sec, 
+        uuid_str, sys_args->recv_tag, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
 #else
     if (sys_args->sa_family == AF_LOCAL)
     {
@@ -14488,6 +14540,7 @@ struct sendmsg_ahgv
   long        rc;
   sa_family_t sa_family;
   char        sun_path[UNIX_PATH_MAX];
+  theia_udp_tag send_tag;
 };
 
 void packahgv_sendmsg(struct sendmsg_ahgv *sys_args)
@@ -14514,9 +14567,9 @@ void packahgv_sendmsg(struct sendmsg_ahgv *sys_args)
     theia_dump_auxdata();
 #endif
 
-    size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n",
-                   46, sys_args->pid, current->start_time.tv_sec,
-                   uuid_str, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
+    size = sprintf(buf, "startahg|%d|%d|%ld|%s|%u|%ld|%d|%ld|%ld|%u|endahg\n", 
+        46, sys_args->pid, current->start_time.tv_sec, 
+        uuid_str, sys_args->send_tag, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
 #else
     size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n",
                    46, sys_args->pid, current->start_time.tv_sec,
@@ -14542,6 +14595,7 @@ struct recvmsg_ahgv
   long        rc;
   sa_family_t sa_family;
   char        sun_path[UNIX_PATH_MAX];
+  theia_udp_tag recv_tag;
 };
 
 void packahgv_recvmsg(struct recvmsg_ahgv *sys_args)
@@ -14569,9 +14623,9 @@ void packahgv_recvmsg(struct recvmsg_ahgv *sys_args)
     theia_dump_auxdata();
 #endif
 
-    size = sprintf(buf, "startahg|%d|%d|%lu|%s|%ld|%d|%ld|%ld|%u|endahg\n",
-                   47, sys_args->pid, current->start_time.tv_sec,
-                   uuid_str, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
+    size = sprintf(buf, "startahg|%d|%d|%d|%s|%u|%d|%d|%ld|%ld|%u|endahg\n",
+        47, sys_args->pid, current->start_time.tv_sec, 
+        uuid_str, sys_args->recv_tag, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
 #else
     size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n",
                    47, sys_args->pid, current->start_time.tv_sec,
@@ -14905,6 +14959,7 @@ void theia_sendto_ahg(long rc, int fd, void __user *buff, size_t len, unsigned i
   struct sendto_ahgv *pahgv_sendto = NULL;
   struct socket *sock = NULL;
   int err;
+  struct sock *sk;
 
   if (theia_check_channel() == false)
     return;
@@ -14921,6 +14976,18 @@ void theia_sendto_ahg(long rc, int fd, void __user *buff, size_t len, unsigned i
   pahgv_sendto->pid = current->pid;
   pahgv_sendto->sock_fd = fd;
   pahgv_sendto->rc = rc;
+
+  if(theia_cross_toggle && fd >= 0){
+    sock = sockfd_lookup(fd, &err);
+    if(sock) {
+      sk = sock->sk;
+      if(sk->sk_type == SOCK_DGRAM)
+        pahgv_sendto->send_tag = peek_theia_udp_send_tag(sk);
+      sockfd_put(sock);
+    }
+  }
+  else
+    pahgv_sendto->send_tag = 0;
 
   sock = sockfd_lookup(fd, &err);
   if (sock && (sock->type == SOCK_STREAM || sock->type == SOCK_SEQPACKET)) {
@@ -14955,6 +15022,7 @@ void theia_recvfrom_ahg(long rc, int fd, void __user *ubuf, size_t size, unsigne
   struct recvfrom_ahgv *pahgv_recvfrom = NULL;
   struct socket *sock = NULL;
   int err;
+  struct sock *sk ;
 
   if (theia_check_channel() == false)
     return;
@@ -14971,6 +15039,18 @@ void theia_recvfrom_ahg(long rc, int fd, void __user *ubuf, size_t size, unsigne
   pahgv_recvfrom->pid = current->pid;
   pahgv_recvfrom->sock_fd = fd;
   pahgv_recvfrom->rc = rc;
+
+  if(theia_cross_toggle && fd >= 0){
+    sock = sockfd_lookup(fd, &err);
+    if(sock) {
+      sk = sock->sk;
+      if(sk->sk_type == SOCK_DGRAM)
+        pahgv_recvfrom->recv_tag = peek_theia_udp_recv_tag(sk);
+      sockfd_put(sock);
+    }
+  }
+  else
+    pahgv_recvfrom->recv_tag = 0;
 
   sock = sockfd_lookup(fd, &err);
   if (sock && (sock->type == SOCK_STREAM || sock->type == SOCK_SEQPACKET)) {
@@ -15007,6 +15087,7 @@ void theia_sendmsg_ahg(long rc, int fd, struct msghdr __user *msg, unsigned int 
   struct sockaddr __user *addr;
   int addr_len;
   struct socket *sock = NULL;
+  struct sock *sk;
   int err;
 
   if (theia_check_channel() == false)
@@ -15024,6 +15105,19 @@ void theia_sendmsg_ahg(long rc, int fd, struct msghdr __user *msg, unsigned int 
   pahgv_sendmsg->pid = current->pid;
   pahgv_sendmsg->sock_fd = fd;
   pahgv_sendmsg->rc = rc;
+
+  if(theia_cross_toggle && fd >= 0){
+    sock = sockfd_lookup(fd, &err);
+    if(sock) {
+      sk = sock->sk;
+      if(sk->sk_type == SOCK_DGRAM)
+        pahgv_sendmsg->send_tag = peek_theia_udp_send_tag(sk);
+      sockfd_put(sock);
+    }
+  }
+  else {
+    pahgv_sendmsg->send_tag = 0;
+  }
 
   sock = sockfd_lookup(fd, &err);
   if (sock && (sock->type == SOCK_STREAM || sock->type == SOCK_SEQPACKET)) {
@@ -15062,6 +15156,7 @@ void theia_recvmsg_ahg(long rc, int fd, struct msghdr __user *msg, unsigned int 
   struct sockaddr __user *addr;
   int addr_len;
   struct socket *sock = NULL;
+  struct sock *sk;
   int err;
 
   if (theia_check_channel() == false)
@@ -15079,6 +15174,18 @@ void theia_recvmsg_ahg(long rc, int fd, struct msghdr __user *msg, unsigned int 
   pahgv_recvmsg->pid = current->pid;
   pahgv_recvmsg->sock_fd = fd;
   pahgv_recvmsg->rc = rc;
+
+  if(theia_cross_toggle && fd >= 0){
+    sock = sockfd_lookup(fd, &err);
+    if(sock) {
+      sk = sock->sk;
+      if(sk->sk_type == SOCK_DGRAM)
+        pahgv_recvmsg->recv_tag = peek_theia_udp_recv_tag(sk);
+      sockfd_put(sock);
+    }
+  }
+  else
+    pahgv_recvmsg->recv_tag = 0;
 
   sock = sockfd_lookup(fd, &err);
   if (sock && (sock->type == SOCK_STREAM || sock->type == SOCK_SEQPACKET)) {
