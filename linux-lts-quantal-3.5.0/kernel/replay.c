@@ -15273,10 +15273,30 @@ long theia_sys_getpeername(int fd, struct sockaddr __user *usockaddr, int __user
   return rc;
 }
 
+void theia_socketpair_ahgx(int family, int type, int protocol, int __user *usockvec)
+{
+  char uuid_str[THEIA_UUID_LEN + 1];
+  char *buf = NULL;
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+
+  fd2uuid(usockvec[0], uuid_str);
+
+#ifdef THEIA_AUX_DATA
+  theia_dump_auxdata();
+#endif
+
+  sprintf(buf, "%s", uuid_str);
+  theia_dump_str(buf, 0, 53);
+
+  kmem_cache_free(theia_buffers, buf);
+}
+
 long theia_sys_socketpair(int family, int type, int protocol, int __user *usockvec)
 {
   long rc;
   rc = sys_socketpair(family, type, protocol, usockvec);
+
+  theia_socketpair_ahgx(family, type, protocol, usockvec);
 
   return rc;
 }
