@@ -9196,6 +9196,7 @@ void packahgv_read(struct read_ahgv *sys_args)
         sk = sock->sk;
         if(sk->sk_type == SOCK_DGRAM)
           recv_tag = peek_theia_udp_recv_tag(sk);
+        sockfd_put(sock);
       }
     }
     else {
@@ -9885,6 +9886,7 @@ void packahgv_write(struct write_ahgv *sys_args)
         sk = sock->sk;
         if(sk->sk_type == SOCK_DGRAM)
           send_tag = peek_theia_udp_send_tag(sk);
+        sockfd_put(sock);
       }
     }
     else {
