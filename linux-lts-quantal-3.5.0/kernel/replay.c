@@ -9167,7 +9167,6 @@ void packahgv_read(struct read_ahgv *sys_args)
     else {
       recv_tag = 0;
     }
-    int size;
     if(recv_tag > 0) {
 		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%u|%ld|%d|%ld|%ld|%u|endahg\n", 
 				0, sys_args->pid, current->start_time.tv_sec, uuid_str, recv_tag, sys_args->bytes, current->tgid, 
@@ -9857,7 +9856,6 @@ void packahgv_write(struct write_ahgv *sys_args)
     else {
       send_tag = 0;
     }
-    int size;
     if(send_tag > 0) {
       size = sprintf(buf, "startahg|%d|%d|%ld|%s|%u|%ld|%d|%ld|%ld|%u|endahg\n", 
           1, sys_args->pid, current->start_time.tv_sec, uuid_str, send_tag, sys_args->bytes, current->tgid, sec, nsec, current->no_syscalls++);
@@ -14427,7 +14425,7 @@ void packahgv_sendto(struct sendto_ahgv *sys_args)
     theia_dump_auxdata();
 #endif
 
-    size = sprintf(buf, "startahg|%d|%d|%d|%s|%u|%d|%d|%ld|%ld|%u|endahg\n",
+    size = sprintf(buf, "startahg|%d|%d|%ld|%s|%u|%ld|%d|%ld|%ld|%u|endahg\n",
         44, sys_args->pid, current->start_time.tv_sec, 
         uuid_str, sys_args->send_tag, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
 #else
@@ -14498,7 +14496,7 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args)
     theia_dump_auxdata();
 #endif
 
-    size = sprintf(buf, "startahg|%d|%d|%d|%s|%u|%d|%d|%ld|%ld|%u|endahg\n",
+    size = sprintf(buf, "startahg|%d|%d|%ld|%s|%u|%ld|%d|%ld|%ld|%u|endahg\n",
         45, sys_args->pid, current->start_time.tv_sec, 
         uuid_str, sys_args->recv_tag, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
 #else
@@ -14623,7 +14621,7 @@ void packahgv_recvmsg(struct recvmsg_ahgv *sys_args)
     theia_dump_auxdata();
 #endif
 
-    size = sprintf(buf, "startahg|%d|%d|%d|%s|%u|%d|%d|%ld|%ld|%u|endahg\n",
+    size = sprintf(buf, "startahg|%d|%d|%ld|%s|%u|%ld|%d|%ld|%ld|%u|endahg\n",
         47, sys_args->pid, current->start_time.tv_sec, 
         uuid_str, sys_args->recv_tag, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
 #else
@@ -15272,29 +15270,16 @@ long theia_sys_sendto(int fd, void __user *buff, size_t len, unsigned int flags,
 {
   long rc;
 
-#ifdef THEIA_CROSS_TRACK
-  int type;
-  if (getsockopt(fd, SO_TYPE, &type, sizeof(type)) == 0)
+  rc = sys_sendto(fd, buff, len, flags, addr, addr_len);
+  //printk("sendto is called!, pid %d, ret %ld\n", current->pid,rc);
+
+  // Yang: regardless of the return value, passes the failed syscall also
+  //  if (rc >= 0)
+  if (rc != -EAGAIN)
   {
-    if (type == SOCK_DGRAM)  //udp, we attach the packet counter.
-    {
-      //attach the packet counter
-    }
+    theia_sendto_ahg(rc, fd, buff, len, flags, addr, addr_len);
   }
-
-}
-#endif
-
-rc = sys_sendto(fd, buff, len, flags, addr, addr_len);
-//printk("sendto is called!, pid %d, ret %ld\n", current->pid,rc);
-
-// Yang: regardless of the return value, passes the failed syscall also
-//  if (rc >= 0)
-if (rc != -EAGAIN)
-{
-  theia_sendto_ahg(rc, fd, buff, len, flags, addr, addr_len);
-}
-return rc;
+  return rc;
 }
 
 long theia_sys_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, struct sockaddr __user *addr, int __user *addr_len)
