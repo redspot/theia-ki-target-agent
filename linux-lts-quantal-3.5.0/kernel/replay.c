@@ -387,6 +387,9 @@ bool theia_check_channel(void)
     return false;
   }
 
+  if (!current->mm) /* kernel thread */
+    return false;
+
   old_fs = get_fs();
   set_fs(KERNEL_DS);
 
@@ -657,13 +660,17 @@ void theia_dump_auxdata()
   char *auxdata;
   int size = 0;
 
+  if (!current->mm)
+    return;
+
   if (theia_logging_toggle)
   {
     get_ids(ids);
     callstack = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
     get_user_callstack(callstack, PAGE_SIZE);
     auxdata = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
-    size = sprintf(auxdata, "startahg|700|%d|%s|%s|endahg\n", current->pid, callstack, ids);
+    size = sprintf(auxdata, "startahg|700|%d|%li|%s%s|%u|endahg\n", 
+      current->pid, current->start_time.tv_sec, callstack, ids, current->no_syscalls);
     kmem_cache_free(theia_buffers, callstack);
     if (size < 0)
     {
@@ -3401,11 +3408,6 @@ void get_user_callstack(char *buffer, size_t bufsize)
   char *path_b64 = NULL;
   char *pbuf;
 
-  if (mm == NULL) { /* kernel thread */
-    buffer[0] = '\0';
-    return;
-  }
-
   pbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
   ret_str = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
 
@@ -3435,24 +3437,26 @@ void get_user_callstack(char *buffer, size_t bufsize)
       file2uuid(vma->vm_file, uuid_str, -1);
       path_b64 = base64_encode(path, strlen(path), NULL);
       if (path_b64) {
-        sprintf(ret_str, "%s[%s]=%lx", path_b64, uuid_str, trace.entries[i]);
+//        sprintf(ret_str, "%s[%s]=%lx", path_b64, uuid_str, trace.entries[i]);
+        sprintf(ret_str, "%s|%s", path_b64, uuid_str);
         vfree(path_b64);
       }
       else {
-        sprintf(ret_str, "[%s]=%lx", uuid_str, trace.entries[i]);
+//        sprintf(ret_str, "[%s]=%lx", uuid_str, trace.entries[i]);
+        sprintf(ret_str, "%s", uuid_str);
       }
       ptr = ret_str;
     }
     else
     {
-      sprintf(ret_str, "YW5vbl9wYWdl=%lx", trace.entries[i]); // base64(anon_page)
+      sprintf(ret_str, "YW5vbl9wYWdl"); // base64(anon_page)
       ptr = ret_str;
     }
 
     if (strlen(buffer) + strlen(ptr) > bufsize - 1)
       break;
     strcat(buffer, ptr);
-    strcat(buffer, ";");
+    strcat(buffer, "|");
   }
 
   kmem_cache_free(theia_buffers, ret_str);
