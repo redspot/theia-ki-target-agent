@@ -25214,7 +25214,7 @@ static int __init replay_init(void)
   const char *theia_linker_default = "/usr/local/eglibc/lib/ld-2.15.so";
   // setup default for theia_libpath
   //const char* theia_libpath_default = "LD_LIBRARY_PATH=/home/theia/theia-es/eglibc-2.15/prefix/lib:/lib/theia_libs:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/lib:/usr/lib:/lib";
-  const char *theia_libpath_default = "LD_LIBRARY_PATH=/usr/local/eglibc/lib:/usr/local/lib:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu";
+  const char *theia_libpath_default = "LD_LIBRARY_PATH=/usr/local/eglibc/lib:/usr/local/lib:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib:/lib";
 
   strncpy(theia_linker, theia_linker_default, MAX_LOGDIR_STRLEN + 1);
   strncpy(theia_libpath, theia_libpath_default, MAX_LOGDIR_STRLEN + 1);
