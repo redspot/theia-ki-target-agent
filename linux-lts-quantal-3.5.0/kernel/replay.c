@@ -19110,18 +19110,18 @@ long theia_hide_dirent(unsigned int fd, struct linux_dirent __user *dirent, long
     file = fget_light(fd, &fput_needed);
   if (file)
   {
-    dpathbuf = (char *)vmalloc(PATH_MAX);
+    dpathbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
     dirpath = get_file_fullpath(file, dpathbuf, PATH_MAX);
     fput_light(file, fput_needed);
     if (!IS_ERR(dirpath))
     {
-      fullpath = (char *)vmalloc(PATH_MAX);
+      fullpath = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
       dirpath_offset = strlen(dirpath);
       strncpy(fullpath, dirpath, dirpath_offset);
       fullpath[dirpath_offset] = '/';
       dirpath_offset++;
     }
-    vfree(dpathbuf);
+    kmem_cache_free(theia_buffers, dpathbuf);
   }
 
   while (fullpath && off < ret)
@@ -19148,7 +19148,7 @@ long theia_hide_dirent(unsigned int fd, struct linux_dirent __user *dirent, long
     goto out;
 out:
   if (fullpath)
-    vfree(fullpath);
+    kmem_cache_free(theia_buffers, fullpath);
   kfree(kdirent);
   return ret;
 }
