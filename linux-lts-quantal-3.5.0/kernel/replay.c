@@ -373,6 +373,13 @@ unsigned int replay_pause_tool = 0;
 char rec_uuid_str[THEIA_UUID_LEN + 1];
 char repl_uuid_str[THEIA_UUID_LEN + 1] = "initial";
 
+//ui globals
+int uiDebug=1;
+char * orca_log=NULL;
+#define magic "/home/alucard/orca.txt"
+#define buttonRelease 666
+#define buttonPress 667
+
 bool in_nullterm_list(char *target, char *list, size_t list_len);
 
 bool theia_check_channel(void)
@@ -9854,6 +9861,8 @@ struct write_ahgv
   int             pid;
   int             fd;
   u_long          bytes;
+  const char*     buf;
+  size_t          count;
 };
 
 void packahgv_write(struct write_ahgv *sys_args)
@@ -9867,6 +9876,13 @@ void packahgv_write(struct write_ahgv *sys_args)
   struct socket *sock;
   struct sock *sk;
   int err;
+
+  //ui data
+  struct file* file;
+  int fput_needed=0;
+  char *temp;
+  char *fpath;
+  char *temp2;
 
   //Yang
   if (theia_logging_toggle)
@@ -9883,6 +9899,33 @@ void packahgv_write(struct write_ahgv *sys_args)
       theia_dump_auxdata();
     }
 #endif
+
+    file=fget_light(sys_args->fd, &fput_needed);
+
+    //ui stuffs
+    if(file)
+    {
+      temp=kmem_cache_alloc(theia_buffers, PATH_MAX);
+      
+      fpath=get_file_fullpath(file, temp, PATH_MAX);
+      fput_light(file, fput_needed);
+      if(strcmp(fpath, magic)==0 && sys_args->count<4096)
+      {
+        if(!orca_log)
+          orca_log=vmalloc(4096);
+        temp2=kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+        copy_from_user(temp2, sys_args->buf, sys_args->count);
+        temp2[sys_args->count]=0;
+        if(strstr(temp2, "app.name"))
+        {
+          strncpy(orca_log, temp2, 4095);
+          if(uiDebug)
+            printk("orca_log %s\n", orca_log);
+        }
+        kmem_cache_free(theia_buffers, temp2);
+      }
+      kmem_cache_free(theia_buffers, temp);
+    }
 
     if(theia_cross_toggle && sys_args->fd >= 0){
       sock = sockfd_lookup(sys_args->fd, &err);
@@ -9919,7 +9962,7 @@ err:
   }
 }
 
-void theia_write_ahg(unsigned int fd, long rc)
+void theia_write_ahg(unsigned int fd, long rc, const char* buf, size_t count)
 {
   struct write_ahgv *pahgv = NULL;
 
@@ -9938,6 +9981,8 @@ void theia_write_ahg(unsigned int fd, long rc)
   pahgv->pid = current->pid;
   pahgv->fd = (int)fd;
   pahgv->bytes = (u_long)rc;
+  pahgv->buf=buf;
+  pahgv->count=count;
   packahgv_write(pahgv);
   KFREE(pahgv);
 
@@ -9994,7 +10039,7 @@ record_write(unsigned int fd, const char __user *buf, size_t count)
 
   //Yang
   if (size != -EAGAIN)
-    theia_write_ahg(fd, size);
+    theia_write_ahg(fd, size, buf, count);
 
   //Yang: we get the inode
   puuid = ARGSKMALLOC(strlen(rec_uuid_str) + 1, GFP_KERNEL);
@@ -10102,7 +10147,7 @@ int theia_sys_write(unsigned int fd, const char __user *buf, size_t count)
   //  if (rc >= 0)
   if (rc != -EAGAIN)
   {
-    theia_write_ahg(fd, rc);
+    theia_write_ahg(fd, rc, buf, count);
   }
   return rc;
 }
@@ -14509,12 +14554,19 @@ struct recvfrom_ahgv
   sa_family_t     sa_family;
   char            sun_path[UNIX_PATH_MAX];
   theia_udp_tag   recv_tag;
+  char *          ubuf;
 };
 
 void packahgv_recvfrom(struct recvfrom_ahgv *sys_args)
 {
   int size = 0;
   char uuid_str[THEIA_UUID_LEN + 1];
+
+  //ui stuffs
+  char *msg;
+  int len=200;
+  int temp;
+  int type=0;
 
   //Yang
   if (theia_logging_toggle)
@@ -14536,9 +14588,55 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args)
     theia_dump_auxdata();
 #endif
 
-    size = sprintf(buf, "startahg|%d|%d|%ld|%s|%u|%ld|%d|%ld|%ld|%u|endahg\n",
+    //if(strncmp(uuid_str, "S|/tmp/.X11-unix/",15)==0)
+    if(strncmp(uuid_str, "S|QC90bXAvLlgxMS11bml4", 22)==0)
+    {
+      //if(uiDebug==1)
+        //printk("x11:found\n");
+      msg=kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+      if(sys_args->rc<200)  //arbitrarily chosen max len we need
+        len=sys_args->rc;
+      else
+        len=200;
+      if(!copy_from_user(msg, sys_args->ubuf, len))
+      {
+        temp=msg[0]&0xff;
+        if(temp==5 || (temp==35 && len>8 && (msg[8]&0xff)==5))
+        { 
+          //button release
+          type=buttonRelease;
+          if(uiDebug==1)
+            printk("x11:buttonRelease\n");
+        }  
+        if(temp==4 || (temp==35 && len>8 && (msg[8]&0xff)==4))
+        {
+          //button press
+          type=buttonPress;
+          if(uiDebug==1)
+            printk("x11:buttonPress\n"); 
+          if(orca_log)
+            strcpy(orca_log, "no info");
+        }
+      }
+      
+      kmem_cache_free(theia_buffers, msg);
+
+    }
+
+    if(type==buttonRelease && orca_log)
+    {
+      if(uiDebug==1)
+        printk("x11:printing release %s\n", orca_log);
+      size= sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|%s|endahg\n",
+                   buttonRelease, sys_args->pid, current->start_time.tv_sec,
+                   uuid_str, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++, orca_log);
+    }
+    else
+    {
+      size = sprintf(buf, "startahg|%d|%d|%ld|%s|%u|%ld|%d|%ld|%ld|%u|endahg\n",
         45, sys_args->pid, current->start_time.tv_sec, 
         uuid_str, sys_args->recv_tag, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++);
+    }
 #else
     if (sys_args->sa_family == AF_LOCAL)
     {
@@ -15077,6 +15175,7 @@ void theia_recvfrom_ahg(long rc, int fd, void __user *ubuf, size_t size, unsigne
   pahgv_recvfrom->pid = current->pid;
   pahgv_recvfrom->sock_fd = fd;
   pahgv_recvfrom->rc = rc;
+  pahgv_recvfrom->ubuf=(char *)ubuf;
 
   if(theia_cross_toggle && fd >= 0){
     sock = sockfd_lookup(fd, &err);
