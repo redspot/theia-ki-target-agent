@@ -4746,11 +4746,12 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
   char *argbuf;
   int argbuflen;
   void *slab;
-  int theia_libpath_len;
 #ifdef TIME_TRICK
   struct timeval tv;
   struct timespec tp;
 #endif
+  char libpath_contents[200];
+  char *libpath;
 
   MPRINT("[%s|%d] pid %d, fd %d\n", __func__, __LINE__, current->pid, fd);
   if (current->record_thrd || current->replay_thrd)
@@ -4837,9 +4838,10 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
 
 
   sprintf(ckpt, "%s/ckpt", prg->rg_logdir);
-  BUG_ON(IS_ERR_OR_NULL(theia_libpath));
-  theia_libpath_len = strnlen(theia_libpath, MAX_LOGDIR_STRLEN + 1);
-  argbuf = copy_args(args, env, &argbuflen, theia_libpath, theia_libpath_len);
+  sprintf(libpath_contents,"LD_LIBRARY_PATH=/usr/local/eglibc/lib:/usr/local/lib:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib:/lib"); 
+  libpath = KMALLOC(strlen(libpath_contents), GFP_KERNEL); 
+  strcpy(libpath, libpath_contents);
+  argbuf = copy_args(args, env, &argbuflen, libpath_contents, strlen(libpath_contents));
 
   if (argbuf == NULL)
   {
@@ -4866,9 +4868,7 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
   if (prg->rg_libpath == NULL)
   {
     TPRINT("fork_replay: libpath not found\n");
-
-    prg->rg_libpath = KMALLOC(theia_libpath_len, GFP_KERNEL);
-    strncpy(prg->rg_libpath, theia_libpath, MAX_LOGDIR_STRLEN + 1);
+    prg->rg_libpath = libpath;
     TPRINT("hardcoded libpath is (%s)", prg->rg_libpath);
     //    return -EINVAL;
   }
