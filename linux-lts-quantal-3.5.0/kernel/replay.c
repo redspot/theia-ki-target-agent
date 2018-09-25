@@ -9280,8 +9280,10 @@ record_read(unsigned int fd, char __user *buf, size_t count)
   struct file *filp;
   int is_cache_file = 0;
   struct open_retvals orets;
+#ifdef THEIA_TRACK_SHM_OPEN
   struct vm_area_struct *vma;
   bool shared_none = false;
+#endif
 
 #ifdef TRACE_SOCKET_READ_WRITE
   int err;
@@ -9310,6 +9312,7 @@ record_read(unsigned int fd, char __user *buf, size_t count)
   perftimer_start(read_cache_timer);
   is_cache_file |= is_record_cache_file_lock(current->record_thrd->rp_cache_files, fd);
 
+#ifdef THEIA_TRACK_SHM_OPEN
   // TODO: corner case: kernel writes data into shared memory (TA5's test case)
   // what else? recvmsg, ...
   vma = find_vma(current->mm, (unsigned long)buf);
@@ -9320,14 +9323,17 @@ record_read(unsigned int fd, char __user *buf, size_t count)
     shared_none = true;
     printk("record_read: a buffer for read() is a shared memory (%p)\n", buf);
   }
+#endif
 
   perftimer_stop(read_cache_timer);
   perftimer_start(read_sys_timer);
   rc = sys_read(fd, buf, count);
   perftimer_stop(read_sys_timer);
 
+#ifdef THEIA_TRACK_SHM_OPEN
   if (shared_none)
     err = sys_mprotect((unsigned long)buf, count, PROT_NONE);
+#endif
 
   //Yang
   if (rc != -EAGAIN) /* ignore some less meaningful errors */
