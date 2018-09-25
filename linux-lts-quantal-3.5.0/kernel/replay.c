@@ -25331,7 +25331,7 @@ static int __init replay_init(void)
 {
   mm_segment_t old_fs;
   size_t len;
-  char *proc_whitelist = \
+  char proc_whitelist[] = \
                          "/usr/local/bin/relay-read-file\0"
                          "/usr/local/bin/theia_toggle\0"
                          "/usr/sbin/rsyslogd\0"
@@ -25341,11 +25341,11 @@ static int __init replay_init(void)
                          "/usr/lib/deja-dup/deja-dup/deja-dup-monitor\0"
                          "/usr/lib/libvte-2.90-9/gnome-pty-helper\0"
                          ;
-  size_t proc_whitelist_len = 119;
-  char *hide_list = \
+  size_t proc_whitelist_len = sizeof(proc_whitelist);
+  char hide_list[] = \
                     "/data/handler.log\0"
                     ;
-  size_t hide_len = 18;
+  size_t hide_len = sizeof(hide_list);
 
   // setup default for theia_linker
   //const char* theia_linker_default = "/home/theia/theia-es/eglibc-2.15/prefix/lib/ld-linux-x86-64.so.2";
