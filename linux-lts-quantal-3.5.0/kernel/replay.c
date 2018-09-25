@@ -21106,14 +21106,34 @@ theia_sys_sendfile64(int out_fd, int in_fd, loff_t __user *offset, size_t count)
 
   rc = sys_sendfile64(out_fd, in_fd, offset, count);
 
-  if (theia_check_channel())
+  if (theia_logging_toggle)
     theia_sendfile64_ahgx(out_fd, in_fd, offset, count, rc);
 
   return rc;
 }
 
+static asmlinkage long
+record_sendfile64(int out_fd, int in_fd, loff_t __user *offset, size_t count)
+{
+  long rc;
+
+  new_syscall_enter(40);
+
+  rc = sys_sendfile64(out_fd, in_fd, offset, count);
+
+  if (theia_logging_toggle)
+    theia_sendfile64_ahgx(out_fd, in_fd, offset, count, rc);
+
+  MPRINT("Pid %d records sendfile64 returning %ld\n", current->pid, rc);
+  new_syscall_done(40, rc);
+  new_syscall_exit(40, NULL);
+
+  return rc;
+}
+
+
 //RET1_SHIM4(sendfile64, 40, off_t, offset, int, out_fd, int, in_fd, off_t __user *, offset, size_t, count);
-RET1_RECORD4(sendfile64, 40, loff_t, offset, int, out_fd, int, in_fd, loff_t __user *, offset, size_t, count);
+// RET1_RECORD4(sendfile64, 40, loff_t, offset, int, out_fd, int, in_fd, loff_t __user *, offset, size_t, count);
 RET1_REPLAY(sendfile64, 40, loff_t, offset, int  out_fd, int  in_fd, loff_t __user   *offset, size_t  count);
 asmlinkage long shim_sendfile64(int out_fd, int in_fd, loff_t __user *offset, size_t count)
 SHIM_CALL_MAIN(40, record_sendfile64(out_fd, in_fd, offset, count), replay_sendfile64(out_fd, in_fd, offset, count), theia_sys_sendfile64(out_fd, in_fd, offset, count));
