@@ -9280,8 +9280,10 @@ record_read(unsigned int fd, char __user *buf, size_t count)
   struct file *filp;
   int is_cache_file = 0;
   struct open_retvals orets;
+#ifdef THEIA_TRACK_SHM_OPEN
   struct vm_area_struct *vma;
   bool shared_none = false;
+#endif
 
 #ifdef TRACE_SOCKET_READ_WRITE
   int err;
@@ -9310,6 +9312,7 @@ record_read(unsigned int fd, char __user *buf, size_t count)
   perftimer_start(read_cache_timer);
   is_cache_file |= is_record_cache_file_lock(current->record_thrd->rp_cache_files, fd);
 
+#ifdef THEIA_TRACK_SHM_OPEN
   // TODO: corner case: kernel writes data into shared memory (TA5's test case)
   // what else? recvmsg, ...
   vma = find_vma(current->mm, (unsigned long)buf);
@@ -9320,14 +9323,17 @@ record_read(unsigned int fd, char __user *buf, size_t count)
     shared_none = true;
     printk("record_read: a buffer for read() is a shared memory (%p)\n", buf);
   }
+#endif
 
   perftimer_stop(read_cache_timer);
   perftimer_start(read_sys_timer);
   rc = sys_read(fd, buf, count);
   perftimer_stop(read_sys_timer);
 
+#ifdef THEIA_TRACK_SHM_OPEN
   if (shared_none)
     err = sys_mprotect((unsigned long)buf, count, PROT_NONE);
+#endif
 
   //Yang
   if (rc != -EAGAIN) /* ignore some less meaningful errors */
@@ -10760,7 +10766,7 @@ record_unlink(const char __user *filename)
   strncpy_from_user(pbuf, filename, THEIA_DPATH_LEN);
 
   /* we should call theia_unlink_ahgx before sys_unlink */
-  if (theia_check_channel())
+  if (theia_logging_toggle)
     theia_unlink_ahgx(pbuf);
 
   new_syscall_enter(SYS_UNLINK);
@@ -10892,7 +10898,7 @@ record_unlinkat(int dfd, const char __user *filename, int flag)
   strncpy_from_user(pbuf, filename, THEIA_DPATH_LEN);
 
   /* we should call theia_unlink_ahgx before sys_unlink */
-  if (theia_check_channel())
+  if (theia_logging_toggle)
     theia_unlinkat_ahgx(dfd, pbuf, flag);
 
   new_syscall_enter(SYS_UNLINKAT);
@@ -11010,7 +11016,7 @@ record_openat(int dfd, const char __user *filename, int flag, int mode)
   new_syscall_done(SYS_OPENAT, rc);
   new_syscall_exit(SYS_OPENAT, NULL);
 
-  if (theia_check_channel())
+  if (theia_logging_toggle)
     theia_openat_ahgx(rc, filename, flag, mode);
 
   return rc;
@@ -13740,51 +13746,6 @@ struct old_linux_dirent   // From readdir.c - define this for completeness but s
 
 RET1_SHIM3(old_readdir, 89, struct old_linux_dirent, dirent, unsigned int, fd, struct old_linux_dirent __user *, dirent, unsigned int, count)
 
-// old_mmap is a shim that calls sys_mmap_pgoff - we handle record/replay there instead
-
-static asmlinkage long
-record_munmap(unsigned long addr, size_t len)
-{
-  long rc;
-
-  rg_lock(current->record_thrd->rp_group);
-  new_syscall_enter(11);
-  rc = sys_munmap(addr, len);
-  new_syscall_done(11, rc);
-  new_syscall_exit(11, NULL);
-  DPRINT("Pid %d records munmap of addr %lx returning %ld\n", current->pid, addr, rc);
-  rg_unlock(current->record_thrd->rp_group);
-
-  return rc;
-}
-
-static asmlinkage long
-replay_munmap(unsigned long addr, size_t len)
-{
-  u_long retval, rc;
-
-  if (is_pin_attached())
-  {
-    rc = current->replay_thrd->rp_saved_rc;
-    (*(int *)(current->replay_thrd->app_syscall_addr)) = 999;
-    printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__, __LINE__, current->pid);
-  }
-  else
-  {
-    rc = get_next_syscall(11, NULL);
-  }
-
-  retval = sys_munmap(addr, len);
-  DPRINT("Pid %d replays munmap of addr %lx len %lu returning %ld\n", current->pid, addr, len, retval);
-  if (rc != retval)
-  {
-    printk("Replay munmap returns different value %lu than %lu\n", retval, rc);
-    return syscall_mismatch();
-  }
-  if (retval == 0 && is_pin_attached()) preallocate_after_munmap(addr, len);
-
-  return rc;
-}
 
 struct munmap_ahgv
 {
@@ -13844,6 +13805,52 @@ void theia_munmap_ahg(unsigned long addr, size_t len, long rc)
   pahgv->rc = rc;
   packahgv_munmap(pahgv);
   KFREE(pahgv);
+}
+
+// old_mmap is a shim that calls sys_mmap_pgoff - we handle record/replay there instead
+static asmlinkage long
+record_munmap(unsigned long addr, size_t len)
+{
+  long rc;
+
+  rg_lock(current->record_thrd->rp_group);
+  new_syscall_enter(11);
+  rc = sys_munmap(addr, len);
+  theia_munmap_ahg(addr, len, rc);
+  new_syscall_done(11, rc);
+  new_syscall_exit(11, NULL);
+  DPRINT("Pid %d records munmap of addr %lx returning %ld\n", current->pid, addr, rc);
+  rg_unlock(current->record_thrd->rp_group);
+
+  return rc;
+}
+
+static asmlinkage long
+replay_munmap(unsigned long addr, size_t len)
+{
+  u_long retval, rc;
+
+  if (is_pin_attached())
+  {
+    rc = current->replay_thrd->rp_saved_rc;
+    (*(int *)(current->replay_thrd->app_syscall_addr)) = 999;
+    printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__, __LINE__, current->pid);
+  }
+  else
+  {
+    rc = get_next_syscall(11, NULL);
+  }
+
+  retval = sys_munmap(addr, len);
+  DPRINT("Pid %d replays munmap of addr %lx len %lu returning %ld\n", current->pid, addr, len, retval);
+  if (rc != retval)
+  {
+    printk("Replay munmap returns different value %lu than %lu\n", retval, rc);
+    return syscall_mismatch();
+  }
+  if (retval == 0 && is_pin_attached()) preallocate_after_munmap(addr, len);
+
+  return rc;
 }
 
 int theia_sys_munmap(unsigned long addr, size_t len)
@@ -16295,6 +16302,7 @@ record_socketpair(int family, int type, int protocol, int __user *usockvec)
   new_syscall_enter(53);
 
   rc = sys_socketpair(family, type, protocol, usockvec);
+  theia_socketpair_ahgx(family, type, protocol, usockvec);
 
   new_syscall_done(53, rc);
 
@@ -19441,6 +19449,20 @@ asmlinkage long shim_select(int n, fd_set __user *inp, fd_set __user *outp, fd_s
 SIMPLE_SHIM2(flock, 73, unsigned int, fd, unsigned int, cmd);
 SIMPLE_SHIM3(msync, 26, unsigned long, start, size_t, len, int, flags);
 
+#define SYS_READV 19
+void theia_readv_ahgx(unsigned long fd, const struct iovec __user *vec, unsigned long vlen, long rc, int sysnum)
+{
+  char uuid_str[THEIA_UUID_LEN + 1];
+
+  if (fd < 0) return; /* TODO */
+
+  if (fd2uuid(fd, uuid_str) == false)
+    return; /* TODO: report openat errors? */
+
+  /* TODO: parse iovec */
+  theia_dump_str(uuid_str, rc, sysnum);
+}
+
 static asmlinkage long
 record_readv(unsigned long fd, const struct iovec __user *vec, unsigned long vlen)
 {
@@ -19451,6 +19473,8 @@ record_readv(unsigned long fd, const struct iovec __user *vec, unsigned long vle
 
   new_syscall_enter(19);
   size = sys_readv(fd, vec, vlen);
+  if (theia_logging_toggle)
+    theia_readv_ahgx(fd, vec, vlen, size, SYS_READV);
 
 #ifdef TIME_TRICK
   if (size <= 0)
@@ -19511,20 +19535,6 @@ replay_readv(unsigned long fd, const struct iovec __user *vec, unsigned long vle
   return rc;
 }
 
-#define SYS_READV 19
-void theia_readv_ahgx(unsigned long fd, const struct iovec __user *vec, unsigned long vlen, long rc, int sysnum)
-{
-  char uuid_str[THEIA_UUID_LEN + 1];
-
-  if (fd < 0) return; /* TODO */
-
-  if (fd2uuid(fd, uuid_str) == false)
-    return; /* TODO: report openat errors? */
-
-  /* TODO: parse iovec */
-  theia_dump_str(uuid_str, rc, sysnum);
-}
-
 static asmlinkage long
 theia_sys_readv(unsigned long fd, const struct iovec __user *vec, unsigned long vlen)
 {
@@ -19560,6 +19570,7 @@ record_writev(unsigned long fd, const struct iovec __user *vec, unsigned long vl
   }
   */
   rc = sys_writev(fd, vec, vlen);
+
   if (rc > 0 && is_x_fd(&current->record_thrd->rp_clog.x, fd))
   {
     if (x_detail) printk("Pid %d writev syscall for x proto:%ld, vlen:%lu\n", current->pid, rc, vlen);
@@ -19915,6 +19926,18 @@ asmlinkage long shim_nanosleep(struct timespec __user *rqtp, struct timespec __u
 RET1_SHIM2(nanosleep, 35, struct timespec, rmtp, struct timespec __user *, rqtp, struct timespec __user *, rmtp);
 #endif
 
+#define SYS_MREMAP 25
+void theia_mremap_ahgx(unsigned long old_addr, unsigned long old_len, unsigned long new_addr, unsigned long new_len)
+{
+  char *buf;
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+
+  sprintf(buf, "%lx|%lx|%lx|%lx", old_addr, old_len, new_addr, new_len);
+  theia_dump_str(buf, 0, SYS_MREMAP); // ignore retval (=new_addr)
+
+  kmem_cache_free(theia_buffers, buf);  
+}
+
 static asmlinkage unsigned long
 record_mremap(unsigned long addr, unsigned long old_len, unsigned long new_len, unsigned long flags, unsigned long new_addr)
 {
@@ -19923,6 +19946,7 @@ record_mremap(unsigned long addr, unsigned long old_len, unsigned long new_len, 
   rg_lock(current->record_thrd->rp_group);
   new_syscall_enter(25);
   rc = sys_mremap(addr, old_len, new_len, flags, new_addr);
+  theia_mremap_ahgx(addr, old_len, rc, new_len);
   new_syscall_done(25, rc);
   new_syscall_exit(25, NULL);
 
@@ -20022,18 +20046,6 @@ replay_mremap(unsigned long addr, unsigned long old_len, unsigned long new_len, 
   }
 
   return rc;
-}
-
-#define SYS_MREMAP 25
-void theia_mremap_ahgx(unsigned long old_addr, unsigned long old_len, unsigned long new_addr, unsigned long new_len)
-{
-  char *buf;
-  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
-
-  sprintf(buf, "%lx|%lx|%lx|%lx", old_addr, old_len, new_addr, new_len);
-  theia_dump_str(buf, 0, SYS_MREMAP); // ignore retval (=new_addr)
-
-  kmem_cache_free(theia_buffers, buf);  
 }
 
 unsigned long
@@ -20589,6 +20601,23 @@ SIMPLE_SHIM2(rt_sigsuspend, 130, sigset_t __user *, unewset, size_t, sigsetsize)
 
 /* sigaltstack 131 */
 
+#define SYS_PREAD64 17
+void theia_pread64_ahgx(unsigned int fd, const char __user *ubuf, size_t count, loff_t pos, long rc, int sysnum)
+{
+  char uuid_str[THEIA_UUID_LEN + 1];
+  char *buf;
+
+  if (fd < 0) return; /* TODO */
+
+  if (fd2uuid(fd, uuid_str) == false)
+    return; /* TODO: report openat errors? */
+
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+  sprintf(buf, "%s|%lu|%lli", uuid_str, count, pos);
+  theia_dump_str(buf, rc, sysnum);
+  kmem_cache_free(theia_buffers, buf);
+}
+
 static asmlinkage long
 record_pread64(unsigned int fd, char __user *buf, size_t count, loff_t pos)
 {
@@ -20608,6 +20637,8 @@ record_pread64(unsigned int fd, char __user *buf, size_t count, loff_t pos)
   is_cache_file = is_record_cache_file_lock(current->record_thrd->rp_cache_files, fd);
 
   rc = sys_pread64(fd, buf, count, pos);
+  if (theia_logging_toggle)
+    theia_pread64_ahgx(fd, buf, count, pos, rc, SYS_PREAD64);
 
 #ifdef TIME_TRICK
   if (rc <= 0) shift_clock = 0;
@@ -20773,6 +20804,23 @@ replay_pread64(unsigned int fd, char __user *buf, size_t count, loff_t pos)
   return rc;
 }
 
+#define SYS_PWRITE64 18
+void theia_pwrite64_ahgx(unsigned int fd, const char __user *ubuf, size_t count, loff_t pos, long rc, int sysnum)
+{
+  char uuid_str[THEIA_UUID_LEN + 1];
+  char *buf;
+
+  if (fd < 0) return; /* TODO */
+
+  if (fd2uuid(fd, uuid_str) == false)
+    return; /* TODO: report openat errors? */
+
+  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+  sprintf(buf, "%s|%lu|%lli", uuid_str, count, pos);
+  theia_dump_str(buf, rc, sysnum);
+  kmem_cache_free(theia_buffers, buf);
+}
+
 static asmlinkage long
 record_pwrite64(unsigned int fd, const char __user *buf, size_t count, loff_t pos)
 {
@@ -20782,6 +20830,8 @@ record_pwrite64(unsigned int fd, const char __user *buf, size_t count, loff_t po
 
   new_syscall_enter(18);
   size = sys_pwrite64(fd, buf, count, pos);
+  if (theia_logging_toggle)
+    theia_pwrite64_ahgx(fd, buf, count, pos, size, SYS_PWRITE64);
 
   DPRINT("Pid %d records write returning %zd\n", current->pid, size);
 #ifdef LOG_COMPRESS
@@ -20845,23 +20895,6 @@ replay_pwrite64(unsigned int fd, const char __user *buf, size_t count, loff_t po
   return rc;
 }
 
-#define SYS_PREAD64 17
-void theia_pread64_ahgx(unsigned int fd, const char __user *ubuf, size_t count, loff_t pos, long rc, int sysnum)
-{
-  char uuid_str[THEIA_UUID_LEN + 1];
-  char *buf;
-
-  if (fd < 0) return; /* TODO */
-
-  if (fd2uuid(fd, uuid_str) == false)
-    return; /* TODO: report openat errors? */
-
-  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
-  sprintf(buf, "%s|%lu|%lli", uuid_str, count, pos);
-  theia_dump_str(buf, rc, sysnum);
-  kmem_cache_free(theia_buffers, buf);
-}
-
 static asmlinkage long
 theia_sys_pread64(unsigned int fd, char __user *buf, size_t count, loff_t pos)
 {
@@ -20870,23 +20903,6 @@ theia_sys_pread64(unsigned int fd, char __user *buf, size_t count, loff_t pos)
   if (theia_logging_toggle)
     theia_pread64_ahgx(fd, buf, count, pos, rc, SYS_PREAD64);
   return rc;
-}
-
-#define SYS_PWRITE64 18
-void theia_pwrite64_ahgx(unsigned int fd, const char __user *ubuf, size_t count, loff_t pos, long rc, int sysnum)
-{
-  char uuid_str[THEIA_UUID_LEN + 1];
-  char *buf;
-
-  if (fd < 0) return; /* TODO */
-
-  if (fd2uuid(fd, uuid_str) == false)
-    return; /* TODO: report openat errors? */
-
-  buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
-  sprintf(buf, "%s|%lu|%lli", uuid_str, count, pos);
-  theia_dump_str(buf, rc, sysnum);
-  kmem_cache_free(theia_buffers, buf);
 }
 
 static asmlinkage long
@@ -21090,14 +21106,34 @@ theia_sys_sendfile64(int out_fd, int in_fd, loff_t __user *offset, size_t count)
 
   rc = sys_sendfile64(out_fd, in_fd, offset, count);
 
-  if (theia_check_channel())
+  if (theia_logging_toggle)
     theia_sendfile64_ahgx(out_fd, in_fd, offset, count, rc);
 
   return rc;
 }
 
+static asmlinkage long
+record_sendfile64(int out_fd, int in_fd, loff_t __user *offset, size_t count)
+{
+  long rc;
+
+  new_syscall_enter(40);
+
+  rc = sys_sendfile64(out_fd, in_fd, offset, count);
+
+  if (theia_logging_toggle)
+    theia_sendfile64_ahgx(out_fd, in_fd, offset, count, rc);
+
+  MPRINT("Pid %d records sendfile64 returning %ld\n", current->pid, rc);
+  new_syscall_done(40, rc);
+  new_syscall_exit(40, NULL);
+
+  return rc;
+}
+
+
 //RET1_SHIM4(sendfile64, 40, off_t, offset, int, out_fd, int, in_fd, off_t __user *, offset, size_t, count);
-RET1_RECORD4(sendfile64, 40, loff_t, offset, int, out_fd, int, in_fd, loff_t __user *, offset, size_t, count);
+// RET1_RECORD4(sendfile64, 40, loff_t, offset, int, out_fd, int, in_fd, loff_t __user *, offset, size_t, count);
 RET1_REPLAY(sendfile64, 40, loff_t, offset, int  out_fd, int  in_fd, loff_t __user   *offset, size_t  count);
 asmlinkage long shim_sendfile64(int out_fd, int in_fd, loff_t __user *offset, size_t count)
 SHIM_CALL_MAIN(40, record_sendfile64(out_fd, in_fd, offset, count), replay_sendfile64(out_fd, in_fd, offset, count), theia_sys_sendfile64(out_fd, in_fd, offset, count));
@@ -23639,6 +23675,20 @@ asmlinkage long shim_pipe2(int __user *fildes, int flags) SHIM_CALL(pipe2, 293, 
 
 SIMPLE_SHIM1(inotify_init1, 294, int, flags);
 
+#define SYS_PREADV 295
+void theia_preadv_ahgx(unsigned long fd, const struct iovec __user *vec,  unsigned long vlen, unsigned long pos_l, unsigned long pos_h, long rc, int sysnum)
+{
+  char uuid_str[THEIA_UUID_LEN + 1];
+
+  if (fd < 0) return; /* TODO */
+
+  if (fd2uuid(fd, uuid_str) == false)
+    return; /* TODO: report openat errors? */
+
+  /* TODO: parse iovec */
+  theia_dump_str(uuid_str, rc, sysnum);
+}
+
 /* TODO: seems that we need to do something more like record_pread */
 static asmlinkage long
 record_preadv(unsigned long fd, const struct iovec __user *vec,  unsigned long vlen, unsigned long pos_l, unsigned long pos_h)
@@ -23647,6 +23697,8 @@ record_preadv(unsigned long fd, const struct iovec __user *vec,  unsigned long v
 
   new_syscall_enter(295);
   size = sys_preadv(fd, vec, vlen, pos_l, pos_h);
+  if (theia_logging_toggle)
+    theia_preadv_ahgx(fd, vec, vlen, pos_l, pos_h, size, SYS_PREADV);
   new_syscall_done(295, size);
   new_syscall_exit(295, copy_iovec_to_args(size, vec, vlen));
   return size;
@@ -23669,20 +23721,6 @@ replay_preadv(unsigned long fd, const struct iovec __user *vec,  unsigned long v
   return rc;
 }
 
-#define SYS_PREADV 295
-void theia_preadv_ahgx(unsigned long fd, const struct iovec __user *vec,  unsigned long vlen, unsigned long pos_l, unsigned long pos_h, long rc, int sysnum)
-{
-  char uuid_str[THEIA_UUID_LEN + 1];
-
-  if (fd < 0) return; /* TODO */
-
-  if (fd2uuid(fd, uuid_str) == false)
-    return; /* TODO: report openat errors? */
-
-  /* TODO: parse iovec */
-  theia_dump_str(uuid_str, rc, sysnum);
-}
-
 static asmlinkage long
 theia_sys_preadv(unsigned long fd, const struct iovec __user *vec,  unsigned long vlen, unsigned long pos_l, unsigned long pos_h)
 {
@@ -23698,6 +23736,19 @@ asmlinkage long shim_preadv(unsigned long fd, const struct iovec __user *vec,  u
 SHIM_CALL_MAIN(295, record_preadv(fd, vec, vlen, pos_l, pos_h), replay_preadv(fd, vec, vlen, pos_l, pos_h), theia_sys_preadv(fd, vec, vlen, pos_l, pos_h))
 
 #define SYS_PWRITEV 296
+void theia_pwritev_ahgx(unsigned long fd, const struct iovec __user *vec,  unsigned long vlen, unsigned long pos_l, unsigned long pos_h, long rc, int sysnum)
+{
+  char uuid_str[THEIA_UUID_LEN + 1];
+
+  if (fd < 0) return; /* TODO */
+
+  if (fd2uuid(fd, uuid_str) == false)
+    return; /* TODO: report openat errors? */
+
+  /* TODO: parse iovec */
+  theia_dump_str(uuid_str, rc, sysnum);
+}
+
 static asmlinkage long
 record_pwritev(unsigned long fd, const struct iovec __user *vec,  unsigned long vlen, unsigned long pos_l, unsigned long pos_h)
 {
@@ -23705,6 +23756,8 @@ record_pwritev(unsigned long fd, const struct iovec __user *vec,  unsigned long 
 
   new_syscall_enter(SYS_PWRITEV);
   size = sys_pwritev(fd, vec, vlen, pos_l, pos_h);
+  if (theia_logging_toggle)
+    theia_pwritev_ahgx(fd, vec, vlen, pos_l, pos_h, size, SYS_PWRITEV);
   new_syscall_done(SYS_PWRITEV, size);
   new_syscall_exit(SYS_PWRITEV, copy_iovec_to_args(size, vec, vlen));
   return size;
@@ -23725,19 +23778,6 @@ replay_pwritev(unsigned long fd, const struct iovec __user *vec,  unsigned long 
   }
 
   return rc;
-}
-
-void theia_pwritev_ahgx(unsigned long fd, const struct iovec __user *vec,  unsigned long vlen, unsigned long pos_l, unsigned long pos_h, long rc, int sysnum)
-{
-  char uuid_str[THEIA_UUID_LEN + 1];
-
-  if (fd < 0) return; /* TODO */
-
-  if (fd2uuid(fd, uuid_str) == false)
-    return; /* TODO: report openat errors? */
-
-  /* TODO: parse iovec */
-  theia_dump_str(uuid_str, rc, sysnum);
 }
 
 static asmlinkage long
