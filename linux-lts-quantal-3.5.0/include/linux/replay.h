@@ -7,6 +7,9 @@
 #endif
 
 #define MAX_LOGDIR_STRLEN 256
+#define MAX_LIBPATH_STRLEN PAGE_SIZE
+#define MAX_WHITELIST_STRLEN 512
+#define MAX_DIRENT_STRLEN 256
 
 #include <linux/signal.h>
 #include <linux/mm_types.h>

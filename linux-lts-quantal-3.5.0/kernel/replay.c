@@ -250,14 +250,14 @@ bool theia_recording_toggle = 0;
 EXPORT_SYMBOL(theia_recording_toggle);
 char theia_linker[MAX_LOGDIR_STRLEN + 1];
 EXPORT_SYMBOL(theia_linker);
-char theia_libpath[MAX_LOGDIR_STRLEN + 1];
+char theia_libpath[MAX_LIBPATH_STRLEN + 1];
 EXPORT_SYMBOL(theia_libpath);
 
-char theia_proc_whitelist[MAX_LOGDIR_STRLEN + 1];
+char theia_proc_whitelist[MAX_WHITELIST_STRLEN + 1];
 EXPORT_SYMBOL(theia_proc_whitelist);
 size_t theia_proc_whitelist_len;
 EXPORT_SYMBOL(theia_proc_whitelist_len);
-char theia_dirent_prefix[MAX_LOGDIR_STRLEN + 1];
+char theia_dirent_prefix[MAX_DIRENT_STRLEN + 1];
 EXPORT_SYMBOL(theia_dirent_prefix);
 size_t theia_dirent_prefix_len;
 EXPORT_SYMBOL(theia_dirent_prefix_len);
@@ -4838,7 +4838,8 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
 
   sprintf(ckpt, "%s/ckpt", prg->rg_logdir);
   BUG_ON(IS_ERR_OR_NULL(theia_libpath));
-  theia_libpath_len = strnlen(theia_libpath, MAX_LOGDIR_STRLEN + 1);
+  //MAX_LIBPAT_STRLEN+1 because theia_libpath should have 1 extra byte for null byte
+  theia_libpath_len = strnlen(theia_libpath, MAX_LIBPATH_STRLEN + 1);
   argbuf = copy_args(args, env, &argbuflen, theia_libpath, theia_libpath_len);
 
   if (argbuf == NULL)
@@ -4868,7 +4869,7 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
     TPRINT("fork_replay: libpath not found\n");
 
     prg->rg_libpath = KMALLOC(theia_libpath_len, GFP_KERNEL);
-    strncpy(prg->rg_libpath, theia_libpath, MAX_LOGDIR_STRLEN + 1);
+    strncpy(prg->rg_libpath, theia_libpath, theia_libpath_len);
     TPRINT("hardcoded libpath is (%s)", prg->rg_libpath);
     //    return -EINVAL;
   }
@@ -5058,7 +5059,8 @@ int fork_replay(char __user *logdir, const char __user *const __user *args,
 
   sprintf(ckpt, "%s/ckpt", prg->rg_logdir);
   BUG_ON(IS_ERR_OR_NULL(theia_libpath));
-  theia_libpath_len = strnlen(theia_libpath, MAX_LOGDIR_STRLEN + 1);
+  //MAX_LIBPAT_STRLEN+1 because theia_libpath should have 1 extra byte for null byte
+  theia_libpath_len = strnlen(theia_libpath, MAX_LIBPATH_STRLEN + 1);
   argbuf = copy_args(args, env, &argbuflen, theia_libpath, theia_libpath_len);
 
   if (argbuf == NULL)
@@ -5098,7 +5100,7 @@ int fork_replay(char __user *logdir, const char __user *const __user *args,
     printk("fork_replay: libpath not found\n");
 
     prg->rg_libpath = KMALLOC(theia_libpath_len, GFP_KERNEL);
-    strncpy(prg->rg_libpath, theia_libpath, MAX_LOGDIR_STRLEN + 1);
+    strncpy(prg->rg_libpath, theia_libpath, theia_libpath_len);
     TPRINT("hardcoded libpath is (%s)", prg->rg_libpath);
     //    return -EINVAL;
   }
@@ -25355,19 +25357,21 @@ static int __init replay_init(void)
   //const char* theia_libpath_default = "LD_LIBRARY_PATH=/home/theia/theia-es/eglibc-2.15/prefix/lib:/lib/theia_libs:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/lib:/usr/lib:/lib";
   const char *theia_libpath_default = "LD_LIBRARY_PATH=/usr/local/eglibc/lib:/usr/local/lib:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib:/lib";
 
-  strncpy(theia_linker, theia_linker_default, MAX_LOGDIR_STRLEN + 1);
-  strncpy(theia_libpath, theia_libpath_default, MAX_LOGDIR_STRLEN + 1);
+  strncpy(theia_linker, theia_linker_default, MAX_LOGDIR_STRLEN);
+  theia_linker[MAX_LOGDIR_STRLEN] = 0x0;
+  strncpy(theia_libpath, theia_libpath_default, MAX_LIBPATH_STRLEN);
+  theia_libpath[MAX_LIBPATH_STRLEN] = 0x0;
 #ifdef CONFIG_SYSCTL
   register_sysctl_table(replay_ctl_root);
 #endif
 
   // setup defaults for proc and dirent hiding
   len = proc_whitelist_len;
-  BUG_ON(len > MAX_LOGDIR_STRLEN + 1);
+  BUG_ON(len > MAX_WHITELIST_STRLEN);
   memcpy(theia_proc_whitelist, proc_whitelist, len);
   theia_proc_whitelist_len = len;
   len = hide_len;
-  BUG_ON(len > MAX_LOGDIR_STRLEN + 1);
+  BUG_ON(len > MAX_DIRENT_STRLEN);
   memcpy(theia_dirent_prefix, hide_list, len);
   theia_dirent_prefix_len = len;
 
