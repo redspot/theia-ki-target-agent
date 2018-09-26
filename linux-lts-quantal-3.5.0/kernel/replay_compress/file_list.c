@@ -50,13 +50,13 @@ int init_file_list (struct file_list_struct* file_list, char* file_list_path) {
 		file_list->ignored_count = count;
 		file_list->ignored_list = (struct file_list_name_struct*) kmalloc (count * sizeof(struct file_list_name_struct), GFP_KERNEL);
 		if (file_list->ignored_list == NULL) {
-			printk ("init_file_list: unable to allocate ignored_list with size %d\n", count*sizeof(struct file_list_name_struct));
+			printk ("init_file_list: unable to allocate ignored_list with size %lu\n", count*sizeof(struct file_list_name_struct));
 			rc = -ENOMEM;
 			goto exit;
 		}
 		copyed = vfs_read (file, (char*)file_list->ignored_list, count*sizeof(struct file_list_name_struct), &pos);
 		if (copyed != count*sizeof(struct file_list_name_struct)) {
-			printk ("init_file_list: ftried to read ignored_list for ignored_file_list, got rc %d, expected:%d\n", copyed, count*sizeof(struct file_list_name_struct));
+			printk ("init_file_list: ftried to read ignored_list for ignored_file_list, got rc %d, expected:%lu\n", copyed, count*sizeof(struct file_list_name_struct));
 			rc = copyed;
 			goto exit;
 		}
@@ -77,13 +77,13 @@ int init_file_list (struct file_list_struct* file_list, char* file_list_path) {
 		file_list->modify_count = count;
 		file_list->modify_list = (struct file_list_name_struct*) kmalloc (count * sizeof(struct file_list_name_struct), GFP_KERNEL);
 		if (file_list->modify_list == NULL) {
-			printk ("init_file_list: unable to allocate modify_list with size %d\n", count*sizeof(struct file_list_name_struct));
+			printk ("init_file_list: unable to allocate modify_list with size %lu\n", count*sizeof(struct file_list_name_struct));
 			rc = -ENOMEM;
 			goto exit;
 		}
 		copyed = vfs_read (file, (char*)file_list->modify_list, count*sizeof(struct file_list_name_struct), &pos);
 		if (copyed != count*sizeof(struct file_list_name_struct)) {
-			printk ("init_file_list: ftried to read modify_list for modify_file_list, got rc %d, expected:%d\n", copyed, count*sizeof(struct file_list_name_struct));
+			printk ("init_file_list: ftried to read modify_list for modify_file_list, got rc %d, expected:%lu\n", copyed, count*sizeof(struct file_list_name_struct));
 			rc = copyed;
 			goto exit;
 		}
