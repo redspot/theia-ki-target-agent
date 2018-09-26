@@ -18,7 +18,7 @@ git describe --always --long | tr - +)/" \
 
 #this script is located in test/dev
 export CROSS_COMPILE=${DIR}/../../linux-lts-quantal-3.5.0/debian.master/bin/
-export KERNEL_DIR="${DIR}/spec_build"
+export KERNEL_DIR="${OUT}"
 make oldconfig O="${OUT}" CROSS_COMPILE="${CROSS_COMPILE}" \
 && make prepare O="${OUT}" CROSS_COMPILE="${CROSS_COMPILE}" \
 && make scripts O="${OUT}" CROSS_COMPILE="${CROSS_COMPILE}"
