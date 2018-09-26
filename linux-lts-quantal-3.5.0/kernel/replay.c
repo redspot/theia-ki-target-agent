@@ -14623,7 +14623,7 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args)
 
     }
 
-    if(type==buttonRelease && orca_log)
+    if(type==buttonRelease && orca_log && strncmp(orca_log, "no info",7)!=0)
     {
       if(uiDebug==1)
         printk("x11:printing release %s\n", orca_log);
