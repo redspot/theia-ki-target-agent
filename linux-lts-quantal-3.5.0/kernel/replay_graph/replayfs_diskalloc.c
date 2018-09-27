@@ -237,20 +237,20 @@ static void init_monitor_lists(void) {
 	btree_init64(&lru_list_verify_tree);
 }
 
-static void check_not_in_lru(struct page_data *data) {
-	u64 key;
-	struct page_data *verify_data = NULL;
-
-	key = crappy_pagecache_key(data->alloc, data->page->index);
-
-	cache_debugk("%s %d: Looking up key of 0x%016llX\n", __func__, __LINE__, key);
-	verify_data = btree_lookup64(&lru_list_verify_tree, key);
-	if (verify_data != NULL || IS_ERR(verify_data)) {
-		printk("%s %d: Lookup returns unexpected result for key of 0x%016llX, verify_data is %p\n",
-				__func__, __LINE__, key, verify_data);
-		BUG();
-	}
-}
+//static void check_not_in_lru(struct page_data *data) {
+//	u64 key;
+//	struct page_data *verify_data = NULL;
+//
+//	key = crappy_pagecache_key(data->alloc, data->page->index);
+//
+//	cache_debugk("%s %d: Looking up key of 0x%016llX\n", __func__, __LINE__, key);
+//	verify_data = btree_lookup64(&lru_list_verify_tree, key);
+//	if (verify_data != NULL || IS_ERR(verify_data)) {
+//		printk("%s %d: Lookup returns unexpected result for key of 0x%016llX, verify_data is %p\n",
+//				__func__, __LINE__, key, verify_data);
+//		BUG();
+//	}
+//}
 
 static void add_to_lru_list(struct page_data *data, struct list_head *head,
 		struct list_head *list, struct btree_head64 *verify_tree) {
@@ -278,7 +278,7 @@ static void add_to_free_list(struct page_data *data, struct list_head *head,
 	u32 key;
 	struct page_data *verify_data = NULL;
 
-	key = (u32)data;
+	key = (u32)(long)data;
 
 	verify_data = btree_lookup32(verify_tree, key);
 	//	BUG_ON(verify_data != NULL || IS_ERR(verify_data));
@@ -323,7 +323,7 @@ static void remove_from_free_list(struct page_data *data, struct list_head *head
 	u32 key;
 	struct page_data *verify_data = NULL;
 
-	key = (u32)data;
+	key = (u32)(long)data;
 
 	verify_data = btree_lookup32(verify_tree, key);
 	//	BUG_ON(verify_data == NULL || IS_ERR(verify_data));

@@ -24,7 +24,7 @@
 
 MODULE_AUTHOR("Jason Flinn, Wilson Martin");
 MODULE_LICENSE("GPL");
-MODULE_VERSION("1.3-3.5.0-99-generic");
+MODULE_VERSION("1.4-3.5.0-99-generic");
 
 extern bool theia_logging_toggle;
 extern bool theia_recording_toggle;
@@ -164,6 +164,10 @@ static ssize_t flag_store(struct kobject *kobj, struct kobj_attribute *attr,
   if (error || flag > 1) return -EINVAL;
 
   if (strcmp(attr->attr.name, "theia_logging_toggle") == 0) {
+    if (num_online_cpus() > 1) {
+      pr_err("error: cannot enable logging if num_online_cpus() > 1\n");
+      return -EINVAL;
+    }
     if(theia_logging_toggle == 0 && flag == 1) {
       packahgv_reboot();
     }
@@ -171,6 +175,10 @@ static ssize_t flag_store(struct kobject *kobj, struct kobj_attribute *attr,
       return -EINVAL;
     theia_logging_toggle = flag;
   } else if (strcmp(attr->attr.name, "theia_recording_toggle") == 0) {
+    if (num_online_cpus() > 1) {
+      pr_err("error: cannot enable recording if num_online_cpus() > 1\n");
+      return -EINVAL;
+    }
     if (theia_recording_toggle == 1 && flag == 0 && theia_secure_flag == 1)
       return -EINVAL;
     theia_recording_toggle = flag;
@@ -272,6 +280,10 @@ static long spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
 
   switch (cmd) {
     case THEIA_LOGGING_ON:
+      if (num_online_cpus() > 1) {
+        pr_err("error: cannot enable logging if num_online_cpus() > 1\n");
+        return -EINVAL;
+      }
       if(theia_logging_toggle == 0)
         packahgv_reboot();
       theia_logging_toggle = 1;
@@ -284,6 +296,10 @@ static long spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
       pr_info("Theia logging off\n");
       return 0;
     case THEIA_RECORDING_ON:
+      if (num_online_cpus() > 1) {
+        pr_err("error: cannot enable recording if num_online_cpus() > 1\n");
+        return -EINVAL;
+      }
       theia_recording_toggle = 1;
       pr_info("Theia recording on\n");
       return 0;

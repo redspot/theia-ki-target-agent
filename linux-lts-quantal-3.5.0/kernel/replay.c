@@ -250,14 +250,14 @@ bool theia_recording_toggle = 0;
 EXPORT_SYMBOL(theia_recording_toggle);
 char theia_linker[MAX_LOGDIR_STRLEN + 1];
 EXPORT_SYMBOL(theia_linker);
-char theia_libpath[MAX_LOGDIR_STRLEN + 1];
+char theia_libpath[MAX_LIBPATH_STRLEN + 1];
 EXPORT_SYMBOL(theia_libpath);
 
-char theia_proc_whitelist[MAX_LOGDIR_STRLEN + 1];
+char theia_proc_whitelist[MAX_WHITELIST_STRLEN + 1];
 EXPORT_SYMBOL(theia_proc_whitelist);
 size_t theia_proc_whitelist_len;
 EXPORT_SYMBOL(theia_proc_whitelist_len);
-char theia_dirent_prefix[MAX_LOGDIR_STRLEN + 1];
+char theia_dirent_prefix[MAX_DIRENT_STRLEN + 1];
 EXPORT_SYMBOL(theia_dirent_prefix);
 size_t theia_dirent_prefix_len;
 EXPORT_SYMBOL(theia_dirent_prefix_len);
@@ -4748,12 +4748,11 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
   char *argbuf;
   int argbuflen;
   void *slab;
+  int theia_libpath_len;
 #ifdef TIME_TRICK
   struct timeval tv;
   struct timespec tp;
 #endif
-  char libpath_contents[200];
-  char *libpath;
 
   MPRINT("[%s|%d] pid %d, fd %d\n", __func__, __LINE__, current->pid, fd);
   if (current->record_thrd || current->replay_thrd)
@@ -4840,10 +4839,10 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
 
 
   sprintf(ckpt, "%s/ckpt", prg->rg_logdir);
-  sprintf(libpath_contents,"LD_LIBRARY_PATH=/usr/local/eglibc/lib:/usr/local/lib:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib:/lib"); 
-  libpath = KMALLOC(strlen(libpath_contents), GFP_KERNEL); 
-  strcpy(libpath, libpath_contents);
-  argbuf = copy_args(args, env, &argbuflen, libpath_contents, strlen(libpath_contents));
+  BUG_ON(IS_ERR_OR_NULL(theia_libpath));
+  //MAX_LIBPAT_STRLEN+1 because theia_libpath should have 1 extra byte for null byte
+  theia_libpath_len = strnlen(theia_libpath, MAX_LIBPATH_STRLEN + 1);
+  argbuf = copy_args(args, env, &argbuflen, theia_libpath, theia_libpath_len);
 
   if (argbuf == NULL)
   {
@@ -4870,7 +4869,9 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
   if (prg->rg_libpath == NULL)
   {
     TPRINT("fork_replay: libpath not found\n");
-    prg->rg_libpath = libpath;
+
+    prg->rg_libpath = KMALLOC(theia_libpath_len, GFP_KERNEL);
+    strncpy(prg->rg_libpath, theia_libpath, theia_libpath_len);
     TPRINT("hardcoded libpath is (%s)", prg->rg_libpath);
     //    return -EINVAL;
   }
@@ -5060,7 +5061,8 @@ int fork_replay(char __user *logdir, const char __user *const __user *args,
 
   sprintf(ckpt, "%s/ckpt", prg->rg_logdir);
   BUG_ON(IS_ERR_OR_NULL(theia_libpath));
-  theia_libpath_len = strnlen(theia_libpath, MAX_LOGDIR_STRLEN + 1);
+  //MAX_LIBPAT_STRLEN+1 because theia_libpath should have 1 extra byte for null byte
+  theia_libpath_len = strnlen(theia_libpath, MAX_LIBPATH_STRLEN + 1);
   argbuf = copy_args(args, env, &argbuflen, theia_libpath, theia_libpath_len);
 
   if (argbuf == NULL)
@@ -5100,7 +5102,7 @@ int fork_replay(char __user *logdir, const char __user *const __user *args,
     printk("fork_replay: libpath not found\n");
 
     prg->rg_libpath = KMALLOC(theia_libpath_len, GFP_KERNEL);
-    strncpy(prg->rg_libpath, theia_libpath, MAX_LOGDIR_STRLEN + 1);
+    strncpy(prg->rg_libpath, theia_libpath, theia_libpath_len);
     TPRINT("hardcoded libpath is (%s)", prg->rg_libpath);
     //    return -EINVAL;
   }
@@ -9215,16 +9217,9 @@ void packahgv_read(struct read_ahgv *sys_args)
     else {
       recv_tag = 0;
     }
-    if(recv_tag > 0) {
-		size = sprintf(buf, "startahg|%d|%d|%ld|%s|%u|%ld|%d|%ld|%ld|%u|endahg\n", 
-				0, sys_args->pid, current->start_time.tv_sec, uuid_str, recv_tag, sys_args->bytes, current->tgid, 
-				sec, nsec, current->no_syscalls++);
-    }
-    else {
-      size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n", 
-          0, sys_args->pid, current->start_time.tv_sec, uuid_str, sys_args->bytes, current->tgid, 
-          sec, nsec, current->no_syscalls++);
-    }
+    size = sprintf(buf, "startahg|%d|%d|%ld|%s|%u|%ld|%d|%ld|%ld|%u|endahg\n", 
+        0, sys_args->pid, current->start_time.tv_sec, uuid_str, recv_tag, sys_args->bytes, current->tgid, 
+        sec, nsec, current->no_syscalls++);
 #else
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
 				0, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, 
@@ -9993,14 +9988,8 @@ void packahgv_write(struct write_ahgv *sys_args)
       if(uiDebug)
         printk("x11:LateRelease %s\n", orca_log);
     }
-    if(send_tag > 0) {
-      size = sprintf(buf, "startahg|%d|%d|%ld|%s|%u|%ld|%d|%ld|%ld|%u|endahg\n", 
-          1, sys_args->pid, current->start_time.tv_sec, uuid_str, send_tag, sys_args->bytes, current->tgid, sec, nsec, current->no_syscalls++);
-    }
-    else {
-      size = sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|endahg\n", 
-          1, sys_args->pid, current->start_time.tv_sec, uuid_str, sys_args->bytes, current->tgid, sec, nsec, current->no_syscalls++);
-    }
+    size = sprintf(buf, "startahg|%d|%d|%ld|%s|%u|%ld|%d|%ld|%ld|%u|endahg\n", 
+        1, sys_args->pid, current->start_time.tv_sec, uuid_str, send_tag, sys_args->bytes, current->tgid, sec, nsec, current->no_syscalls++);
 #else
 		int size = sprintf(buf, "startahg|%d|%d|%ld|%d|%ld|%d|%ld|%ld|endahg\n", 
 				1, sys_args->pid, current->start_time.tv_sec, sys_args->fd, sys_args->bytes, current->tgid, sec, nsec);
@@ -13257,6 +13246,33 @@ int theia_sys_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg)
 asmlinkage long shim_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg)
 SHIM_CALL_MAIN(16, record_ioctl(fd, cmd, arg), replay_ioctl(fd, cmd, arg), theia_sys_ioctl(fd, cmd, arg));
 
+void theia_fcntl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long rc)
+{
+  int size = 0;
+  if (theia_check_channel() == false)
+    return;
+
+  if (is_process_new2(current->pid, current->start_time.tv_sec))
+    recursive_packahgv_process();
+
+  /* packahgv */
+  if (theia_logging_toggle)
+  {
+    char *buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+    long sec, nsec;
+    get_curr_time(&sec, &nsec);
+    size = sprintf(buf, "startahg|%d|%d|%ld|%d|%d|%lu|%d|%ld|%ld|%u|endahg\n",
+                   72, current->pid, current->start_time.tv_sec, fd, cmd, arg, current->tgid, sec, nsec, current->no_syscalls++);
+    if (size < 0)
+    {
+      pr_warn("%s() size = %i\n", __FUNCTION__, size);
+    }
+    else
+      theia_file_write(buf, size);
+    kmem_cache_free(theia_buffers, buf);
+  }
+}
+
 static asmlinkage long
 record_fcntl(unsigned int fd, unsigned int cmd, unsigned long arg)
 {
@@ -13265,6 +13281,7 @@ record_fcntl(unsigned int fd, unsigned int cmd, unsigned long arg)
 
   new_syscall_enter(72);
   rc = sys_fcntl(fd, cmd, arg);
+  theia_fcntl_ahg(fd, cmd, arg, rc);
   new_syscall_done(72, rc);
   if (rc >= 0)
   {
@@ -13318,33 +13335,6 @@ replay_fcntl(unsigned int fd, unsigned int cmd, unsigned long arg)
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + bytes);
   }
   return rc;
-}
-
-void theia_fcntl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long rc)
-{
-  int size = 0;
-  if (theia_check_channel() == false)
-    return;
-
-  if (is_process_new2(current->pid, current->start_time.tv_sec))
-    recursive_packahgv_process();
-
-  /* packahgv */
-  if (theia_logging_toggle)
-  {
-    char *buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
-    long sec, nsec;
-    get_curr_time(&sec, &nsec);
-    size = sprintf(buf, "startahg|%d|%d|%ld|%d|%d|%lu|%d|%ld|%ld|%u|endahg\n",
-                   72, current->pid, current->start_time.tv_sec, fd, cmd, arg, current->tgid, sec, nsec, current->no_syscalls++);
-    if (size < 0)
-    {
-      pr_warn("%s() size = %i\n", __FUNCTION__, size);
-    }
-    else
-      theia_file_write(buf, size);
-    kmem_cache_free(theia_buffers, buf);
-  }
 }
 
 int theia_sys_fcntl(unsigned int fd, unsigned int cmd, unsigned long arg)
@@ -14523,7 +14513,8 @@ bool addr2uuid(struct socket *sock, struct sockaddr *dest_addr, char *uuid_str) 
     sprintf(local_ip, "127.0.0.1");
   }
 
-  snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%lu|%s|%lu", ip, port, local_ip, local_port);
+//  snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%lu|%s|%lu", ip, port, local_ip, local_port);
+  snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%lu|%s|%lu|-1/-1", ip, port, local_ip, local_port);
   
   return true;
 
@@ -25390,7 +25381,7 @@ static int __init replay_init(void)
 {
   mm_segment_t old_fs;
   size_t len;
-  char *proc_whitelist = \
+  char proc_whitelist[] = \
                          "/usr/local/bin/relay-read-file\0"
                          "/usr/local/bin/theia_toggle\0"
                          "/usr/sbin/rsyslogd\0"
@@ -25400,11 +25391,11 @@ static int __init replay_init(void)
                          "/usr/lib/deja-dup/deja-dup/deja-dup-monitor\0"
                          "/usr/lib/libvte-2.90-9/gnome-pty-helper\0"
                          ;
-  size_t proc_whitelist_len = 119;
-  char *hide_list = \
+  size_t proc_whitelist_len = sizeof(proc_whitelist);
+  char hide_list[] = \
                     "/data/handler.log\0"
                     ;
-  size_t hide_len = 18;
+  size_t hide_len = sizeof(hide_list);
 
   // setup default for theia_linker
   //const char* theia_linker_default = "/home/theia/theia-es/eglibc-2.15/prefix/lib/ld-linux-x86-64.so.2";
@@ -25414,19 +25405,21 @@ static int __init replay_init(void)
   //const char* theia_libpath_default = "LD_LIBRARY_PATH=/home/theia/theia-es/eglibc-2.15/prefix/lib:/lib/theia_libs:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/lib:/usr/lib:/lib";
   const char *theia_libpath_default = "LD_LIBRARY_PATH=/usr/local/eglibc/lib:/usr/local/lib:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib:/lib";
 
-  strncpy(theia_linker, theia_linker_default, MAX_LOGDIR_STRLEN + 1);
-  strncpy(theia_libpath, theia_libpath_default, MAX_LOGDIR_STRLEN + 1);
+  strncpy(theia_linker, theia_linker_default, MAX_LOGDIR_STRLEN);
+  theia_linker[MAX_LOGDIR_STRLEN] = 0x0;
+  strncpy(theia_libpath, theia_libpath_default, MAX_LIBPATH_STRLEN);
+  theia_libpath[MAX_LIBPATH_STRLEN] = 0x0;
 #ifdef CONFIG_SYSCTL
   register_sysctl_table(replay_ctl_root);
 #endif
 
   // setup defaults for proc and dirent hiding
   len = proc_whitelist_len;
-  BUG_ON(len > MAX_LOGDIR_STRLEN + 1);
+  BUG_ON(len > MAX_WHITELIST_STRLEN);
   memcpy(theia_proc_whitelist, proc_whitelist, len);
   theia_proc_whitelist_len = len;
   len = hide_len;
-  BUG_ON(len > MAX_LOGDIR_STRLEN + 1);
+  BUG_ON(len > MAX_DIRENT_STRLEN);
   memcpy(theia_dirent_prefix, hide_list, len);
   theia_dirent_prefix_len = len;
 
