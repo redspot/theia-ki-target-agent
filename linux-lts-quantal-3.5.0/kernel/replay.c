@@ -380,6 +380,8 @@ char * orca_log=NULL;
 #define buttonRelease 666
 #define buttonPress 667
 
+long lastPress=0;
+char * danglingX11=NULL;
 bool in_nullterm_list(char *target, char *list, size_t list_len);
 
 bool theia_check_channel(void)
@@ -9889,6 +9891,11 @@ void packahgv_write(struct write_ahgv *sys_args)
   char *temp;
   char *fpath;
   char *temp2;
+  long eventTime;
+  char *timeInd;
+  char ugly[20];
+  char *tempPtr;
+  bool needStitch=false;
 
   //Yang
   if (theia_logging_toggle)
@@ -9918,15 +9925,47 @@ void packahgv_write(struct write_ahgv *sys_args)
       if(strcmp(fpath, magic)==0 && sys_args->count<4096)
       {
         if(!orca_log)
+        {  
           orca_log=vmalloc(4096);
+          danglingX11=vmalloc(1024);
+        }
         temp2=kmem_cache_alloc(theia_buffers, GFP_KERNEL);
         copy_from_user(temp2, sys_args->buf, sys_args->count);
         temp2[sys_args->count]=0;
         if(strstr(temp2, "app.name"))
         {
           strncpy(orca_log, temp2, 4095);
+          timeInd=strstr(orca_log, "time=");
+          if(timeInd)
+          {
+            int i=0;
+            tempPtr=timeInd+6;
+            for(i=0; i<20; i++)
+            {
+              if(tempPtr[i]!='\'')
+                ugly[i]=tempPtr[i];
+              else
+              {
+                ugly[i]='\0';
+              }
+            }
+            if(uiDebug)
+              printk("timeInd? %s\n", ugly);
+            kstrtol(ugly, 10, &eventTime);
+          }
+          else
+            eventTime=0;
           if(uiDebug)
-            printk("orca_log %s\n", orca_log);
+          {
+            printk("orca_log %s %ld\n", orca_log, eventTime);
+          }
+          if(danglingX11[0] && eventTime>=lastPress)
+          {
+            //danglingX11[0]='\0';
+            if(uiDebug)
+              printk("need stitch?\n");
+            needStitch=true;
+          }
         }
         kmem_cache_free(theia_buffers, temp2);
       }
@@ -9944,6 +9983,15 @@ void packahgv_write(struct write_ahgv *sys_args)
     }
     else {
       send_tag = 0;
+    }
+    if(needStitch && orca_log)
+    {
+      size=sprintf(buf, "%s|%u|%s|endahg\n", danglingX11, current->no_syscalls++, orca_log);
+      theia_file_write(buf, size);
+
+      danglingX11[0]='\0';
+      if(uiDebug)
+        printk("x11:LateRelease %s\n", orca_log);
     }
     if(send_tag > 0) {
       size = sprintf(buf, "startahg|%d|%d|%ld|%s|%u|%ld|%d|%ld|%ld|%u|endahg\n", 
@@ -14619,8 +14667,9 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args)
         {
           //button press
           type=buttonPress;
+          lastPress=sec;
           if(uiDebug==1)
-            printk("x11:buttonPress\n"); 
+            printk("x11:buttonPress %ld\n", sec); 
           if(orca_log)
             strcpy(orca_log, "no info");
         }
@@ -14630,13 +14679,23 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args)
 
     }
 
-    if(type==buttonRelease && orca_log && strncmp(orca_log, "no info",7)!=0)
+    if(type==buttonRelease && orca_log)
     {
-      if(uiDebug==1)
+      if(uiDebug==1 && strncmp(orca_log, "no info", 7)!=0)
         printk("x11:printing release %s\n", orca_log);
-      size= sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|%s|endahg\n",
+      if(strncmp(orca_log, "no info", 7)!=0)
+      {
+        danglingX11[0]='\0';
+        size= sprintf(buf, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|%u|%s|endahg\n",
                    buttonRelease, sys_args->pid, current->start_time.tv_sec,
                    uuid_str, sys_args->rc, current->tgid, sec, nsec, current->no_syscalls++, orca_log);
+      }
+      else
+      {
+        sprintf(danglingX11, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|",
+                   buttonRelease, sys_args->pid, current->start_time.tv_sec,
+                   uuid_str, sys_args->rc, current->tgid, sec, nsec);
+      }
     }
     else
     {
