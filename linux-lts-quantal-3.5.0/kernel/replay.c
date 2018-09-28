@@ -5080,8 +5080,9 @@ int fork_replay(char __user *logdir, const char __user *const __user *args,
   {
     TPRINT("fork_replay: libpath not found\n");
 
-    prg->rg_libpath = KMALLOC(theia_libpath_len, GFP_KERNEL);
+    prg->rg_libpath = KMALLOC(theia_libpath_len+1, GFP_KERNEL);
     strncpy(prg->rg_libpath, theia_libpath, theia_libpath_len);
+    prg->rg_libpath[theia_libpath_len] = '\0';
     TPRINT("hardcoded libpath is (%s)", prg->rg_libpath);
     //    return -EINVAL;
   }
