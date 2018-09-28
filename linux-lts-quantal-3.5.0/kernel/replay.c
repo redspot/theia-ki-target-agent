@@ -4513,6 +4513,7 @@ get_libpath(const char __user *const __user *env)
       TPRINT("get_libpath cannot copy path from user\n");
       return NULL;
     }
+    retbuf[len] = '\0';
     return retbuf;
   }
   while (1);
@@ -4847,8 +4848,9 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
   {
     TPRINT("fork_replay: libpath not found\n");
 
-    prg->rg_libpath = KMALLOC(theia_libpath_len, GFP_KERNEL);
+    prg->rg_libpath = KMALLOC(theia_libpath_len+1, GFP_KERNEL);
     strncpy(prg->rg_libpath, theia_libpath, theia_libpath_len);
+    prg->rg_libpath[theia_libpath_len] = '\0';
     TPRINT("hardcoded libpath is (%s)", prg->rg_libpath);
     //    return -EINVAL;
   }
