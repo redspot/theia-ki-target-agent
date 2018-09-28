@@ -21547,19 +21547,23 @@ record_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
   long rc;
   struct mmap_pgoff_retvals *recbuf = NULL;
 
+#ifdef THEIA_TRACK_SHM_OPEN
   char *vm_file_path = NULL;
   char *path = NULL;
   bool is_shmem = false;
   vm_file_path = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
   memset(vm_file_path, '\0', PATH_MAX);
+#endif
 
   rg_lock(current->record_thrd->rp_group);
   new_syscall_enter(9);
 
+#ifdef THEIA_TRACK_SHM_OPEN
   if (flags & MAP_SHARED)
   {
     flags = flags | MAP_POPULATE;
   }
+#endif
 
   rc = sys_mmap_pgoff(addr, len, prot, flags, fd, pgoff);
   //  TPRINT("mmap record is done. rc:%lx\n", rc);
@@ -21586,6 +21590,7 @@ record_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
       //      TPRINT("record_mmap_pgoff: rc: %lx, vm_file->fdentry->d_iname: %s, prot: %lu.\n", rc, vma->vm_file->f_dentry->d_iname, prot);
       //      sprintf(vm_file_path, "%s", vma->vm_file->f_dentry->d_iname);
 
+#ifdef THEIA_TRACK_SHM_OPEN
       path = d_path(&(vma->vm_file->f_path), vm_file_path, PATH_MAX);
       if (IS_ERR(path))
       {
@@ -21602,6 +21607,7 @@ record_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
       }
       if (vm_file_path)
         kmem_cache_free(theia_buffers, vm_file_path);
+#endif
     }
     up_read(&mm->mmap_sem);
   }
