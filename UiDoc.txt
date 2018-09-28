@@ -1,6 +1,11 @@
 Currently the UI piece only logs UI info to the ahg, but doesn't have the CDM part.
 
-To be able to log UI info, you'll need to run our custom orca with the command "orca --debug-file=orca.txt" in your home directory. You'll also need to fix the "magic" in replay.c to point to the right Orca log file.
+To be able to log UI info, you'll need to run our custom orca with the command "orca --debug-file=orca.txt" in your home directory. You'll also need to fix the "magic" in replay.c to point to the right Orca log file. 
+
+You can find the custom orca at the repo: theia-orca. General instuctions to build it is:
+1) ./autogen.sh (and entertain all the complains about missing packages)
+2) make
+3) sudo make install
 
 You can turn off all the printk from the UI piece by setting uiDebug to 0 in replay.c.
 
