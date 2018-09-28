@@ -143,6 +143,7 @@ shm_open (const char *name, int oflag, mode_t mode)
   int fd;
 
 //SL: TODO: define a MACRO?
+#if 0
   int j,nptrs;
   void *buffer[BT_BUF_SIZE];
   char **strings;
@@ -152,6 +153,7 @@ shm_open (const char *name, int oflag, mode_t mode)
   for (j = 0; j < nptrs; ++j)
     printf("THEIA-BACKTRACE: %s\n", strings[j]);
   free(strings);
+#endif
 //**********************************************
 
   /* Determine where the shmfs is mounted.  */
