@@ -299,10 +299,13 @@ EXPORT_SYMBOL(theia_replay_register_data);
 // If defined, use file cache for reads of read-only files
 #define CACHE_READS
 
+unsigned int theia_debug = 1;
+#define TPRINT if(theia_debug) pr_debug
+
 /* These #defines can be found in replay_config.h */
 int verify_debug = 0;
 #ifdef VERIFY_COMPRESSED_DATA
-#define verify_debugk(...) if (verify_debug) {printk(__VA_ARGS__);}
+#define verify_debugk(...) if (verify_debug) {TPRINT(__VA_ARGS__);}
 #else
 #define verify_debugk(...)
 #endif
@@ -331,8 +334,6 @@ int verify_debug = 0;
 //#define MPRINT(x,...)
 //#define MCPRINT
 
-unsigned int theia_debug = 1;
-#define TPRINT if(theia_debug) pr_debug
 //#define DPRINT(x,...)
 
 //xdou
@@ -407,7 +408,7 @@ bool theia_check_channel(void)
     theia_dir = debugfs_create_dir(APP_DIR, NULL);
     if (!theia_dir)
     {
-      printk("Couldn't create relay app directory.\n");
+      TPRINT("Couldn't create relay app directory.\n");
       set_fs(old_fs);
       return false;
     }
@@ -599,7 +600,7 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
   }
   else
   {
-    printk("[file2uuid]: Not a file\n");
+    TPRINT("[file2uuid]: Not a file\n");
     return false;
   }
 
@@ -935,7 +936,7 @@ static int subbuf_start_handler(struct rchan_buf *buf,
     if (!suspended)
     {
       suspended = 1;
-      printk("cpu %d buffer full, dropped_count: %lu\n", smp_processor_id(), dropped_count);
+      TPRINT("cpu %d buffer full, dropped_count: %lu\n", smp_processor_id(), dropped_count);
     }
     dropped_count++;
     return 0;
@@ -943,7 +944,7 @@ static int subbuf_start_handler(struct rchan_buf *buf,
   else if (suspended)
   {
     suspended = 0;
-    printk("cpu %d buffer no longer full.\n", smp_processor_id());
+    TPRINT("cpu %d buffer no longer full.\n", smp_processor_id());
   }
   return 1;
 }
@@ -1025,32 +1026,6 @@ struct rchan *create_channel(size_t size, size_t n)
 
   return channel;
 }
-
-void put_blackpid(int grpid)
-{
-  if (grpid == 0)
-    return;
-  if (glb_blackpid.pid[0] == 0)
-  {
-    glb_blackpid.pid[0] = grpid;
-    return;
-  }
-  if (glb_blackpid.pid[1] == 0)
-  {
-    glb_blackpid.pid[1] = grpid;
-    return;
-  }
-  if (glb_blackpid.pid[2] == 0)
-  {
-    glb_blackpid.pid[2] = grpid;
-    return;
-  }
-  printk("glb_blackpid is full, put fails.\n");
-  return;
-}
-
-//Yang: bookkeeping the process info
-//ds_list_t* glb_process_list = NULL;
 
 DEFINE_MUTEX(theia_process_tree_mutex);
 static struct btree_head64 theia_process_tree;
@@ -1152,7 +1127,7 @@ static struct inode_data *inode_data_get(struct file *filp)
 
   key = ((u64)inode->i_sb->s_dev) << 32 | (u64)inode->i_ino;
   /*
-  printk("%s %d: dev is %x ino is %lx, key is %llx\n", __func__, __LINE__,
+  TPRINT("%s %d: dev is %x ino is %lx, key is %llx\n", __func__, __LINE__,
       inode->i_rdev, inode->i_ino, key);
       */
 
@@ -1183,7 +1158,7 @@ void replay_filp_close(struct file *filp)
         struct filemap_data *data = filp->replayfs_filemap;
 #ifdef TRACE_READ_WRITE
         /*
-        printk("%s %d: destroying %p\n", __func__, __LINE__,
+        TPRINT("%s %d: destroying %p\n", __func__, __LINE__,
             filp->replayfs_filemap);
             */
         replayfs_filemap_destroy(&data->map);
@@ -1242,7 +1217,7 @@ void replayfs_file_opened(struct file *filp)
         BUG_ON(!data->idata);
         filp->replayfs_filemap = data;
         /*
-        printk("%s %d: Allocating %p\n", __func__, __LINE__,
+        TPRINT("%s %d: Allocating %p\n", __func__, __LINE__,
             filp->replayfs_filemap);
             */
 
@@ -1450,7 +1425,7 @@ void KFREE(const void *ptr)
     tmp = ds_list_remove(malloc_hash[addr % 1023], (void *) ptr);
     if (tmp == NULL)
     {
-      printk("Cannot remove address %p\n", ptr);
+      TPRINT("Cannot remove address %p\n", ptr);
       BUG();
     }
   }
@@ -1652,7 +1627,7 @@ struct sysv_shm
   struct list_head list;
 };
 
-#define CHECK_K_PTR(x) if ((u_long) (x) < 0xc0000000) { printk ("Bad pointer %p\n", (x)); BUG(); }
+#define CHECK_K_PTR(x) if ((u_long) (x) < 0xc0000000) { TPRINT ("Bad pointer %p\n", (x)); BUG(); }
 
 #ifdef REPLAY_LOCK_DEBUG
 static void rg_lock(struct record_group *prg)
@@ -1680,7 +1655,7 @@ static void rg_unlock(struct record_group *prg)
 #ifdef REPLAY_PARANOID
   if (current->pid != prg->rg_locker)
   {
-    printk("pid %d locked and pid %d unlocked\n", prg->rg_locker,
+    TPRINT("pid %d locked and pid %d unlocked\n", prg->rg_locker,
            current->pid);
   }
   prg->rg_locker = 0;
@@ -1689,7 +1664,7 @@ static void rg_unlock(struct record_group *prg)
 #ifdef REPLAY_PARANOID
   if (prg->rg_sem.count > 1)
   {
-    printk("ERROR: pid %d sees semcount %d\n", current->pid, prg->rg_sem.count);
+    TPRINT("ERROR: pid %d sees semcount %d\n", current->pid, prg->rg_sem.count);
   }
 #endif
 }
@@ -1724,7 +1699,7 @@ check_KFREE(const void *x)
   {
     if ((u_long) x < 0xc0000000)
     {
-      printk("  ERROR: freeing obviously bogus value %p\n", x);
+      TPRINT("  ERROR: freeing obviously bogus value %p\n", x);
       BUG_ON(1);
     }
     else
@@ -1741,7 +1716,7 @@ check_putname(const char *name)
   {
     if ((u_long) name < 0xc0000000)
     {
-      printk("  ERROR: bogus name: %p\n", name);
+      TPRINT("  ERROR: bogus name: %p\n", name);
       BUG_ON(1);
     }
     else
@@ -2074,7 +2049,7 @@ static inline int
 test_app_syscall(int number)
 {
   struct replay_thread *prt = current->replay_thrd;
-  //printk("[%s|%d] pid %d, syscall %d, app_syscall_addr %lx, value %d\n", __func__,__LINE__,current->pid,number,
+  //TPRINT("[%s|%d] pid %d, syscall %d, app_syscall_addr %lx, value %d\n", __func__,__LINE__,current->pid,number,
   // prt->app_syscall_addr,(prt->app_syscall_addr <=1)?-1:*(int*)(prt->app_syscall_addr));
   if (prt->app_syscall_addr == 1) return 0; // PIN not yet attached
   return (prt->app_syscall_addr == 0) || (*(int *)(prt->app_syscall_addr) == number);
@@ -2083,7 +2058,7 @@ test_app_syscall(int number)
 static inline int
 is_pin_attached(void)
 {
-  printk("[%s|%d] pid %d, app_syscall_addr %lx\n", __func__, __LINE__, current->pid, current->replay_thrd->app_syscall_addr);
+  TPRINT("[%s|%d] pid %d, app_syscall_addr %lx\n", __func__, __LINE__, current->pid, current->replay_thrd->app_syscall_addr);
   return current->replay_thrd->app_syscall_addr != 0;
 }
 
@@ -2116,11 +2091,11 @@ void print_memory_areas(void)
   {
     existing_mmap = 0;
   }
-  printk("Pid %d let's print out the memory mappings:\n", current->pid);
+  TPRINT("Pid %d let's print out the memory mappings:\n", current->pid);
   while (existing_mmap)
   {
     // vm_area's are a singly-linked list
-    printk("  addr: %#lx, len %lu\n", existing_mmap->vm_start, existing_mmap->vm_end - existing_mmap->vm_start);
+    TPRINT("  addr: %#lx, len %lu\n", existing_mmap->vm_start, existing_mmap->vm_end - existing_mmap->vm_start);
     existing_mmap = existing_mmap->vm_next;
   }
 }
@@ -2214,7 +2189,7 @@ recycle_shared_clock(char *path)
   pnew = KMALLOC(sizeof(struct replay_paths_to_free), GFP_KERNEL);
   if (pnew == NULL)
   {
-    printk("Cannot alloc memory to queue freed path\n");
+    TPRINT("Cannot alloc memory to queue freed path\n");
   }
   else
   {
@@ -2235,7 +2210,7 @@ init_record_cache_files(void)
   pfiles = KMALLOC(sizeof(struct record_cache_files), GFP_KERNEL);
   if (pfiles == NULL)
   {
-    printk("init_record_cache_files: cannot allocate struct\n");
+    TPRINT("init_record_cache_files: cannot allocate struct\n");
     return NULL;
   }
 
@@ -2245,7 +2220,7 @@ init_record_cache_files(void)
   pfiles->list = KMALLOC(sizeof(struct record_cache_chunk), GFP_KERNEL);
   if (pfiles->list == NULL)
   {
-    printk("init_record_cache_files: cannot allocate list\n");
+    TPRINT("init_record_cache_files: cannot allocate list\n");
     KFREE(pfiles);
     return NULL;
   }
@@ -2254,7 +2229,7 @@ init_record_cache_files(void)
   pfiles->list->data = KMALLOC(INIT_RECPLAY_CACHE_SIZE * sizeof(struct record_cache_data), GFP_KERNEL);
   if (pfiles->list->data == NULL)
   {
-    printk("init_record_cache_files: cannot allocate data\n");
+    TPRINT("init_record_cache_files: cannot allocate data\n");
     KFREE(pfiles);
     return NULL;
   }
@@ -2372,14 +2347,14 @@ set_record_cache_file(struct record_cache_files *pfiles, int fd)
     tmp = KMALLOC(sizeof(struct record_cache_chunk), GFP_KERNEL);
     if (tmp == NULL)
     {
-      printk("set_record_cache_files: cannot allocate list\n");
+      TPRINT("set_record_cache_files: cannot allocate list\n");
       up_write(&pfiles->sem);
       return -ENOMEM;
     }
     tmp->data = KMALLOC(chunkcount * sizeof(struct record_cache_data), GFP_KERNEL);
     if (tmp->data == NULL)
     {
-      printk("set_cache_file: cannot allocate new data buffer of size %lu\n", chunkcount * sizeof(struct record_cache_data));
+      TPRINT("set_cache_file: cannot allocate new data buffer of size %lu\n", chunkcount * sizeof(struct record_cache_data));
       KFREE(tmp);
       up_write(&pfiles->sem);
       return -ENOMEM;
@@ -2478,7 +2453,7 @@ init_replay_cache_files(void)
   pfiles = KMALLOC(sizeof(struct replay_cache_files), GFP_KERNEL);
   if (pfiles == NULL)
   {
-    printk("init_replay_cache_files: cannot allocate struct\n");
+    TPRINT("init_replay_cache_files: cannot allocate struct\n");
     return NULL;
   }
   atomic_set(&pfiles->refcnt, 1);
@@ -2486,7 +2461,7 @@ init_replay_cache_files(void)
   pfiles->data = KMALLOC(INIT_RECPLAY_CACHE_SIZE * sizeof(int), GFP_KERNEL);
   if (pfiles->data == NULL)
   {
-    printk("init_replay_cache_files: cannot allocate data\n");
+    TPRINT("init_replay_cache_files: cannot allocate data\n");
     return NULL;
   }
   for (i = 0; i < INIT_RECPLAY_CACHE_SIZE; i++) pfiles->data[i] = -1;
@@ -2532,7 +2507,7 @@ set_replay_cache_file(struct replay_cache_files *pfiles, int fd, int cache_fd)
     tmp = KMALLOC(newcount * sizeof(int), GFP_KERNEL);
     if (tmp == NULL)
     {
-      printk("set_cache_file: cannot allocate new data buffer of size %d\n", newcount);
+      TPRINT("set_cache_file: cannot allocate new data buffer of size %d\n", newcount);
       return -ENOMEM;
     }
     for (i = 0; i < pfiles->count; i++) tmp[i] = pfiles->data[i];
@@ -2610,10 +2585,10 @@ int c_detail = 0;
 #ifdef LOG_COMPRESS
 inline void pipe_fds_init(struct pipe_fds *fds, int size)
 {
-  //printk("init pipe fds.\n");
+  //TPRINT("init pipe fds.\n");
   //fds = kmalloc(sizeof(struct pipe_fds), GFP_KERNEL);
   //if(fds == NULL)
-  //  printk("pipe fds init fails.\n");
+  //  TPRINT("pipe fds init fails.\n");
   if (fds->fds)
     kfree(fds->fds);
   fds->fds = kmalloc(sizeof(int) * size * 2, GFP_KERNEL);
@@ -2628,7 +2603,7 @@ inline struct pipe_fds *pipe_fds_clone(struct pipe_fds *fds)
 {
   struct pipe_fds *ret = kmalloc(sizeof(struct pipe_fds), GFP_KERNEL);
   mutex_lock(&fds->lock);
-  printk("clone.\n");
+  TPRINT("clone.\n");
   ret->length = fds->length;
   ret->size = fds->size;
   ret->fds = kmalloc(sizeof(int) * fds->size * 2, GFP_KERNEL);
@@ -2680,7 +2655,7 @@ inline int pipe_fds_lookup(struct pipe_fds *fds, int fd)
   {
     if (fds->fds[i] == fd)
     {
-      //printk("Find a pipe fd.\n");
+      //TPRINT("Find a pipe fd.\n");
       return 1;
     }
   }
@@ -2700,9 +2675,9 @@ inline int pipe_fds_delete(struct pipe_fds *fds, int fd)
 inline void pipe_fds_copy(struct pipe_fds *to, struct pipe_fds *from)
 {
   mutex_lock(&from->lock);
-  printk("free old pipe_fds.\n");
+  TPRINT("free old pipe_fds.\n");
   pipe_fds_free(to);
-  printk("copy pipe_fds_map.\n");
+  TPRINT("copy pipe_fds_map.\n");
   to->length = from->length;
   to->size = from->size;
   to->fds = kmalloc(sizeof(int) * from->size * 2, GFP_KERNEL);
@@ -2730,7 +2705,7 @@ static void inline init_clog_struct(struct clog_struct *clog)
   init_syscall_cache(&clog->syscall_cache);
   status_init(&clog->syscall_status);
   //clog->time.flag = 1;
-  //printk ("Pid %d init_clog_struct.\n", current->pid);
+  //TPRINT ("Pid %d init_clog_struct.\n", current->pid);
 }
 
 inline int is_x_socket(unsigned long *a)
@@ -2740,19 +2715,21 @@ inline int is_x_socket(unsigned long *a)
   struct sockaddr_in *tmp2;
   int result = 0;
 
-  if (x_detail) printk("Pid %d connect:%s,%lu, %d\n", current->pid, ((char *)(a[1])) + 3, a[2], tmp.sa_family);
+  if (x_detail) 
+    TPRINT("Pid %d connect:%s,%lu, %d\n", current->pid, ((char *)(a[1])) + 3, a[2], tmp.sa_family);
   if (strstr(((char *)(a[1])) + 3, "tmp/.X11-unix/X") != NULL)
   {
-    printk("Pid %d connect to the x server. socket fd:%lu\n", current->pid, a[0]);
+    TPRINT("Pid %d connect to the x server. socket fd:%lu\n", current->pid, a[0]);
     result = 1;
   }
   else
   {
     tmp2 = (struct sockaddr_in *)(a[1]);
-    if (x_detail) printk("connect2: port:%u, addr:%u\n", tmp2->sin_port, tmp2->sin_addr.s_addr);
+    if (x_detail) 
+      TPRINT("connect2: port:%u, addr:%u\n", tmp2->sin_port, tmp2->sin_addr.s_addr);
     if ((tmp2->sin_port == htons(6010)) && tmp2->sin_addr.s_addr == in_aton("127.0.0.1"))
     {
-      if (x_detail) printk("connect2 to the x server.\n");
+      if (x_detail) TPRINT("connect2 to the x server.\n");
       result = 1;
     }
   }
@@ -2786,11 +2763,11 @@ inline int is_regular_file(unsigned int fd)
       return 1;
     }
     //if(S_ISFIFO(file->f_dentry->d_inode->i_mode))
-    //    printk("Find a FIFO, fd:%d\n", fd);
+    //    TPRINT("Find a FIFO, fd:%d\n", fd);
   }
   else
   {
-    printk("error:fd not exist.%u\n", fd);
+    TPRINT("error:fd not exist.%u\n", fd);
   }
   rcu_read_unlock();
   /*if(pipe_fds_lookup(&current->replay_thrd->rp_record_thread->pfds, fd) == 1)
@@ -2867,7 +2844,7 @@ inline void init_evs(void)
   }
   forked_process_list = ds_list_create(NULL, 0, 1);
 #endif
-  printk("init_evs.\n");
+  TPRINT("init_evs.\n");
 }
 
 inline long get_log_special(void)
@@ -2898,7 +2875,7 @@ new_replay_group(struct record_group *prec_group, int follow_splits)
   prg = KMALLOC(sizeof(struct replay_group), GFP_KERNEL);
   if (prg == NULL)
   {
-    printk("Cannot allocate replay_group\n");
+    TPRINT("Cannot allocate replay_group\n");
     goto err;
   }
   DPRINT("new_replay_group: %p\n", prg);
@@ -2909,7 +2886,7 @@ new_replay_group(struct record_group *prec_group, int follow_splits)
   prg->rg_replay_threads = ds_list_create(NULL, 0, 1);
   if (prg->rg_replay_threads == NULL)
   {
-    printk("Cannot create replay_group rg_replay_threads\n");
+    TPRINT("Cannot create replay_group rg_replay_threads\n");
     goto err_replaythreads;
   }
 
@@ -2944,7 +2921,7 @@ new_record_group(char *logdir)
   prg = KMALLOC(sizeof(struct record_group), GFP_KERNEL);
   if (prg == NULL)
   {
-    printk("Cannot allocate record_group\n");
+    TPRINT("Cannot allocate record_group\n");
     goto err;
   }
 
@@ -2954,7 +2931,7 @@ new_record_group(char *logdir)
 
     if (prg->rg_id == 0)
     {
-      printk("Cannot get replay id\n");
+      TPRINT("Cannot get replay id\n");
       goto err_free;
     }
   }
@@ -3049,7 +3026,7 @@ destroy_replay_group(struct replay_group *prepg)
 #ifdef REPLAY_STATS
   atomic_inc(&rstats.finished);
 #endif
-  printk("Goodbye, cruel lamp!  This replay is over\n");
+  TPRINT("Goodbye, cruel lamp!  This replay is over\n");
   MPRINT("Pid %d destroy replay group %p: exit\n", current->pid, prepg);
 }
 
@@ -3065,7 +3042,7 @@ destroy_record_group(struct record_group *prg)
   if (replay_pause_tool)
   {
     atomic_set((prg->rg_pkrecord_clock + 1), 0);
-    printk("Pid %d clear up pause clock\n", current->pid);
+    TPRINT("Pid %d clear up pause clock\n", current->pid);
   }
 #endif
 
@@ -3083,7 +3060,7 @@ destroy_record_group(struct record_group *prg)
 
   KFREE(prg);
 #ifdef REPLAY_PARANOID
-  printk("vmalloc cnt: %d\n", atomic_read(&vmalloc_cnt));
+  TPRINT("vmalloc cnt: %d\n", atomic_read(&vmalloc_cnt));
 #endif
 }
 
@@ -3096,7 +3073,7 @@ new_record_thread(struct record_group *prg, u_long recpid, struct record_cache_f
   prp = KMALLOC(sizeof(struct record_thread), GFP_KERNEL);
   if (prp == NULL)
   {
-    printk("Cannot allocate record_thread\n");
+    TPRINT("Cannot allocate record_thread\n");
     return NULL;
   }
 
@@ -3201,7 +3178,7 @@ new_replay_thread(struct replay_group *prg, struct record_thread *prec_thrd, u_l
   struct replay_thread *prp = KMALLOC(sizeof(struct replay_thread), GFP_KERNEL);
   if (prp == NULL)
   {
-    printk("Cannot allocate replay_thread\n");
+    TPRINT("Cannot allocate replay_thread\n");
     return NULL;
   }
 
@@ -3307,9 +3284,9 @@ __destroy_record_thread(struct record_thread *prp)
 #ifdef LOG_COMPRESS_1
   clogfreeall(prp);
   int bitsin, bitsout;
-  printk("Pid %d compresssion summary:\n", current->pid);
+  TPRINT("Pid %d compresssion summary:\n", current->pid);
   status_summarize(&prp->rp_clog.syscall_status, &bitsin, &bitsout);
-  printk("Pid %d compression saves %d bytes.\n", current->pid, (bitsin - bitsout) / 8);
+  TPRINT("Pid %d compression saves %d bytes.\n", current->pid, (bitsin - bitsout) / 8);
 #endif
 #ifdef LOG_COMPRESS
   free_syscall_cache(&prp->rp_clog.syscall_cache);
@@ -3480,16 +3457,16 @@ dump_user_stack(void)
   int i = 0;
 
   struct pt_regs *regs = get_pt_regs(NULL);
-  printk("sp is %lx\n", regs->sp);
+  TPRINT("sp is %lx\n", regs->sp);
   p = (u_long __user *) regs->sp;
   do
   {
     get_user(v, p);
     get_user(a, p + 1);
-    printk("frame %d (%p) address 0x%08lx\n", i, p, a);
+    TPRINT("frame %d (%p) address 0x%08lx\n", i, p, a);
     if (v <= (u_long) p)
     {
-      printk("ending stack trace, v=0x%07lx\n", v);
+      TPRINT("ending stack trace, v=0x%07lx\n", v);
       p = 0;
     }
     else
@@ -3503,7 +3480,7 @@ dump_user_stack(void)
   for (i = 0; i < 250; i++)
   {
     get_user(v, p);
-    printk("value at address %p is 0x%08lx\n", p, v);
+    TPRINT("value at address %p is 0x%08lx\n", p, v);
     p++;
   }
 }
@@ -3513,7 +3490,7 @@ __syscall_mismatch(struct record_group *precg)
 {
   precg->rg_mismatch_flag = 1;
   rg_unlock(precg);
-  printk("SYSCALL MISMATCH\n");
+  TPRINT("SYSCALL MISMATCH\n");
 #ifdef REPLAY_STATS
   atomic_inc(&rstats.mismatched);
 #endif
@@ -3534,40 +3511,40 @@ print_vmas(struct task_struct *tsk)
   struct vm_area_struct *mpnt;
   char buf[256];
 
-  printk("vmas for task %d mm %p\n", tsk->pid, tsk->mm);
+  TPRINT("vmas for task %d mm %p\n", tsk->pid, tsk->mm);
   down_read(&tsk->mm->mmap_sem);
   for (mpnt = tsk->mm->mmap; mpnt; mpnt = mpnt->vm_next)
   {
-    printk("VMA start %lx end %lx", mpnt->vm_start, mpnt->vm_end);
+    TPRINT("VMA start %lx end %lx", mpnt->vm_start, mpnt->vm_end);
     if (mpnt->vm_file)
     {
-      printk(" file %s ", dentry_path(mpnt->vm_file->f_dentry, buf, sizeof(buf)));
+      TPRINT(" file %s ", dentry_path(mpnt->vm_file->f_dentry, buf, sizeof(buf)));
       if (mpnt->vm_flags & VM_READ)
       {
-        printk("r");
+        TPRINT("r");
       }
       else
       {
-        printk("-");
+        TPRINT("-");
       }
       if (mpnt->vm_flags & VM_WRITE)
       {
-        printk("w");
+        TPRINT("w");
       }
       else
       {
-        printk("-");
+        TPRINT("-");
       }
       if (mpnt->vm_flags & VM_EXEC)
       {
-        printk("x");
+        TPRINT("x");
       }
       else
       {
-        printk("-");
+        TPRINT("-");
       }
     }
-    printk("\n");
+    TPRINT("\n");
   }
   up_read(&tsk->mm->mmap_sem);
 }
@@ -3602,7 +3579,7 @@ create_used_address_list(void)
     pmapping = KMALLOC(sizeof(struct reserved_mapping), GFP_KERNEL);
     if (pmapping == NULL)
     {
-      printk("Cannot allocate new reserved mapping\n");
+      TPRINT("Cannot allocate new reserved mapping\n");
       return;
     }
     pmapping->m_begin = mpnt->vm_start;
@@ -3626,8 +3603,8 @@ void ret_from_fork_replay(void)
   /* Nothing to do unless we need to support multiple threads */
   MPRINT("Pid %d ret_from_fork_replay\n", current->pid);
   ret = wait_event_interruptible_timeout(prept->rp_waitq, prept->rp_status == REPLAY_STATUS_RUNNING, SCHED_TO);
-  if (ret == 0) printk("Replay pid %d timed out waiting for cloned thread to go\n", current->pid);
-  if (ret == -ERESTARTSYS) printk("Pid %d: ret_from_fork_replay cannot wait due to signal - try again\n", current->pid);
+  if (ret == 0) TPRINT("Replay pid %d timed out waiting for cloned thread to go\n", current->pid);
+  if (ret == -ERESTARTSYS) TPRINT("Pid %d: ret_from_fork_replay cannot wait due to signal - try again\n", current->pid);
   if (prept->rp_status != REPLAY_STATUS_RUNNING)
   {
     MPRINT("Replay pid %d woken up during clone but not running.  We must want it to die\n", current->pid);
@@ -3640,7 +3617,7 @@ void print_userspace_retaddr(void *addr1, void *addr2, void *addr3, void *addr4,
 {
   if (current->record_thrd)
   {
-    printk("The registers from userspace: 4(esp)-ecx: %lx, 8(esp)-edx: %lx, C(esp)-esi: %lx, 10(esp)-edi: %lx, 14(esp)-ebp: %lx, 18(esp)-eax: %lx, 1C(esp)-ds: %lx, 2C(esp)-orig_eax: %lx, 30(esp)-eip: %lx, pid: %d\n", (u_long)addr1, (u_long)addr2, (u_long)addr3, (u_long)addr4, (u_long)addr5, (u_long)addr6, (u_long)addr7, (u_long)addr8, (u_long)addr9, current->pid);
+    TPRINT("The registers from userspace: 4(esp)-ecx: %lx, 8(esp)-edx: %lx, C(esp)-esi: %lx, 10(esp)-edi: %lx, 14(esp)-ebp: %lx, 18(esp)-eax: %lx, 1C(esp)-ds: %lx, 2C(esp)-orig_eax: %lx, 30(esp)-eip: %lx, pid: %d\n", (u_long)addr1, (u_long)addr2, (u_long)addr3, (u_long)addr4, (u_long)addr5, (u_long)addr6, (u_long)addr7, (u_long)addr8, (u_long)addr9, current->pid);
   }
 }
 
@@ -3666,7 +3643,7 @@ get_used_addresses(struct used_address __user *plist, int listsize)
     }
     else
     {
-      printk("get_used_addresses: not enough room to return all mappings\n");
+      TPRINT("get_used_addresses: not enough room to return all mappings\n");
       rc = -EINVAL;
     }
   }
@@ -3692,7 +3669,7 @@ reserve_memory(u_long addr, u_long len)
   }
   else
   {
-    printk("Pid %d not a record/replay thread, can't reserve memory\n", current->pid);
+    TPRINT("Pid %d not a record/replay thread, can't reserve memory\n", current->pid);
     return;
   }
 
@@ -3741,7 +3718,7 @@ reserve_memory(u_long addr, u_long len)
   pmapping = KMALLOC(sizeof(struct reserved_mapping), GFP_KERNEL);
   if (pmapping == NULL)
   {
-    printk("Cannot allocate new reserved mapping\n");
+    TPRINT("Cannot allocate new reserved mapping\n");
     return;
   }
   pmapping->m_begin = addr;
@@ -3760,7 +3737,7 @@ do_preallocate(u_long start, u_long end)
   retval = sys_mmap_pgoff(start, end - start, 1, MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS, -1, 0);
   if (start != retval)
   {
-    printk("preallocating mmap_pgoff returns different value %lx than %lx\n", retval, start);
+    TPRINT("preallocating mmap_pgoff returns different value %lx than %lx\n", retval, start);
     return -1;
   }
 
@@ -3853,7 +3830,7 @@ static struct argsalloc_node *new_argsalloc_node(void *slab, size_t size)
   new_node = KMALLOC(sizeof(struct argsalloc_node), GFP_KERNEL);
   if (new_node == NULL)
   {
-    printk("new_argalloc_node: Cannot allocate struct argsalloc_node\n");
+    TPRINT("new_argalloc_node: Cannot allocate struct argsalloc_node\n");
     return NULL;
   }
 
@@ -3872,7 +3849,7 @@ static struct clog_node *new_clog_node(void *slab, size_t size)
   new_node = KMALLOC(sizeof(struct clog_node), GFP_KERNEL);
   if (new_node == NULL)
   {
-    printk("new_clog_node: Cannot allocate struct clog_node\n");
+    TPRINT("new_clog_node: Cannot allocate struct clog_node\n");
     return NULL;
   }
 
@@ -3894,7 +3871,7 @@ static int add_argsalloc_node(struct record_thread *prect, void *slab, size_t si
   new_node = new_argsalloc_node(slab, size);
   if (new_node == NULL)
   {
-    printk("Pid %d add_argsalloc_node: could not create new argsalloc_node\n", prect->rp_record_pid);
+    TPRINT("Pid %d add_argsalloc_node: could not create new argsalloc_node\n", prect->rp_record_pid);
     return -1;
   }
 
@@ -3911,7 +3888,7 @@ static int add_compress_node(struct record_thread *prect, void *slab, size_t siz
   new_node = new_clog_node(slab, size);
   if (new_node == NULL)
   {
-    printk("Pid %d add_compress_node: could not create new clog_node\n", prect->rp_record_pid);
+    TPRINT("Pid %d add_compress_node: could not create new clog_node\n", prect->rp_record_pid);
     return -1;
   }
 
@@ -3937,7 +3914,7 @@ static void *argsalloc(size_t size)
 
   node = list_first_entry(&prect->rp_argsalloc_list, struct argsalloc_node, list);
 
-  //printk("in argsalloc: size %lu\n", size);
+  //TPRINT("in argsalloc: size %lu\n", size);
 
   // check to see if we've allocated a slab and if we have enough space left in the slab
   if (unlikely(list_empty(&prect->rp_argsalloc_list) || ((node->head + node->size - node->pos) < size)))
@@ -3951,13 +3928,13 @@ static void *argsalloc(size_t size)
     slab = VMALLOC(asize);
     if (slab == NULL)
     {
-      printk("Pid %d argsalloc: couldn't alloc slab with size %lu\n", current->pid, asize);
+      TPRINT("Pid %d argsalloc: couldn't alloc slab with size %lu\n", current->pid, asize);
       return NULL;
     }
     rc = add_argsalloc_node(current->record_thrd, slab, asize);
     if (rc)
     {
-      printk("Pid %d argalloc: problem adding argsalloc_node\n", current->pid);
+      TPRINT("Pid %d argalloc: problem adding argsalloc_node\n", current->pid);
       VFREE(slab);
       return NULL;
     }
@@ -3974,13 +3951,13 @@ static void *argsalloc(size_t size)
       slab = VMALLOC(asize);
       if (slab == NULL)
       {
-        printk("Pid %d argsalloc:(clog) couldn't alloc slab with size %u\n", current->pid, asize);
+        TPRINT("Pid %d argsalloc:(clog) couldn't alloc slab with size %u\n", current->pid, asize);
         return NULL;
       }
       rc = add_clog_node(current->record_thrd, slab, asize);
       if (rc)
       {
-        printk("Pid %d argalloc: (clog) problem adding argsalloc_node\n", current->pid);
+        TPRINT("Pid %d argalloc: (clog) problem adding argsalloc_node\n", current->pid);
         VFREE(slab);
         return NULL;
       }
@@ -3995,18 +3972,18 @@ static void *argsalloc(size_t size)
         unsigned int free_bits = cnode->freeBitsInDest;
         //after we copy the last byte, the last byte in previous cnode node can be cleared
         cnode->freeBitsInDest = 8;
-        printk("Pid %d allocate new clog node, clog run out of space.\n", current->pid);
+        TPRINT("Pid %d allocate new clog node, clog run out of space.\n", current->pid);
         asize = (size > argsalloc_size) ? size : argsalloc_size;
         slab = VMALLOC(asize);
         if (slab == NULL)
         {
-          printk("Pid %d argsalloc:(clog) couldn't alloc slab with size %u\n", current->pid, asize);
+          TPRINT("Pid %d argsalloc:(clog) couldn't alloc slab with size %u\n", current->pid, asize);
           return NULL;
         }
         rc = add_clog_node(current->record_thrd, slab, asize);
         if (rc)
         {
-          printk("Pid %d argalloc: (clog) problem adding argsalloc_node\n", current->pid);
+          TPRINT("Pid %d argalloc: (clog) problem adding argsalloc_node\n", current->pid);
           VFREE(slab);
           return NULL;
         }
@@ -4048,13 +4025,13 @@ static void *compressalloc(size_t size, struct list_head *rp_list)
     slab = VMALLOC(asize);
     if (slab == NULL)
     {
-      printk("Pid %d compressalloc: couldn't alloc slab with size %u\n", current->pid, asize);
+      TPRINT("Pid %d compressalloc: couldn't alloc slab with size %u\n", current->pid, asize);
       return NULL;
     }
     rc = add_compress_node(current->record_thrd, slab, asize, rp_list);
     if (rc)
     {
-      printk("Pid %d compressalloc: problem adding argsalloc_node\n", current->pid);
+      TPRINT("Pid %d compressalloc: problem adding argsalloc_node\n", current->pid);
       VFREE(slab);
       return NULL;
     }
@@ -4086,7 +4063,7 @@ argshead(struct record_thread *prect)
   node = list_first_entry(&prect->rp_argsalloc_list, struct argsalloc_node, list);
   if (unlikely(list_empty(&prect->rp_argsalloc_list)))
   {
-    printk("argshead: pid %d sanity check failed - no anc. data\n", current->pid);
+    TPRINT("argshead: pid %d sanity check failed - no anc. data\n", current->pid);
     BUG();
   }
   return node->pos;
@@ -4101,16 +4078,16 @@ argsconsume(struct record_thread *prect, u_long size)
   node = list_first_entry(&prect->rp_argsalloc_list, struct argsalloc_node, list);
   if (unlikely(list_empty(&prect->rp_argsalloc_list)))
   {
-    printk("argsconsume: pid %d sanity check failed - no anc. data\n", current->pid);
+    TPRINT("argsconsume: pid %d sanity check failed - no anc. data\n", current->pid);
     BUG();
   }
   if (unlikely(node->head + node->size - node->pos < size))
   {
-    printk("argsconsume: pid %d sanity check failed - head %p size %lu pos %p size %lu\n", current->pid, node->head, (u_long) node->size, node->pos, size);
+    TPRINT("argsconsume: pid %d sanity check failed - head %p size %lu pos %p size %lu\n", current->pid, node->head, (u_long) node->size, node->pos, size);
     dump_stack();
     BUG();
   }
-  printk("in argsconsume: size %lu\n", size);
+  TPRINT("in argsconsume: size %lu\n", size);
   node->pos += size;
 }
 
@@ -4171,7 +4148,7 @@ static void argsfree(const void *ptr, size_t size)
   }
   else
   {
-    printk("Pid %d argsfree: unhandled case\n", current->pid);
+    TPRINT("Pid %d argsfree: unhandled case\n", current->pid);
     return;
   }
 }
@@ -4214,7 +4191,7 @@ static void compressfree(const void *ptr, size_t size, struct list_head *rp_list
   }
   else
   {
-    printk("Pid %d compressfree: unhandled case\n", current->pid);
+    TPRINT("Pid %d compressfree: unhandled case\n", current->pid);
     return;
   }
 }
@@ -4238,7 +4215,7 @@ static inline void clogfree(const void *ptr, size_t size)
 }
 static inline void clogfreeall(struct record_thread *prect)
 {
-  printk("clogfreeall\n");
+  TPRINT("clogfreeall\n");
   compressfreeall(prect, &prect->rp_clog_list);
 }
 #endif
@@ -4250,7 +4227,7 @@ static int add_sysv_mapping(struct replay_thread *prt, int record_id, int replay
   tmp = KMALLOC(sizeof(struct sysv_mapping), GFP_KERNEL);
   if (tmp == NULL)
   {
-    printk("Pid %d (recpid %d) add_sysv_mapping: could not create new sysv_mapping\n", current->pid, prt->rp_record_thread->rp_record_pid);
+    TPRINT("Pid %d (recpid %d) add_sysv_mapping: could not create new sysv_mapping\n", current->pid, prt->rp_record_thread->rp_record_pid);
     return -1;
   }
   tmp->record_id = record_id;
@@ -4300,7 +4277,7 @@ int set_pin_address(u_long pin_address)
     }
   }
 
-  printk("set_pin_address called for something that is not a replay process\n");
+  TPRINT("set_pin_address called for something that is not a replay process\n");
   return -EINVAL;
 }
 EXPORT_SYMBOL(set_pin_address);
@@ -4309,12 +4286,12 @@ long get_log_id(void)
 {
   if (current->replay_thrd)
   {
-    printk("[%s|%d] pid %d, rp_record_pid is %d\n", __func__, __LINE__, current->pid, current->replay_thrd->rp_record_thread->rp_record_pid);
+    TPRINT("[%s|%d] pid %d, rp_record_pid is %d\n", __func__, __LINE__, current->pid, current->replay_thrd->rp_record_thread->rp_record_pid);
     return current->replay_thrd->rp_record_thread->rp_record_pid;
   }
   else
   {
-    printk("get_log_id called by a non-replay process\n");
+    TPRINT("get_log_id called by a non-replay process\n");
     return -EINVAL;
   }
 }
@@ -4324,7 +4301,7 @@ EXPORT_SYMBOL(get_log_id);
 //Yang: get inode,dev,crtime for taint
 int get_inode_for_pin(u_long inode)
 {
-  printk("received get_inode_for_pin request!!!!, inode %lx, repl_uuid_str is %s\n", inode, repl_uuid_str);
+  TPRINT("received get_inode_for_pin request!!!!, inode %lx, repl_uuid_str is %s\n", inode, repl_uuid_str);
   copy_to_user((char *)inode, repl_uuid_str, strlen(repl_uuid_str));
   ((char *)inode)[strlen(repl_uuid_str)] = '\0';
   return 0;
@@ -4360,7 +4337,7 @@ unsigned long get_clock_value(void)
   }
   else
   {
-    printk("get_clock_value called by a non-replay process\n");
+    TPRINT("get_clock_value called by a non-replay process\n");
     return -EINVAL;
   }
 }
@@ -4384,7 +4361,7 @@ long get_record_group_id(__u64 *prg_id)
     }
     return 0;
   }
-  printk("get_record_group_id called by a non-replay process\n");
+  TPRINT("get_record_group_id called by a non-replay process\n");
   return -EINVAL;
 }
 EXPORT_SYMBOL(get_record_group_id);
@@ -4403,7 +4380,7 @@ long get_num_filemap_entries(int fd, loff_t offset, int size)
   filp = fget(fd);
   if (!filp)
   {
-    printk("Pid %d got bad filp for fd %d\n", current->pid, fd);
+    TPRINT("Pid %d got bad filp for fd %d\n", current->pid, fd);
     return -EBADF;
   }
   replayfs_filemap_init(&map, replayfs_alloc, filp);
@@ -4419,7 +4396,7 @@ long get_num_filemap_entries(int fd, loff_t offset, int size)
   entry = replayfs_filemap_read(&map, offset, size);
   if (IS_ERR(entry) || entry == NULL)
   {
-    printk("get filemap can't find entry %p\n", entry);
+    TPRINT("get filemap can't find entry %p\n", entry);
     replayfs_filemap_destroy(&map);
     fput(filp);
     if (entry != NULL)
@@ -4505,7 +4482,7 @@ get_libpath(const char __user *const __user *env)
   {
     if (get_user(pc, up))
     {
-      printk("copy_args: invalid env value\n");
+      TPRINT("copy_args: invalid env value\n");
       return NULL;
     }
     if (pc == 0) break; // No more args
@@ -4522,18 +4499,18 @@ get_libpath(const char __user *const __user *env)
     len = strnlen_user(pc, 4096);
     if (len > 4096)
     {
-      printk("get_libpath: path too long\n");
+      TPRINT("get_libpath: path too long\n");
       return NULL;
     }
     retbuf = KMALLOC(len, GFP_KERNEL);
     if (retbuf == NULL)
     {
-      printk("get_libpath cannot allocate buffer\n");
+      TPRINT("get_libpath cannot allocate buffer\n");
       return NULL;
     }
     if (copy_from_user(retbuf, pc, len))
     {
-      printk("get_libpath cannot copy path from user\n");
+      TPRINT("get_libpath cannot copy path from user\n");
       return NULL;
     }
     return retbuf;
@@ -4608,7 +4585,7 @@ patch_for_libpath(struct record_group *prg, char *p, int present)
   env = KMALLOC((env_cnt + 1) * sizeof(char *), GFP_KERNEL);
   if (env == NULL)
   {
-    printk("patch_for_libpath: unable to allocate env struct\n");
+    TPRINT("patch_for_libpath: unable to allocate env struct\n");
     return NULL;
   }
 
@@ -4620,7 +4597,7 @@ patch_for_libpath(struct record_group *prg, char *p, int present)
       env[i] = KMALLOC(strlen(prg->rg_libpath) + 1, GFP_KERNEL);
       if (env[i] == NULL)
       {
-        printk("patch_for_libpath: unable to allocate new env\n");
+        TPRINT("patch_for_libpath: unable to allocate new env\n");
         return NULL;
       }
       strcpy(env[i], prg->rg_libpath);
@@ -4631,7 +4608,7 @@ patch_for_libpath(struct record_group *prg, char *p, int present)
       env[i] = KMALLOC(len, GFP_KERNEL);
       if (env[i] == NULL)
       {
-        printk("patch_for_libpath: unable to allocate env. %d of length %d\n", i, len);
+        TPRINT("patch_for_libpath: unable to allocate env. %d of length %d\n", i, len);
         return NULL;
       }
       strcpy(env[i], p + sizeof(int));
@@ -4644,7 +4621,7 @@ patch_for_libpath(struct record_group *prg, char *p, int present)
     env[i] = KMALLOC(strlen(prg->rg_libpath) + 1, GFP_KERNEL);
     if (env[i] == NULL)
     {
-      printk("patch_for_libpath: unable to allocate new env\n");
+      TPRINT("patch_for_libpath: unable to allocate new env\n");
       return NULL;
     }
     strcpy(env[i], prg->rg_libpath);
@@ -4697,7 +4674,7 @@ patch_buf_for_libpath(struct record_group *prg, char *buf, int *pbuflen, int pre
   newbuf = KMALLOC(newbuflen, GFP_KERNEL);
   if (newbuf == NULL)
   {
-    printk("patch_buf_for_libpath: cannot allocate buffer of size %lu\n", newbuflen);
+    TPRINT("patch_buf_for_libpath: cannot allocate buffer of size %lu\n", newbuflen);
     return NULL;
   }
   if (present < 0)
@@ -4757,13 +4734,13 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
   MPRINT("[%s|%d] pid %d, fd %d\n", __func__, __LINE__, current->pid, fd);
   if (current->record_thrd || current->replay_thrd)
   {
-    printk("fork_replay_theia: pid %d cannot start a new recording while already recording or replaying\n", current->pid);
+    TPRINT("fork_replay_theia: pid %d cannot start a new recording while already recording or replaying\n", current->pid);
     return -EINVAL;
   }
 
   if (atomic_read(&current->mm->mm_users) > 1)
   {
-    printk("fork with multiple threads is not currently supported\n");
+    TPRINT("fork with multiple threads is not currently supported\n");
     return -EINVAL;
   }
 
@@ -4787,7 +4764,7 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
     VFREE(slab);
     destroy_record_group(prg);
     current->record_thrd = NULL;
-    printk("Pid %d fork_replay_theia: error adding argsalloc_node\n", current->pid);
+    TPRINT("Pid %d fork_replay_theia: error adding argsalloc_node\n", current->pid);
     return -ENOMEM;
   }
   MPRINT("fork_replay_theia added new slab %p to record_thread %p\n", slab, current->record_thrd);
@@ -4799,7 +4776,7 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
     VFREE(slab);
     destroy_record_group(prg);
     current->record_thrd = NULL;
-    printk("Pid %d fork_replay_theia: error adding clog_node\n", current->pid);
+    TPRINT("Pid %d fork_replay_theia: error adding clog_node\n", current->pid);
     return -ENOMEM;
   }
   MPRINT("fork_replay_theia added new slab %p to record_thread %p (clog)\n", slab, current->record_thrd);
@@ -4821,7 +4798,7 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
   if (fd >= 0)
   {
     retval = sys_close(fd);
-    if (retval < 0) printk("fork_replay_theia: unable to close fd %d, rc=%ld\n", fd, retval);
+    if (retval < 0) TPRINT("fork_replay_theia: unable to close fd %d, rc=%ld\n", fd, retval);
   }
 
   if (pipe_fd >= 0)
@@ -4846,7 +4823,7 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
 
   if (argbuf == NULL)
   {
-    printk("replay_checkpoint_to_disk: copy_args failed\n");
+    TPRINT("replay_checkpoint_to_disk: copy_args failed\n");
     return -EFAULT;
   }
 
@@ -4860,7 +4837,7 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
   DPRINT("replay_checkpoint_to_disk returns %ld\n", retval);
   if (retval)
   {
-    printk("replay_checkpoint_to_disk returns %ld\n", retval);
+    TPRINT("replay_checkpoint_to_disk returns %ld\n", retval);
     return retval;
   }
 
@@ -4877,7 +4854,7 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
   }
 
   retval = record_execve(filename, args, env, get_pt_regs(NULL));
-  if (retval) printk("fork_replay_execve: execve returns %ld\n", retval);
+  if (retval) TPRINT("fork_replay_execve: execve returns %ld\n", retval);
   return retval;
 }
 
@@ -4909,7 +4886,7 @@ void show_kernel_stack(u_long *sp)
   }
 
   stack = sp;
-  printk("kernel stack: sp: %p\n", (void *)sp);
+  TPRINT("kernel stack: sp: %p\n", (void *)sp);
   for (i = 0; i < kstack_depth_to_print; i++)
   {
     if (stack >= irq_stack && stack <= irq_stack_end)
@@ -4917,7 +4894,7 @@ void show_kernel_stack(u_long *sp)
       if (stack == irq_stack_end)
       {
         stack = (unsigned long *)(irq_stack_end[-1]);
-        printk(KERN_CONT " <EOI> ");
+        TPRINT(KERN_CONT " <EOI> ");
       }
     }
     else
@@ -4926,13 +4903,13 @@ void show_kernel_stack(u_long *sp)
         break;
     }
     if (i && ((i % STACKSLOTS_PER_LINE) == 0))
-      printk(KERN_CONT "\n");
-    printk(KERN_CONT " %016lx", *stack++);
+      TPRINT(KERN_CONT "\n");
+    TPRINT(KERN_CONT " %016lx", *stack++);
     touch_nmi_watchdog();
   }
   preempt_enable();
 
-  printk(KERN_CONT "\n");
+  TPRINT(KERN_CONT "\n");
 
 }
 
@@ -4961,19 +4938,19 @@ int fork_replay(char __user *logdir, const char __user *const __user *args,
   //show_regs(get_pt_regs(NULL));
   /*
   __asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
-  printk("Yang verify: addr cur_rsp: %lx, cur_rsp: %lx\n", &cur_rsp, cur_rsp);
+  TPRINT("Yang verify: addr cur_rsp: %lx, cur_rsp: %lx\n", &cur_rsp, cur_rsp);
   show_kernel_stack((u_long*)cur_rsp);
   */
 
   if (current->record_thrd || current->replay_thrd)
   {
-    printk("fork_replay: pid %d cannot start a new recording while already recording or replaying\n", current->pid);
+    TPRINT("fork_replay: pid %d cannot start a new recording while already recording or replaying\n", current->pid);
     return -EINVAL;
   }
 
   if (atomic_read(&current->mm->mm_users) > 1)
   {
-    printk("fork with multiple threads is not currently supported\n");
+    TPRINT("fork with multiple threads is not currently supported\n");
     return -EINVAL;
   }
 
@@ -5003,7 +4980,7 @@ int fork_replay(char __user *logdir, const char __user *const __user *args,
     VFREE(slab);
     destroy_record_group(prg);
     current->record_thrd = NULL;
-    printk("Pid %d fork_replay: error adding argsalloc_node\n", current->pid);
+    TPRINT("Pid %d fork_replay: error adding argsalloc_node\n", current->pid);
     return -ENOMEM;
   }
   MPRINT("fork_replay added new slab %p to record_thread %p\n", slab, current->record_thrd);
@@ -5015,7 +4992,7 @@ int fork_replay(char __user *logdir, const char __user *const __user *args,
     VFREE(slab);
     destroy_record_group(prg);
     current->record_thrd = NULL;
-    printk("Pid %d fork_replay: error adding clog_node\n", current->pid);
+    TPRINT("Pid %d fork_replay: error adding clog_node\n", current->pid);
     return -ENOMEM;
   }
   MPRINT("fork_replay added new slab %p to record_thread %p (clog)\n", slab, current->record_thrd);
@@ -5036,7 +5013,7 @@ int fork_replay(char __user *logdir, const char __user *const __user *args,
   if (fd >= 0)
   {
     retval = sys_close(fd);
-    if (retval < 0) printk("fork_replay: unable to close fd %d, rc=%ld\n", fd, retval);
+    if (retval < 0) TPRINT("fork_replay: unable to close fd %d, rc=%ld\n", fd, retval);
   }
 
   if (pipe_fd >= 0)
@@ -5067,17 +5044,17 @@ int fork_replay(char __user *logdir, const char __user *const __user *args,
 
   if (argbuf == NULL)
   {
-    printk("replay_checkpoint_to_disk: copy_args failed\n");
+    TPRINT("replay_checkpoint_to_disk: copy_args failed\n");
     return -EFAULT;
   }
 
   // Finally do exec from which we should not return
   get_user(pc, args);
   filename = getname(pc);
-  printk("fork_replay: filename is %s\n", filename);
+  TPRINT("fork_replay: filename is %s\n", filename);
   if (IS_ERR(filename))
   {
-    printk("fork_replay: unable to copy exec filname\n");
+    TPRINT("fork_replay: unable to copy exec filname\n");
     return -EINVAL;
   }
 
@@ -5091,7 +5068,7 @@ int fork_replay(char __user *logdir, const char __user *const __user *args,
   DPRINT("replay_checkpoint_to_disk returns %ld\n", retval);
   if (retval)
   {
-    printk("replay_checkpoint_to_disk returns %ld\n", retval);
+    TPRINT("replay_checkpoint_to_disk returns %ld\n", retval);
     return retval;
   }
 
@@ -5099,14 +5076,14 @@ int fork_replay(char __user *logdir, const char __user *const __user *args,
   prg->rg_libpath = get_libpath(env);
   if (prg->rg_libpath == NULL)
   {
-    printk("fork_replay: libpath not found\n");
+    TPRINT("fork_replay: libpath not found\n");
 
     prg->rg_libpath = KMALLOC(theia_libpath_len, GFP_KERNEL);
     strncpy(prg->rg_libpath, theia_libpath, theia_libpath_len);
     TPRINT("hardcoded libpath is (%s)", prg->rg_libpath);
     //    return -EINVAL;
   }
-  printk("prg->rg_libpath is (%s)", prg->rg_libpath);
+  TPRINT("prg->rg_libpath is (%s)", prg->rg_libpath);
 
   //show_regs(get_pt_regs(NULL));
   /*
@@ -5115,7 +5092,7 @@ int fork_replay(char __user *logdir, const char __user *const __user *args,
   */
 
 
-  printk("Yang before entering record_execve in fork_replay\n");
+  TPRINT("Yang before entering record_execve in fork_replay\n");
   retval = record_execve(filename, args, env, get_pt_regs(NULL));
 
   //show_regs(get_pt_regs(NULL));
@@ -5124,8 +5101,8 @@ int fork_replay(char __user *logdir, const char __user *const __user *args,
   show_kernel_stack((u_long*)cur_rsp);
   */
 
-  printk("Yang after entering record_execve in fork_replay\n");
-  if (retval) printk("fork_replay: execve returns %ld\n", retval);
+  TPRINT("Yang after entering record_execve in fork_replay\n");
+  if (retval) TPRINT("fork_replay: execve returns %ld\n", retval);
   return retval;
 }
 
@@ -5147,7 +5124,7 @@ get_linker(void)
   }
   else
   {
-    printk("Cannot get linker for non record/replay process\n");
+    TPRINT("Cannot get linker for non record/replay process\n");
     return NULL;
   }
 }
@@ -5174,7 +5151,7 @@ replay_ckpt_wakeup(int attach_pin, char *logdir, char *linker, int fd, int follo
   MPRINT("In replay_ckpt_wakeup\n");
   if (current->record_thrd || current->replay_thrd)
   {
-    printk("fork_replay: pid %d cannot start a new replay while already recording or replaying\n", current->pid);
+    TPRINT("fork_replay: pid %d cannot start a new replay while already recording or replaying\n", current->pid);
     return -EINVAL;
   }
 
@@ -5251,17 +5228,17 @@ replay_ckpt_wakeup(int attach_pin, char *logdir, char *linker, int fd, int follo
   if (attach_pin)
   {
     prept->app_syscall_addr = 1;  // Will be set to actual value later
-    printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 1\n", __func__, __LINE__, current->pid);
+    TPRINT("[%s|%d] pid %d, prt->app_syscall_addr is set to 1\n", __func__, __LINE__, current->pid);
 
     rc = read_mmap_log(precg);
     if (rc)
     {
-      printk("replay_ckpt_wakeup: could not read memory log for Pin support\n");
+      TPRINT("replay_ckpt_wakeup: could not read memory log for Pin support\n");
       return rc;
     }
     preallocate_memory(precg);  // Actually do the prealloaction for this process
 
-    printk("Pid %d sleeping in order to let you attach pin\n", current->pid);
+    TPRINT("Pid %d sleeping in order to let you attach pin\n", current->pid);
     set_current_state(TASK_INTERRUPTIBLE);
     schedule();
   }
@@ -5269,14 +5246,14 @@ replay_ckpt_wakeup(int attach_pin, char *logdir, char *linker, int fd, int follo
   if (fd >= 0)
   {
     rc = sys_close(fd);
-    if (rc < 0) printk("replay_ckpt_wakeup: unable to close fd %d, rc=%ld\n", fd, rc);
+    if (rc < 0) TPRINT("replay_ckpt_wakeup: unable to close fd %d, rc=%ld\n", fd, rc);
   }
 
   set_fs(KERNEL_DS);
   rc = replay_execve(execname, (const char *const *) args, (const char *const *) env, get_pt_regs(NULL));
   set_fs(old_fs);
   //  if (rc < 0)
-  printk("replay_ckpt_wakeup: replay_execve of <%s> returns %ld\n", args[0], rc);
+  TPRINT("replay_ckpt_wakeup: replay_execve of <%s> returns %ld\n", args[0], rc);
   return rc;
 }
 EXPORT_SYMBOL(replay_ckpt_wakeup);
@@ -5314,7 +5291,7 @@ new_syscall_enter(long sysnum)
   psr->sysnum = sysnum;
   new_clock = atomic_add_return(1, prt->rp_precord_clock);
   start_clock = new_clock - prt->rp_expected_clock - 1;
-  //printk ("[%s|%d]pid %d incremented precord_clock to %d, expected_clock %d, start_clock %d, on syscall %ld enter\n", __func__,__LINE__,current->pid, atomic_read(prt->rp_precord_clock), prt->rp_expected_clock, start_clock,sysnum);
+  //TPRINT ("[%s|%d]pid %d incremented precord_clock to %d, expected_clock %d, start_clock %d, on syscall %ld enter\n", __func__,__LINE__,current->pid, atomic_read(prt->rp_precord_clock), prt->rp_expected_clock, start_clock,sysnum);
   if (start_clock == 0)
   {
     psr->flags = 0;
@@ -5329,7 +5306,7 @@ new_syscall_enter(long sysnum)
     // compression for start_clock
     encodeValue((unsigned int) start_clock, 32, 4, clog_alloc(4));
     if (c_detail)
-      printk("Pid %d encoded 4 bytes.\n", current->pid);
+      TPRINT("Pid %d encoded 4 bytes.\n", current->pid);
     status_add(&current->record_thrd->rp_clog.syscall_status, 1, sizeof(long) << 3, getCumulativeBitsWritten(list_first_entry(&current->record_thrd->rp_clog_list, struct clog_node, list)));
 #endif
   }
@@ -5378,7 +5355,7 @@ new_syscall_done(long sysnum, long retval)
     p = ARGSKMALLOC(sizeof(long), GFP_KERNEL);
     if (unlikely(p == NULL)) return -ENOMEM;
     if (sysnum == 0)
-      printk("rec_uuid retval %ld\n", retval);
+      TPRINT("rec_uuid retval %ld\n", retval);
     *p = retval;
   }
 
@@ -5390,12 +5367,12 @@ new_syscall_done(long sysnum, long retval)
     ulp = ARGSKMALLOC(sizeof(u_long), GFP_KERNEL);
     if (unlikely(ulp == NULL)) return -ENOMEM;
     if (sysnum == 0)
-      printk("rec_uuid ulp %lu\n", stop_clock);
+      TPRINT("rec_uuid ulp %lu\n", stop_clock);
     *ulp = stop_clock;
   }
   prt->rp_expected_clock = new_clock;
 
-  //printk ("[%s|%d]pid %d incremented precord_clock to %d, expected_clock %d, start_clock %d, on syscall %ld enter\n", __func__,__LINE__,current->pid, atomic_read(prt->rp_precord_clock), prt->rp_expected_clock, stop_clock,sysnum);
+  //TPRINT ("[%s|%d]pid %d incremented precord_clock to %d, expected_clock %d, start_clock %d, on syscall %ld enter\n", __func__,__LINE__,current->pid, atomic_read(prt->rp_precord_clock), prt->rp_expected_clock, stop_clock,sysnum);
   return 0;
 }
 
@@ -5417,7 +5394,7 @@ _new_syscall_exit(long sysnum, void *retparams, void *ahgparams)
   psr->flags = retparams ? (psr->flags | SR_HAS_RETPARAMS) : psr->flags;
   //Yang
   psr->flags = ahgparams ? (psr->flags | SR_HAS_AHGPARAMS) : psr->flags;
-  //  printk("new_syscall_exit flag is %x\n",psr->flags);
+  //  TPRINT("new_syscall_exit flag is %x\n",psr->flags);
 #ifdef USE_HPC
   psr->hpc_end = rdtsc();
 #endif
@@ -5455,7 +5432,7 @@ get_record_pending_signal(siginfo_t *info)
 
   if (!prt->rp_signals)
   {
-    printk("get_record_pending_signal: no signal to return\n");
+    TPRINT("get_record_pending_signal: no signal to return\n");
     return 0;
   }
   MPRINT("Delivering deferred signal now at %d\n", atomic_read(prt->rp_precord_clock));
@@ -5468,9 +5445,9 @@ get_record_pending_signal(siginfo_t *info)
   return signr;
 }
 
-// Don't use standard debugging by default here because a printk could deadlock kernel
+// Don't use standard debugging by default here because a TPRINT could deadlock kernel
 #define SIGPRINT(x,...)
-//#define SIGPRINT printk
+//#define SIGPRINT TPRINT
 
 static int defer_signal(struct record_thread *prt, int signr, siginfo_t *info)
 {
@@ -5582,7 +5559,7 @@ record_signal_delivery(int signr, siginfo_t *info, struct k_sigaction *ka)
   }
   else if (!sig_fatal(current, signr) && sysnum != psr->sysnum && sysnum != 0 /* restarted syscall */)
   {
-    printk("record_signal_delivery: this should have been handled!!!\n");
+    TPRINT("record_signal_delivery: this should have been handled!!!\n");
     return -1;
   }
   if (sig_fatal(current, signr) && sysnum != psr->sysnum && sysnum != 0 /* restarted syscall */)
@@ -5603,7 +5580,7 @@ record_signal_delivery(int signr, siginfo_t *info, struct k_sigaction *ka)
     }
     else
     {
-      printk("record_signal_delivery: pid %d could not get head pointer\n", current->pid);
+      TPRINT("record_signal_delivery: pid %d could not get head pointer\n", current->pid);
     }
 #else
     char __user *pnext;
@@ -5625,7 +5602,7 @@ record_signal_delivery(int signr, siginfo_t *info, struct k_sigaction *ka)
     }
     else
     {
-      printk("record_signal_delivery: pid %d could not get head pointer\n", current->pid);
+      TPRINT("record_signal_delivery: pid %d could not get head pointer\n", current->pid);
     }
 #endif
 
@@ -5644,7 +5621,7 @@ record_signal_delivery(int signr, siginfo_t *info, struct k_sigaction *ka)
   psignal = ARGSKMALLOC(sizeof(struct repsignal), GFP_KERNEL);
   if (psignal == NULL)
   {
-    printk("Cannot allocate replay signal\n");
+    TPRINT("Cannot allocate replay signal\n");
     return 0;  // Replay broken - but might as well let recording proceed
   }
   psignal->signr = signr;
@@ -5850,7 +5827,7 @@ write_user_log(struct record_thread *prect)
 
   if (copy_from_user(&next, &phead->next, sizeof(u_long)))
   {
-    printk("Pid %d: unable to get log head next ptr\n", current->pid);
+    TPRINT("Pid %d: unable to get log head next ptr\n", current->pid);
     return -EINVAL;
   }
   DPRINT("Pid %d: log current address is at %lx\n", current->pid, next);
@@ -5877,7 +5854,7 @@ write_user_log(struct record_thread *prect)
     rc = sys_newstat(filename, &st);
     if (rc < 0)
     {
-      printk("Pid %d - write_log_data, can't append stat of file %s failed\n", current->pid, filename);
+      TPRINT("Pid %d - write_log_data, can't append stat of file %s failed\n", current->pid, filename);
       return -EINVAL;
     }
     fd = sys_open(filename, O_RDWR | O_APPEND | O_LARGEFILE, 0777);
@@ -5890,7 +5867,7 @@ write_user_log(struct record_thread *prect)
       rc = sys_fchmod(fd, 0777);
       if (rc == -1)
       {
-        printk("Pid %d fchmod failed\n", current->pid);
+        TPRINT("Pid %d fchmod failed\n", current->pid);
       }
     }
     prect->rp_ulog_opened = 1;
@@ -5901,14 +5878,14 @@ write_user_log(struct record_thread *prect)
 
   if (fd < 0)
   {
-    printk("Cannot open log file %s, rc =%d\n", filename, fd);
+    TPRINT("Cannot open log file %s, rc =%d\n", filename, fd);
     return -EINVAL;
   }
 
   file = fget(fd);
   if (file == NULL)
   {
-    printk("write_user_log: invalid file\n");
+    TPRINT("write_user_log: invalid file\n");
     return -EINVAL;
   }
 
@@ -5918,14 +5895,14 @@ write_user_log(struct record_thread *prect)
 
   if (written != sizeof(int))
   {
-    printk("write_user_log: tried to write %lu, got rc %ld\n", sizeof(int), written);
+    TPRINT("write_user_log: tried to write %lu, got rc %ld\n", sizeof(int), written);
     rc = -EINVAL;
   }
 
   written = vfs_write(file, start, to_write, &prect->rp_read_ulog_pos);
   if (written != to_write)
   {
-    printk("write_user_log1: tried to write %ld, got rc %ld\n", to_write, written);
+    TPRINT("write_user_log1: tried to write %ld, got rc %ld\n", to_write, written);
     rc = -EINVAL;
   }
 
@@ -5942,7 +5919,7 @@ write_user_log(struct record_thread *prect)
 #endif
   if (copy_to_user(&phead->next, &next, sizeof(u_long)))
   {
-    printk("Unable to put log head next\n");
+    TPRINT("Unable to put log head next\n");
     return -EINVAL;
   }
 
@@ -5983,7 +5960,7 @@ read_user_log(struct record_thread *prect)
   rc = sys_newstat(filename, &st);
   if (rc < 0)
   {
-    printk("Stat of file %s failed\n", filename);
+    TPRINT("Stat of file %s failed\n", filename);
     set_fs(old_fs);
     return rc;
   }
@@ -5991,14 +5968,14 @@ read_user_log(struct record_thread *prect)
   set_fs(old_fs);
   if (fd < 0)
   {
-    printk("Cannot open log file %s, rc =%d\n", filename, fd);
+    TPRINT("Cannot open log file %s, rc =%d\n", filename, fd);
     return fd;
   }
 
   file = fget(fd);
   if (file == NULL)
   {
-    printk("read_user_log: invalid file\n");
+    TPRINT("read_user_log: invalid file\n");
     return -EINVAL;
   }
 
@@ -6008,7 +5985,7 @@ read_user_log(struct record_thread *prect)
   set_fs(old_fs);
   if (copyed != sizeof(int))
   {
-    if (copyed) printk("read_user_log: tried to read num entries %lu, got rc %zd\n", sizeof(int), copyed);
+    if (copyed) TPRINT("read_user_log: tried to read num entries %lu, got rc %zd\n", sizeof(int), copyed);
     rc = -EINVAL;
     goto close_out;
   }
@@ -6017,7 +5994,7 @@ read_user_log(struct record_thread *prect)
   copyed = vfs_read(file, (char __user *) start, num_bytes, &prect->rp_read_ulog_pos);
   if (copyed != num_bytes)
   {
-    printk("read_user_log: tried to read %d, got rc %ld\n", num_bytes, copyed);
+    TPRINT("read_user_log: tried to read %d, got rc %ld\n", num_bytes, copyed);
     rc = -EINVAL;
   }
   else
@@ -6057,7 +6034,7 @@ write_user_extra_log(struct record_thread *prect)
 
   if (copy_from_user(&head, phead, sizeof(struct pthread_extra_log_head)))
   {
-    printk("Pid %d: unable to get extra log head\n", current->pid);
+    TPRINT("Pid %d: unable to get extra log head\n", current->pid);
     return -EINVAL;
   }
   DPRINT("Pid %d: extra log current address is at %p\n", current->pid, head.next);
@@ -6084,7 +6061,7 @@ write_user_extra_log(struct record_thread *prect)
     rc = sys_newstat(filename, &st);
     if (rc < 0)
     {
-      printk("Pid %d - write_extra_log_data, can't append stat of file %s failed\n", current->pid, filename);
+      TPRINT("Pid %d - write_extra_log_data, can't append stat of file %s failed\n", current->pid, filename);
       return -EINVAL;
     }
     fd = sys_open(filename, O_RDWR | O_APPEND | O_LARGEFILE, 0777);
@@ -6097,7 +6074,7 @@ write_user_extra_log(struct record_thread *prect)
       rc = sys_fchmod(fd, 0777);
       if (rc == -1)
       {
-        printk("Pid %d fchmod failed\n", current->pid);
+        TPRINT("Pid %d fchmod failed\n", current->pid);
       }
     }
     prect->rp_elog_opened = 1;
@@ -6108,14 +6085,14 @@ write_user_extra_log(struct record_thread *prect)
 
   if (fd < 0)
   {
-    printk("Cannot open exta log file %s, rc =%d\n", filename, fd);
+    TPRINT("Cannot open exta log file %s, rc =%d\n", filename, fd);
     return -EINVAL;
   }
 
   file = fget(fd);
   if (file == NULL)
   {
-    printk("write_extra_user_log: invalid file\n");
+    TPRINT("write_extra_user_log: invalid file\n");
     return -EINVAL;
   }
 
@@ -6125,14 +6102,14 @@ write_user_extra_log(struct record_thread *prect)
 
   if (written != sizeof(int))
   {
-    printk("write_user_log: tried to write %d, got rc %ld\n", sizeof(int), written);
+    TPRINT("write_user_log: tried to write %d, got rc %ld\n", sizeof(int), written);
     rc = -EINVAL;
   }
 
   written = vfs_write(file, start, to_write, &prect->rp_read_elog_pos);
   if (written != to_write)
   {
-    printk("write_extra_user_log1: tried to write %ld, got rc %ld\n", to_write, written);
+    TPRINT("write_extra_user_log1: tried to write %ld, got rc %ld\n", to_write, written);
     rc = -EINVAL;
   }
 
@@ -6146,7 +6123,7 @@ write_user_extra_log(struct record_thread *prect)
 
   if (copy_to_user(phead, &head, sizeof(struct pthread_extra_log_head)))
   {
-    printk("Unable to put extra log head\n");
+    TPRINT("Unable to put extra log head\n");
     return -EINVAL;
   }
 
@@ -6187,7 +6164,7 @@ read_user_extra_log(struct record_thread *prect)
   rc = sys_newstat(filename, &st);
   if (rc < 0)
   {
-    printk("Stat of file %s failed\n", filename);
+    TPRINT("Stat of file %s failed\n", filename);
     set_fs(old_fs);
     return rc;
   }
@@ -6195,14 +6172,14 @@ read_user_extra_log(struct record_thread *prect)
   set_fs(old_fs);
   if (fd < 0)
   {
-    printk("Cannot open extra log file %s, rc =%d\n", filename, fd);
+    TPRINT("Cannot open extra log file %s, rc =%d\n", filename, fd);
     return fd;
   }
 
   file = fget(fd);
   if (file == NULL)
   {
-    printk("read_user_extra_log: invalid file\n");
+    TPRINT("read_user_extra_log: invalid file\n");
     return -EINVAL;
   }
 
@@ -6212,7 +6189,7 @@ read_user_extra_log(struct record_thread *prect)
   set_fs(old_fs);
   if (copyed != sizeof(int))
   {
-    printk("read_extra_user_log: tried to read num entries %d, got rc %ld\n", sizeof(int), copyed);
+    TPRINT("read_extra_user_log: tried to read num entries %d, got rc %ld\n", sizeof(int), copyed);
     rc = -EINVAL;
     goto close_out;
   }
@@ -6221,7 +6198,7 @@ read_user_extra_log(struct record_thread *prect)
   copyed = vfs_read(file, (char __user *) start, num_bytes, &prect->rp_read_elog_pos);
   if (copyed != num_bytes)
   {
-    printk("read_user_extra_log: tried to read %d, got rc %ld\n", num_bytes, copyed);
+    TPRINT("read_user_extra_log: tried to read %d, got rc %ld\n", num_bytes, copyed);
     rc = -EINVAL;
   }
   else
@@ -6270,18 +6247,18 @@ get_next_clock(struct replay_thread *prt, struct replay_group *prg, long wait_cl
       {
         if (prt->rp_pin_restart_syscall)
         {
-          printk("Pid %d: This was a restarted syscall entry, let's sleep and try again\n", current->pid);
+          TPRINT("Pid %d: This was a restarted syscall entry, let's sleep and try again\n", current->pid);
           msleep(1000);
           break;
         }
-        printk("Pid %d (recpid %d): Crud! no eligible thread to run\n", current->pid, current->replay_thrd->rp_record_thread->rp_record_pid);
-        printk("current clock value is %ld waiting for %lu\n", *(prt->rp_preplay_clock), wait_clock_value);
+        TPRINT("Pid %d (recpid %d): Crud! no eligible thread to run\n", current->pid, current->replay_thrd->rp_record_thread->rp_record_pid);
+        TPRINT("current clock value is %ld waiting for %lu\n", *(prt->rp_preplay_clock), wait_clock_value);
         dump_stack(); // how did we get here?
         // cycle around again and print
         tmp = tmp->rp_next_thread;
         while (tmp != current->replay_thrd)
         {
-          printk("\t thread %d (recpid %d) status %d clock %ld\n", tmp->rp_replay_pid, tmp->rp_record_thread->rp_record_pid, tmp->rp_status, tmp->rp_wait_clock);
+          TPRINT("\t thread %d (recpid %d) status %d clock %ld\n", tmp->rp_replay_pid, tmp->rp_record_thread->rp_record_pid, tmp->rp_status, tmp->rp_wait_clock);
           tmp = tmp->rp_next_thread;
         }
         sys_exit_group(0);
@@ -6295,7 +6272,7 @@ get_next_clock(struct replay_thread *prt, struct replay_group *prg, long wait_cl
       rg_unlock(prg->rg_rec_group);
       ret = wait_event_interruptible_timeout(prt->rp_waitq, prt->rp_status == REPLAY_STATUS_RUNNING || prg->rg_rec_group->rg_mismatch_flag || (prt->rp_replay_exit && prt->rp_record_thread->rp_in_ptr == prt->rp_out_ptr + 1), SCHED_TO);
       rg_lock(prg->rg_rec_group);
-      if (ret == 0) printk("Replay pid %d timed out waiting for clock value %ld but current clock value is %ld\n", current->pid, wait_clock_value, *(prt->rp_preplay_clock));
+      if (ret == 0) TPRINT("Replay pid %d timed out waiting for clock value %ld but current clock value is %ld\n", current->pid, wait_clock_value, *(prt->rp_preplay_clock));
       if (prg->rg_rec_group->rg_mismatch_flag || (prt->rp_replay_exit && (prt->rp_record_thread->rp_in_ptr == prt->rp_out_ptr + 1)))
       {
         MPRINT("Replay pid %d woken up to die on entrance in_ptr %lu out_ptr %lu\n", current->pid, prt->rp_record_thread->rp_in_ptr, prt->rp_out_ptr);
@@ -6304,7 +6281,7 @@ get_next_clock(struct replay_thread *prt, struct replay_group *prg, long wait_cl
       }
       if (ret == -ERESTARTSYS)
       {
-        printk("Pid %d: entering syscall cannot wait due to signal - try again\n", current->pid);
+        TPRINT("Pid %d: entering syscall cannot wait due to signal - try again\n", current->pid);
         rg_unlock(prg->rg_rec_group);
         msleep(1000);
         rg_lock(prg->rg_rec_group);
@@ -6330,7 +6307,7 @@ sys_wakeup_paused_process(pid_t pid)
     tmp = prt;
     do
     {
-      printk("Consider thread %d status %d clock %ld\n", tmp->rp_replay_pid, tmp->rp_status, tmp->rp_wait_clock);
+      TPRINT("Consider thread %d status %d clock %ld\n", tmp->rp_replay_pid, tmp->rp_status, tmp->rp_wait_clock);
       if (tmp->rp_status == REPLAY_STATUS_RUNNING && tmp->rp_wait_clock <= *(prt->rp_preplay_clock + 1))
       {
         wake_up(&tmp->rp_waitq);
@@ -6340,14 +6317,14 @@ sys_wakeup_paused_process(pid_t pid)
       tmp = tmp->rp_next_thread;
       if (tmp == prt)
       {
-        printk("Replay_pause: Pid %d (recpid %d): Crud! no eligible thread to run on syscall entry\n", current->pid, prt->rp_record_thread->rp_record_pid);
-        printk("current clock value is %ld looking for %lu\n", *(prt->rp_preplay_clock), *(prt->rp_preplay_clock + 1));
+        TPRINT("Replay_pause: Pid %d (recpid %d): Crud! no eligible thread to run on syscall entry\n", current->pid, prt->rp_record_thread->rp_record_pid);
+        TPRINT("current clock value is %ld looking for %lu\n", *(prt->rp_preplay_clock), *(prt->rp_preplay_clock + 1));
         dump_stack(); // how did we get here?
         // cycle around again and print
         tmp = tmp->rp_next_thread;
         while (tmp != current->replay_thrd)
         {
-          printk("\t thread %d (recpid %d) status %d clock %ld\n", tmp->rp_replay_pid, tmp->rp_record_thread->rp_record_pid, tmp->rp_status, tmp->rp_wait_clock);
+          TPRINT("\t thread %d (recpid %d) status %d clock %ld\n", tmp->rp_replay_pid, tmp->rp_record_thread->rp_record_pid, tmp->rp_status, tmp->rp_wait_clock);
           tmp = tmp->rp_next_thread;
         }
       }
@@ -6356,7 +6333,7 @@ sys_wakeup_paused_process(pid_t pid)
   }
   else
   {
-    printk("Pid %d is not a replay thread, please check the paramter.\n", pid);
+    TPRINT("Pid %d is not a replay thread, please check the paramter.\n", pid);
     return 0;
   }
   return 1;
@@ -6389,14 +6366,14 @@ get_next_syscall_enter(struct replay_thread *prt, struct replay_group *prg, int 
 #ifdef REPLAY_PARANOID
   if (current->replay_thrd == NULL)
   {
-    printk("Pid %d replaying but no log\n", current->pid);
+    TPRINT("Pid %d replaying but no log\n", current->pid);
     sys_exit(0);
   }
 #endif
 #ifdef TIME_TRICK
   //add_fake_time(5000, prg->rg_rec_group);
   //add_fake_time_syscall (prg->rg_rec_group);
-  //printk("the new fake time.%u, %u\n", fake_tv_sec, fake_tv_usec);
+  //TPRINT("the new fake time.%u, %u\n", fake_tv_sec, fake_tv_usec);
 #endif
 
   rg_lock(prg->rg_rec_group);
@@ -6432,7 +6409,7 @@ get_next_syscall_enter(struct replay_thread *prt, struct replay_group *prg, int 
     if (prect->rp_in_ptr == 0)
     {
       // There should be one record there at least
-      printk("Pid %d waiting for non-existant syscall record %d - recording not synced yet??? \n", current->pid, syscall);
+      TPRINT("Pid %d waiting for non-existant syscall record %d - recording not synced yet??? \n", current->pid, syscall);
       __syscall_mismatch(prg->rg_rec_group);
     }
     prt->rp_out_ptr = 0;
@@ -6448,7 +6425,7 @@ get_next_syscall_enter(struct replay_thread *prt, struct replay_group *prg, int 
     pclock = (u_long *) argshead(prect);
     argsconsume(prect, sizeof(u_long));
     start_clock += *pclock;
-    if (start_clock > 100000000) printk("start_clock %ld, pclock %ld, prt->rp_expected_clock %ld\n", start_clock, *pclock, prt->rp_expected_clock);
+    if (start_clock > 100000000) TPRINT("start_clock %ld, pclock %ld, prt->rp_expected_clock %ld\n", start_clock, *pclock, prt->rp_expected_clock);
   }
   prt->rp_expected_clock = start_clock + 1;
   // Pin can interrupt, so we need to save the start clock in case we need to resume
@@ -6462,7 +6439,7 @@ get_next_syscall_enter(struct replay_thread *prt, struct replay_group *prg, int 
       syscall == 45 || syscall == 46 || syscall == 47)
   {
     strcpy(repl_uuid_str, (char *)argshead(prect));
-    printk("syscall %d, repl_uuid is %s, repl_uuid_str len is %lu, retparam len is %lu\n", syscall, repl_uuid_str, strlen(repl_uuid_str), strlen((char *)argshead(prect)));
+    TPRINT("syscall %d, repl_uuid is %s, repl_uuid_str len is %lu, retparam len is %lu\n", syscall, repl_uuid_str, strlen(repl_uuid_str), strlen((char *)argshead(prect)));
     argsconsume(prect, strlen(repl_uuid_str) + 1);
   }
 
@@ -6471,11 +6448,11 @@ get_next_syscall_enter(struct replay_thread *prt, struct replay_group *prg, int 
   {
     if (psr->sysnum == SIGNAL_WHILE_SYSCALL_IGNORED && prect->rp_in_ptr == prt->rp_out_ptr + 1)
     {
-      printk("last record is apparently for a terminal signal - we'll just proceed anyway\n");
+      TPRINT("last record is apparently for a terminal signal - we'll just proceed anyway\n");
     }
     else
     {
-      printk("[ERROR]Pid  %d record pid %d expected syscall %d in log, got %d, start clock %ld\n",
+      TPRINT("[ERROR]Pid  %d record pid %d expected syscall %d in log, got %d, start clock %ld\n",
              current->pid, prect->rp_record_pid, syscall, psr->sysnum, start_clock);
       dump_stack();
       __syscall_mismatch(prg->rg_rec_group);
@@ -6489,7 +6466,7 @@ get_next_syscall_enter(struct replay_thread *prt, struct replay_group *prg, int 
   else
   {
     retval = *((long *) argshead(prect));
-    printk("argsconsume called at %d, size: %lu\n", __LINE__, sizeof(long));
+    TPRINT("argsconsume called at %d, size: %lu\n", __LINE__, sizeof(long));
     argsconsume(prect, sizeof(long));
   }
   MPRINT("Replay Pid %d, index %ld sys %d retval %lx\n", current->pid, prt->rp_out_ptr, psr->sysnum, retval);
@@ -6517,7 +6494,7 @@ get_next_syscall_enter(struct replay_thread *prt, struct replay_group *prg, int 
   }
   else if (unlikely((psr->flags & SR_HAS_RETPARAMS) != 0))
   {
-    printk("[ERROR]Pid %d record pid %d not expecting return parameters, syscall %d start clock %ld\n",
+    TPRINT("[ERROR]Pid %d record pid %d not expecting return parameters, syscall %d start clock %ld\n",
            current->pid, prect->rp_record_pid, syscall, start_clock);
     __syscall_mismatch(prg->rg_rec_group);
   }
@@ -6545,14 +6522,14 @@ get_next_syscall_enter(struct replay_thread *prt, struct replay_group *prg, int 
       tmp = tmp->rp_next_thread;
       if (tmp == prt)
       {
-        printk("Pid %d (recpid %d): Crud! no eligible thread to run on syscall entry\n", current->pid, prect->rp_record_pid);
-        printk("current clock value is %ld waiting for %lu\n", *(prt->rp_preplay_clock), start_clock);
+        TPRINT("Pid %d (recpid %d): Crud! no eligible thread to run on syscall entry\n", current->pid, prect->rp_record_pid);
+        TPRINT("current clock value is %ld waiting for %lu\n", *(prt->rp_preplay_clock), start_clock);
         dump_stack(); // how did we get here?
         // cycle around again and print
         tmp = tmp->rp_next_thread;
         while (tmp != current->replay_thrd)
         {
-          printk("\t thread %d (recpid %d) status %d clock %ld\n", tmp->rp_replay_pid, tmp->rp_record_thread->rp_record_pid, tmp->rp_status, tmp->rp_wait_clock);
+          TPRINT("\t thread %d (recpid %d) status %d clock %ld\n", tmp->rp_replay_pid, tmp->rp_record_thread->rp_record_pid, tmp->rp_status, tmp->rp_wait_clock);
           tmp = tmp->rp_next_thread;
         }
         __syscall_mismatch(prg->rg_rec_group);
@@ -6566,7 +6543,7 @@ get_next_syscall_enter(struct replay_thread *prt, struct replay_group *prg, int 
       rg_unlock(prg->rg_rec_group);
       ret = wait_event_interruptible_timeout(prt->rp_waitq, prt->rp_status == REPLAY_STATUS_RUNNING || prg->rg_rec_group->rg_mismatch_flag || (prt->rp_replay_exit && prect->rp_in_ptr == prt->rp_out_ptr + 1), SCHED_TO);
       rg_lock(prg->rg_rec_group);
-      if (ret == 0) printk("Replay pid %d timed out waiting for clock value %ld on syscall entry but current clock value is %ld\n", current->pid, start_clock, *(prt->rp_preplay_clock));
+      if (ret == 0) TPRINT("Replay pid %d timed out waiting for clock value %ld on syscall entry but current clock value is %ld\n", current->pid, start_clock, *(prt->rp_preplay_clock));
       if (prg->rg_rec_group->rg_mismatch_flag || (prt->rp_replay_exit && (prect->rp_in_ptr == prt->rp_out_ptr + 1)))
       {
         MPRINT("Replay pid %d woken up to die on entrance in_ptr %lu out_ptr %lu\n", current->pid, prect->rp_in_ptr, prt->rp_out_ptr);
@@ -6595,7 +6572,7 @@ get_next_syscall_enter(struct replay_thread *prt, struct replay_group *prg, int 
           return -ERESTART_RESTARTBLOCK;
         }
 
-        printk("Pid %d: entering syscall cannot wait due to signal - try again\n", current->pid);
+        TPRINT("Pid %d: entering syscall cannot wait due to signal - try again\n", current->pid);
         rg_unlock(prg->rg_rec_group);
         msleep(1000);
         rg_lock(prg->rg_rec_group);
@@ -6605,14 +6582,14 @@ get_next_syscall_enter(struct replay_thread *prt, struct replay_group *prg, int 
 #ifdef REPLAY_PAUSE
   if (replay_pause_tool && *prt->rp_preplay_clock >= *(prt->rp_preplay_clock + 1))
   {
-    printk("Pid %d replay will pause here, clock is %lu now\n", current->pid, *prt->rp_preplay_clock);
+    TPRINT("Pid %d replay will pause here, clock is %lu now\n", current->pid, *prt->rp_preplay_clock);
     prt->rp_wait_clock = *(prt->rp_preplay_clock + 1);
     rg_unlock(prg->rg_rec_group);
     ret = wait_event_interruptible_timeout(prt->rp_waitq, *prt->rp_preplay_clock < * (prt->rp_preplay_clock + 1), SCHED_TO);
-    if (ret == 0) printk("Replay_pause: Replay pid %d timed out waiting for clock value %ld on syscall entry but current clock value is %ld\n", current->pid, start_clock, *(prt->rp_preplay_clock));
+    if (ret == 0) TPRINT("Replay_pause: Replay pid %d timed out waiting for clock value %ld on syscall entry but current clock value is %ld\n", current->pid, start_clock, *(prt->rp_preplay_clock));
     if (ret == -ERESTARTSYS)
     {
-      printk("Pid %d: entering syscall cannot wait due to signal for replay_pause\n", current->pid);
+      TPRINT("Pid %d: entering syscall cannot wait due to signal for replay_pause\n", current->pid);
     }
     rg_lock(prg->rg_rec_group);
   }
@@ -6664,15 +6641,15 @@ get_next_syscall_exit(struct replay_thread *prt, struct replay_group *prg, struc
       tmp = tmp->rp_next_thread;
       if (tmp == prt)
       {
-        printk("Pid %d: Crud! no eligible thread to run on syscall exit\n", current->pid);
-        printk("replay pid %d waiting for clock value on syscall exit - current clock value is %ld\n", current->pid, *(prt->rp_preplay_clock));
+        TPRINT("Pid %d: Crud! no eligible thread to run on syscall exit\n", current->pid);
+        TPRINT("replay pid %d waiting for clock value on syscall exit - current clock value is %ld\n", current->pid, *(prt->rp_preplay_clock));
         if (prt->rp_pin_restart_syscall)
         {
-          printk("Pid %d: This was a restarted syscall exit, let's sleep and try again\n", current->pid);
+          TPRINT("Pid %d: This was a restarted syscall exit, let's sleep and try again\n", current->pid);
           msleep(1000);
           break;
         }
-        printk("replay pid %d waiting for clock value %ld on syscall exit - current clock value is %ld\n", current->pid, stop_clock, *(prt->rp_preplay_clock));
+        TPRINT("replay pid %d waiting for clock value %ld on syscall exit - current clock value is %ld\n", current->pid, stop_clock, *(prt->rp_preplay_clock));
         sys_exit_group(0);
       }
     }
@@ -6684,7 +6661,7 @@ get_next_syscall_exit(struct replay_thread *prt, struct replay_group *prg, struc
       rg_unlock(prg->rg_rec_group);
       ret = wait_event_interruptible_timeout(prt->rp_waitq, prt->rp_status == REPLAY_STATUS_RUNNING || prg->rg_rec_group->rg_mismatch_flag || (prt->rp_replay_exit && prect->rp_in_ptr == prt->rp_out_ptr + 1), SCHED_TO);
       rg_lock(prg->rg_rec_group);
-      if (ret == 0) printk("Replay pid %d timed out waiting for clock value %ld on syscall exit but current clock value is %ld\n", current->pid, stop_clock, *(prt->rp_preplay_clock));
+      if (ret == 0) TPRINT("Replay pid %d timed out waiting for clock value %ld on syscall exit but current clock value is %ld\n", current->pid, stop_clock, *(prt->rp_preplay_clock));
       if (prg->rg_rec_group->rg_mismatch_flag || (prt->rp_replay_exit && (prect->rp_in_ptr == prt->rp_out_ptr + 1)))
       {
         rg_unlock(prg->rg_rec_group);
@@ -6708,7 +6685,7 @@ get_next_syscall_exit(struct replay_thread *prt, struct replay_group *prg, struc
           return -ERESTART_RESTARTBLOCK;
         }
 
-        printk("Pid %d: exiting syscall cannot wait due to signal w/clock %lu - try again\n", current->pid, *(prt->rp_preplay_clock));
+        TPRINT("Pid %d: exiting syscall cannot wait due to signal w/clock %lu - try again\n", current->pid, *(prt->rp_preplay_clock));
         print_replay_threads();
         rg_unlock(prg->rg_rec_group);
         msleep(1000);
@@ -6782,7 +6759,7 @@ get_next_syscall(int syscall, char **ppretparams)
     {
       (*(int *)(prt->app_syscall_addr)) = 0;
       (*(int *)(prt->app_syscall_addr)) = 997; //Yang: in syscall_64.tbl, 0 is read.. we use 997 instead
-      printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 997\n", __func__, __LINE__, current->pid);
+      TPRINT("[%s|%d] pid %d, prt->app_syscall_addr is set to 997\n", __func__, __LINE__, current->pid);
     }
   }
 
@@ -6828,7 +6805,7 @@ cget_next_syscall(int syscall, char **ppretparams, u_char *flag, long prediction
     {
       //(*(int*)(prt->app_syscall_addr)) = 0;
       (*(int *)(prt->app_syscall_addr)) = 997; //Yang: in syscall_64.tbl, 0 is read.. we use 997 instead
-      printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 997\n", __func__, __LINE__, current->pid);
+      TPRINT("[%s|%d] pid %d, prt->app_syscall_addr is set to 997\n", __func__, __LINE__, current->pid);
     }
   }
 
@@ -6871,7 +6848,7 @@ void record_randomness(u_long value)
   }
   else
   {
-    printk("record_randomness: exceeded maximum number of values\n");
+    TPRINT("record_randomness: exceeded maximum number of values\n");
   }
 }
 
@@ -6883,7 +6860,7 @@ u_long replay_randomness(void)
   }
   else
   {
-    printk("replay_randomness: exceeded maximum number of values\n");
+    TPRINT("replay_randomness: exceeded maximum number of values\n");
     return -1;
   }
 }
@@ -6916,7 +6893,7 @@ unsigned long get_replay_args(void)
   }
   else
   {
-    printk("Pid %d, no args start on non-replay\n", current->pid);
+    TPRINT("Pid %d, no args start on non-replay\n", current->pid);
     return 0;
   }
 }
@@ -6930,7 +6907,7 @@ unsigned long get_env_vars(void)
   }
   else
   {
-    printk("Pid %d, no env vars on non-replay\n", current->pid);
+    TPRINT("Pid %d, no env vars on non-replay\n", current->pid);
     return 0;
   }
 }
@@ -7013,16 +6990,16 @@ long check_clock_after_syscall(int syscall)
   if (ignore_flag) return 0;
 
   // This should block until it is time to execute the syscall.  We must save the returned values for use in the actual system call
-  printk("[%s|%d] pid %d, syscall %d, app_syscall_addr %lx, value %d\n", __func__, __LINE__, current->pid, syscall,
+  TPRINT("[%s|%d] pid %d, syscall %d, app_syscall_addr %lx, value %d\n", __func__, __LINE__, current->pid, syscall,
          prt->app_syscall_addr, (prt->app_syscall_addr <= 1) ? -1 : * (int *)(prt->app_syscall_addr));
   if (prt->app_syscall_addr <= 1)
   {
-    printk("Pid %d calls check_clock_after_syscall, but thread not yet initialized\n", current->pid);
+    TPRINT("Pid %d calls check_clock_after_syscall, but thread not yet initialized\n", current->pid);
     return -EINVAL;
   }
   if (prt->rp_saved_psr == NULL)
   {
-    printk("Pid %d calls check_clock_after_syscall, but psr not saved\n", current->pid);
+    TPRINT("Pid %d calls check_clock_after_syscall, but psr not saved\n", current->pid);
     return -EINVAL;
   }
   DPRINT("Pid %d post-wait for syscall for syscall %d\n", current->pid, prt->rp_saved_psr->sysnum);
@@ -7044,7 +7021,7 @@ sys_pthread_print(const char __user *buf, size_t count)
   if (current->replay_thrd)
   {
     clock = *(current->replay_thrd->rp_preplay_clock);
-    printk("Pid %d recpid %5d PTHREAD:%ld:%ld.%06ld:%s", current->pid, current->replay_thrd->rp_record_thread->rp_record_pid, clock, tv.tv_sec, tv.tv_usec, buf);
+    TPRINT("Pid %d recpid %5d PTHREAD:%ld:%ld.%06ld:%s", current->pid, current->replay_thrd->rp_record_thread->rp_record_pid, clock, tv.tv_sec, tv.tv_usec, buf);
   }
   else if (current->record_thrd)
   {
@@ -7057,11 +7034,11 @@ sys_pthread_print(const char __user *buf, size_t count)
     {
       ignore_flag = 0;
     }
-    printk("Pid %d recpid ----- PTHREAD:%ld:%ld.%06ld:%d:%s", current->pid, clock, tv.tv_sec, tv.tv_usec, ignore_flag, buf);
+    TPRINT("Pid %d recpid ----- PTHREAD:%ld:%ld.%06ld:%d:%s", current->pid, clock, tv.tv_sec, tv.tv_usec, ignore_flag, buf);
   }
   else
   {
-    printk("sys_pthread_print: pid %d is not a record/replay proces: %s\n", current->pid, buf);
+    TPRINT("sys_pthread_print: pid %d is not a record/replay proces: %s\n", current->pid, buf);
     return -EINVAL;
   }
 
@@ -7088,7 +7065,7 @@ sys_pthread_init(int __user *status, u_long record_hook, u_long replay_hook)
   }
   else
   {
-    printk("Pid %d calls sys_pthread_init, but not a record/replay process\n", current->pid);
+    TPRINT("Pid %d calls sys_pthread_init, but not a record/replay process\n", current->pid);
     return -EINVAL;
   }
   return 0;
@@ -7141,7 +7118,7 @@ sys_pthread_log(u_long log_addr, int __user *ignore_addr)
   }
   else
   {
-    printk("sys_prthread_log called by pid %d which is neither recording nor replaying\n", current->pid);
+    TPRINT("sys_prthread_log called by pid %d which is neither recording nor replaying\n", current->pid);
     return -EINVAL;
   }
   return 0;
@@ -7166,7 +7143,7 @@ sys_pthread_elog(int type, u_long addr)
     }
     else
     {
-      printk("sys_pthread_elog called by pid %d which is neither recording nor replaying\n", current->pid);
+      TPRINT("sys_pthread_elog called by pid %d which is neither recording nor replaying\n", current->pid);
       return -EINVAL;
     }
   }
@@ -7175,7 +7152,7 @@ sys_pthread_elog(int type, u_long addr)
     if (current->record_thrd)
     {
       DPRINT("Pid %d: extra log full\n", current->pid);
-      if (write_user_extra_log(current->record_thrd) < 0) printk("Extra debug log write failed\n");
+      if (write_user_extra_log(current->record_thrd) < 0) TPRINT("Extra debug log write failed\n");
     }
     else if (current->replay_thrd)
     {
@@ -7184,7 +7161,7 @@ sys_pthread_elog(int type, u_long addr)
     }
     else
     {
-      printk("sys_pthread_elog called by pid %d which is neither recording nor replaying\n", current->pid);
+      TPRINT("sys_pthread_elog called by pid %d which is neither recording nor replaying\n", current->pid);
       return -EINVAL;
     }
   }
@@ -7205,7 +7182,7 @@ sys_pthread_block(u_long clock)
 
   if (!current->replay_thrd)
   {
-    printk("sys_pthread_block called by non-replay process %d\n", current->pid);
+    TPRINT("sys_pthread_block called by non-replay process %d\n", current->pid);
     return -EINVAL;
   }
   prt = current->replay_thrd;
@@ -7231,12 +7208,12 @@ sys_pthread_block(u_long clock)
       tmp = tmp->rp_next_thread;
       if (tmp == prt)
       {
-        printk("Pid %d: Crud! no eligible thread to run on user-level block\n", current->pid);
-        printk("Replay pid %d is waiting for user clock value %ld but current clock value is %ld\n", current->pid, clock, *(prt->rp_preplay_clock));
+        TPRINT("Pid %d: Crud! no eligible thread to run on user-level block\n", current->pid);
+        TPRINT("Replay pid %d is waiting for user clock value %ld but current clock value is %ld\n", current->pid, clock, *(prt->rp_preplay_clock));
         tmp = prt->rp_next_thread;
         do
         {
-          printk("\tthread %d (recpid %d) status %d clock %ld\n", tmp->rp_replay_pid, tmp->rp_record_thread->rp_record_pid, tmp->rp_status, tmp->rp_wait_clock);
+          TPRINT("\tthread %d (recpid %d) status %d clock %ld\n", tmp->rp_replay_pid, tmp->rp_record_thread->rp_record_pid, tmp->rp_status, tmp->rp_wait_clock);
           tmp = tmp->rp_next_thread;
         }
         while (tmp != prt);
@@ -7253,11 +7230,11 @@ sys_pthread_block(u_long clock)
       rg_unlock(prg->rg_rec_group);
       ret = wait_event_interruptible_timeout(prt->rp_waitq, prt->rp_status == REPLAY_STATUS_RUNNING || prg->rg_rec_group->rg_mismatch_flag || (prt->rp_replay_exit && prt->rp_record_thread->rp_in_ptr == prt->rp_out_ptr), SCHED_TO);
       rg_lock(prg->rg_rec_group);
-      if (ret == 0) printk("Replay pid %d timed out waiting for user clock value %ld\n", current->pid, clock);
+      if (ret == 0) TPRINT("Replay pid %d timed out waiting for user clock value %ld\n", current->pid, clock);
       if (prg->rg_rec_group->rg_mismatch_flag || (prt->rp_replay_exit && (prt->rp_record_thread->rp_in_ptr == prt->rp_out_ptr))) break; // exit condition below
       if (ret == -ERESTARTSYS)
       {
-        printk("Pid %d: blocking syscall cannot wait due to signal - try again (%d)\n", current->pid, prg->rg_rec_group->rg_mismatch_flag);
+        TPRINT("Pid %d: blocking syscall cannot wait due to signal - try again (%d)\n", current->pid, prg->rg_rec_group->rg_mismatch_flag);
         rg_unlock(prg->rg_rec_group);
         msleep(1000);
         rg_lock(prg->rg_rec_group);
@@ -7291,7 +7268,7 @@ asmlinkage long sys_pthread_full(void)
   }
   else
   {
-    printk("Pid %d: pthread_log_full only valid for replay processes\n", current->pid);
+    TPRINT("Pid %d: pthread_log_full only valid for replay processes\n", current->pid);
     return -EINVAL;
   }
 }
@@ -7334,7 +7311,7 @@ asmlinkage long sys_pthread_shm_path(void)
   }
   else
   {
-    printk("[WARN]Pid %d, neither record/replay is asking for the shm_path???\n", current->pid);
+    TPRINT("[WARN]Pid %d, neither record/replay is asking for the shm_path???\n", current->pid);
     fd = -EINVAL;
   }
 
@@ -7361,11 +7338,11 @@ asmlinkage long sys_pthread_sysign(void)
     return F_RECORD;          \
   }               \
   if (current->replay_thrd && test_app_syscall(number)) {   \
-printk("SHIM_CALL_MAIN: Pid %d, app replay meets syscall %d\n", current->pid, number); \
+TPRINT("SHIM_CALL_MAIN: Pid %d, app replay meets syscall %d\n", current->pid, number); \
     if (current->replay_thrd->rp_record_thread->rp_ignore_flag_addr) { \
       get_user (ignore_flag, current->replay_thrd->rp_record_thread->rp_ignore_flag_addr); \
       if (ignore_flag) { \
-        printk ("syscall %d ignored\n", number); \
+        TPRINT ("syscall %d ignored\n", number); \
         return F_SYS;       \
       }           \
     }             \
@@ -7373,7 +7350,7 @@ printk("SHIM_CALL_MAIN: Pid %d, app replay meets syscall %d\n", current->pid, nu
     return F_REPLAY;          \
   }               \
   else if (current->replay_thrd) {        \
-printk("SHIM_CALL_MAIN: Pid %d, non replay meets syscall %d\n", current->pid, number); \
+TPRINT("SHIM_CALL_MAIN: Pid %d, non replay meets syscall %d\n", current->pid, number); \
     if (*(current->replay_thrd->rp_preplay_clock) > pin_debug_clock) {  \
       DPRINT("Pid %d, pin syscall %d\n", current->pid, number); \
     }             \
@@ -7404,7 +7381,7 @@ printk("SHIM_CALL_MAIN: Pid %d, non replay meets syscall %d\n", current->pid, nu
     if (current->replay_thrd->rp_record_thread->rp_ignore_flag_addr) { \
       get_user (ignore_flag, current->replay_thrd->rp_record_thread->rp_ignore_flag_addr); \
       if (ignore_flag) { \
-        printk ("We should get here, ignored syscall %d\n", number);      \
+        TPRINT ("We should get here, ignored syscall %d\n", number);      \
         return F_SYS;       \
       }           \
     }             \
@@ -7690,11 +7667,11 @@ static asmlinkage long record_##name (arg0type arg0name)  \
   if (rc >= 0 && dest) {            \
           pretval = ARGSKMALLOC (sizeof(type), GFP_KERNEL); \
     if (pretval == NULL) {          \
-      printk ("record_##name: can't allocate buffer\n"); \
+      TPRINT ("record_##name: can't allocate buffer\n"); \
       return -ENOMEM;         \
     }             \
     if (copy_from_user (pretval, dest, sizeof (type))) {  \
-      printk ("record_##name: can't copy to buffer\n"); \
+      TPRINT ("record_##name: can't copy to buffer\n"); \
       ARGSKFREE(pretval, sizeof(type));   \
       pretval = NULL;         \
       rc = -EFAULT;         \
@@ -7717,11 +7694,11 @@ static asmlinkage long record_##name (arg0type arg0name, arg1type arg1name) \
   if (rc >= 0 && dest) {            \
           pretval = ARGSKMALLOC (sizeof(type), GFP_KERNEL); \
     if (pretval == NULL) {          \
-      printk ("record_##name: can't allocate buffer\n"); \
+      TPRINT ("record_##name: can't allocate buffer\n"); \
       return -ENOMEM;         \
     }             \
     if (copy_from_user (pretval, dest, sizeof (type))) {  \
-      printk ("record_##name: can't copy to buffer\n"); \
+      TPRINT ("record_##name: can't copy to buffer\n"); \
       ARGSKFREE(pretval, sizeof(type));   \
       pretval = NULL;         \
       rc = -EFAULT;         \
@@ -7744,11 +7721,11 @@ static asmlinkage long record_##name (arg0type arg0name, arg1type arg1name, arg2
   if (rc >= 0 && dest) {            \
           pretval = ARGSKMALLOC (sizeof(type), GFP_KERNEL); \
     if (pretval == NULL) {          \
-      printk ("record_##name: can't allocate buffer\n"); \
+      TPRINT ("record_##name: can't allocate buffer\n"); \
       return -ENOMEM;         \
     }             \
     if (copy_from_user (pretval, dest, sizeof (type))) {  \
-      printk ("record_##name: can't copy to buffer\n"); \
+      TPRINT ("record_##name: can't copy to buffer\n"); \
       ARGSKFREE(pretval, sizeof(type));   \
       pretval = NULL;         \
       rc = -EFAULT;         \
@@ -7771,11 +7748,11 @@ static asmlinkage long record_##name (arg0type arg0name, arg1type arg1name, arg2
   if (rc >= 0 && dest) {            \
           pretval = ARGSKMALLOC (sizeof(type), GFP_KERNEL); \
     if (pretval == NULL) {          \
-      printk ("record_##name: can't allocate buffer\n"); \
+      TPRINT ("record_##name: can't allocate buffer\n"); \
       return -ENOMEM;         \
     }             \
     if (copy_from_user (pretval, dest, sizeof (type))) {  \
-      printk ("record_##name: can't copy to buffer\n"); \
+      TPRINT ("record_##name: can't copy to buffer\n"); \
       ARGSKFREE(pretval, sizeof(type));   \
       pretval = NULL;         \
       rc = -EFAULT;         \
@@ -7798,11 +7775,11 @@ static asmlinkage long record_##name (arg0type arg0name, arg1type arg1name, arg2
   if (rc >= 0 && dest) {            \
           pretval = ARGSKMALLOC (sizeof(type), GFP_KERNEL); \
     if (pretval == NULL) {          \
-      printk ("record_##name: can't allocate buffer\n"); \
+      TPRINT ("record_##name: can't allocate buffer\n"); \
       return -ENOMEM;         \
     }             \
     if (copy_from_user (pretval, dest, sizeof (type))) {  \
-      printk ("record_##name: can't copy to buffer\n"); \
+      TPRINT ("record_##name: can't copy to buffer\n"); \
       ARGSKFREE(pretval, sizeof(type));   \
       pretval = NULL;         \
       rc = -EFAULT;         \
@@ -7820,8 +7797,8 @@ static asmlinkage long replay_##name (args)       \
   long rc = get_next_syscall (sysnum, (char **) &retparams);  \
                   \
   if (retparams) {            \
-    if (copy_to_user (dest, retparams, size)) printk ("replay_##name: pid %d cannot copy to user\n", current->pid); \
-printk("argsconsume called at %d, size: %lu\n", __LINE__, size); \
+    if (copy_to_user (dest, retparams, size)) TPRINT ("replay_##name: pid %d cannot copy to user\n", current->pid); \
+TPRINT("argsconsume called at %d, size: %lu\n", __LINE__, size); \
     argsconsume (current->replay_thrd->rp_record_thread, size); \
   }               \
                   \
@@ -7867,11 +7844,11 @@ static asmlinkage long record_##name (arg0type arg0name, arg1type arg1name, arg2
   if (rc >= 0 && dest) {            \
     pretval = ARGSKMALLOC (rc, GFP_KERNEL);     \
     if (pretval == NULL) {          \
-      printk ("record_##name: can't allocate buffer\n"); \
+      TPRINT ("record_##name: can't allocate buffer\n"); \
       return -ENOMEM;         \
     }             \
     if (copy_from_user (pretval, dest, rc)) {   \
-      printk ("record_##name: can't copy to buffer\n"); \
+      TPRINT ("record_##name: can't copy to buffer\n"); \
       ARGSKFREE(pretval, rc);       \
       pretval = NULL;         \
       rc = -EFAULT;         \
@@ -7894,11 +7871,11 @@ static asmlinkage long record_##name (arg0type arg0name, arg1type arg1name, arg2
   if (rc >= 0 && dest) {            \
     pretval = ARGSKMALLOC (rc, GFP_KERNEL);     \
     if (pretval == NULL) {          \
-      printk ("record_##name: can't allocate buffer\n"); \
+      TPRINT ("record_##name: can't allocate buffer\n"); \
       return -ENOMEM;         \
     }             \
     if (copy_from_user (pretval, dest, rc)) {   \
-      printk ("record_##name: can't copy to buffer\n"); \
+      TPRINT ("record_##name: can't copy to buffer\n"); \
       ARGSKFREE(pretval, rc);       \
       pretval = NULL;         \
       rc = -EFAULT;         \
@@ -7921,11 +7898,11 @@ static asmlinkage long record_##name (arg0type arg0name, arg1type arg1name, arg2
   if (rc >= 0 && dest) {            \
     pretval = ARGSKMALLOC (rc, GFP_KERNEL);     \
     if (pretval == NULL) {          \
-      printk ("record_##name: can't allocate buffer\n"); \
+      TPRINT ("record_##name: can't allocate buffer\n"); \
       return -ENOMEM;         \
     }             \
     if (copy_from_user (pretval, dest, rc)) {   \
-      printk ("record_##name: can't copy to buffer\n"); \
+      TPRINT ("record_##name: can't copy to buffer\n"); \
       ARGSKFREE(pretval, rc);       \
       pretval = NULL;         \
       rc = -EFAULT;         \
@@ -7943,7 +7920,7 @@ static asmlinkage long replay_##name (args)       \
   long rc = get_next_syscall (sysnum, &retparams);    \
                   \
   if (retparams) {            \
-    if (copy_to_user (dest, retparams, rc)) printk ("replay_##name: pid %d cannot copy to user\n", current->pid); \
+    if (copy_to_user (dest, retparams, rc)) TPRINT ("replay_##name: pid %d cannot copy to user\n", current->pid); \
     argsconsume (current->replay_thrd->rp_record_thread, rc); \
   }               \
                   \
@@ -7996,7 +7973,7 @@ flush_user_log(struct record_thread *prt)
   }
   else
   {
-    printk("flush_user_log: next pointer invalid: phead is %p\n", phead);
+    TPRINT("flush_user_log: next pointer invalid: phead is %p\n", phead);
   }
 }
 #endif
@@ -8009,7 +7986,7 @@ deallocate_user_log(struct record_thread *prt)
   struct pthread_log_head *phead = (struct pthread_log_head __user *) prt->rp_user_log_addr;
   MPRINT("Pid %d -- deallocate user log phead %p\n", current->pid, phead);
   rc = sys_munmap((u_long) phead, PTHREAD_LOG_SIZE + 4096);
-  if (rc < 0) printk("pid %d: deallocate_user_log failed, rc=%ld\n", current->pid, rc);
+  if (rc < 0) TPRINT("pid %d: deallocate_user_log failed, rc=%ld\n", current->pid, rc);
 }
 
 /* Called on enter of do_exit() in kernel/exit.c
@@ -8125,7 +8102,7 @@ recplay_exit_middle(void)
       if (!current->replay_thrd->rp_replay_exit && !current->replay_thrd->rp_group->rg_rec_group->rg_mismatch_flag)
       {
         // Usually get here by terminating when we see the exit flag and all records have been consumed
-        printk("Non-running pid %d is exiting with status %d - abnormal termination?\n", current->pid, current->replay_thrd->rp_status);
+        TPRINT("Non-running pid %d is exiting with status %d - abnormal termination?\n", current->pid, current->replay_thrd->rp_status);
         dump_stack();
       }
       current->replay_thrd->rp_status = REPLAY_STATUS_DONE;  // Will run no more
@@ -8153,13 +8130,13 @@ recplay_exit_middle(void)
       tmp = tmp->rp_next_thread;
       if (tmp == current->replay_thrd && num_blocked)
       {
-        printk("Pid %d (recpid %d): Crud! no eligible thread to run on exit, clock is %ld\n", current->pid, current->replay_thrd->rp_record_thread->rp_record_pid, clock);
+        TPRINT("Pid %d (recpid %d): Crud! no eligible thread to run on exit, clock is %ld\n", current->pid, current->replay_thrd->rp_record_thread->rp_record_pid, clock);
         dump_stack(); // how did we get here?
         // cycle around again and print
         tmp = tmp->rp_next_thread;
         while (tmp != current->replay_thrd)
         {
-          printk("\t thread %d (recpid %d) status %d clock %ld\n", tmp->rp_replay_pid, tmp->rp_record_thread->rp_record_pid, tmp->rp_status, tmp->rp_wait_clock);
+          TPRINT("\t thread %d (recpid %d) status %d clock %ld\n", tmp->rp_replay_pid, tmp->rp_record_thread->rp_record_pid, tmp->rp_status, tmp->rp_wait_clock);
           tmp = tmp->rp_next_thread;
         }
       }
@@ -8218,7 +8195,7 @@ extern long do_restart_poll(struct restart_block *restart_block); /* In select.c
 static long
 record_restart_syscall(struct restart_block *restart)
 {
-  printk("Pid %d calls record_restart_syscall\n", current->pid);
+  TPRINT("Pid %d calls record_restart_syscall\n", current->pid);
   if (restart->fn == do_restart_poll)
   {
     long rc;
@@ -8247,7 +8224,7 @@ record_restart_syscall(struct restart_block *restart)
       pretvals = ARGSKMALLOC(sizeof(u_long) + restart->poll.nfds * sizeof(short), GFP_KERNEL);
       if (pretvals == NULL)
       {
-        printk("restart_record_poll: can't allocate buffer\n");
+        TPRINT("restart_record_poll: can't allocate buffer\n");
         return -ENOMEM;
       }
       *((u_long *)pretvals) = restart->poll.nfds * sizeof(short);
@@ -8256,7 +8233,7 @@ record_restart_syscall(struct restart_block *restart)
       {
         if (copy_from_user(p, &restart->poll.ufds[i].revents, sizeof(short)))
         {
-          printk("record_poll: can't copy retval %d\n", i);
+          TPRINT("record_poll: can't copy retval %d\n", i);
           ARGSKFREE(pretvals, sizeof(u_long) + restart->poll.nfds * sizeof(short));
           return -EFAULT;
         }
@@ -8282,7 +8259,7 @@ record_restart_syscall(struct restart_block *restart)
       {
         BUG();
         //add_fake_time(restart->poll.timeout_msecs*1000000, current->record_thrd->rp_group);
-        //printk ("semi-det time for poll: timeout %ld ms.\n", timeout_msecs);
+        //TPRINT ("semi-det time for poll: timeout %ld ms.\n", timeout_msecs);
       }
     }
 #endif
@@ -8291,7 +8268,7 @@ record_restart_syscall(struct restart_block *restart)
   }
   else
   {
-    printk("Record pid %d clock %d unhandled restart function %p do_restart_poll %p\n", current->pid, atomic_read(current->record_thrd->rp_precord_clock), restart->fn, do_restart_poll);
+    TPRINT("Record pid %d clock %d unhandled restart function %p do_restart_poll %p\n", current->pid, atomic_read(current->record_thrd->rp_precord_clock), restart->fn, do_restart_poll);
     return restart->fn(restart);
   }
 }
@@ -8299,14 +8276,14 @@ record_restart_syscall(struct restart_block *restart)
 static long
 replay_restart_syscall(struct restart_block *restart)
 {
-  printk("Replay pid %d RESTARTING syscall\n", current->pid);
+  TPRINT("Replay pid %d RESTARTING syscall\n", current->pid);
   if (restart->fn == do_restart_poll)
   {
     return replay_poll(restart->poll.ufds, restart->poll.nfds, 0 /* unused */);
   }
   else
   {
-    printk("Replay pid %d unhandled restart function\n", current->pid);
+    TPRINT("Replay pid %d unhandled restart function\n", current->pid);
     return restart->fn(restart);
   }
 }
@@ -8734,9 +8711,9 @@ long file_cache_check_version(int fd, struct file *filp,
    */
   mutex_lock(&data->idata->replay_inode_lock);
   /*
-  printk("%s %d: Checking versions, file_version is %lld\n", __func__, __LINE__,
+  TPRINT("%s %d: Checking versions, file_version is %lld\n", __func__, __LINE__,
       current->record_thrd->prev_file_version[fd]);
-  printk("%s %d: Checking versions, idata is %lld\n", __func__, __LINE__,
+  TPRINT("%s %d: Checking versions, idata is %lld\n", __func__, __LINE__,
       data->idata->version);
       */
   if (current->record_thrd->prev_file_version[fd] == -1)
@@ -8747,7 +8724,7 @@ long file_cache_check_version(int fd, struct file *filp,
   {
     if (current->record_thrd->prev_file_version[fd] < data->idata->version)
     {
-      printk("%s %d: !!!!!! Warning - HAVE Out of date file version pid %d fd %d versions %lld %lld !!!!!!!!\n", __func__, __LINE__,
+      TPRINT("%s %d: !!!!!! Warning - HAVE Out of date file version pid %d fd %d versions %lld %lld !!!!!!!!\n", __func__, __LINE__,
              current->pid, fd, current->record_thrd->prev_file_version[fd], data->idata->version);
 #if 0
       ret = READ_NEW_CACHE_FILE;
@@ -8786,9 +8763,9 @@ long file_cache_file_written(struct filemap_data *data, int fd)
   /* increment the version on the file */
   mutex_lock(&data->idata->replay_inode_lock);
   /*
-  printk("%s %d: Checking versions, file_version is %lld\n", __func__, __LINE__,
+  TPRINT("%s %d: Checking versions, file_version is %lld\n", __func__, __LINE__,
       current->record_thrd->prev_file_version[fd]);
-  printk("%s %d: Checking versions, idata is %lld\n", __func__, __LINE__,
+  TPRINT("%s %d: Checking versions, idata is %lld\n", __func__, __LINE__,
       data->idata->version);
       */
   data->idata->version++;
@@ -9095,7 +9072,7 @@ void packahgv_process_bin(struct task_struct *tsk)
     buf_ahg->task_sec = tsk->start_time.tv_sec;
     get_ids(ids);
     buf_ahg->size_ids = strlen(ids);
-    printk("ids:(%s),size:%hu\n", ids, buf_ahg->size_ids);
+    TPRINT("ids:(%s),size:%hu\n", ids, buf_ahg->size_ids);
     buf_ahg->p_pid = tsk->real_parent->pid;
     if (ptsk)
       buf_ahg->p_task_sec = ptsk->start_time.tv_sec;
@@ -9108,7 +9085,7 @@ void packahgv_process_bin(struct task_struct *tsk)
       strncpy(fpathbuf, tsk->comm, TASK_COMM_LEN);
     }
     buf_ahg->size_fpathbuf = strlen(fpath);
-    printk("fpath:(%s),size:%hu\n", fpathbuf, buf_ahg->size_fpathbuf);
+    TPRINT("fpath:(%s),size:%hu\n", fpathbuf, buf_ahg->size_fpathbuf);
     buf_ahg->is_user_remote = is_remote(tsk);
     buf_ahg->tgid = tsk->tgid;
     buf_ahg->sec = sec;
@@ -9193,7 +9170,7 @@ void packahgv_read(struct read_ahgv *sys_args)
 #ifdef THEIA_UUID
     if (fd2uuid(sys_args->fd, uuid_str) == false)
     {
-      printk("fd2uuid returns false, pid %d, fd %d\n", current->pid, sys_args->fd);
+      TPRINT("fd2uuid returns false, pid %d, fd %d\n", current->pid, sys_args->fd);
       goto err; /* no file, socket, ...? */
     }
 
@@ -9246,14 +9223,14 @@ void theia_read_ahg(unsigned int fd, long rc)
   if (is_process_new2(current->pid, current->start_time.tv_sec))
     recursive_packahgv_process();
 
-  //  printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
+  //  TPRINT("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
   // Yang: regardless of the return value, passes the failed syscall also
   //  if(rc >= 0)
   {
     pahgv = (struct read_ahgv *)KMALLOC(sizeof(struct read_ahgv), GFP_KERNEL);
     if (pahgv == NULL)
     {
-      printk("theia_read_ahg: failed to KMALLOC.\n");
+      TPRINT("theia_read_ahg: failed to KMALLOC.\n");
       return;
     }
     pahgv->pid = current->pid;
@@ -9305,7 +9282,7 @@ record_read(unsigned int fd, char __user *buf, size_t count)
 
   new_syscall_enter(0);
   DPRINT("pid %d, record read off of fd %d\n", current->pid, fd);
-  //printk("%s %d: In else? of macro?\n", __func__, __LINE__);
+  //TPRINT("%s %d: In else? of macro?\n", __func__, __LINE__);
   perftimer_start(read_cache_timer);
   is_cache_file |= is_record_cache_file_lock(current->record_thrd->rp_cache_files, fd);
 
@@ -9318,7 +9295,7 @@ record_read(unsigned int fd, char __user *buf, size_t count)
   {
     err = sys_mprotect((unsigned long)buf, count, PROT_WRITE);
     shared_none = true;
-    printk("record_read: a buffer for read() is a shared memory (%p)\n", buf);
+    TPRINT("record_read: a buffer for read() is a shared memory (%p)\n", buf);
   }
 #endif
 
@@ -9340,7 +9317,7 @@ record_read(unsigned int fd, char __user *buf, size_t count)
   puuid = ARGSKMALLOC(strlen(rec_uuid_str) + 1, GFP_KERNEL);
   if (puuid == NULL)
   {
-    printk("record_read: can't allocate pos buffer for rec_uuid_str\n");
+    TPRINT("record_read: can't allocate pos buffer for rec_uuid_str\n");
     record_cache_file_unlock(current->record_thrd->rp_cache_files, fd);
     return -ENOMEM;
   }
@@ -9376,7 +9353,7 @@ record_read(unsigned int fd, char __user *buf, size_t count)
     fdt = files_fdtable(files);
     if (fd >= fdt->max_fds)
     {
-      printk("record_read: invalid fd but read succeeded?\n");
+      TPRINT("record_read: invalid fd but read succeeded?\n");
       record_cache_file_unlock(current->record_thrd->rp_cache_files, fd);
       return -EINVAL;
     }
@@ -9396,7 +9373,7 @@ record_read(unsigned int fd, char __user *buf, size_t count)
       //      pretval = ARGSKMALLOC (strlen(rec_uuid_str)+1+sizeof(u_int) + sizeof(loff_t), GFP_KERNEL);
       if (pretval == NULL)
       {
-        printk("record_read: can't allocate pos buffer\n");
+        TPRINT("record_read: can't allocate pos buffer\n");
         record_cache_file_unlock(current->record_thrd->rp_cache_files, fd);
         return -ENOMEM;
       }
@@ -9426,7 +9403,7 @@ record_read(unsigned int fd, char __user *buf, size_t count)
         map = filp->replayfs_filemap;
         //replayfs_filemap_init(&map, replayfs_alloc, filp);
 
-        //printk("%s %d - %p: Reading %d\n", __func__, __LINE__, current, fd);
+        //TPRINT("%s %d - %p: Reading %d\n", __func__, __LINE__, current, fd);
         if (filp->replayfs_filemap)
         {
           perftimer_start(read_filemap_timer);
@@ -9643,7 +9620,7 @@ record_read(unsigned int fd, char __user *buf, size_t count)
       pretval = ARGSKMALLOC(rc, GFP_KERNEL);
       if (copy_from_user(pretval, buf, rc))
       {
-        printk("record_read: can't copy to buffer\n");
+        TPRINT("record_read: can't copy to buffer\n");
         ARGSKFREE(pretval, rc);
         return -EFAULT;
       }
@@ -9654,18 +9631,18 @@ record_read(unsigned int fd, char __user *buf, size_t count)
       pretval = ARGSKMALLOC(rc + sizeof(u_int), GFP_KERNEL);
       if (pretval == NULL)
       {
-        printk("record_read: can't allocate buffer\n");
+        TPRINT("record_read: can't allocate buffer\n");
         return -ENOMEM;
       }
       *((u_int *) pretval) = 0;
-      printk("[LINE %d]rec_uuid  set 0, \n", __LINE__);
+      TPRINT("[LINE %d]rec_uuid  set 0, \n", __LINE__);
       if (copy_from_user(pretval + sizeof(u_int), buf, rc))
       {
-        printk("record_read: can't copy to buffer\n");
+        TPRINT("record_read: can't copy to buffer\n");
         ARGSKFREE(pretval, rc + sizeof(u_int));
         return -EFAULT;
       }
-      printk("[LINE %d]rec_uuid  set buf len: %ld, \n", __LINE__, rc);
+      TPRINT("[LINE %d]rec_uuid  set buf len: %ld, \n", __LINE__, rc);
 #ifdef X_COMPRESS
       if (is_x_fd(&current->record_thrd->rp_clog.x, fd))
       {
@@ -9700,13 +9677,13 @@ replay_read(unsigned int fd, char __user *buf, size_t count)
   int consume_size = 0;
 
   DPRINT("[READ] Pid %d replays read returning %ld, fd %u, clock %ld, log_clock %ld\n", current->pid, rc, fd, *(current->replay_thrd->rp_preplay_clock), current->replay_thrd->rp_expected_clock);
-  printk("base addr: %p\n", retparams);
+  TPRINT("base addr: %p\n", retparams);
   //print_mem(retparams-30, 128);
   if (retparams)
   {
 
     u_int is_cache_file = *((u_int *)retparams);
-    printk("is_cache_file is %u\n", is_cache_file);
+    TPRINT("is_cache_file is %u\n", is_cache_file);
     consume_size = 0;
 
     if (is_cache_file & READ_NEW_CACHE_FILE)
@@ -9725,7 +9702,7 @@ replay_read(unsigned int fd, char __user *buf, size_t count)
       retval = sys_pread64(cache_fd, buf, rc, off);
       if (retval != rc)
       {
-        printk("pid %d read from cache file %d files %p orig fd %u off %ld returns %ld not expected %ld\n", current->pid, cache_fd, current->replay_thrd->rp_cache_files, fd, (long) off, retval, rc);
+        TPRINT("pid %d read from cache file %d files %p orig fd %u off %ld returns %ld not expected %ld\n", current->pid, cache_fd, current->replay_thrd->rp_cache_files, fd, (long) off, retval, rc);
         return syscall_mismatch();
       }
       consume_size += sizeof(u_int) + sizeof(loff_t);
@@ -9755,15 +9732,15 @@ replay_read(unsigned int fd, char __user *buf, size_t count)
       consume_size += sizeof(struct replayfs_filemap_entry) +
                       (entry->num_elms * sizeof(struct replayfs_filemap_value));
 
-      if (copy_to_user(buf, retparams + consume_size, rc)) printk("replay_read: pid %d cannot copy to user\n", current->pid);
-      printk("READ_PIPE_WITH_DATA consumes %lu\n", consume_size + rc);
+      if (copy_to_user(buf, retparams + consume_size, rc)) TPRINT("replay_read: pid %d cannot copy to user\n", current->pid);
+      TPRINT("READ_PIPE_WITH_DATA consumes %lu\n", consume_size + rc);
       argsconsume(current->replay_thrd->rp_record_thread, consume_size + rc);
     }
     else if (is_cache_file & READ_IS_PIPE)
     {
       consume_size = sizeof(u_int) + sizeof(u64) + sizeof(int);
 
-      if (copy_to_user(buf, retparams + consume_size, rc)) printk("replay_read: pid %d cannot copy to user\n", current->pid);
+      if (copy_to_user(buf, retparams + consume_size, rc)) TPRINT("replay_read: pid %d cannot copy to user\n", current->pid);
 
       argsconsume(current->replay_thrd->rp_record_thread, consume_size + rc);
 #endif
@@ -9776,16 +9753,16 @@ replay_read(unsigned int fd, char __user *buf, size_t count)
         int actual_fd = is_x_fd_replay(&current->replay_thrd->rp_record_thread->rp_clog.x, fd);
         if (actual_fd > 0)
         {
-          if (x_detail) printk("Pid %d read for x, fd:%d, buf:%p, count:%d, rc:%ld\n", current->pid, fd, buf, count, rc);
+          if (x_detail) TPRINT("Pid %d read for x, fd:%d, buf:%p, count:%d, rc:%ld\n", current->pid, fd, buf, count, rc);
           if (x_proxy)
           {
             retval = sys_read(actual_fd, buf, count);
             if (rc != retval)
-              printk("pid %d read from x socket fails, expected:%ld, actual:%ld\n", current->pid, rc, retval);
+              TPRINT("pid %d read from x socket fails, expected:%ld, actual:%ld\n", current->pid, rc, retval);
           }
           if (record_x)
           {
-            if (copy_to_user(buf, retparams + sizeof(u_int), rc)) printk("replay_read: pid %d cannot copy to user\n", current->pid);
+            if (copy_to_user(buf, retparams + sizeof(u_int), rc)) TPRINT("replay_read: pid %d cannot copy to user\n", current->pid);
             consume_size = sizeof(u_int) + rc;
             argsconsume(current->replay_thrd->rp_record_thread, consume_size);
           }
@@ -9802,7 +9779,7 @@ replay_read(unsigned int fd, char __user *buf, size_t count)
 #endif
       // uncached read
       DPRINT("uncached read of fd %u\n", fd);
-      if (copy_to_user(buf, retparams + sizeof(u_int), rc)) printk("replay_read: pid %d cannot copy %ld bytes to user\n", current->pid, rc);
+      if (copy_to_user(buf, retparams + sizeof(u_int), rc)) TPRINT("replay_read: pid %d cannot copy %ld bytes to user\n", current->pid, rc);
       consume_size = sizeof(u_int) + rc;
       argsconsume(current->replay_thrd->rp_record_thread, consume_size);
     }
@@ -9827,7 +9804,7 @@ int theia_sys_read(unsigned int fd, char __user *buf, size_t count)
   {
     err = sys_mprotect(buf, count, PROT_WRITE);
     shared_none = true;
-    printk("theia_sys_read: a buffer for read() is a shared memory (%p)\n", buf);
+    TPRINT("theia_sys_read: a buffer for read() is a shared memory (%p)\n", buf);
   }
 #endif
 
@@ -9839,7 +9816,7 @@ int theia_sys_read(unsigned int fd, char __user *buf, size_t count)
     err = sys_mprotect(buf, count, PROT_NONE);
     if (err)
     {
-      printk("theia_sys_read: mprotect none returned an error\n");
+      TPRINT("theia_sys_read: mprotect none returned an error\n");
     }
   }
 #endif
@@ -9945,20 +9922,20 @@ void packahgv_write(struct write_ahgv *sys_args)
               }
             }
             if(uiDebug)
-              printk("timeInd? %s\n", ugly);
+              TPRINT("timeInd? %s\n", ugly);
             kstrtol(ugly, 10, &eventTime);
           }
           else
             eventTime=0;
           if(uiDebug)
           {
-            printk("orca_log %s %ld\n", orca_log, eventTime);
+            TPRINT("orca_log %s %ld\n", orca_log, eventTime);
           }
           if(danglingX11[0] && eventTime>=lastPress)
           {
             //danglingX11[0]='\0';
             if(uiDebug)
-              printk("need stitch?\n");
+              TPRINT("need stitch?\n");
             needStitch=true;
           }
         }
@@ -9986,7 +9963,7 @@ void packahgv_write(struct write_ahgv *sys_args)
 
       danglingX11[0]='\0';
       if(uiDebug)
-        printk("x11:LateRelease %s\n", orca_log);
+        TPRINT("x11:LateRelease %s\n", orca_log);
     }
     size = sprintf(buf, "startahg|%d|%d|%ld|%s|%u|%ld|%d|%ld|%ld|%u|endahg\n", 
         1, sys_args->pid, current->start_time.tv_sec, uuid_str, send_tag, sys_args->bytes, current->tgid, sec, nsec, current->no_syscalls++);
@@ -10018,7 +9995,7 @@ void theia_write_ahg(unsigned int fd, long rc, const char* buf, size_t count)
   pahgv = (struct write_ahgv *)KMALLOC(sizeof(struct write_ahgv), GFP_KERNEL);
   if (pahgv == NULL)
   {
-    printk("theia_write_ahg: failed to KMALLOC.\n");
+    TPRINT("theia_write_ahg: failed to KMALLOC.\n");
     return;
   }
   pahgv->pid = current->pid;
@@ -10049,14 +10026,14 @@ record_write(unsigned int fd, const char __user *buf, size_t count)
     new_syscall_enter(1);
     new_syscall_done(1, count);
     memset(kbuf, 0, sizeof(kbuf));
-    if (copy_from_user(kbuf, buf, count < 179 ? count : 180)) printk("record_write: cannot copy kstring\n");
-    //    printk ("Pid %d clock %d logged clock %ld records: %s", current->pid, atomic_read(current->record_thrd->rp_precord_clock)-1, current->record_thrd->rp_expected_clock-1, kbuf);
+    if (copy_from_user(kbuf, buf, count < 179 ? count : 180)) TPRINT("record_write: cannot copy kstring\n");
+    //    TPRINT ("Pid %d clock %d logged clock %ld records: %s", current->pid, atomic_read(current->record_thrd->rp_precord_clock)-1, current->record_thrd->rp_expected_clock-1, kbuf);
     new_syscall_exit(1, NULL);
     return count;
   }
 
   //Yang
-  printk("[%s|%d] fd %u, count %lu\n", __func__, __LINE__, fd, count);
+  TPRINT("[%s|%d] fd %u, count %lu\n", __func__, __LINE__, fd, count);
   if (fd != 0)
   {
     filp = fget(fd);
@@ -10088,18 +10065,18 @@ record_write(unsigned int fd, const char __user *buf, size_t count)
   puuid = ARGSKMALLOC(strlen(rec_uuid_str) + 1, GFP_KERNEL);
   if (puuid == NULL)
   {
-    printk("record_write: can't allocate pos buffer for rec_uuid_str\n");
+    TPRINT("record_write: can't allocate pos buffer for rec_uuid_str\n");
     return -ENOMEM;
   }
   strcpy((char *)puuid, rec_uuid_str);
-  printk("write: rec_uuid_str is %s,clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
-  printk("write: copied to pretval is (%s)\n", (char *)puuid);
+  TPRINT("write: rec_uuid_str is %s,clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
+  TPRINT("write: copied to pretval is (%s)\n", (char *)puuid);
 
   DPRINT("Pid %d records write returning %zd\n", current->pid, size);
 #ifdef X_COMPRESS
   if (is_x_fd(&current->record_thrd->rp_clog.x, fd) && size > 0)
   {
-    if (x_detail) printk("Pid %d write for x\n", current->pid);
+    if (x_detail) TPRINT("Pid %d write for x\n", current->pid);
     BUG_ON(size != count);
     //x_compress_req (buf, size, &X_STRUCT_REC);
   }
@@ -10137,8 +10114,8 @@ replay_write(unsigned int fd, const char __user *buf, size_t count)
   if (fd == 99999)   // Hack that assists in debugging user-level code
   {
     memset(kbuf, 0, sizeof(kbuf));
-    if (copy_from_user(kbuf, buf, count < 80 ? count : 79)) printk("replay_write: cannot copy kstring\n");
-    printk("Pid %d (recpid %d) clock %ld log_clock %ld replays: %s", current->pid, current->replay_thrd->rp_record_thread->rp_record_pid, *(current->replay_thrd->rp_preplay_clock), current->replay_thrd->rp_expected_clock - 1, kbuf);
+    if (copy_from_user(kbuf, buf, count < 80 ? count : 79)) TPRINT("replay_write: cannot copy kstring\n");
+    TPRINT("Pid %d (recpid %d) clock %ld log_clock %ld replays: %s", current->pid, current->replay_thrd->rp_record_thread->rp_record_pid, *(current->replay_thrd->rp_preplay_clock), current->replay_thrd->rp_expected_clock - 1, kbuf);
   }
   DPRINT("[WRITE] Pid %d replays write returning %zd, fd %u, clock %ld, log_clock %ld\n", current->pid, rc, fd, *(current->replay_thrd->rp_preplay_clock), current->replay_thrd->rp_expected_clock);
 #ifdef REPLAY_COMPRESS_READS
@@ -10149,7 +10126,7 @@ replay_write(unsigned int fd, const char __user *buf, size_t count)
     id.unique_id = current->replay_thrd->rp_record_thread->rp_group->rg_id;
     id.pid = current->replay_thrd->rp_record_thread->rp_record_pid;
 
-    printk("%s %d: Adding syscache with id {%lld, %lld, %lld}\n", __func__,
+    TPRINT("%s %d: Adding syscache with id {%lld, %lld, %lld}\n", __func__,
            __LINE__, (loff_t)id.sysnum, (loff_t)id.unique_id, (loff_t)id.pid);
     replayfs_syscache_add(&syscache, &id, rc, buf);
 
@@ -10166,13 +10143,13 @@ replay_write(unsigned int fd, const char __user *buf, size_t count)
 #ifdef X_COMPRESS
   if ((actual_fd = is_x_fd_replay(&current->replay_thrd->rp_record_thread->rp_clog.x, fd)) > 0 && rc > 0)
   {
-    if (x_detail) printk("Pid %d write for x\n", current->pid);
+    if (x_detail) TPRINT("Pid %d write for x\n", current->pid);
     if (x_proxy)
     {
       long retval;
       retval = sys_write(actual_fd, buf, count);
       if (rc != retval)
-        printk("pid %d write to x socket fails, expected:%d, actual:%ld\n", current->pid, rc, retval);
+        TPRINT("pid %d write to x socket fails, expected:%d, actual:%ld\n", current->pid, rc, retval);
     }
     //x_compress_req (buf, rc, &X_STRUCT_REP);
   }
@@ -10327,7 +10304,7 @@ void theia_open_ahg(const char __user *filename, int flags, int mode, long rc, b
   pahgv = (struct open_ahgv *)KMALLOC(sizeof(struct open_ahgv), GFP_KERNEL);
   if (pahgv == NULL)
   {
-    printk("theia_open_ahg: failed to KMALLOC.\n");
+    TPRINT("theia_open_ahg: failed to KMALLOC.\n");
     return;
   }
   pahgv->pid = current->pid;
@@ -10349,7 +10326,7 @@ void theia_open_ahg(const char __user *filename, int flags, int mode, long rc, b
     pahgv->ino = 0;
     if ((copied_length = strncpy_from_user(pahgv->filename, filename, sizeof(pahgv->filename))) != strlen(filename))
     {
-      printk("theia_open_ahg: can't copy filename to ahgv, filename length %lu, copied %d, filename:%s\n", strlen(filename), copied_length, filename);
+      TPRINT("theia_open_ahg: can't copy filename to ahgv, filename length %lu, copied %d, filename:%s\n", strlen(filename), copied_length, filename);
       KFREE(pahgv);
       return;
     }
@@ -10357,7 +10334,7 @@ void theia_open_ahg(const char __user *filename, int flags, int mode, long rc, b
   else
   {
     inode = file->f_dentry->d_inode;
-    //  printk("!!!!!!inode is %p, i_sb: %p,s_dev: %lu, i_ino %lu\n", inode, inode->i_sb, inode->i_sb->s_dev, inode->i_ino);
+    //  TPRINT("!!!!!!inode is %p, i_sb: %p,s_dev: %lu, i_ino %lu\n", inode, inode->i_sb, inode->i_sb->s_dev, inode->i_ino);
     pahgv->dev = inode->i_sb->s_dev;
     pahgv->ino = inode->i_ino;
 
@@ -10374,7 +10351,7 @@ void theia_open_ahg(const char __user *filename, int flags, int mode, long rc, b
       vfree(fpathbuf);
       if ((copied_length = strncpy_from_user(pahgv->filename, filename, sizeof(pahgv->filename))) != strlen(filename))
       {
-        printk("theia_open_ahg: can't copy filename to ahgv, filename length %lu, copied %d, filename:%s\n", strlen(filename), copied_length, filename);
+        TPRINT("theia_open_ahg: can't copy filename to ahgv, filename length %lu, copied %d, filename:%s\n", strlen(filename), copied_length, filename);
         KFREE(pahgv);
         return;
       }
@@ -10422,7 +10399,7 @@ record_open(const char __user *filename, int flags, int mode)
     do {
       file = fget(rc);
       inode = file->f_dentry->d_inode;
-      printk("%s %d: Opened %s to fd %ld with ino %08lX\n", __func__, __LINE__,
+      TPRINT("%s %d: Opened %s to fd %ld with ino %08lX\n", __func__, __LINE__,
           filename, rc, inode->i_ino);
       fput(file);
     } while (0);
@@ -10555,7 +10532,7 @@ void theia_close_ahg(int fd)
   pahgv = (struct close_ahgv *)KMALLOC(sizeof(struct close_ahgv), GFP_KERNEL);
   if (pahgv == NULL)
   {
-    printk("theia_close_ahg: failed to KMALLOC.\n");
+    TPRINT("theia_close_ahg: failed to KMALLOC.\n");
     return;
   }
   pahgv->pid = current->pid;
@@ -10590,7 +10567,7 @@ record_close(int fd)
   new_syscall_enter(3);
   perftimer_start(close_sys_timer);
   rc = sys_close(fd);
-  printk("[%s|%d] fd %d, rc %ld\n", __func__, __LINE__, fd, rc);
+  TPRINT("[%s|%d] fd %d, rc %ld\n", __func__, __LINE__, fd, rc);
   perftimer_stop(close_sys_timer);
   new_syscall_done(3, rc);
   if (rc >= 0) clear_record_cache_file(current->record_thrd->rp_cache_files, fd);
@@ -10599,7 +10576,7 @@ record_close(int fd)
   {
     // don't set it to be -1 after closed
     // -1 is for initial state, -2 is for closed state; the socket to x server may be re-established again
-    printk("Pid %d close x server socket %d.\n", current->pid, fd);
+    TPRINT("Pid %d close x server socket %d.\n", current->pid, fd);
     remove_x_fd(&X_STRUCT_REC, fd);
   }
 #endif
@@ -11092,14 +11069,14 @@ add_file_to_cache_by_name(const char __user *filename, dev_t *pdev, u_long *pino
   fd = sys_open(filename, O_RDONLY, 0);  // note that there is a race here if library is changed after syscall
   if (fd < 0)
   {
-    //    printk ("add_file_to_cache_by_name: pid %d cannot open file %s\n", current->pid, filename);
+    //    TPRINT ("add_file_to_cache_by_name: pid %d cannot open file %s\n", current->pid, filename);
     set_fs(old_fs);
     return -EINVAL;
   }
   file = fget(fd);
   if (file == NULL)
   {
-    printk("add_file_to_cache_by_name: pid %d cannot get file\n", current->pid);
+    TPRINT("add_file_to_cache_by_name: pid %d cannot get file\n", current->pid);
     set_fs(old_fs);
     return -EINVAL;
   }
@@ -11201,7 +11178,7 @@ void packahgv_execve(struct execve_ahgv *sys_args)
     }
     else
     {
-      printk("XXX: %s %d\n", sys_args->filename, fd);
+      TPRINT("XXX: %s %d\n", sys_args->filename, fd);
       set_fs(old_fs);
       goto err; /* TODO: error handling */
     }
@@ -11281,7 +11258,7 @@ void theia_execve_ahg(const char *filename, int rc)
   pahgv = (struct execve_ahgv *)KMALLOC(sizeof(struct execve_ahgv), GFP_KERNEL);
   if (pahgv == NULL)
   {
-    printk("theia_execve_ahg: failed to KMALLOC.\n");
+    TPRINT("theia_execve_ahg: failed to KMALLOC.\n");
     return;
   }
   pahgv->pid = current->pid;
@@ -11300,10 +11277,10 @@ void print_value(u_long address, int num_of_bytes)
 
   while (i < n)
   {
-    printk("%02X", (unsigned)byte_array[i]);
+    TPRINT("%02X", (unsigned)byte_array[i]);
     i++;
   }
-  printk("\n");
+  TPRINT("\n");
   return;
 }
 
@@ -11342,7 +11319,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
      whitelist1 = "/usr/lib/firefox/firefox";
 
      if(strcmp(filename, whitelist1) == 0) {
-     printk("theia_start_execve, ignore %s\n", filename);
+     TPRINT("theia_start_execve, ignore %s\n", filename);
      rc = do_execve(filename, __argv, __envp, regs);
      theia_execve_ahg(filename);
      return rc;
@@ -11374,7 +11351,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
     newbuf = patch_buf_for_libpath(current->record_thrd->rp_group, argbuf, &argbuflen, present);
     if (env == NULL || newbuf == NULL)
     {
-      printk("libpath patch failed\n");
+      TPRINT("libpath patch failed\n");
       return -ENOMEM;
     }
     KFREE(argbuf);
@@ -11388,13 +11365,13 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
   else
   {
     /*
-       printk("Yang before do_execve\n");
+       TPRINT("Yang before do_execve\n");
        __asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
        show_kernel_stack((u_long*)cur_rsp);
        */
     rc = do_execve(filename, __argv, __envp, regs);
     /*
-       printk("Yang after do_execve\n");
+       TPRINT("Yang after do_execve\n");
        __asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
        show_kernel_stack((u_long*)cur_rsp);
        */
@@ -11404,7 +11381,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
   theia_execve_ahg(filename, rc);
 
   new_syscall_done(59, rc);
-  printk("Yang record_execve after new_syscall_done, ip: %lx, sp: %lx, r11: %lx, rc %ld\n", regs->ip, regs->sp, regs->r11, rc);
+  TPRINT("Yang record_execve after new_syscall_done, ip: %lx, sp: %lx, r11: %lx, rc %ld\n", regs->ip, regs->sp, regs->r11, rc);
   print_value(regs->sp, 128);
   print_value(regs->sp + 128, 16);
   if (rc >= 0)
@@ -11417,7 +11394,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
     // but I don't know what is better
     if (prt->rp_next_thread != prt)
     {
-      printk("Yang prt->rp_next_thread != prt, rc %ld\n", rc);
+      TPRINT("Yang prt->rp_next_thread != prt, rc %ld\n", rc);
       parent_rg_id = prt->rp_group->rg_id;
       DPRINT("New record group\n");
 
@@ -11438,7 +11415,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
         precg->rg_libpath = KMALLOC(strlen(prt->rp_group->rg_libpath) + 1, GFP_KERNEL);
         if (precg->rg_libpath == NULL)
         {
-          printk("Unable to allocate libpath on execve\n");
+          TPRINT("Unable to allocate libpath on execve\n");
           current->record_thrd = NULL;
           return -ENOMEM;
         }
@@ -11491,12 +11468,12 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
       pretval = ARGSKMALLOC(sizeof(struct execve_retvals), GFP_KERNEL);
       if (pretval == NULL)
       {
-        printk("Unable to allocate space for execve retvals\n");
+        TPRINT("Unable to allocate space for execve retvals\n");
         return -ENOMEM;
       }
       pretval->is_new_group = 1;
       pretval->data.new_group.log_id = precg->rg_id;
-      printk("Yang record_execve before new_syscall_exit, rc %ld\n", rc);
+      TPRINT("Yang record_execve before new_syscall_exit, rc %ld\n", rc);
       new_syscall_exit(59, pretval);
       write_and_free_kernel_log(prt);
 
@@ -11524,7 +11501,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 #endif
       if (retval)
       {
-        printk("record_execve: replay_checkpoint_to_disk returns %ld\n", retval);
+        TPRINT("record_execve: replay_checkpoint_to_disk returns %ld\n", retval);
         VFREE(slab);
 #ifdef LOG_COMPRESS_1
         VFREE(clog_slab);
@@ -11550,7 +11527,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
     pretval = ARGSKMALLOC(sizeof(struct execve_retvals), GFP_KERNEL);
     if (pretval == NULL)
     {
-      printk("Unable to allocate space for execve retvals\n");
+      TPRINT("Unable to allocate space for execve retvals\n");
       return -ENOMEM;
     }
 
@@ -11567,7 +11544,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
   /*
      __asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
      show_kernel_stack((u_long*)cur_rsp);
-     printk("Yang record_execve after new_syscall_exit, rc %d\n", rc);
+     TPRINT("Yang record_execve after new_syscall_exit, rc %d\n", rc);
      */
   return rc;
 }
@@ -11632,13 +11609,13 @@ replay_execve(const char *filename, const char __user *const __user *__argv, con
           tmp = tmp->rp_next_thread;
           if (tmp == prt && num_blocked)
           {
-            printk("Pid %d (recpid %d): Crud! no eligible thread to run on exit, clock is %ld\n", current->pid, prt->rp_record_thread->rp_record_pid, clock);
+            TPRINT("Pid %d (recpid %d): Crud! no eligible thread to run on exit, clock is %ld\n", current->pid, prt->rp_record_thread->rp_record_pid, clock);
             dump_stack(); // how did we get here?
             // cycle around again and print
             tmp = tmp->rp_next_thread;
             while (tmp != current->replay_thrd)
             {
-              printk("\t thread %d (recpid %d) status %d clock %ld\n", tmp->rp_replay_pid, tmp->rp_record_thread->rp_record_pid, tmp->rp_status, tmp->rp_wait_clock);
+              TPRINT("\t thread %d (recpid %d) status %d clock %ld\n", tmp->rp_replay_pid, tmp->rp_record_thread->rp_record_pid, tmp->rp_status, tmp->rp_wait_clock);
               tmp = tmp->rp_next_thread;
             }
           }
@@ -11658,7 +11635,7 @@ replay_execve(const char *filename, const char __user *const __user *__argv, con
 
         // Now start a new group if needed
         get_logdir_for_replay_id(logid, logdir);
-        printk("[%s|%d] pid %d, app_syscall_addr %lx, value %d\n", __func__, __LINE__, current->pid,
+        TPRINT("[%s|%d] pid %d, app_syscall_addr %lx, value %d\n", __func__, __LINE__, current->pid,
                app_syscall_addr, (app_syscall_addr <= 1) ? -1 : * (int *)(app_syscall_addr));
         return replay_ckpt_wakeup(app_syscall_addr, logdir, linker, -1, follow_splits, prg->rg_rec_group->rg_save_mmap_flag);
       }
@@ -11691,7 +11668,7 @@ replay_execve(const char *filename, const char __user *const __user *__argv, con
 
       if (rc != retval)
       {
-        printk("[ERROR] Replay pid %d sees execve return %ld, recorded rc was %ld\n", current->pid, rc, retval);
+        TPRINT("[ERROR] Replay pid %d sees execve return %ld, recorded rc was %ld\n", current->pid, rc, retval);
         syscall_mismatch();
       }
     }
@@ -11700,7 +11677,7 @@ replay_execve(const char *filename, const char __user *const __user *__argv, con
     if (is_pin_attached())
     {
       prt->app_syscall_addr = 1; /* We need to reattach the pin tool after exec */
-      printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 1\n", __func__, __LINE__, current->pid);
+      TPRINT("[%s|%d] pid %d, prt->app_syscall_addr is set to 1\n", __func__, __LINE__, current->pid);
       preallocate_memory(prt->rp_record_thread->rp_group);  /* And preallocate memory again - our previous preallocs were just destroyed */
       create_used_address_list();
     }
@@ -11736,7 +11713,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
   struct path linker_path;
   int save_mmap = 1;
 
-  // printk("in theia_start_execve: filename %s\n", filename);
+  // TPRINT("in theia_start_execve: filename %s\n", filename);
 
   mm_segment_t old_fs = get_fs();
   set_fs(KERNEL_DS);
@@ -11750,30 +11727,30 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
   ret = sys_access(devfile, 0/*F_OK*/);
   if (ret < 0)  //for ensure the inert_spec.sh is done before record starts.
   {
-    printk("%s not accessible yet. ret %d\n", devfile, ret);
+    TPRINT("%s not accessible yet. ret %d\n", devfile, ret);
     theia_recording_toggle = 0;
     goto out_norm;
   }
   fd = sys_open(devfile, O_RDWR, 0777 /*mode should be ignored anyway*/);
   if (fd < 0)
   {
-    printk("%s not open yet. fd %d\n", devfile, fd);
+    TPRINT("%s not open yet. fd %d\n", devfile, fd);
     theia_recording_toggle = 0;
     goto out_norm;
   }
 
   //apply a black list for recording also.
-  printk("[%s|%d] current->comm (%s), strcmp is %d\n", __func__, __LINE__, current->comm, strcmp(current->comm, "deja-dup-monito"));
+  TPRINT("[%s|%d] current->comm (%s), strcmp is %d\n", __func__, __LINE__, current->comm, strcmp(current->comm, "deja-dup-monito"));
   if ((strcmp(current->comm, "deja-dup-monito") == 0) ||
       (strcmp(current->comm, "gnome-session") == 0))
   {
-    printk("[Record-blacklist] %s is skipped.\n", current->comm);
+    TPRINT("[Record-blacklist] %s is skipped.\n", current->comm);
     goto out_norm;
   }
 
   if (theia_recording_toggle == 1)
   {
-    printk("/dev/spec0 ready ! filename: %s\n", filename);
+    TPRINT("/dev/spec0 ready ! filename: %s\n", filename);
     //should be ready to add the process to record_group
     ret = sys_access(theia_linker, 0/*F_OK*/);
     if (ret < 0)  //if linker is not there, bail out
@@ -11807,7 +11784,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
     set_fs(old_fs);
     rc = fork_replay_theia(NULL /*logdir*/, filename, __argv, __envp, theia_linker, save_mmap, fd, -1 /*pipe_fd*/);
 
-    printk("fork_replay_theia returns. %s, comm(%s)\n", filename, current->comm);
+    TPRINT("fork_replay_theia returns. %s, comm(%s)\n", filename, current->comm);
     goto out;
   }
 
@@ -11815,7 +11792,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
   if (theia_replay_register_data.pid == current->pid)
   {
     set_fs(old_fs);
-    printk("Received theia_replay_register_data: \n pid %d, pin %d, logdir %s, linker %s, fd %d, follow_splits %d, save_mmap %d\n",
+    TPRINT("Received theia_replay_register_data: \n pid %d, pin %d, logdir %s, linker %s, fd %d, follow_splits %d, save_mmap %d\n",
            theia_replay_register_data.pid,
            theia_replay_register_data.pin,
            theia_replay_register_data.logdir,
@@ -11833,7 +11810,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
                        theia_replay_register_data.follow_splits,
                        theia_replay_register_data.save_mmap);
 
-    printk("replay_ckpt_wakeup returns. %s\n", filename);
+    TPRINT("replay_ckpt_wakeup returns. %s\n", filename);
     goto out;
     //    goto out_norm;
   }
@@ -11877,12 +11854,12 @@ record_time(time_t __user *tloc)
     pretval = ARGSKMALLOC(sizeof(time_t), GFP_KERNEL);
     if (pretval == NULL)
     {
-      printk("record_time: can't allocate buffer\n");
+      TPRINT("record_time: can't allocate buffer\n");
       return -ENOMEM;
     }
     if (copy_from_user(pretval, tloc, sizeof(time_t)))
     {
-      printk("record_time: can't copy from user\n");
+      TPRINT("record_time: can't copy from user\n");
       ARGSKFREE(pretval, sizeof(time_t));
       return -EFAULT;
     }
@@ -12261,7 +12238,7 @@ inline void theia_fchownat_ahgx(int dfd, char __user *filename, uid_t user,
     }
     else
     {
-      printk("[fchownat]: dfd & current->fs invalid.\n");
+      TPRINT("[fchownat]: dfd & current->fs invalid.\n");
     }
   }
   kmem_cache_free(theia_buffers, buf);
@@ -12418,14 +12395,14 @@ void theia_mount_ahg(char __user *dev_name, char __user *dir_name, char __user *
   if (is_process_new2(current->pid, current->start_time.tv_sec))
     recursive_packahgv_process();
 
-  //  printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
+  //  TPRINT("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
   // Yang: regardless of the return value, passes the failed syscall also
   //  if(rc >= 0)
   {
     pahgv = (struct mount_ahgv *)KMALLOC(sizeof(struct mount_ahgv), GFP_KERNEL);
     if (pahgv == NULL)
     {
-      printk("theia_mount_ahg: failed to KMALLOC.\n");
+      TPRINT("theia_mount_ahg: failed to KMALLOC.\n");
       return;
     }
 
@@ -12433,19 +12410,19 @@ void theia_mount_ahg(char __user *dev_name, char __user *dir_name, char __user *
 
     if ((copied_length = strncpy_from_user(pahgv->devname, dev_name, sizeof(pahgv->devname))) != strlen(dev_name))
     {
-      printk("theia_mount_ahg: can't copy devname to ahgv, devname length %lu, copied %d, devname:%s\n", strlen(dev_name), copied_length, dev_name);
+      TPRINT("theia_mount_ahg: can't copy devname to ahgv, devname length %lu, copied %d, devname:%s\n", strlen(dev_name), copied_length, dev_name);
       KFREE(pahgv);
     }
 
     if ((copied_length = strncpy_from_user(pahgv->dirname, dir_name, sizeof(pahgv->dirname))) != strlen(dir_name))
     {
-      printk("theia_mount_ahg: can't copy dir_name to ahgv, dir_name length %lu, copied %d, dir_name:%s\n", strlen(dir_name), copied_length, dir_name);
+      TPRINT("theia_mount_ahg: can't copy dir_name to ahgv, dir_name length %lu, copied %d, dir_name:%s\n", strlen(dir_name), copied_length, dir_name);
       KFREE(pahgv);
     }
 
     if ((copied_length = strncpy_from_user(pahgv->type, type, sizeof(pahgv->type))) != strlen(type))
     {
-      printk("theia_mount_ahg: can't copy type to ahgv, type length %lu, copied %d, type:%s\n", strlen(type), copied_length, type);
+      TPRINT("theia_mount_ahg: can't copy type to ahgv, type length %lu, copied %d, type:%s\n", strlen(type), copied_length, type);
       KFREE(pahgv);
     }
 
@@ -12498,12 +12475,12 @@ record_ptrace(long request, long pid, long addr, long data)
   {
     if (!tsk->record_thrd)
     {
-      printk("[ERROR] pid %d records ptrace of non-recordig pid %ld\n", current->pid, pid);
+      TPRINT("[ERROR] pid %d records ptrace of non-recordig pid %ld\n", current->pid, pid);
       return sys_ptrace(request, pid, addr, data);
     }
     else if (tsk->record_thrd->rp_group != current->record_thrd->rp_group)
     {
-      printk("[ERROR] pid %d records ptrace of pid %ld in different record group - must merge\n", current->pid, pid);
+      TPRINT("[ERROR] pid %d records ptrace of pid %ld in different record group - must merge\n", current->pid, pid);
       return sys_ptrace(request, pid, addr, data);
     } // Now we know two tasks are in same record group, so memory ops should be deterministic (unless they incorrectly involve replay-specific structures) */
   }
@@ -12532,13 +12509,13 @@ replay_ptrace(long request, long pid, long addr, long data)
       retval = sys_ptrace(request, tmp->rp_record_thread->rp_record_pid, addr, data);
       if (rc != retval)
       {
-        printk("ptrace returns %ld on replay but returned %ld on record\n", retval, rc);
+        TPRINT("ptrace returns %ld on replay but returned %ld on record\n", retval, rc);
         syscall_mismatch();
       }
       return rc;
     }
   }
-  printk("ptrace: pid %d cannot find record pid %ld in replay group\n", current->pid, pid);
+  TPRINT("ptrace: pid %d cannot find record pid %ld in replay group\n", current->pid, pid);
   return syscall_mismatch();
 }
 
@@ -12550,7 +12527,7 @@ asmlinkage long shim_ptrace(long request, long pid, long addr, long data)
     struct task_struct *tsk = pid_task(find_vpid(pid), PIDTYPE_PID);
     if (tsk && tsk->record_thrd)
     {
-      printk("[ERROR]: non-recorded process %d ptracing the address space of recorded thread %ld\n", current->pid, pid);
+      TPRINT("[ERROR]: non-recorded process %d ptracing the address space of recorded thread %ld\n", current->pid, pid);
     }
   }
   SHIM_CALL(ptrace, 101, request, pid, addr, data)
@@ -12668,7 +12645,7 @@ void theia_pipe_ahg(u_long retval, int pfd1, int pfd2)
   pahgv = (struct pipe_ahgv *)KMALLOC(sizeof(struct pipe_ahgv), GFP_KERNEL);
   if (pahgv == NULL)
   {
-    printk("theia_pipe_ahg: failed to KMALLOC.\n");
+    TPRINT("theia_pipe_ahg: failed to KMALLOC.\n");
     return;
   }
   pahgv->pid = current->pid;
@@ -12732,7 +12709,7 @@ record_pipe(int __user *fildes)
     pretval = ARGSKMALLOC(2 * sizeof(int), GFP_KERNEL);
     if (pretval == NULL)
     {
-      printk("record_pipe: can't allocate buffer\n");
+      TPRINT("record_pipe: can't allocate buffer\n");
       return -ENOMEM;
     }
     if (copy_from_user(pretval, fildes, 2 * sizeof(int)))
@@ -12764,13 +12741,13 @@ static asmlinkage long replay_pipe(int __user *fildes)
   ret = sys_pipe(fildes);
   if (copy_from_user(ret_fildes, fildes, 2 * sizeof(int)))
   {
-    printk("Pid %d cannot copy from user. \n", current->pid);
+    TPRINT("Pid %d cannot copy from user. \n", current->pid);
     return syscall_mismatch();
   }
 
   if (retparams)
   {
-    if (copy_to_user(fildes, retparams, 2 * sizeof(int))) printk("replay_pipe: pid %d cannot copy to user\n", current->pid);
+    if (copy_to_user(fildes, retparams, 2 * sizeof(int))) TPRINT("replay_pipe: pid %d cannot copy to user\n", current->pid);
     argsconsume(current->replay_thrd->rp_record_thread, 2 * sizeof(int));
   }
   DPRINT("replay_pipe, return:%d(actual:%d), %d(actual:%d)\n", fildes[0], ret_fildes[0], fildes[1], ret_fildes[1]);
@@ -12860,7 +12837,7 @@ replay_brk(unsigned long brk)
   {
     rc = prt->rp_saved_rc;
     (*(int *)(prt->app_syscall_addr)) = 999;
-    printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__, __LINE__, current->pid);
+    TPRINT("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__, __LINE__, current->pid);
   }
   else
   {
@@ -12882,7 +12859,7 @@ replay_brk(unsigned long brk)
       // We need to unmap preallocations
       if (do_munmap(mm, old_brk, (rc - old_brk) + 4096))
       {
-        printk("Pid %d -- problem deallocating preallocation %lx-%lx before brk\n", current->pid, old_brk, rc);
+        TPRINT("Pid %d -- problem deallocating preallocation %lx-%lx before brk\n", current->pid, old_brk, rc);
         return syscall_mismatch();
       }
     }
@@ -12897,7 +12874,7 @@ replay_brk(unsigned long brk)
   retval = sys_brk(brk);
   if (rc != retval)
   {
-    printk("Replay brk returns different value %lx than %lx\n", retval, rc);
+    TPRINT("Replay brk returns different value %lx than %lx\n", retval, rc);
     syscall_mismatch();
   }
   // Save the regions for preallocation for replay+pin
@@ -13005,14 +12982,14 @@ void theia_ioctl_ahg(unsigned int fd, unsigned int cmd, unsigned long arg, long 
   if (is_process_new2(current->pid, current->start_time.tv_sec))
     recursive_packahgv_process();
 
-  //  printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
+  //  TPRINT("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
   // Yang: regardless of the return value, passes the failed syscall also
   //  if(rc >= 0)
   {
     pahgv = (struct ioctl_ahgv *)KMALLOC(sizeof(struct ioctl_ahgv), GFP_KERNEL);
     if (pahgv == NULL)
     {
-      printk("theia_ioctl_ahg: failed to KMALLOC.\n");
+      TPRINT("theia_ioctl_ahg: failed to KMALLOC.\n");
       return;
     }
     pahgv->pid = current->pid;
@@ -13171,7 +13148,7 @@ record_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg)
       size = _IOC_SIZE(cmd);
       if (dir == _IOC_NONE || size == 0)
       {
-        printk("*** Generic IOCTL cmd %x arg %lx has no data! This probably needs special handling!\n", cmd, arg);
+        TPRINT("*** Generic IOCTL cmd %x arg %lx has no data! This probably needs special handling!\n", cmd, arg);
         dir = _IOC_NONE;
         size = 0;
       }
@@ -13190,14 +13167,14 @@ record_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg)
     recbuf = ARGSKMALLOC(sizeof(u_long) + size, GFP_KERNEL);
     if (!recbuf)
     {
-      printk("record_ioctl: can't allocate return\n");
+      TPRINT("record_ioctl: can't allocate return\n");
       rc = -ENOMEM;
     }
     else
     {
       if (copy_from_user(recbuf + sizeof(u_long), (void __user *)arg, size))
       {
-        printk("record_ioctl: faulted on readback\n");
+        TPRINT("record_ioctl: faulted on readback\n");
         ARGSKFREE(recbuf, sizeof(u_long) + size);
         recbuf = NULL;
         rc = -EFAULT;
@@ -13222,7 +13199,7 @@ replay_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg)
     my_size = *((u_long *)retparams);
     if (copy_to_user((void __user *)arg, retparams + sizeof(u_long), my_size))
     {
-      printk("replay_ioctl: pid %d faulted\n", current->pid);
+      TPRINT("replay_ioctl: pid %d faulted\n", current->pid);
       return -EFAULT;
     }
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + my_size);
@@ -13290,13 +13267,13 @@ record_fcntl(unsigned int fd, unsigned int cmd, unsigned long arg)
       recbuf = ARGSKMALLOC(sizeof(u_long) + sizeof(struct flock), GFP_KERNEL);
       if (!recbuf)
       {
-        printk("record_fcntl: can't allocate return buffer\n");
+        TPRINT("record_fcntl: can't allocate return buffer\n");
         return -ENOMEM;
       }
       *(u_long *) recbuf = sizeof(struct flock);
       if (copy_from_user(recbuf + sizeof(u_long), (struct flock __user *)arg, sizeof(struct flock)))
       {
-        printk("record_fcntl: faulted on readback\n");
+        TPRINT("record_fcntl: faulted on readback\n");
         KFREE(recbuf);
         return -EFAULT;
       }
@@ -13306,13 +13283,13 @@ record_fcntl(unsigned int fd, unsigned int cmd, unsigned long arg)
       recbuf = ARGSKMALLOC(sizeof(u_long) + sizeof(struct f_owner_ex), GFP_KERNEL);
       if (!recbuf)
       {
-        printk("record_fcntl: can't allocate return buffer\n");
+        TPRINT("record_fcntl: can't allocate return buffer\n");
         return -ENOMEM;
       }
       *(u_long *) recbuf = sizeof(struct f_owner_ex);
       if (copy_from_user(recbuf + sizeof(u_long), (struct f_owner_ex __user *)arg, sizeof(struct f_owner_ex)))
       {
-        printk("record_fcntl: faulted on readback\n");
+        TPRINT("record_fcntl: faulted on readback\n");
         KFREE(recbuf);
         return -EFAULT;
       }
@@ -13383,10 +13360,10 @@ asmlinkage int sys_sigaction(int sig, const struct sigaction __user *act, struct
 //
 //  rc = get_next_syscall (67, (char **) &retparams);
 //  if (retparams) {
-//    //if (copy_to_user (oact, retparams, sizeof(struct old_sigaction))) printk ("replay_sigaction: pid %d cannot copy to user\n", current->pid);
+//    //if (copy_to_user (oact, retparams, sizeof(struct old_sigaction))) TPRINT ("replay_sigaction: pid %d cannot copy to user\n", current->pid);
 //    //argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct old_sigaction));
 ////64port
-//    if (copy_to_user (oact, retparams, sizeof(struct sigaction))) printk ("replay_sigaction: pid %d cannot copy to user\n", current->pid);
+//    if (copy_to_user (oact, retparams, sizeof(struct sigaction))) TPRINT ("replay_sigaction: pid %d cannot copy to user\n", current->pid);
 //    argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct sigaction));
 //  }
 //  return rc;
@@ -13409,7 +13386,7 @@ replay_setrlimit(unsigned int resource, struct rlimit __user *rlim)
   long rc;
   long rc_orig = get_next_syscall(160, NULL);
   rc = sys_setrlimit(resource, rlim);
-  if (rc != rc_orig) printk("setrlim changed its return in replay\n");
+  if (rc != rc_orig) TPRINT("setrlim changed its return in replay\n");
   return rc_orig;
 }
 
@@ -13441,7 +13418,7 @@ record_gettimeofday(struct timeval __user *tv, struct timezone __user *tz)
   // note: this could be buggy, fix it later; about the retval of gettimeofday
 #ifdef TIME_TRICK
   if (!tv) BUG();
-  if (DET_TIME_DEBUG) printk("Pid %d gettimeofday actual time %lu, %lu\n", current->pid, tv->tv_sec, tv->tv_usec);
+  if (DET_TIME_DEBUG) TPRINT("Pid %d gettimeofday actual time %lu, %lu\n", current->pid, tv->tv_sec, tv->tv_usec);
   mutex_lock(&prg->rg_time_mutex);
   //get the clock count since last update
   if (atomic_read(&prg->rg_det_time.flag))
@@ -13461,11 +13438,11 @@ record_gettimeofday(struct timeval __user *tv, struct timezone __user *tz)
     else
     {
       calc_det_gettimeofday(&prg->rg_det_time, tv, current_clock);
-      if (DET_TIME_DEBUG) printk("Pid %d gettimeofday returns det time\n", current->pid);
+      if (DET_TIME_DEBUG) TPRINT("Pid %d gettimeofday returns det time\n", current->pid);
       fake_time = 1;
     }
   }
-  if (DET_TIME_DEBUG) printk("Pid %d gettimeofday finally returns %lu, %lu\n", current->pid, tv->tv_sec, tv->tv_usec);
+  if (DET_TIME_DEBUG) TPRINT("Pid %d gettimeofday finally returns %lu, %lu\n", current->pid, tv->tv_sec, tv->tv_usec);
   atomic_set(&prg->rg_det_time.flag, 0);  //all time queries don't need to update the det time
   cnew_syscall_done(96, rc, -1, 0);
   mutex_unlock(&prg->rg_time_mutex);
@@ -13487,7 +13464,7 @@ record_gettimeofday(struct timeval __user *tv, struct timezone __user *tz)
       pretvals = ARGSKMALLOC(sizeof(struct gettimeofday_retvals), GFP_KERNEL);
       if (pretvals == NULL)
       {
-        printk("record_gettimeofday: can't allocate buffer\n");
+        TPRINT("record_gettimeofday: can't allocate buffer\n");
         return -ENOMEM;
       }
 #ifdef LOG_COMPRESS_1
@@ -13498,7 +13475,7 @@ record_gettimeofday(struct timeval __user *tv, struct timezone __user *tz)
         pretvals->has_tv = 1;
         if (copy_from_user(&pretvals->tv, tv, sizeof(struct timeval)))
         {
-          printk("Pid %d cannot copy tv from user\n", current->pid);
+          TPRINT("Pid %d cannot copy tv from user\n", current->pid);
           ARGSKFREE(pretvals, sizeof(struct gettimeofday_retvals));
           return -EFAULT;
         }
@@ -13532,7 +13509,7 @@ record_gettimeofday(struct timeval __user *tv, struct timezone __user *tz)
         pretvals->has_tz = 1;
         if (copy_from_user(&pretvals->tz, tz, sizeof(struct timezone)))
         {
-          printk("Pid %d cannot copy tz from user\n", current->pid);
+          TPRINT("Pid %d cannot copy tz from user\n", current->pid);
           ARGSKFREE(pretvals, sizeof(struct gettimeofday_retvals));
           return -EFAULT;
         }
@@ -13604,7 +13581,7 @@ replay_gettimeofday(struct timeval __user *tv, struct timezone __user *tz)
     {
       if (copy_to_user(tv, &retparams->tv, sizeof(struct timeval)))
       {
-        printk("Pid %d cannot copy tv to user\n", current->pid);
+        TPRINT("Pid %d cannot copy tv to user\n", current->pid);
         return syscall_mismatch();
       }
     }
@@ -13612,7 +13589,7 @@ replay_gettimeofday(struct timeval __user *tv, struct timezone __user *tz)
     {
       if (copy_to_user(tz, &retparams->tz, sizeof(struct timezone)))
       {
-        printk("Pid %d cannot copy tz to user\n", current->pid);
+        TPRINT("Pid %d cannot copy tz to user\n", current->pid);
         return syscall_mismatch();
       }
     }
@@ -13643,7 +13620,7 @@ replay_gettimeofday(struct timeval __user *tv, struct timezone __user *tz)
       SYSCALL_CACHE_REP.tv_usec = c_retparams.tv.tv_usec;
       if (copy_to_user(tv, &c_retparams.tv, sizeof(struct timeval)))
       {
-        printk("Pid %d cannot copy tv to user\n", current->pid);
+        TPRINT("Pid %d cannot copy tv to user\n", current->pid);
         return syscall_mismatch();
       }
     }
@@ -13662,14 +13639,14 @@ replay_gettimeofday(struct timeval __user *tv, struct timezone __user *tz)
       SYSCALL_CACHE_REP.tz_dsttime = c_retparams.tz.tz_dsttime;
       if (copy_to_user(tz, &c_retparams.tz, sizeof(struct timezone)))
       {
-        printk("Pid %d cannot copy tz to user\n", current->pid);
+        TPRINT("Pid %d cannot copy tz to user\n", current->pid);
         return syscall_mismatch();
       }
     }
 
 #endif
 #ifdef TIME_TRICK
-    if (DET_TIME_DEBUG) printk("gettimeofday returns actual time. actual :%ld,%ld\n", tv->tv_sec, tv->tv_usec);
+    if (DET_TIME_DEBUG) TPRINT("gettimeofday returns actual time. actual :%ld,%ld\n", tv->tv_sec, tv->tv_usec);
     if (is_shift)
     {
       time_diff = get_diff_gettimeofday(&prg->rg_det_time, &retparams->tv, start_clock);
@@ -13684,9 +13661,9 @@ replay_gettimeofday(struct timeval __user *tv, struct timezone __user *tz)
   {
     //return det_time
     calc_det_gettimeofday(&prg->rg_det_time, tv, start_clock);
-    if (DET_TIME_DEBUG) printk("gettimeofday returns deterministic time\n");
+    if (DET_TIME_DEBUG) TPRINT("gettimeofday returns deterministic time\n");
   }
-  if (DET_TIME_DEBUG) printk("Pid %d gettimeofday finally returns %lu, %lu\n", current->pid, tv->tv_sec, tv->tv_usec);
+  if (DET_TIME_DEBUG) TPRINT("Pid %d gettimeofday finally returns %lu, %lu\n", current->pid, tv->tv_sec, tv->tv_usec);
 #endif
   return rc;
 }
@@ -13728,7 +13705,7 @@ record_uselib(const char __user *library)
     recbuf = ARGSKMALLOC(sizeof(struct mmap_pgoff_retvals), GFP_KERNEL);
     if (recbuf == NULL)
     {
-      printk("record_uselib: pid %d cannot allocate return buffer\n", current->pid);
+      TPRINT("record_uselib: pid %d cannot allocate return buffer\n", current->pid);
       return -EINVAL;
     }
     if (add_file_to_cache_by_name(library, &recbuf->dev, &recbuf->ino, &recbuf->mtime) < 0) return -EINVAL;
@@ -13761,7 +13738,7 @@ replay_uselib(const char __user *library)
     set_fs(old_fs);
     if (rc != retval)
     {
-      printk("Replay mmap_pgoff returns different value %lx than %lx\n", retval, rc);
+      TPRINT("Replay mmap_pgoff returns different value %lx than %lx\n", retval, rc);
       syscall_mismatch();
     }
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct mmap_pgoff_retvals));
@@ -13834,7 +13811,7 @@ void theia_munmap_ahg(unsigned long addr, size_t len, long rc)
   pahgv = (struct munmap_ahgv *)KMALLOC(sizeof(struct munmap_ahgv), GFP_KERNEL);
   if (pahgv == NULL)
   {
-    printk("theia_munmap_ahg: failed to KMALLOC.\n");
+    TPRINT("theia_munmap_ahg: failed to KMALLOC.\n");
     return;
   }
   pahgv->pid = current->pid;
@@ -13872,7 +13849,7 @@ replay_munmap(unsigned long addr, size_t len)
   {
     rc = current->replay_thrd->rp_saved_rc;
     (*(int *)(current->replay_thrd->app_syscall_addr)) = 999;
-    printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__, __LINE__, current->pid);
+    TPRINT("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__, __LINE__, current->pid);
   }
   else
   {
@@ -13883,7 +13860,7 @@ replay_munmap(unsigned long addr, size_t len)
   DPRINT("Pid %d replays munmap of addr %lx len %lu returning %ld\n", current->pid, addr, len, retval);
   if (rc != retval)
   {
-    printk("Replay munmap returns different value %lu than %lu\n", retval, rc);
+    TPRINT("Replay munmap returns different value %lu than %lu\n", retval, rc);
     return syscall_mismatch();
   }
   if (retval == 0 && is_pin_attached()) preallocate_after_munmap(addr, len);
@@ -13959,14 +13936,14 @@ copy_iovec_to_args(long size, const struct iovec __user *vec, unsigned long vlen
     recbuf = ARGSKMALLOC(size, GFP_KERNEL);
     if (recbuf == NULL)
     {
-      printk("Unable to allocate readv buffer\n");
+      TPRINT("Unable to allocate readv buffer\n");
       return NULL;
     }
 
     kvec = KMALLOC(vlen * sizeof(struct iovec), GFP_KERNEL);
     if (kvec == NULL)
     {
-      printk("Pid %d copy_iovec_to_args allocation of vector failed\n", current->pid);
+      TPRINT("Pid %d copy_iovec_to_args allocation of vector failed\n", current->pid);
       KFREE(kvec);
       ARGSKFREE(recbuf, size);
       return NULL;
@@ -13974,7 +13951,7 @@ copy_iovec_to_args(long size, const struct iovec __user *vec, unsigned long vlen
 
     if (copy_from_user(kvec, vec, vlen * sizeof(struct iovec)))
     {
-      printk("Pid %d copy_iovec_to_args copy_from_user of vector failed\n", current->pid);
+      TPRINT("Pid %d copy_iovec_to_args copy_from_user of vector failed\n", current->pid);
       KFREE(kvec);
       ARGSKFREE(recbuf, size);
       return NULL;
@@ -13988,7 +13965,7 @@ copy_iovec_to_args(long size, const struct iovec __user *vec, unsigned long vlen
 
       if (copy_from_user(copyp, kvec[i].iov_base, to_copy))
       {
-        printk("Pid %d copy_iovec_to_args copy_from_user of data failed\n", current->pid);
+        TPRINT("Pid %d copy_iovec_to_args copy_from_user of data failed\n", current->pid);
         KFREE(kvec);
         ARGSKFREE(recbuf, size);
         return NULL;
@@ -14014,7 +13991,7 @@ log_mmsghdr(struct mmsghdr __user *msg, long rc, long *plogsize)
   len = sizeof(u_long);
   if (plogsize == NULL)
   {
-    printk("record_recvmmsg: can't allocate msg size\n");
+    TPRINT("record_recvmmsg: can't allocate msg size\n");
     return -ENOMEM;
   }
   for (i = 0; i < rc; i++)
@@ -14022,14 +13999,14 @@ log_mmsghdr(struct mmsghdr __user *msg, long rc, long *plogsize)
     phdr = ARGSKMALLOC(sizeof(struct mmsghdr), GFP_KERNEL);
     if (phdr == NULL)
     {
-      printk("record_recvmmsg: can't allocate msg hdr %ld\n", i);
+      TPRINT("record_recvmmsg: can't allocate msg hdr %ld\n", i);
       ARGSKFREE(plogsize, len);
       return -ENOMEM;
     }
     len += sizeof(struct mmsghdr);
     if (copy_from_user(phdr, msg + i, sizeof(struct mmsghdr)))
     {
-      printk("record_recvmmsg: can't allocate msg header %ld\n", i);
+      TPRINT("record_recvmmsg: can't allocate msg header %ld\n", i);
       ARGSKFREE(plogsize, len);
       return -EFAULT;
     }
@@ -14039,14 +14016,14 @@ log_mmsghdr(struct mmsghdr __user *msg, long rc, long *plogsize)
       pdata = ARGSKMALLOC(phdr->msg_hdr.msg_namelen, GFP_KERNEL);
       if (pdata == NULL)
       {
-        printk("record_recvmmsg: can't allocate msg name %ld\n", i);
+        TPRINT("record_recvmmsg: can't allocate msg name %ld\n", i);
         ARGSKFREE(plogsize, len);
         return -ENOMEM;
       }
       len += phdr->msg_hdr.msg_namelen;
       if (copy_from_user(pdata, phdr->msg_hdr.msg_name, phdr->msg_hdr.msg_namelen))
       {
-        printk("record_recvmmsg: can't copy msg_name %ld of size %d\n", i, phdr->msg_hdr.msg_namelen);
+        TPRINT("record_recvmmsg: can't copy msg_name %ld of size %d\n", i, phdr->msg_hdr.msg_namelen);
         ARGSKFREE(plogsize, len);
         return -EFAULT;
       }
@@ -14056,21 +14033,21 @@ log_mmsghdr(struct mmsghdr __user *msg, long rc, long *plogsize)
       pdata = ARGSKMALLOC(phdr->msg_hdr.msg_controllen, GFP_KERNEL);
       if (pdata == NULL)
       {
-        printk("record_recvmmsg: can't allocate msg control %ld\n", i);
+        TPRINT("record_recvmmsg: can't allocate msg control %ld\n", i);
         ARGSKFREE(plogsize, len);
         return -ENOMEM;
       }
       len += phdr->msg_hdr.msg_controllen;
       if (copy_from_user(pdata, phdr->msg_hdr.msg_control, phdr->msg_hdr.msg_controllen))
       {
-        printk("record_recvmmsg: can't copy msg_control %ld of size %ld\n", i, phdr->msg_hdr.msg_controllen);
+        TPRINT("record_recvmmsg: can't copy msg_control %ld of size %ld\n", i, phdr->msg_hdr.msg_controllen);
         ARGSKFREE(plogsize, len);
         return -EFAULT;
       }
     }
     if (copy_iovec_to_args(phdr->msg_len, phdr->msg_hdr.msg_iov, phdr->msg_hdr.msg_iovlen) == NULL)
     {
-      printk("record_recvmmsg: can't allocate or copy msg data %ld\n", i);
+      TPRINT("record_recvmmsg: can't allocate or copy msg data %ld\n", i);
       ARGSKFREE(plogsize, len);
       return -ENOMEM;
     }
@@ -14091,13 +14068,13 @@ copy_args_to_iovec(char *retparams, long size, const struct iovec __user *vec, u
   kvec = KMALLOC(vlen * sizeof(struct iovec), GFP_KERNEL);
   if (kvec == NULL)
   {
-    printk("Pid %d replay_readv allocation of vector failed\n", current->pid);
+    TPRINT("Pid %d replay_readv allocation of vector failed\n", current->pid);
     return -ENOMEM;
   }
 
   if (copy_from_user(kvec, vec, vlen * sizeof(struct iovec)))
   {
-    printk("Pid %d replay_readv copy_from_user of vector failed\n", current->pid);
+    TPRINT("Pid %d replay_readv copy_from_user of vector failed\n", current->pid);
     KFREE(kvec);
     return -EFAULT;
   }
@@ -14110,7 +14087,7 @@ copy_args_to_iovec(char *retparams, long size, const struct iovec __user *vec, u
 
     if (copy_to_user(kvec[i].iov_base, copyp, to_copy))
     {
-      printk("Pid %d replay_readv copy_to_user of data failed\n", current->pid);
+      TPRINT("Pid %d replay_readv copy_to_user of data failed\n", current->pid);
       KFREE(kvec);
       return -EFAULT;
     }
@@ -14144,7 +14121,7 @@ extract_mmsghdr(char *retparams, struct mmsghdr __user *msg, long rc)
     {
       if (copy_to_user(&msg[i].msg_hdr.msg_name, retparams, phdr->msg_hdr.msg_namelen))
       {
-        printk("extract_mmsghdr: pid %d cannot copy msg_name to user\n", current->pid);
+        TPRINT("extract_mmsghdr: pid %d cannot copy msg_name to user\n", current->pid);
         syscall_mismatch();
       }
       retparams += phdr->msg_hdr.msg_namelen;
@@ -14154,7 +14131,7 @@ extract_mmsghdr(char *retparams, struct mmsghdr __user *msg, long rc)
     {
       if (copy_to_user(&msg[i].msg_hdr.msg_control, retparams, phdr->msg_hdr.msg_controllen))
       {
-        printk("extract_mmsghdr: pid %d cannot copy msg_control to user\n", current->pid);
+        TPRINT("extract_mmsghdr: pid %d cannot copy msg_control to user\n", current->pid);
         syscall_mismatch();
       }
       retparams += phdr->msg_hdr.msg_controllen;
@@ -14174,7 +14151,7 @@ void print_mem(void *addr, int length)
   int i;
   for (i = 0; i < length; i++)
   {
-    printk("%02x(%d),", cc[i], i);
+    TPRINT("%02x(%d),", cc[i], i);
   }
 }
 
@@ -14189,7 +14166,7 @@ void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char *i
 
   if (copy_from_user(address, sockaddr, addrlen))
   {
-    printk("get_ip_port_sockaddr[%d]: fails to copy sockaddr from userspace\n", __LINE__);
+    TPRINT("get_ip_port_sockaddr[%d]: fails to copy sockaddr from userspace\n", __LINE__);
     // TODO: what should we do?
     *port = THEIA_INVALID_PORT;
     sprintf(ip, "NA");
@@ -14243,7 +14220,7 @@ void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char *i
       break;
     case AF_INET6: /* TODO */
     default:
-      printk("get_ip_port_sockaddr: sa_family problem %d\n", basic_sockaddr->sa_family);
+      TPRINT("get_ip_port_sockaddr: sa_family problem %d\n", basic_sockaddr->sa_family);
       *port = THEIA_INVALID_PORT;
       strcpy(ip, "NA");
       strcpy(sun_path, "NA");
@@ -14403,7 +14380,7 @@ void packahgv_connect(struct connect_ahgv *sys_args)
                       42, sys_args->pid, current->start_time.tv_sec,
                       sys_args->rc, sys_args->sock_fd, sys_args->ip, sys_args->port, current->tgid, sec, nsec);
     }
-    //    printk("[socketcall connect]: %s", buf);
+    //    TPRINT("[socketcall connect]: %s", buf);
 #endif
     if (size < 0)
     {
@@ -14638,7 +14615,7 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args)
     if(strncmp(uuid_str, "S|QC90bXAvLlgxMS11bml4", 22)==0)
     {
       //if(uiDebug==1)
-        //printk("x11:found\n");
+        //TPRINT("x11:found\n");
       msg=kmem_cache_alloc(theia_buffers, GFP_KERNEL);
       if(sys_args->rc<200)  //arbitrarily chosen max len we need
         len=sys_args->rc;
@@ -14652,7 +14629,7 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args)
           //button release
           type=buttonRelease;
           if(uiDebug==1)
-            printk("x11:buttonRelease\n");
+            TPRINT("x11:buttonRelease\n");
         }  
         if(temp==4 || (temp==35 && len>8 && (msg[8]&0xff)==4))
         {
@@ -14660,7 +14637,7 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args)
           type=buttonPress;
           lastPress=sec;
           if(uiDebug==1)
-            printk("x11:buttonPress %ld\n", sec); 
+            TPRINT("x11:buttonPress %ld\n", sec); 
           if(orca_log)
             strcpy(orca_log, "no info");
         }
@@ -14673,7 +14650,7 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args)
     if(type==buttonRelease && orca_log)
     {
       if(uiDebug==1 && strncmp(orca_log, "no info", 7)!=0)
-        printk("x11:printing release %s\n", orca_log);
+        TPRINT("x11:printing release %s\n", orca_log);
       if(strncmp(orca_log, "no info", 7)!=0)
       {
         danglingX11[0]='\0';
@@ -15082,7 +15059,7 @@ void theia_connect_ahg(long rc, int fd, struct sockaddr __user *uservaddr, int a
   pahgv_connect = (struct connect_ahgv *)KMALLOC(sizeof(struct connect_ahgv), GFP_KERNEL);
   if (pahgv_connect == NULL)
   {
-    printk("theia_connect_ahg: failed to KMALLOC.\n");
+    TPRINT("theia_connect_ahg: failed to KMALLOC.\n");
     return;
   }
   pahgv_connect->pid = current->pid;
@@ -15124,7 +15101,7 @@ void theia_accept_ahg(long rc, int fd, struct sockaddr __user *upeer_sockaddr, i
   pahgv_accept = (struct accept_ahgv *)KMALLOC(sizeof(struct accept_ahgv), GFP_KERNEL);
   if (pahgv_accept == NULL)
   {
-    printk("theia_accept_ahg: failed to KMALLOC.\n");
+    TPRINT("theia_accept_ahg: failed to KMALLOC.\n");
     return;
   }
   pahgv_accept->pid = current->pid;
@@ -15163,7 +15140,7 @@ void theia_sendto_ahg(long rc, int fd, void __user *buff, size_t len, unsigned i
   pahgv_sendto = (struct sendto_ahgv *)KMALLOC(sizeof(struct sendto_ahgv), GFP_KERNEL);
   if (pahgv_sendto == NULL)
   {
-    printk("theia_sendto_ahg: failed to KMALLOC.\n");
+    TPRINT("theia_sendto_ahg: failed to KMALLOC.\n");
     goto out;
   }
   pahgv_sendto->pid = current->pid;
@@ -15190,7 +15167,7 @@ void theia_sendto_ahg(long rc, int fd, void __user *buff, size_t len, unsigned i
     if (addr != NULL && addr_len > 0) {
       pahgv_sendto->sock_fd = -1; /* ignore socket (no connection) */
       if (copy_from_user((char*)&pahgv_sendto->dest_addr, (char*)addr, sizeof(struct sockaddr))) {
-        printk ("theia_sendto_ahg: failed to copy dest_addr %p\n", addr);
+        TPRINT ("theia_sendto_ahg: failed to copy dest_addr %p\n", addr);
         goto out;
       }
     }
@@ -15226,7 +15203,7 @@ void theia_recvfrom_ahg(long rc, int fd, void __user *ubuf, size_t size, unsigne
   pahgv_recvfrom = (struct recvfrom_ahgv *)KMALLOC(sizeof(struct recvfrom_ahgv), GFP_KERNEL);
   if (pahgv_recvfrom == NULL)
   {
-    printk("theia_recvfrom_ahg: failed to KMALLOC.\n");
+    TPRINT("theia_recvfrom_ahg: failed to KMALLOC.\n");
     return;
   }
   pahgv_recvfrom->pid = current->pid;
@@ -15254,7 +15231,7 @@ void theia_recvfrom_ahg(long rc, int fd, void __user *ubuf, size_t size, unsigne
     if (addr != NULL && addr_len > 0) {
       pahgv_recvfrom->sock_fd = -1; /* ignore socket (no connection) */
       if (copy_from_user((char*)&pahgv_recvfrom->src_addr, (char*)addr, sizeof(struct sockaddr))) {
-        printk ("theia_recvfrom_ahg: failed to copy src_addr %p\n", addr);
+        TPRINT ("theia_recvfrom_ahg: failed to copy src_addr %p\n", addr);
         goto out;
       }
     }
@@ -15293,7 +15270,7 @@ void theia_sendmsg_ahg(long rc, int fd, struct msghdr __user *msg, unsigned int 
   pahgv_sendmsg = (struct sendmsg_ahgv *)KMALLOC(sizeof(struct sendmsg_ahgv), GFP_KERNEL);
   if (pahgv_sendmsg == NULL)
   {
-    printk("theia_sendmsg_ahg: failed to KMALLOC.\n");
+    TPRINT("theia_sendmsg_ahg: failed to KMALLOC.\n");
     return;
   }
   pahgv_sendmsg->pid = current->pid;
@@ -15323,7 +15300,7 @@ void theia_sendmsg_ahg(long rc, int fd, struct msghdr __user *msg, unsigned int 
       addr_len = kmsg.msg_namelen;
       pahgv_sendmsg->sock_fd = -1; /* ignore socket (no connection) */
       if (copy_from_user((char*)&pahgv_sendmsg->dest_addr, (char*)addr, addr_len)) {
-        printk ("theia_sendto_ahg: failed to copy dest_addr %p\n", addr);
+        TPRINT ("theia_sendto_ahg: failed to copy dest_addr %p\n", addr);
         goto out;
       }
     }
@@ -15362,7 +15339,7 @@ void theia_recvmsg_ahg(long rc, int fd, struct msghdr __user *msg, unsigned int 
   pahgv_recvmsg = (struct recvmsg_ahgv *)KMALLOC(sizeof(struct recvmsg_ahgv), GFP_KERNEL);
   if (pahgv_recvmsg == NULL)
   {
-    printk("theia_recvmsg_ahg: failed to KMALLOC.\n");
+    TPRINT("theia_recvmsg_ahg: failed to KMALLOC.\n");
     return;
   }
   pahgv_recvmsg->pid = current->pid;
@@ -15391,7 +15368,7 @@ void theia_recvmsg_ahg(long rc, int fd, struct msghdr __user *msg, unsigned int 
       addr_len = kmsg.msg_namelen;
       pahgv_recvmsg->sock_fd = -1; /* ignore socket (no connection) */
       if (copy_from_user((char*)&pahgv_recvmsg->src_addr, (char*)addr, addr_len)) {
-        printk ("theia_sendto_ahg: failed to copy dest_addr %p\n", addr);
+        TPRINT ("theia_sendto_ahg: failed to copy dest_addr %p\n", addr);
         goto out;
       }
     }
@@ -15467,7 +15444,7 @@ long theia_sys_sendto(int fd, void __user *buff, size_t len, unsigned int flags,
   long rc;
 
   rc = sys_sendto(fd, buff, len, flags, addr, addr_len);
-  //printk("sendto is called!, pid %d, ret %ld\n", current->pid,rc);
+  //TPRINT("sendto is called!, pid %d, ret %ld\n", current->pid,rc);
 
   // Yang: regardless of the return value, passes the failed syscall also
   //  if (rc >= 0)
@@ -15497,7 +15474,7 @@ long theia_sys_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags)
   long rc;
   rc = sys_sendmsg(fd, msg, flags);
 
-  //printk("sendmsg is called!, pid %d, ret %ld\n", current->pid,rc);
+  //TPRINT("sendmsg is called!, pid %d, ret %ld\n", current->pid,rc);
   // Yang: regardless of the return value, passes the failed syscall also
   //  if (rc >= 0)
   if (rc != -EAGAIN)
@@ -15638,7 +15615,7 @@ record_socket(int family, int type, int protocol)
   pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
   if (pretvals == NULL)
   {
-    printk("record_socketcall(socket): can't allocate buffer\n");
+    TPRINT("record_socketcall(socket): can't allocate buffer\n");
     return -ENOMEM;
   }
   pretvals->call = SYS_SOCKET;
@@ -15668,7 +15645,7 @@ record_connect(int fd, struct sockaddr __user *uservaddr, int addrlen)
   pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
   if (pretvals == NULL)
   {
-    printk("record_socketcall(socket): can't allocate buffer\n");
+    TPRINT("record_socketcall(socket): can't allocate buffer\n");
     return -ENOMEM;
   }
   pretvals->call = SYS_CONNECT;
@@ -15710,7 +15687,7 @@ record_accept(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_
     pretvals = ARGSKMALLOC(sizeof(struct accept_retvals) + addrlen, GFP_KERNEL);
     if (pretvals == NULL)
     {
-      printk("record_socketcall(accept): can't allocate buffer\n");
+      TPRINT("record_socketcall(accept): can't allocate buffer\n");
       return -ENOMEM;
     }
     pretvals->addrlen = addrlen;
@@ -15718,7 +15695,7 @@ record_accept(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_
     {
       if (copy_from_user(&pretvals->addr, (char *) upeer_sockaddr, addrlen))
       {
-        printk("record_socketcall(accept): can't copy addr\n");
+        TPRINT("record_socketcall(accept): can't copy addr\n");
         ARGSKFREE(pretvals, sizeof(struct accept_retvals) + addrlen);
         return -EFAULT;
       }
@@ -15764,7 +15741,7 @@ record_accept4(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer
     pretvals = ARGSKMALLOC(sizeof(struct accept_retvals) + addrlen, GFP_KERNEL);
     if (pretvals == NULL)
     {
-      printk("record_socketcall(accept): can't allocate buffer\n");
+      TPRINT("record_socketcall(accept): can't allocate buffer\n");
       return -ENOMEM;
     }
     pretvals->addrlen = addrlen;
@@ -15772,7 +15749,7 @@ record_accept4(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer
     {
       if (copy_from_user(&pretvals->addr, (char *) upeer_sockaddr, addrlen))
       {
-        printk("record_socketcall(accept): can't copy addr\n");
+        TPRINT("record_socketcall(accept): can't copy addr\n");
         ARGSKFREE(pretvals, sizeof(struct accept_retvals) + addrlen);
         return -EFAULT;
       }
@@ -15823,7 +15800,7 @@ record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct 
   puuid = ARGSKMALLOC(strlen(rec_uuid_str) + 1, GFP_KERNEL);
   if (puuid == NULL)
   {
-    printk("record_sendto: can't allocate pos buffer for rec_uuid_str\n");
+    TPRINT("record_sendto: can't allocate pos buffer for rec_uuid_str\n");
     return -ENOMEM;
   }
   strcpy((char *)puuid, rec_uuid_str);
@@ -15838,7 +15815,7 @@ record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct 
   pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
   if (pretvals == NULL)
   {
-    printk("record_socketcall(socket): can't allocate buffer\n");
+    TPRINT("record_socketcall(socket): can't allocate buffer\n");
     return -ENOMEM;
   }
   pretvals->call = SYS_SENDTO;
@@ -15884,7 +15861,7 @@ record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct 
   pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
   if (pretvals == NULL)
   {
-    printk("record_socketcall(socket): can't allocate buffer\n");
+    TPRINT("record_socketcall(socket): can't allocate buffer\n");
     return -ENOMEM;
   }
   pretvals->call = SYS_SENDTO;
@@ -15915,7 +15892,7 @@ record_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, stru
   puuid = ARGSKMALLOC(strlen(rec_uuid_str) + 1, GFP_KERNEL);
   if (puuid == NULL)
   {
-    printk("record_recvfrom: can't allocate pos buffer for rec_uuid_str\n");
+    TPRINT("record_recvfrom: can't allocate pos buffer for rec_uuid_str\n");
     return -ENOMEM;
   }
   strcpy((char *)puuid, rec_uuid_str);
@@ -15931,13 +15908,13 @@ record_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, stru
     pretvals = ARGSKMALLOC(sizeof(struct recvfrom_retvals) + rc - 1, GFP_KERNEL);
     if (pretvals == NULL)
     {
-      printk("record_socketcall(recvfrom): can't allocate buffer\n");
+      TPRINT("record_socketcall(recvfrom): can't allocate buffer\n");
       return -ENOMEM;
     }
 
     if (copy_from_user(&pretvals->buf, (char *) ubuf, rc))
     {
-      printk("record_socketcall(recvfrom): can't copy data buffer of size %ld\n", rc);
+      TPRINT("record_socketcall(recvfrom): can't copy data buffer of size %ld\n", rc);
       ARGSKFREE(pretvals, sizeof(struct recvfrom_retvals) + rc - 1);
       return -EFAULT;
     }
@@ -15946,13 +15923,13 @@ record_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, stru
       pretvals->addrlen = *((int *)addr_len);
       if (pretvals->addrlen > sizeof(struct sockaddr))
       {
-        printk("record_socketcall(recvfrom): addr length %d too big\n", pretvals->addrlen);
+        TPRINT("record_socketcall(recvfrom): addr length %d too big\n", pretvals->addrlen);
         ARGSKFREE(pretvals, sizeof(struct recvfrom_retvals) + rc - 1);
         return -EFAULT;
       }
       if (copy_from_user(&pretvals->addr, (char *) addr, pretvals->addrlen))
       {
-        printk("record_socketcall(recvfrom): can't copy addr\n");
+        TPRINT("record_socketcall(recvfrom): can't copy addr\n");
         ARGSKFREE(pretvals, sizeof(struct recvfrom_retvals) + rc - 1);
         return -EFAULT;
       }
@@ -16017,7 +15994,7 @@ record_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags)
   puuid = ARGSKMALLOC(strlen(rec_uuid_str) + 1, GFP_KERNEL);
   if (puuid == NULL)
   {
-    printk("record_sendmsg: can't allocate pos buffer for rec_uuid_str\n");
+    TPRINT("record_sendmsg: can't allocate pos buffer for rec_uuid_str\n");
     return -ENOMEM;
   }
   strcpy((char *)puuid, rec_uuid_str);
@@ -16031,7 +16008,7 @@ record_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags)
   pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
   if (pretvals == NULL)
   {
-    printk("record_socketcall(socket): can't allocate buffer\n");
+    TPRINT("record_socketcall(socket): can't allocate buffer\n");
     return -ENOMEM;
   }
   pretvals->call = SYS_SENDMSG;
@@ -16055,7 +16032,7 @@ record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
   new_syscall_enter(47);
 
   rc = sys_recvmsg(fd, msg, flags);
-  printk("[%s|%d] pid %d, fd %d, rc %ld\n", __func__, __LINE__, current->pid, fd, rc);
+  TPRINT("[%s|%d] pid %d, fd %d, rc %ld\n", __func__, __LINE__, current->pid, fd, rc);
 
   // Yang also needed at recording
   if (rc != -EAGAIN) /* ignore some less meaningful errors */
@@ -16065,7 +16042,7 @@ record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
   puuid = ARGSKMALLOC(strlen(rec_uuid_str) + 1, GFP_KERNEL);
   if (puuid == NULL)
   {
-    printk("record_recvmsg: can't allocate pos buffer for rec_uuid_str\n");
+    TPRINT("record_recvmsg: can't allocate pos buffer for rec_uuid_str\n");
     return -ENOMEM;
   }
   strcpy((char *)puuid, rec_uuid_str);
@@ -16091,7 +16068,7 @@ record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
     pretvals = ARGSKMALLOC(sizeof(struct recvmsg_retvals) + pmsghdr->msg_namelen + pmsghdr->msg_controllen + rc, GFP_KERNEL);
     if (pretvals == NULL)
     {
-      printk("record_socketcall(recvmsg): can't allocate buffer\n");
+      TPRINT("record_socketcall(recvmsg): can't allocate buffer\n");
       return -ENOMEM;
     }
     pretvals->call = SYS_RECVMSG;
@@ -16105,7 +16082,7 @@ record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
     {
       if (copy_from_user(pdata, pmsghdr->msg_name, pretvals->msg_namelen))
       {
-        printk("record_socketcall(recvmsg): can't copy msg_name of size %d\n", pretvals->msg_namelen);
+        TPRINT("record_socketcall(recvmsg): can't copy msg_name of size %d\n", pretvals->msg_namelen);
         ARGSKFREE(pretvals, sizeof(struct recvmsg_retvals) + pmsghdr->msg_namelen + pmsghdr->msg_controllen + rc);
         return -EFAULT;
       }
@@ -16115,7 +16092,7 @@ record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
     {
       if (copy_from_user(pdata, pmsghdr->msg_control, pretvals->msg_controllen))
       {
-        printk("record_socketcall(recvmsg): can't copy msg_control of size %ld\n", pretvals->msg_controllen);
+        TPRINT("record_socketcall(recvmsg): can't copy msg_control of size %ld\n", pretvals->msg_controllen);
         ARGSKFREE(pretvals, sizeof(struct recvmsg_retvals) + pmsghdr->msg_namelen + pmsghdr->msg_controllen + rc);
         return -EFAULT;
       }
@@ -16131,7 +16108,7 @@ record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
 
       if (copy_from_user(pdata, pmsghdr->msg_iov[i].iov_base, to_copy))
       {
-        printk("Pid %d record_readv copy_from_user of data failed\n", current->pid);
+        TPRINT("Pid %d record_readv copy_from_user of data failed\n", current->pid);
         ARGSKFREE(pretvals, sizeof(struct recvmsg_retvals) + pmsghdr->msg_namelen + pmsghdr->msg_controllen + rc);
         return -EFAULT;
       }
@@ -16139,11 +16116,11 @@ record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
       rem_size -= to_copy;
       if (rem_size == 0) break;
     }
-    //      if (rem_size != 0) printk ("record_socketcall(recvmsg): %ld bytes of data remain???\n", rem_size);
+    //      if (rem_size != 0) TPRINT ("record_socketcall(recvmsg): %ld bytes of data remain???\n", rem_size);
 #ifdef X_COMPRESS
     if (is_x_fd(&X_STRUCT_REC, fd))
     {
-      if (x_detail) printk("Pid %d recvmsg: fd:%ld, size:%ld\n", current->pid,  fd, rc);
+      if (x_detail) TPRINT("Pid %d recvmsg: fd:%ld, size:%ld\n", current->pid,  fd, rc);
       change_log_special_second();
     }
 #endif
@@ -16173,7 +16150,7 @@ record_shutdown(int fd, int how)
   pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
   if (pretvals == NULL)
   {
-    printk("record_socketcall(socket): can't allocate buffer\n");
+    TPRINT("record_socketcall(socket): can't allocate buffer\n");
     return -ENOMEM;
   }
   pretvals->call = SYS_SHUTDOWN;
@@ -16201,7 +16178,7 @@ record_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
   pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
   if (pretvals == NULL)
   {
-    printk("record_socketcall(socket): can't allocate buffer\n");
+    TPRINT("record_socketcall(socket): can't allocate buffer\n");
     return -ENOMEM;
   }
   pretvals->call = SYS_BIND;
@@ -16229,7 +16206,7 @@ record_listen(int fd, int backlog)
   pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
   if (pretvals == NULL)
   {
-    printk("record_socketcall(socket): can't allocate buffer\n");
+    TPRINT("record_socketcall(socket): can't allocate buffer\n");
     return -ENOMEM;
   }
   pretvals->call = SYS_LISTEN;
@@ -16269,7 +16246,7 @@ record_getsockname(int fd, struct sockaddr __user *usockaddr, int __user *usocka
     pretvals = ARGSKMALLOC(sizeof(struct accept_retvals) + addrlen, GFP_KERNEL);
     if (pretvals == NULL)
     {
-      printk("record_socketcall(accept): can't allocate buffer\n");
+      TPRINT("record_socketcall(accept): can't allocate buffer\n");
       return -ENOMEM;
     }
     pretvals->addrlen = addrlen;
@@ -16277,7 +16254,7 @@ record_getsockname(int fd, struct sockaddr __user *usockaddr, int __user *usocka
     {
       if (copy_from_user(&pretvals->addr, (char *) usockaddr, addrlen))
       {
-        printk("record_socketcall(accept): can't copy addr\n");
+        TPRINT("record_socketcall(accept): can't copy addr\n");
         ARGSKFREE(pretvals, sizeof(struct accept_retvals) + addrlen);
         return -EFAULT;
       }
@@ -16320,7 +16297,7 @@ record_getpeername(int fd, struct sockaddr __user *usockaddr, int __user *usocka
     pretvals = ARGSKMALLOC(sizeof(struct accept_retvals) + addrlen, GFP_KERNEL);
     if (pretvals == NULL)
     {
-      printk("record_socketcall(accept): can't allocate buffer\n");
+      TPRINT("record_socketcall(accept): can't allocate buffer\n");
       return -ENOMEM;
     }
     pretvals->addrlen = addrlen;
@@ -16328,7 +16305,7 @@ record_getpeername(int fd, struct sockaddr __user *usockaddr, int __user *usocka
     {
       if (copy_from_user(&pretvals->addr, (char *) usockaddr, addrlen))
       {
-        printk("record_socketcall(accept): can't copy addr\n");
+        TPRINT("record_socketcall(accept): can't copy addr\n");
         ARGSKFREE(pretvals, sizeof(struct accept_retvals) + addrlen);
         return -EFAULT;
       }
@@ -16364,7 +16341,7 @@ record_socketpair(int family, int type, int protocol, int __user *usockvec)
     pretvals = ARGSKMALLOC(sizeof(struct socketpair_retvals), GFP_KERNEL);
     if (pretvals == NULL)
     {
-      printk("record_socketcall(socketpair): can't allocate buffer\n");
+      TPRINT("record_socketcall(socketpair): can't allocate buffer\n");
       return -ENOMEM;
     }
     pretvals->call = SYS_SOCKETPAIR;
@@ -16396,7 +16373,7 @@ record_setsockopt(int fd, int level, int optname, char __user *optval, int optle
   pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
   if (pretvals == NULL)
   {
-    printk("record_socketcall(socket): can't allocate buffer\n");
+    TPRINT("record_socketcall(socket): can't allocate buffer\n");
     return -ENOMEM;
   }
   pretvals->call = SYS_SETSOCKOPT;
@@ -16424,7 +16401,7 @@ record_getsockopt(int fd, int level, int optname, char __user *optval, int __use
   pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
   if (pretvals == NULL)
   {
-    printk("record_socketcall(socket): can't allocate buffer\n");
+    TPRINT("record_socketcall(socket): can't allocate buffer\n");
     return -ENOMEM;
   }
   pretvals->call = SYS_GETSOCKOPT;
@@ -16502,7 +16479,7 @@ replay_accept(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer_
       *((int *) upeer_addrlen) = retvals->addrlen;
       if (copy_to_user((char *) upeer_sockaddr, &retvals->addr, retvals->addrlen))
       {
-        printk("Pid %d replay_socketcall_accept cannot copy to user\n", current->pid);
+        TPRINT("Pid %d replay_socketcall_accept cannot copy to user\n", current->pid);
       }
     }
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct accept_retvals) + retvals->addrlen);
@@ -16530,7 +16507,7 @@ replay_accept4(int fd, struct sockaddr __user *upeer_sockaddr, int __user *upeer
       *((int *) upeer_addrlen) = retvals->addrlen;
       if (copy_to_user((char *) upeer_sockaddr, &retvals->addr, retvals->addrlen))
       {
-        printk("Pid %d replay_socketcall_accept cannot copy to user\n", current->pid);
+        TPRINT("Pid %d replay_socketcall_accept cannot copy to user\n", current->pid);
       }
     }
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct accept_retvals) + retvals->addrlen);
@@ -16584,14 +16561,14 @@ replay_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, stru
     struct recvfrom_retvals *retvals = (struct recvfrom_retvals *) retparams;
     if (copy_to_user((char *) ubuf, &retvals->buf, rc))
     {
-      printk("Pid %d replay_recvfrom cannot copy to user\n", current->pid);
+      TPRINT("Pid %d replay_recvfrom cannot copy to user\n", current->pid);
     }
     if (addr)
     {
       *((int *) addr_len) = retvals->addrlen;
       if (copy_to_user((char *) addr, &retvals->addr, retvals->addrlen))
       {
-        printk("Pid %d cannot copy sockaddr from to user\n", current->pid);
+        TPRINT("Pid %d cannot copy sockaddr from to user\n", current->pid);
       }
 
     }
@@ -16642,33 +16619,33 @@ replay_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
     put_user(retvals->msg_controllen, &msg->msg_controllen);  // This is an in-out parameter
     pr_debug("[%s|%d] replay_recvmsg, retvals msg_controllen size %lu, msg->msg_controllen size %lu, retvals msg_flags size %lu, msg->msg_flags size %lu, retvals->msg_flags %u, msg_flags ptr %p\n", __func__, __LINE__, sizeof(retvals->msg_controllen), sizeof(&msg->msg_controllen), sizeof(retvals->msg_flags), sizeof(msg->msg_flags), retvals->msg_flags, &(msg->msg_flags));
     put_user(retvals->msg_flags, &(msg->msg_flags));            // Out parameter
-    printk("[%s|%d] replay_recvmsg, msg_namelen %d, msg->msg_namelen %d\n", __func__, __LINE__, retvals->msg_namelen, msg->msg_namelen);
+    TPRINT("[%s|%d] replay_recvmsg, msg_namelen %d, msg->msg_namelen %d\n", __func__, __LINE__, retvals->msg_namelen, msg->msg_namelen);
 
     if (retvals->msg_namelen)
     {
       long crc = copy_to_user((char *) msg->msg_name, pdata, retvals->msg_namelen);
       if (crc)
       {
-        printk("Pid %d cannot copy msg_namelen %p to user %p len %d, rc=%ld\n",
+        TPRINT("Pid %d cannot copy msg_namelen %p to user %p len %d, rc=%ld\n",
                current->pid, msg->msg_name, pdata, retvals->msg_namelen, crc);
         syscall_mismatch();
       }
       pdata += retvals->msg_namelen;
     }
-    printk("[%s|%d] replay_recvmsg\n", __func__, __LINE__);
+    TPRINT("[%s|%d] replay_recvmsg\n", __func__, __LINE__);
 
     if (retvals->msg_controllen)
     {
       long crc = copy_to_user((char *) msg->msg_control, pdata, retvals->msg_controllen);
       if (crc)
       {
-        printk("Pid %d cannot copy msg_control %p to user %p len %ld, rc=%ld\n",
+        TPRINT("Pid %d cannot copy msg_control %p to user %p len %ld, rc=%ld\n",
                current->pid, msg->msg_control, pdata, retvals->msg_controllen, crc);
         syscall_mismatch();
       }
       pdata += retvals->msg_controllen;
     }
-    printk("[%s|%d] replay_recvmsg\n", __func__, __LINE__);
+    TPRINT("[%s|%d] replay_recvmsg\n", __func__, __LINE__);
 
     get_user(iovlen, &msg->msg_iovlen);
     rem_size = rc;
@@ -16679,7 +16656,7 @@ replay_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
 
       if (copy_to_user(msg->msg_iov[i].iov_base, pdata, to_copy))
       {
-        printk("Pid %d replay_readv copy_to_user of data failed\n", current->pid);
+        TPRINT("Pid %d replay_readv copy_to_user of data failed\n", current->pid);
         syscall_mismatch();
       }
       pdata += to_copy;
@@ -16687,16 +16664,16 @@ replay_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
       if (rem_size == 0) break;
     }
 
-    printk("[%s|%d] replay_recvmsg\n", __func__, __LINE__);
+    TPRINT("[%s|%d] replay_recvmsg\n", __func__, __LINE__);
     if (rem_size != 0)
     {
-      printk("replay_socketcall(recvmsg): %ld bytes remaining\n", rem_size);
+      TPRINT("replay_socketcall(recvmsg): %ld bytes remaining\n", rem_size);
       syscall_mismatch();
     }
 #ifdef X_COMPRESS
     if (is_x_fd(&X_STRUCT_REP, fd))
     {
-      if (x_detail) printk("Pid %d recvmsg for x\n", current->pid);
+      if (x_detail) TPRINT("Pid %d recvmsg for x\n", current->pid);
       //x_decompress_reply (iovlen, &X_STRUCT_REP, xnode);
       //validate_decode_buffer (((char*) retvals) + sizeof (struct recvmsg_retvals) + retvals->msg_namelen + retvals->msg_controllen, iovlen, &X_STRUCT_REP);
       //consume_decode_buffer (iovlen, &X_STRUCT_REP);
@@ -16706,7 +16683,7 @@ replay_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
         // it should be the same with RECV; fix if needed
         BUG();
         if (retval != rc)
-          printk("Pid %d recvmsg from x fails, expected:%ld, actual:%ld\n", current->pid, rc, retval);
+          TPRINT("Pid %d recvmsg from x fails, expected:%ld, actual:%ld\n", current->pid, rc, retval);
       }
 
     }
@@ -16782,7 +16759,7 @@ replay_getsockname(int fd, struct sockaddr __user *usockaddr, int __user *usocka
     *((int *) usockaddr_len) = retvals->addrlen;
     if (copy_to_user((char *) usockaddr, &retvals->addr, retvals->addrlen))
     {
-      printk("Pid %d replay_socketcall_getpeername cannot copy to user\n", current->pid);
+      TPRINT("Pid %d replay_socketcall_getpeername cannot copy to user\n", current->pid);
     }
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct accept_retvals) + retvals->addrlen);
   }
@@ -16807,7 +16784,7 @@ replay_getpeername(int fd, struct sockaddr __user *usockaddr, int __user *usocka
     *((int *) usockaddr_len) = retvals->addrlen;
     if (copy_to_user((char *) usockaddr, &retvals->addr, retvals->addrlen))
     {
-      printk("Pid %d replay_socketcall_getpeername cannot copy to user\n", current->pid);
+      TPRINT("Pid %d replay_socketcall_getpeername cannot copy to user\n", current->pid);
     }
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct accept_retvals) + retvals->addrlen);
   }
@@ -16837,7 +16814,7 @@ replay_socketpair(int family, int type, int protocol, int __user *usockvec)
 
     if (copy_to_user((int *) usockvec, sv, 2 * sizeof(int)))
     {
-      printk("Pid %d replay_socketcall_socketpair cannot copy to user\n", current->pid);
+      TPRINT("Pid %d replay_socketcall_socketpair cannot copy to user\n", current->pid);
     }
 
     KFREE(sv);
@@ -16880,12 +16857,12 @@ replay_getsockopt(int fd, int level, int optname, char __user *optval, int __use
 
     if (copy_to_user((char *) optval, &retvals->optval, retvals->optlen))
     {
-      printk("Pid %d cannot copy optval to user\n", current->pid);
+      TPRINT("Pid %d cannot copy optval to user\n", current->pid);
     }
 
     if (copy_to_user((char *) optlen, &retvals->optlen, sizeof(int)))
     {
-      printk("Pid %d cannot copy optlen to user\n", current->pid);
+      TPRINT("Pid %d cannot copy optlen to user\n", current->pid);
     }
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct getsockopt_retvals) + retvals->optlen);
   }
@@ -16955,12 +16932,12 @@ record_syslog(int type, char __user *buf, int len)
     recbuf = ARGSKMALLOC(rc, GFP_KERNEL);
     if (recbuf == NULL)
     {
-      printk("record_syslog: can't allocate return buffer\n");
+      TPRINT("record_syslog: can't allocate return buffer\n");
       return -ENOMEM;
     }
     if (copy_from_user(recbuf, buf, rc))
     {
-      printk("record_syslog: faulted on readback\n");
+      TPRINT("record_syslog: faulted on readback\n");
       ARGSKFREE(recbuf, rc);
       return -EFAULT;
     }
@@ -17003,7 +16980,7 @@ record_wait4(pid_t upid, int __user *stat_addr, int options, struct rusage __use
     retvals = ARGSKMALLOC(sizeof(struct wait4_retvals), GFP_KERNEL);
     if (retvals == NULL)
     {
-      printk("record_wait4: can't allocate buffer\n");
+      TPRINT("record_wait4: can't allocate buffer\n");
       return -ENOMEM;
     }
 
@@ -17011,7 +16988,7 @@ record_wait4(pid_t upid, int __user *stat_addr, int options, struct rusage __use
     {
       if (copy_from_user(&retvals->stat_addr, stat_addr, sizeof(int)))
       {
-        printk("record_wait4: unable to copy status from user\n");
+        TPRINT("record_wait4: unable to copy status from user\n");
         ARGSKFREE(retvals, sizeof(struct wait4_retvals));
         return -EFAULT;
       }
@@ -17020,7 +16997,7 @@ record_wait4(pid_t upid, int __user *stat_addr, int options, struct rusage __use
     {
       if (copy_from_user(&retvals->ru, ru, sizeof(struct rusage)))
       {
-        printk("record_wait4: unable to copy rusage from user\n");
+        TPRINT("record_wait4: unable to copy rusage from user\n");
         ARGSKFREE(retvals, sizeof(struct wait4_retvals));
         return -EFAULT;
       }
@@ -17042,7 +17019,7 @@ replay_wait4(pid_t upid, int __user *stat_addr, int options, struct rusage __use
     {
       if (copy_to_user(stat_addr, &pretvals->stat_addr, sizeof(int)))
       {
-        printk("Pid %d replay_wait4 cannot copy status to user\n", current->pid);
+        TPRINT("Pid %d replay_wait4 cannot copy status to user\n", current->pid);
         return syscall_mismatch();
       }
     }
@@ -17050,7 +17027,7 @@ replay_wait4(pid_t upid, int __user *stat_addr, int options, struct rusage __use
     {
       if (copy_to_user(ru, &pretvals->ru, sizeof(struct rusage)))
       {
-        printk("Pid %d replay_wait4 cannot copy status to user\n", current->pid);
+        TPRINT("Pid %d replay_wait4 cannot copy status to user\n", current->pid);
         return syscall_mismatch();
       }
     }
@@ -17113,7 +17090,7 @@ void theia_shmget_ahg(long rc, key_t key, size_t size, int flag)
   pahgv_shmget = (struct shmget_ahgv *)KMALLOC(sizeof(struct shmget_ahgv), GFP_KERNEL);
   if (pahgv_shmget == NULL)
   {
-    printk("theia_shmget_ahg: failed to KMALLOC.\n");
+    TPRINT("theia_shmget_ahg: failed to KMALLOC.\n");
     return;
   }
   pahgv_shmget->pid = current->pid;
@@ -17163,14 +17140,14 @@ replay_shmget(key_t key, size_t size, int flag)
   retval = sys_shmget(key, size, flag);
   if ((rc < 0 && retval >= 0) || (rc >= 0 && retval < 0))
   {
-    printk("Pid %d replay_ipc SHMGET, on record we got %ld, but replay we got %ld\n", current->pid, rc, retval);
+    TPRINT("Pid %d replay_ipc SHMGET, on record we got %ld, but replay we got %ld\n", current->pid, rc, retval);
     return syscall_mismatch();
   }
 
   // put a mapping from the re-run replay identifier (pseudo), to the record one
   if (add_sysv_mapping(current->replay_thrd, rc, retval))
   {
-    printk("Pid %d replay_ipc SHMGET, could not add replay identifier mapping, replay: %ld, record %ld\n", current->pid, retval, rc);
+    TPRINT("Pid %d replay_ipc SHMGET, could not add replay identifier mapping, replay: %ld, record %ld\n", current->pid, retval, rc);
     return syscall_mismatch();
   }
 
@@ -17253,7 +17230,7 @@ void theia_shmat_ahg(long rc, int shmid, char __user *shmaddr, int shmflg, struc
   pahgv_shmat = (struct shmat_ahgv *)KMALLOC(sizeof(struct shmat_ahgv), GFP_KERNEL);
   if (pahgv_shmat == NULL)
   {
-    printk("theia_shmat_ahg: failed to KMALLOC.\n");
+    TPRINT("theia_shmat_ahg: failed to KMALLOC.\n");
     return;
   }
   pahgv_shmat->pid = current->pid;
@@ -17288,7 +17265,7 @@ long theia_sys_shmat(int shmid, char __user *shmaddr, int shmflg)
   ipcp = ipc_lock(&ns->ids[IPC_SHM_IDS], shmid);
   if (IS_ERR(ipcp))
   {
-    printk("theia_sys_ipc: cannot lock ipc for shmat\n");
+    TPRINT("theia_sys_ipc: cannot lock ipc for shmat\n");
     return -EINVAL;
   }
   shp = container_of(ipcp, struct shmid_kernel, shm_perm);
@@ -17313,7 +17290,7 @@ long theia_sys_shmat(int shmid, char __user *shmaddr, int shmflg)
     }
 
     ret = sys_mprotect(rc, size, PROT_NONE);
-    //    printk("protection of a shared page will be changed, ret %d, %d\n", ret, np);
+    //    TPRINT("protection of a shared page will be changed, ret %d, %d\n", ret, np);
   }
 #endif
   return rc;
@@ -17343,7 +17320,7 @@ record_shmat(int shmid, char __user *shmaddr, int shmflg)
   ipcp = ipc_lock(&ns->ids[IPC_SHM_IDS], shmid);
   if (IS_ERR(ipcp))
   {
-    printk("theia_sys_ipc: cannot lock ipc for shmat\n");
+    TPRINT("theia_sys_ipc: cannot lock ipc for shmat\n");
     return -EINVAL;
   }
   shp = container_of(ipcp, struct shmid_kernel, shm_perm);
@@ -17365,7 +17342,7 @@ record_shmat(int shmid, char __user *shmaddr, int shmflg)
     ipcp = ipc_lock(&ns->ids[IPC_SHM_IDS], shmid);
     if (IS_ERR(ipcp))
     {
-      printk("record_ipc: cannot lock ipc for shmat\n");
+      TPRINT("record_ipc: cannot lock ipc for shmat\n");
       return -EINVAL;
     }
     shp = container_of(ipcp, struct shmid_kernel, shm_perm);
@@ -17376,7 +17353,7 @@ record_shmat(int shmid, char __user *shmaddr, int shmflg)
     patretval = (struct shmat_retvals *) pretval;
     if (patretval == NULL)
     {
-      printk("record_ipc(shmat) can't allocate buffer\n");
+      TPRINT("record_ipc(shmat) can't allocate buffer\n");
       return -ENOMEM;
     }
     patretval->len = sizeof(struct shmat_retvals) - sizeof(u_long);
@@ -17400,7 +17377,7 @@ record_shmat(int shmid, char __user *shmaddr, int shmflg)
       }
 
       ret = sys_mprotect(rc, size, PROT_NONE);
-      //      printk("protection of a shared page will be changed, ret %d, %d\n", ret, np);
+      //      TPRINT("protection of a shared page will be changed, ret %d, %d\n", ret, np);
     }
 #endif
 
@@ -17445,7 +17422,7 @@ replay_shmat(int shmid, char __user *shmaddr, int shmflg)
       tmp = KMALLOC(sizeof(struct sysv_shm), GFP_KERNEL);
       if (tmp == NULL)
       {
-        printk("Pid %d: could not alllocate for sysv_shm\n", current->pid);
+        TPRINT("Pid %d: could not alllocate for sysv_shm\n", current->pid);
         return -ENOMEM;
       }
       tmp->addr = atretparams->raddr;
@@ -17454,7 +17431,7 @@ replay_shmat(int shmid, char __user *shmaddr, int shmflg)
 
       MPRINT("  Pin is attached to pid %d - munmap preallocation before shmat at addr %lx size %lu\n", current->pid, atretparams->raddr, atretparams->size);
       retval = sys_munmap(atretparams->raddr, atretparams->size);
-      if (retval) printk("[WARN]Pid %d shmat failed to munmap the preallocation at addr %lx size %lu\n", current->pid, rc, atretparams->size);
+      if (retval) TPRINT("[WARN]Pid %d shmat failed to munmap the preallocation at addr %lx size %lu\n", current->pid, rc, atretparams->size);
     }
 
     // redo the mapping with at the same address returned during recording
@@ -17462,17 +17439,17 @@ replay_shmat(int shmid, char __user *shmaddr, int shmflg)
     retval = sys_shmat(shmid, shmaddr, shmflg);
     if (retval != rc)
     {
-      printk("replay_ipc(shmat) returns different value %ld than %ld\n", retval, rc);
+      TPRINT("replay_ipc(shmat) returns different value %ld than %ld\n", retval, rc);
       return syscall_mismatch();
     }
     if (retval > 0)
     {
       u_long raddr;
       get_user(raddr, (unsigned long __user *) retval);
-      printk("Pid %d replays SHMAT success address %lx\n", current->pid, raddr);
+      TPRINT("Pid %d replays SHMAT success address %lx\n", current->pid, raddr);
       if (raddr != atretparams->raddr)
       {
-        printk("replay_ipc(shmat) returns different address %lx than %lx\n", raddr, atretparams->raddr);
+        TPRINT("replay_ipc(shmat) returns different address %lx than %lx\n", raddr, atretparams->raddr);
       }
     }
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct shmat_retvals));
@@ -17516,14 +17493,14 @@ record_shmctl(int shmid, int cmd, struct shmid_ds __user *buf)
       pretval = ARGSKMALLOC(sizeof(u_long) + sizeof(int) + len, GFP_KERNEL);
       if (pretval == NULL)
       {
-        printk("record_ipc (shmctl): can't allocate return value\n");
+        TPRINT("record_ipc (shmctl): can't allocate return value\n");
         return -ENOMEM;
       }
       *((u_long *) pretval) = sizeof(int) + len;
       *((int *) pretval + sizeof(u_long)) = SHMCTL;
       if (copy_from_user(pretval + sizeof(u_long) + sizeof(int), buf, len))
       {
-        printk("record_ipc (shmctl): can't copy data from user\n");
+        TPRINT("record_ipc (shmctl): can't copy data from user\n");
         ARGSKFREE(pretval, sizeof(u_long) + sizeof(int) + len);
         return -EFAULT;
       }
@@ -17553,7 +17530,7 @@ replay_shmctl(int shmid, int cmd, struct shmid_ds __user *buf)
         u_long len = *((u_long *) retparams);
         if (copy_to_user(buf, retparams + sizeof(u_long) + sizeof(int), len - sizeof(int)))
         {
-          printk("replay_ipc (call %d): pid %d cannot copy to user\n", SHMCTL, current->pid);
+          TPRINT("replay_ipc (call %d): pid %d cannot copy to user\n", SHMCTL, current->pid);
           return syscall_mismatch();
         }
         argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + len);
@@ -17617,7 +17594,7 @@ record_semctl(int semid, int semnum, int cmd, union semun arg)
       pretval = ARGSKMALLOC(sizeof(u_long) + sizeof(int) + len, GFP_KERNEL);
       if (pretval == NULL)
       {
-        printk("record_ipc (semctl): can't allocate return value\n");
+        TPRINT("record_ipc (semctl): can't allocate return value\n");
         return -ENOMEM;
       }
       *((u_long *) pretval) = sizeof(int) + len;
@@ -17644,7 +17621,7 @@ replay_semctl(int semid, int semnum, int cmd, union semun arg)
     u_long len = *((u_long *) retparams);
     if (copy_to_user(arg.buf, retparams + sizeof(u_long) + sizeof(int), len - sizeof(int)))
     {
-      printk("replay_ipc (call %d): pid %d cannot copy to user\n", SEMCTL, current->pid);
+      TPRINT("replay_ipc (call %d): pid %d cannot copy to user\n", SEMCTL, current->pid);
       return syscall_mismatch();
     }
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + len);
@@ -17681,7 +17658,7 @@ replay_shmdt(char __user *shmaddr)
   retval = sys_shmdt(shmaddr);
   if (retval != rc)
   {
-    printk("replay_ipc(shmdt) returns different value %ld than %ld\n", retval, rc);
+    TPRINT("replay_ipc(shmdt) returns different value %ld than %ld\n", retval, rc);
     return syscall_mismatch();
   }
   /*
@@ -17737,7 +17714,7 @@ record_msgrcv(int msqid, struct msgbuf __user *msgp, size_t msgsz, long msgtyp, 
     pretval = ARGSKMALLOC(sizeof(u_long) + sizeof(long) + rc, GFP_KERNEL);
     if (pretval == NULL)
     {
-      printk("record_ipc (msgrcv): can't allocate return value\n");
+      TPRINT("record_ipc (msgrcv): can't allocate return value\n");
       return -ENOMEM;
     }
     *((u_long *) pretval) = sizeof(int) + sizeof(long) + rc;
@@ -17763,7 +17740,7 @@ replay_msgrcv(int msqid, struct msgbuf __user *msgp, size_t msgsz, long msgtyp, 
     u_long len = *((u_long *) retparams);
     if (copy_to_user(msgp, retparams + sizeof(u_long) + sizeof(int), len - sizeof(int)))
     {
-      printk("replay_ipc (call %d): pid %d cannot copy to user\n", MSGRCV, current->pid);
+      TPRINT("replay_ipc (call %d): pid %d cannot copy to user\n", MSGRCV, current->pid);
       return syscall_mismatch();
     }
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + len);
@@ -17806,7 +17783,7 @@ record_msgctl(int msqid, int cmd, struct msqid_ds __user *buf)
       pretval = ARGSKMALLOC(sizeof(u_long) + sizeof(int) + len, GFP_KERNEL);
       if (pretval == NULL)
       {
-        printk("record_ipc (msgctl): can't allocate return value\n");
+        TPRINT("record_ipc (msgctl): can't allocate return value\n");
         return -ENOMEM;
       }
       *((u_long *) pretval) = sizeof(int) + len;
@@ -17833,7 +17810,7 @@ replay_msgctl(int msqid, int cmd, struct msqid_ds __user *buf)
     u_long len = *((u_long *) retparams);
     if (copy_to_user(buf, retparams + sizeof(u_long) + sizeof(int), len - sizeof(int)))
     {
-      printk("replay_ipc (call %d): pid %d cannot copy to user\n", MSGCTL, current->pid);
+      TPRINT("replay_ipc (call %d): pid %d cannot copy to user\n", MSGCTL, current->pid);
       return syscall_mismatch();
     }
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + len);
@@ -17867,7 +17844,7 @@ void theia_ipc_ahg(long rc, uint call, int first, u_long second,
       pahgv_shmget = (struct shmget_ahgv *)KMALLOC(sizeof(struct shmget_ahgv), GFP_KERNEL);
       if (pahgv_shmget == NULL)
       {
-        printk("theia_shmget_ahg: failed to KMALLOC.\n");
+        TPRINT("theia_shmget_ahg: failed to KMALLOC.\n");
         return;
       }
       pahgv_shmget->pid = current->pid;
@@ -17882,7 +17859,7 @@ void theia_ipc_ahg(long rc, uint call, int first, u_long second,
       pahgv_shmat = (struct shmat_ahgv *)KMALLOC(sizeof(struct shmat_ahgv), GFP_KERNEL);
       if (pahgv_shmat == NULL)
       {
-        printk("theia_shmat_ahg: failed to KMALLOC.\n");
+        TPRINT("theia_shmat_ahg: failed to KMALLOC.\n");
         return;
       }
       pahgv_shmat->pid = current->pid;
@@ -17923,7 +17900,7 @@ int theia_sys_ipc(uint call, int first, u_long second,
     ipcp = ipc_lock(&ns->ids[IPC_SHM_IDS], first);
     if (IS_ERR(ipcp))
     {
-      printk("theia_sys_ipc: cannot lock ipc for shmat\n");
+      TPRINT("theia_sys_ipc: cannot lock ipc for shmat\n");
       return -EINVAL;
     }
     shp = container_of(ipcp, struct shmid_kernel, shm_perm);
@@ -17946,7 +17923,7 @@ int theia_sys_ipc(uint call, int first, u_long second,
       }
 
       ret = sys_mprotect(rc, size, PROT_NONE);
-      //      printk("protection of a shared page will be changed, ret %d, %d\n", ret, np);
+      //      TPRINT("protection of a shared page will be changed, ret %d, %d\n", ret, np);
     }
 #endif
   }
@@ -18005,7 +17982,7 @@ record_ipc(uint call, int first, u_long second, u_long third, void __user *ptr, 
           pretval = ARGSKMALLOC(sizeof(u_long) + sizeof(int) + len, GFP_KERNEL);
           if (pretval == NULL)
           {
-            printk("record_ipc (msgctl): can't allocate return value\n");
+            TPRINT("record_ipc (msgctl): can't allocate return value\n");
             return -ENOMEM;
           }
           *((u_long *) pretval) = sizeof(int) + len;
@@ -18021,7 +17998,7 @@ record_ipc(uint call, int first, u_long second, u_long third, void __user *ptr, 
         pretval = ARGSKMALLOC(sizeof(u_long) + sizeof(long) + rc, GFP_KERNEL);
         if (pretval == NULL)
         {
-          printk("record_ipc (msgrcv): can't allocate return value\n");
+          TPRINT("record_ipc (msgrcv): can't allocate return value\n");
           return -ENOMEM;
         }
         *((u_long *) pretval) = sizeof(int) + sizeof(long) + rc;
@@ -18061,7 +18038,7 @@ record_ipc(uint call, int first, u_long second, u_long third, void __user *ptr, 
           pretval = ARGSKMALLOC(sizeof(u_long) + sizeof(int) + len, GFP_KERNEL);
           if (pretval == NULL)
           {
-            printk("record_ipc (semctl): can't allocate return value\n");
+            TPRINT("record_ipc (semctl): can't allocate return value\n");
             return -ENOMEM;
           }
           *((u_long *) pretval) = sizeof(int) + len;
@@ -18088,7 +18065,7 @@ record_ipc(uint call, int first, u_long second, u_long third, void __user *ptr, 
         ipcp = ipc_lock(&ns->ids[IPC_SHM_IDS], first);
         if (IS_ERR(ipcp))
         {
-          printk("record_ipc: cannot lock ipc for shmat\n");
+          TPRINT("record_ipc: cannot lock ipc for shmat\n");
           return -EINVAL;
         }
         shp = container_of(ipcp, struct shmid_kernel, shm_perm);
@@ -18099,7 +18076,7 @@ record_ipc(uint call, int first, u_long second, u_long third, void __user *ptr, 
         patretval = (struct shmat_retvals *) pretval;
         if (patretval == NULL)
         {
-          printk("record_ipc(shmat) can't allocate buffer\n");
+          TPRINT("record_ipc(shmat) can't allocate buffer\n");
           return -ENOMEM;
         }
         patretval->len = sizeof(struct shmat_retvals) - sizeof(u_long);
@@ -18123,7 +18100,7 @@ record_ipc(uint call, int first, u_long second, u_long third, void __user *ptr, 
           }
 
           ret = sys_mprotect(rc, size, PROT_NONE);
-          //        printk("protection of a shared page will be changed, ret %d, %d\n", ret, np);
+          //        TPRINT("protection of a shared page will be changed, ret %d, %d\n", ret, np);
         }
 #endif
 
@@ -18156,14 +18133,14 @@ record_ipc(uint call, int first, u_long second, u_long third, void __user *ptr, 
           pretval = ARGSKMALLOC(sizeof(u_long) + sizeof(int) + len, GFP_KERNEL);
           if (pretval == NULL)
           {
-            printk("record_ipc (shmctl): can't allocate return value\n");
+            TPRINT("record_ipc (shmctl): can't allocate return value\n");
             return -ENOMEM;
           }
           *((u_long *) pretval) = sizeof(int) + len;
           *((int *) pretval + sizeof(u_long)) = call;
           if (copy_from_user(pretval + sizeof(u_long) + sizeof(int), ptr, len))
           {
-            printk("record_ipc (shmctl): can't copy data from user\n");
+            TPRINT("record_ipc (shmctl): can't copy data from user\n");
             ARGSKFREE(pretval, sizeof(u_long) + sizeof(int) + len);
             return -EFAULT;
           }
@@ -18194,7 +18171,7 @@ replay_ipc(uint call, int first, u_long second, u_long third, void __user *ptr, 
         u_long len = *((u_long *) retparams);
         if (copy_to_user(ptr, retparams + sizeof(u_long) + sizeof(int), len - sizeof(int)))
         {
-          printk("replay_ipc (call %d): pid %d cannot copy to user\n", call, current->pid);
+          TPRINT("replay_ipc (call %d): pid %d cannot copy to user\n", call, current->pid);
           return syscall_mismatch();
         }
         argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + len);
@@ -18221,7 +18198,7 @@ replay_ipc(uint call, int first, u_long second, u_long third, void __user *ptr, 
           tmp = KMALLOC(sizeof(struct sysv_shm), GFP_KERNEL);
           if (tmp == NULL)
           {
-            printk("Pid %d: could not alllocate for sysv_shm\n", current->pid);
+            TPRINT("Pid %d: could not alllocate for sysv_shm\n", current->pid);
             return -ENOMEM;
           }
           tmp->addr = atretparams->raddr;
@@ -18230,7 +18207,7 @@ replay_ipc(uint call, int first, u_long second, u_long third, void __user *ptr, 
 
           MPRINT("  Pin is attached to pid %d - munmap preallocation before shmat at addr %lx size %lu\n", current->pid, atretparams->raddr, atretparams->size);
           retval = sys_munmap(atretparams->raddr, atretparams->size);
-          if (retval) printk("[WARN]Pid %d shmat failed to munmap the preallocation at addr %lx size %lu\n", current->pid, rc, atretparams->size);
+          if (retval) TPRINT("[WARN]Pid %d shmat failed to munmap the preallocation at addr %lx size %lu\n", current->pid, rc, atretparams->size);
         }
 
         // redo the mapping with at the same address returned during recording
@@ -18238,17 +18215,17 @@ replay_ipc(uint call, int first, u_long second, u_long third, void __user *ptr, 
         retval = sys_ipc(call, repid, rc, third, (void __user *) atretparams->raddr, fifth);
         if (retval != rc)
         {
-          printk("replay_ipc(shmat) returns different value %ld than %ld\n", retval, rc);
+          TPRINT("replay_ipc(shmat) returns different value %ld than %ld\n", retval, rc);
           return syscall_mismatch();
         }
         if (retval == 0)
         {
           u_long raddr;
           get_user(raddr, (unsigned long __user *) third);
-          printk("Pid %d replays SHMAT success address %lx\n", current->pid, raddr);
+          TPRINT("Pid %d replays SHMAT success address %lx\n", current->pid, raddr);
           if (raddr != atretparams->raddr)
           {
-            printk("replay_ipc(shmat) returns different address %lx than %lx\n", raddr, atretparams->raddr);
+            TPRINT("replay_ipc(shmat) returns different address %lx than %lx\n", raddr, atretparams->raddr);
           }
         }
         argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct shmat_retvals));
@@ -18258,7 +18235,7 @@ replay_ipc(uint call, int first, u_long second, u_long third, void __user *ptr, 
       retval = sys_ipc(call, first, second, third, ptr, fifth);
       if (retval != rc)
       {
-        printk("replay_ipc(shmdt) returns different value %ld than %ld\n", retval, rc);
+        TPRINT("replay_ipc(shmdt) returns different value %ld than %ld\n", retval, rc);
         return syscall_mismatch();
       }
       /*
@@ -18293,14 +18270,14 @@ replay_ipc(uint call, int first, u_long second, u_long third, void __user *ptr, 
       retval = sys_ipc(call, first, second, third, ptr, fifth);
       if ((rc < 0 && retval >= 0) || (rc >= 0 && retval < 0))
       {
-        printk("Pid %d replay_ipc SHMGET, on record we got %ld, but replay we got %ld\n", current->pid, rc, retval);
+        TPRINT("Pid %d replay_ipc SHMGET, on record we got %ld, but replay we got %ld\n", current->pid, rc, retval);
         return syscall_mismatch();
       }
 
       // put a mapping from the re-run replay identifier (pseudo), to the record one
       if (add_sysv_mapping(current->replay_thrd, rc, retval))
       {
-        printk("Pid %d replay_ipc SHMGET, could not add replay identifier mapping, replay: %ld, record %ld\n", current->pid, retval, rc);
+        TPRINT("Pid %d replay_ipc SHMGET, could not add replay identifier mapping, replay: %ld, record %ld\n", current->pid, retval, rc);
         return syscall_mismatch();
       }
       return rc;
@@ -18318,7 +18295,7 @@ replay_ipc(uint call, int first, u_long second, u_long third, void __user *ptr, 
             u_long len = *((u_long *) retparams);
             if (copy_to_user(ptr, retparams + sizeof(u_long) + sizeof(int), len - sizeof(int)))
             {
-              printk("replay_ipc (call %d): pid %d cannot copy to user\n", call, current->pid);
+              TPRINT("replay_ipc (call %d): pid %d cannot copy to user\n", call, current->pid);
               return syscall_mismatch();
             }
             argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + len);
@@ -18358,7 +18335,7 @@ long shim_sigreturn(struct pt_regs *regs)
     }
     else
     {
-      printk("Pid %d does sigreturn but no context???\n", current->pid);
+      TPRINT("Pid %d does sigreturn but no context???\n", current->pid);
     }
   }
 
@@ -18430,7 +18407,7 @@ record_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_reg
     tsk = pid_task(find_vpid(rc), PIDTYPE_PID);
     if (tsk == NULL)
     {
-      printk("record_clone: cannot find child\n");
+      TPRINT("record_clone: cannot find child\n");
       rg_unlock(prg);
       return -ECHILD;
     }
@@ -18480,7 +18457,7 @@ record_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_reg
     if (add_argsalloc_node(tsk->record_thrd, slab, argsalloc_size))
     {
       VFREE(slab);
-      printk("Pid %d fork_replay: error adding argsalloc_node\n", current->pid);
+      TPRINT("Pid %d fork_replay: error adding argsalloc_node\n", current->pid);
       return -ENOMEM;
     }
 #ifdef LOG_COMPRESS_1
@@ -18491,7 +18468,7 @@ record_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_reg
     if (add_clog_node(tsk->record_thrd, slab, argsalloc_size))
     {
       VFREE(slab);
-      printk("Pid %d fork_replay: error adding clog_node\n", current->pid);
+      TPRINT("Pid %d fork_replay: error adding clog_node\n", current->pid);
       return -ENOMEM;
     }
 #endif
@@ -18525,7 +18502,7 @@ replay_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_reg
   {
     rc = current->replay_thrd->rp_saved_rc;
     (*(int *)(current->replay_thrd->app_syscall_addr)) = 999;
-    printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__, __LINE__, current->pid);
+    TPRINT("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__, __LINE__, current->pid);
   }
   else
   {
@@ -18544,13 +18521,13 @@ replay_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_reg
     MPRINT("Pid %d in replay clone spawns child %d\n", current->pid, pid);
     if (pid < 0)
     {
-      printk("[DIFF]replay_clone: second clone failed, rc=%d\n", pid);
+      TPRINT("[DIFF]replay_clone: second clone failed, rc=%d\n", pid);
       return syscall_mismatch();
     }
     tsk = pid_task(find_vpid(pid), PIDTYPE_PID);
     if (!tsk)
     {
-      printk("[DIFF]replay_clone: cannot find replaying Pid %d\n", pid);
+      TPRINT("[DIFF]replay_clone: cannot find replaying Pid %d\n", pid);
       return -EINVAL;
     }
 
@@ -18591,7 +18568,7 @@ replay_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_reg
     {
       if (prept->rp_record_thread == prt)
       {
-        printk("[DIFF]replay_clone: record thread already cloned?\n");
+        TPRINT("[DIFF]replay_clone: record thread already cloned?\n");
         ds_list_iter_destroy(iter);
         rg_unlock(prg->rg_rec_group);
         return syscall_mismatch();
@@ -18764,7 +18741,7 @@ void theia_clone_ahg(long new_pid)
     pahgv = (struct clone_ahgv *)KMALLOC(sizeof(struct clone_ahgv), GFP_KERNEL);
     if (pahgv == NULL)
     {
-      printk("theia_clone_ahg: failed to KMALLOC.\n");
+      TPRINT("theia_clone_ahg: failed to KMALLOC.\n");
       return;
     }
     pahgv->pid = current->pid;
@@ -18837,7 +18814,7 @@ shim_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_regs 
     tsk = pid_task(find_vpid(child_pid), PIDTYPE_PID);
     if (!tsk)
     {
-      printk("[DIFF]shim_clone: cannot find replaying Pid %d\n", child_pid);
+      TPRINT("[DIFF]shim_clone: cannot find replaying Pid %d\n", child_pid);
       return -EINVAL;
     }
     tsk->replay_thrd = NULL;
@@ -18911,7 +18888,7 @@ void theia_mprotect_ahg(u_long address, u_long len, uint16_t prot, long rc)
   pahgv = (struct mprotect_ahgv *)KMALLOC(sizeof(struct mprotect_ahgv), GFP_KERNEL);
   if (pahgv == NULL)
   {
-    printk("theia_mprotect_ahg: failed to KMALLOC.\n");
+    TPRINT("theia_mprotect_ahg: failed to KMALLOC.\n");
     return;
   }
   pahgv->pid = current->pid;
@@ -18954,7 +18931,7 @@ replay_mprotect(unsigned long start, size_t len, unsigned long prot)
   {
     rc = current->replay_thrd->rp_saved_rc;
     (*(int *)(current->replay_thrd->app_syscall_addr)) = 999;
-    printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__, __LINE__, current->pid);
+    TPRINT("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__, __LINE__, current->pid);
   }
   else
   {
@@ -18966,7 +18943,7 @@ replay_mprotect(unsigned long start, size_t len, unsigned long prot)
 
   if (rc != retval)
   {
-    printk("Replay: mprotect returns diff. value %lu than %lu\n", retval, rc);
+    TPRINT("Replay: mprotect returns diff. value %lu than %lu\n", retval, rc);
     return syscall_mismatch();
   }
   return rc;
@@ -19048,7 +19025,7 @@ record_quotactl(unsigned int cmd, const char __user *special, qid_t id, void __u
       pretval = ARGSKMALLOC(sizeof(u_long) + len, GFP_KERNEL);
       if (pretval == NULL)
       {
-        printk("record_quotactl: can't allocate return value\n");
+        TPRINT("record_quotactl: can't allocate return value\n");
         return -ENOMEM;
       }
       *((u_long *) pretval) = len;
@@ -19076,7 +19053,7 @@ replay_quotactl(unsigned int cmd, const char __user *special, qid_t id, void __u
     len = *((u_long *) retparams);
     if (copy_to_user(addr, retparams + sizeof(u_long), len))
     {
-      printk("replay_quotactl: pid %d cannot copy to user\n", current->pid);
+      TPRINT("replay_quotactl: pid %d cannot copy to user\n", current->pid);
       return syscall_mismatch();
     }
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + len);
@@ -19111,12 +19088,12 @@ record_bdflush(int func, long data)
     pretval = ARGSKMALLOC(sizeof(long), GFP_KERNEL);
     if (pretval == NULL)
     {
-      printk("record_bdflush: can't allocate buffer\n");
+      TPRINT("record_bdflush: can't allocate buffer\n");
       return -ENOMEM;
     }
     if (copy_from_user(pretval, (long __user *) data, sizeof(long)))
     {
-      printk("record_bdflush: can't copy to buffer\n");
+      TPRINT("record_bdflush: can't copy to buffer\n");
       ARGSKFREE(pretval, sizeof(long));
       pretval = NULL;
       rc = -EFAULT;
@@ -19133,7 +19110,7 @@ static asmlinkage long replay_bdflush(int func, long data)
   long rc = get_next_syscall(134, &retparams);
   if (retparams)
   {
-    if (copy_to_user((long __user *) data, retparams, sizeof(long))) printk("replay_bdflush: pid %d cannot copy to user\n", current->pid);
+    if (copy_to_user((long __user *) data, retparams, sizeof(long))) TPRINT("replay_bdflush: pid %d cannot copy to user\n", current->pid);
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(long));
   }
 
@@ -19156,19 +19133,19 @@ record_sysfs(int option, unsigned long arg1, unsigned long arg2)
     len = strlen_user((char __user *) arg2) + 1;
     if (len <= 0)
     {
-      printk("record_sysfs: pid %d unable to determine buffer length\n", current->pid);
+      TPRINT("record_sysfs: pid %d unable to determine buffer length\n", current->pid);
       return -EINVAL;
     }
     pretval = ARGSKMALLOC(len + sizeof(long), GFP_KERNEL);
     if (pretval == NULL)
     {
-      printk("record_sysfs: can't allocate buffer\n");
+      TPRINT("record_sysfs: can't allocate buffer\n");
       return -ENOMEM;
     }
     *((u_long *) pretval) = len;
     if (copy_from_user(pretval + sizeof(u_long), (long __user *) arg2, len))
     {
-      printk("record_sysfs: can't copy to buffer\n");
+      TPRINT("record_sysfs: can't copy to buffer\n");
       ARGSKFREE(pretval, len);
       return -EFAULT;
     }
@@ -19186,7 +19163,7 @@ replay_sysfs(int option, unsigned long arg1, unsigned long arg2)
   if (retparams)
   {
     u_long len = *((u_long *) retparams);
-    if (copy_to_user((char __user *) arg2, retparams + sizeof(u_long), len)) printk("replay_sysfs: pid %d cannot copy to user\n", current->pid);
+    if (copy_to_user((char __user *) arg2, retparams + sizeof(u_long), len)) TPRINT("replay_sysfs: pid %d cannot copy to user\n", current->pid);
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + len);
   }
 
@@ -19333,12 +19310,12 @@ static asmlinkage long record_getdents(unsigned int fd, struct linux_dirent __us
     pretval = ARGSKMALLOC(new_rc, GFP_KERNEL);
     if (pretval == NULL)
     {
-      printk("record_getdents: can't allocate buffer\n");
+      TPRINT("record_getdents: can't allocate buffer\n");
       return -ENOMEM;
     }
     if (copy_from_user(pretval, dirent, new_rc))
     {
-      printk("record_getdents: can't copy to buffer\n");
+      TPRINT("record_getdents: can't copy to buffer\n");
       ARGSKFREE(pretval, new_rc);
       pretval = NULL;
       new_rc = -EFAULT;
@@ -19356,7 +19333,7 @@ static asmlinkage long replay_getdents(unsigned int fd, struct linux_dirent __us
 
   if (retparams)
   {
-    if (copy_to_user(dirent, retparams, rc)) printk("replay_getdents: pid %d cannot copy to user\n", current->pid);
+    if (copy_to_user(dirent, retparams, rc)) TPRINT("replay_getdents: pid %d cannot copy to user\n", current->pid);
     argsconsume(current->replay_thrd->rp_record_thread, rc);
   }
 
@@ -19388,7 +19365,7 @@ record_select(int n, fd_set __user *inp, fd_set __user *outp, fd_set __user *exp
   pretvals = ARGSKMALLOC(sizeof(u_long) + size, GFP_KERNEL);
   if (pretvals == NULL)
   {
-    printk("record_select: can't allocate buffer\n");
+    TPRINT("record_select: can't allocate buffer\n");
     return -ENOMEM;
   }
   *((u_long *) pretvals) = size; // Needed for parseklog currently
@@ -19397,7 +19374,7 @@ record_select(int n, fd_set __user *inp, fd_set __user *outp, fd_set __user *exp
   {
     if (copy_from_user(p, inp, FDS_BYTES(n)))
     {
-      printk("record_select: copy of inp failed\n");
+      TPRINT("record_select: copy of inp failed\n");
       ARGSKFREE(pretvals, sizeof(u_long) + size);
       return -EFAULT;
     }
@@ -19407,7 +19384,7 @@ record_select(int n, fd_set __user *inp, fd_set __user *outp, fd_set __user *exp
   {
     if (copy_from_user(p, outp, FDS_BYTES(n)))
     {
-      printk("record_select: copy of outp failed\n");
+      TPRINT("record_select: copy of outp failed\n");
       ARGSKFREE(pretvals, sizeof(u_long) + size);
       return -EFAULT;
     }
@@ -19417,7 +19394,7 @@ record_select(int n, fd_set __user *inp, fd_set __user *outp, fd_set __user *exp
   {
     if (copy_from_user(p, exp, FDS_BYTES(n)))
     {
-      printk("record_select: copy of exp failed\n");
+      TPRINT("record_select: copy of exp failed\n");
       ARGSKFREE(pretvals, sizeof(u_long) + size);
       return -EFAULT;
     }
@@ -19427,7 +19404,7 @@ record_select(int n, fd_set __user *inp, fd_set __user *outp, fd_set __user *exp
   {
     if (copy_from_user(p, tvp, sizeof(struct timeval)))
     {
-      printk("record_select: copy of exp failed\n");
+      TPRINT("record_select: copy of exp failed\n");
       ARGSKFREE(pretvals, sizeof(u_long) + size);
       return -EFAULT;
     }
@@ -19437,7 +19414,7 @@ record_select(int n, fd_set __user *inp, fd_set __user *outp, fd_set __user *exp
   if (rc == 0 && tvp)
   {
     atomic_set(&current->record_thrd->rp_group->rg_det_time.flag, 1);
-    printk("Pid %d select timeout after %lu, %lu\n", current->pid, tvp->tv_sec, tvp->tv_usec);
+    TPRINT("Pid %d select timeout after %lu, %lu\n", current->pid, tvp->tv_sec, tvp->tv_usec);
   }
 #endif
 
@@ -19458,7 +19435,7 @@ replay_select(int n, fd_set __user *inp, fd_set __user *outp, fd_set __user *exp
   {
     if (copy_to_user(inp, retparams, FDS_BYTES(n)))
     {
-      printk("Pid %d cannot copy inp to user\n", current->pid);
+      TPRINT("Pid %d cannot copy inp to user\n", current->pid);
       syscall_mismatch();
     }
     retparams += FDS_BYTES(n);
@@ -19467,7 +19444,7 @@ replay_select(int n, fd_set __user *inp, fd_set __user *outp, fd_set __user *exp
   {
     if (copy_to_user(outp, retparams, FDS_BYTES(n)))
     {
-      printk("Pid %d cannot copy outp to user\n", current->pid);
+      TPRINT("Pid %d cannot copy outp to user\n", current->pid);
       syscall_mismatch();
     }
     retparams += FDS_BYTES(n);
@@ -19476,7 +19453,7 @@ replay_select(int n, fd_set __user *inp, fd_set __user *outp, fd_set __user *exp
   {
     if (copy_to_user(exp, retparams, FDS_BYTES(n)))
     {
-      printk("Pid %d cannot copy exp to user\n", current->pid);
+      TPRINT("Pid %d cannot copy exp to user\n", current->pid);
       syscall_mismatch();
     }
     retparams += FDS_BYTES(n);
@@ -19485,7 +19462,7 @@ replay_select(int n, fd_set __user *inp, fd_set __user *outp, fd_set __user *exp
   {
     if (copy_to_user(tvp, retparams, sizeof(struct timeval)))
     {
-      printk("Pid %d cannot copy tvp to user\n", current->pid);
+      TPRINT("Pid %d cannot copy tvp to user\n", current->pid);
       syscall_mismatch();
     }
   }
@@ -19539,7 +19516,7 @@ record_readv(unsigned long fd, const struct iovec __user *vec, unsigned long vle
   if (is_x_fd(&current->record_thrd->rp_clog.x, fd) && size > 0)
   {
     change_log_special_second();
-    if (x_detail) printk("Pid %d readv for x\n", current->pid);
+    if (x_detail) TPRINT("Pid %d readv for x\n", current->pid);
     //x_compress_reply (argshead(current->record_thrd) - size, size, &X_STRUCT_REC, node);
   }
 #endif
@@ -19565,7 +19542,7 @@ replay_readv(unsigned long fd, const struct iovec __user *vec, unsigned long vle
     {
       BUG();
       //clog_mark_done_replay();
-      if (x_detail) printk("Pid %d readv for x\n", current->pid);
+      if (x_detail) TPRINT("Pid %d readv for x\n", current->pid);
       //x_decompress_reply (retval, &X_STRUCT_REP, node);
       //validate_decode_buffer (argshead(current->replay_thrd->rp_record_thread), retval, &X_STRUCT_REP);
       //consume_decode_buffer (retval, &X_STRUCT_REP);
@@ -19574,7 +19551,7 @@ replay_readv(unsigned long fd, const struct iovec __user *vec, unsigned long vle
         long retval = sys_readv(fd, vec, vlen);
         // it should be the same with RECV, fix if needed;
         if (retval != rc)
-          printk("Pid %d readv from x fails, expected:%ld, actual:%ld\n", current->pid, rc, retval);
+          TPRINT("Pid %d readv from x fails, expected:%ld, actual:%ld\n", current->pid, rc, retval);
       }
 
     }
@@ -19613,8 +19590,8 @@ record_writev(unsigned long fd, const struct iovec __user *vec, unsigned long vl
       if (x_detail) {
         int j = 0;
         for (; j < vec[i].iov_len; ++j)
-          printk ("%u, ", (unsigned int) *((unsigned char*)(vec[i].iov_base) + j));
-        printk ("\n");
+          TPRINT ("%u, ", (unsigned int) *((unsigned char*)(vec[i].iov_base) + j));
+        TPRINT ("\n");
       }
     }
   }
@@ -19623,7 +19600,7 @@ record_writev(unsigned long fd, const struct iovec __user *vec, unsigned long vl
 
   if (rc > 0 && is_x_fd(&current->record_thrd->rp_clog.x, fd))
   {
-    if (x_detail) printk("Pid %d writev syscall for x proto:%ld, vlen:%lu\n", current->pid, rc, vlen);
+    if (x_detail) TPRINT("Pid %d writev syscall for x proto:%ld, vlen:%lu\n", current->pid, rc, vlen);
     change_log_special_second();
 
   }
@@ -19642,7 +19619,7 @@ replay_writev(unsigned long fd, const struct iovec __user *vec, unsigned long vl
 
   if (size > 0 && (actual_fd = is_x_fd_replay(&X_STRUCT_REP, fd)) > 0)
   {
-    if (x_detail) printk("Pid %d writev syscall for x proto:%ld, vlen:%lu\n", current->pid, size, vlen);
+    if (x_detail) TPRINT("Pid %d writev syscall for x proto:%ld, vlen:%lu\n", current->pid, size, vlen);
     for (i = 0; i < vlen && count < size; ++i)
     {
       if (vec[i].iov_len > 0)
@@ -19672,11 +19649,11 @@ replay_writev(unsigned long fd, const struct iovec __user *vec, unsigned long vl
         mm_segment_t old_fs = get_fs();
         if (copy_from_user(kvec, vec, sizeof(struct iovec) * vlen))
         {
-          printk("Pid %d writev (modifying) for x cannot copy from user.\n", current->pid);
+          TPRINT("Pid %d writev (modifying) for x cannot copy from user.\n", current->pid);
           return -EFAULT;
         }
 
-        if (x_detail) printk("Pid %d writev for x, to_write is %d bytes.\n", current->pid, bytes_count);
+        if (x_detail) TPRINT("Pid %d writev for x, to_write is %d bytes.\n", current->pid, bytes_count);
         for (i = 0; i < vlen; ++i)
         {
           if (kvec[i].iov_len <= 0)
@@ -19703,7 +19680,7 @@ replay_writev(unsigned long fd, const struct iovec __user *vec, unsigned long vl
         retval = sys_writev(actual_fd, vec, vlen);
       if (retval != size)
       {
-        printk("Pid %d writev from x fails, expected:%ld, actual:%ld\n", current->pid, size, retval);
+        TPRINT("Pid %d writev from x fails, expected:%ld, actual:%ld\n", current->pid, size, retval);
         BUG();
       }
     }
@@ -19731,7 +19708,7 @@ theia_sys_writev(unsigned long fd, const struct iovec __user *vec, unsigned long
 {
   long rc;
   rc = sys_writev(fd, vec, vlen);
-  //printk("theia_sys_writev: pid %d, fd %lu, rc %ld\n", current->pid, fd, rc)
+  //TPRINT("theia_sys_writev: pid %d, fd %lu, rc %ld\n", current->pid, fd, rc)
   if (theia_logging_toggle)
     theia_writev_ahgx(fd, vec, vlen, rc, SYS_WRITEV);
   return rc;
@@ -19760,7 +19737,7 @@ theia_sys_writev(unsigned long fd, const struct iovec __user *vec, unsigned long
 {
   long rc;
   rc = sys_writev(fd, vec, vlen);
-  //printk("theia_sys_writev: pid %d, fd %lu, rc %ld\n", current->pid, fd, rc);
+  //TPRINT("theia_sys_writev: pid %d, fd %lu, rc %ld\n", current->pid, fd, rc);
   if (theia_logging_toggle)
     theia_writev_ahgx(fd, vec, vlen, rc, SYS_WRITEV);
   return rc;
@@ -19803,26 +19780,26 @@ record_sysctl(struct __sysctl_args __user *args)
   {
     if (copy_from_user(&kargs, args, sizeof(struct __sysctl_args)))
     {
-      printk("record_sysctl: pid %d cannot copy args struct from user\n", current->pid);
+      TPRINT("record_sysctl: pid %d cannot copy args struct from user\n", current->pid);
       return -EFAULT;
     }
     if (kargs.oldval && kargs.oldlenp)
     {
       if (copy_from_user(&oldlen, &kargs.oldlenp, sizeof(size_t)))
       {
-        printk("record_sysctl: pid %d cannot copy size from user\n", current->pid);
+        TPRINT("record_sysctl: pid %d cannot copy size from user\n", current->pid);
         return -EFAULT;
       }
       pretval = ARGSKMALLOC(sizeof(oldlen), GFP_KERNEL);
       if (pretval == NULL)
       {
-        printk("record_sysctl: pid %d can't allocate buffer of size %ld\n", current->pid, (long) oldlen);
+        TPRINT("record_sysctl: pid %d can't allocate buffer of size %ld\n", current->pid, (long) oldlen);
         return -ENOMEM;
       }
       *((u_long *) pretval) = oldlen;
       if (copy_from_user(pretval + sizeof(u_long), kargs.oldval, oldlen))
       {
-        printk("record_sysctl: pid %d cannot copy buffer from user\n", current->pid);
+        TPRINT("record_sysctl: pid %d cannot copy buffer from user\n", current->pid);
         ARGSKFREE(pretval, oldlen);
         return -EFAULT;
       }
@@ -19844,11 +19821,11 @@ replay_sysctl(struct __sysctl_args __user *args)
   {
     if (copy_from_user(&kargs, args, sizeof(struct __sysctl_args)))
     {
-      printk("replay_sysctl: pid %d cannot copy args struct from user\n", current->pid);
+      TPRINT("replay_sysctl: pid %d cannot copy args struct from user\n", current->pid);
       return syscall_mismatch();
     }
     oldlen = *((u_long *) retparams);
-    if (copy_to_user(kargs.oldval, retparams + sizeof(u_long), oldlen)) printk("replay_sysctl: pid %d cannot copy to user\n", current->pid);
+    if (copy_to_user(kargs.oldval, retparams + sizeof(u_long), oldlen)) TPRINT("replay_sysctl: pid %d cannot copy to user\n", current->pid);
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + oldlen);
   }
 
@@ -19890,26 +19867,26 @@ asmlinkage long shim_sched_yield(void)
         tmp->rp_status = REPLAY_STATUS_RUNNING;
         wake_up(&tmp->rp_waitq);
         ret = wait_event_interruptible_timeout(current->replay_thrd->rp_waitq, current->replay_thrd->rp_status == REPLAY_STATUS_RUNNING || current->replay_thrd->rp_group->rg_rec_group->rg_mismatch_flag, SCHED_TO);
-        if (ret == 0) printk("Replay pid %d timed out waiting after yield\n", current->pid);
+        if (ret == 0) TPRINT("Replay pid %d timed out waiting after yield\n", current->pid);
         if (ret == -ERESTARTSYS)
         {
-          printk("Pid %d: cannot wait due to yield - try again\n", current->pid);
+          TPRINT("Pid %d: cannot wait due to yield - try again\n", current->pid);
           if (test_thread_flag(TIF_SIGPENDING))
           {
             // this is really dumb
             while (current->replay_thrd->rp_status != REPLAY_STATUS_RUNNING)
             {
-              printk("Pid %d: cannot wait due to pending signal(s) - try again\n", current->pid);
+              TPRINT("Pid %d: cannot wait due to pending signal(s) - try again\n", current->pid);
               msleep(1000);
             }
           }
         }
         if (current->replay_thrd->rp_status != REPLAY_STATUS_RUNNING)
         {
-          printk("Replay pid %d woken up but not running.  We must want it to die\n", current->pid);
+          TPRINT("Replay pid %d woken up but not running.  We must want it to die\n", current->pid);
           do
           {
-            printk("\tthread %d (recpid %d) status %d clock %ld\n", tmp->rp_replay_pid, tmp->rp_record_thread->rp_record_pid, tmp->rp_status, tmp->rp_wait_clock);
+            TPRINT("\tthread %d (recpid %d) status %d clock %ld\n", tmp->rp_replay_pid, tmp->rp_record_thread->rp_record_pid, tmp->rp_status, tmp->rp_wait_clock);
             tmp = tmp->rp_next_thread;
           }
           while (tmp != current->replay_thrd);
@@ -19921,8 +19898,8 @@ asmlinkage long shim_sched_yield(void)
       tmp = tmp->rp_next_thread;
       if (tmp == current->replay_thrd)
       {
-        printk("Pid %d: Crud! no eligible thread to run on sched_yield\n", current->pid);
-        printk("This is probably really bad...sleeping\n");
+        TPRINT("Pid %d: Crud! no eligible thread to run on sched_yield\n", current->pid);
+        TPRINT("This is probably really bad...sleeping\n");
         msleep(1000);
       }
     }
@@ -19948,21 +19925,21 @@ record_nanosleep(struct timespec __user *rqtp, struct timespec __user *rmtp)
     pretval = ARGSKMALLOC(sizeof(struct timespec), GFP_KERNEL);
     if (pretval == NULL)
     {
-      printk("record_nanosleep: can't alloc buffer\n");
+      TPRINT("record_nanosleep: can't alloc buffer\n");
       return -ENOMEM;
     }
     if (copy_from_user(pretval, rmtp, sizeof(struct timespec)))
     {
-      printk("record_nanosleep: can't copy to buffer\n");
+      TPRINT("record_nanosleep: can't copy to buffer\n");
       ARGSKFREE(pretval, sizeof(struct timespec));
       pretval = NULL;
       rc = -EFAULT;
     }
   }
-  printk("Pid %d nanosleep \n", current->pid);
+  TPRINT("Pid %d nanosleep \n", current->pid);
   if (rc == 0)
   {
-    printk("Pid %d nanosleep for %lu, %lu\n", current->pid, rqtp->tv_sec, rqtp->tv_nsec);
+    TPRINT("Pid %d nanosleep for %lu, %lu\n", current->pid, rqtp->tv_sec, rqtp->tv_nsec);
     atomic_set(&current->record_thrd->rp_group->rg_det_time.flag, 1);
   }
   new_syscall_exit(35, pretval);
@@ -20047,7 +20024,7 @@ replay_mremap(unsigned long addr, unsigned long old_len, unsigned long new_len, 
 
   if (rc != retval)
   {
-    printk("Replay mremap returns different value %lu than %lu\n", retval, rc);
+    TPRINT("Replay mremap returns different value %lu than %lu\n", retval, rc);
     return syscall_mismatch();
   }
 
@@ -20105,7 +20082,7 @@ theia_sys_mremap(unsigned long addr, unsigned long old_len, unsigned long new_le
   rc = sys_mremap(addr, old_len, new_len, flags, new_addr);
 
   if (rc != -1) {
-//    printk("mremap: (0x%lx, %lu) -> (0x%lx, %lu)\n", addr, old_len, rc, new_len);
+//    TPRINT("mremap: (0x%lx, %lu) -> (0x%lx, %lu)\n", addr, old_len, rc, new_len);
     theia_mremap_ahgx(addr, old_len, rc, new_len);
   }
 
@@ -20144,17 +20121,17 @@ record_poll(struct pollfd __user *ufds, unsigned int nfds, long timeout_msecs)
     pretvals = ARGSKMALLOC(sizeof(u_long) + nfds * sizeof(short), GFP_KERNEL);
     if (pretvals == NULL)
     {
-      printk("record_poll: can't allocate buffer\n");
+      TPRINT("record_poll: can't allocate buffer\n");
       return -ENOMEM;
     }
     *((u_long *)pretvals) = nfds * sizeof(short);
-    if (c_detail) printk("Pid %d nfds %u\n", current->pid, nfds);
+    if (c_detail) TPRINT("Pid %d nfds %u\n", current->pid, nfds);
     p = (short *)(pretvals + sizeof(u_long));
     for (i = 0; i < nfds; i++)
     {
       if (copy_from_user(p, &ufds[i].revents, sizeof(short)))
       {
-        printk("record_poll: can't copy retval %d\n", i);
+        TPRINT("record_poll: can't copy retval %d\n", i);
         ARGSKFREE(pretvals, sizeof(u_long) + nfds * sizeof(short));
         return -EFAULT;
       }
@@ -20177,7 +20154,7 @@ record_poll(struct pollfd __user *ufds, unsigned int nfds, long timeout_msecs)
   if (rc == 0 && timeout_msecs > 0)
   {
     atomic_set(&prg->rg_det_time.flag, 1);
-    printk("Pid %d poll timeout %ld ms.\n", current->pid, timeout_msecs);
+    TPRINT("Pid %d poll timeout %ld ms.\n", current->pid, timeout_msecs);
   }
 #endif
   return rc;
@@ -20200,7 +20177,7 @@ replay_poll(struct pollfd __user *ufds, unsigned int nfds, long timeout_msecs)
   {
     struct restart_block *restart_block;
 
-    printk("pid %d restarting poll system call\n", current->pid);
+    TPRINT("pid %d restarting poll system call\n", current->pid);
     restart_block = &current_thread_info()->restart_block;
     restart_block->fn = do_restart_poll;
     restart_block->poll.ufds = ufds;
@@ -20214,7 +20191,7 @@ replay_poll(struct pollfd __user *ufds, unsigned int nfds, long timeout_msecs)
     {
       if (copy_to_user(&ufds[i].revents, p, sizeof(short)))
       {
-        printk("Pid %d cannot copy revent %d to user\n", current->pid, i);
+        TPRINT("Pid %d cannot copy revent %d to user\n", current->pid, i);
         syscall_mismatch();
       }
       p++;
@@ -20223,7 +20200,7 @@ replay_poll(struct pollfd __user *ufds, unsigned int nfds, long timeout_msecs)
     node = clog_mark_done_replay();
     decodeCachedValue(&tmp, 32, &current->replay_thrd->rp_record_thread->rp_clog.syscall_cache.poll_size, 0, 0, node);
     if (c_detail)
-      printk("record nfds*2:%u, actual: nfds %u\n", tmp, nfds);
+      TPRINT("record nfds*2:%u, actual: nfds %u\n", tmp, nfds);
     if (log_compress_debug) BUG_ON(tmp  != nfds * sizeof(short));
     p = (short *)(retparams + sizeof(u_long));
     for (i = 0; i < nfds; ++i)
@@ -20232,7 +20209,7 @@ replay_poll(struct pollfd __user *ufds, unsigned int nfds, long timeout_msecs)
       BUG_ON((short)tmp != *p);
       if (copy_to_user(&ufds[i].revents, &tmp, sizeof(short)))
       {
-        printk("Pid %d cannot copy revent %d to user\n", current->pid, i);
+        TPRINT("Pid %d cannot copy revent %d to user\n", current->pid, i);
         syscall_mismatch();
       }
       p++;
@@ -20285,7 +20262,7 @@ record_prctl(int option, unsigned long arg2, unsigned long arg3, unsigned long a
       pretval = ARGSKMALLOC(sizeof(u_long) + len, GFP_KERNEL);
       if (pretval == NULL)
       {
-        printk("record_quotactl: can't allocate return value\n");
+        TPRINT("record_quotactl: can't allocate return value\n");
         return -ENOMEM;
       }
       *((u_long *) pretval) = len;
@@ -20314,7 +20291,7 @@ replay_prctl(int option, unsigned long arg2, unsigned long arg3, unsigned long a
     retval = sys_prctl(option, arg2, arg3, arg4, arg5);
     if (retval != rc)
     {
-      printk("pid %d mismatch: prctl option %d returns %ld on replay and %ld during recording\n", current->pid, option, retval, rc);
+      TPRINT("pid %d mismatch: prctl option %d returns %ld on replay and %ld during recording\n", current->pid, option, retval, rc);
       return syscall_mismatch();
     }
   }
@@ -20323,7 +20300,7 @@ replay_prctl(int option, unsigned long arg2, unsigned long arg3, unsigned long a
     u_long len = *((u_long *) retparams);
     if (copy_to_user((char __user *) arg2, retparams + sizeof(u_long), len))
     {
-      printk("replay_quotactl: pid %d cannot copy to user\n", current->pid);
+      TPRINT("replay_quotactl: pid %d cannot copy to user\n", current->pid);
       return syscall_mismatch();
     }
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + len);
@@ -20347,7 +20324,7 @@ record_arch_prctl(int code, unsigned long addr)
     pretval = ARGSKMALLOC(sizeof(int) + sizeof(u_long), GFP_KERNEL);
     if (pretval == NULL)
     {
-      printk("record_arch_prctl: can't allocate return value\n");
+      TPRINT("record_arch_prctl: can't allocate return value\n");
       return -ENOMEM;
     }
     *((int *) pretval) = code;
@@ -20382,7 +20359,7 @@ replay_arch_prctl(int code, unsigned long addr)
     retval = sys_arch_prctl(code, addr);
     if (retval != rc)
     {
-      printk("pid %d mismatch: arch_prctl code %d returns %ld on replay and %ld during recording\n", current->pid, code, retval, rc);
+      TPRINT("pid %d mismatch: arch_prctl code %d returns %ld on replay and %ld during recording\n", current->pid, code, retval, rc);
       return syscall_mismatch();
     }
   }
@@ -20390,7 +20367,7 @@ replay_arch_prctl(int code, unsigned long addr)
   {
     if (copy_to_user((unsigned long __user *) addr, retparams + sizeof(int), sizeof(unsigned long)))
     {
-      printk("replay_arch_prctl: pid %d cannot copy to user\n", current->pid);
+      TPRINT("replay_arch_prctl: pid %d cannot copy to user\n", current->pid);
       return syscall_mismatch();
     }
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + sizeof(int));
@@ -20427,7 +20404,7 @@ long shim_rt_sigreturn(struct pt_regs *regs)
     }
     else
     {
-      printk("Pid %d does rt_sigreturn but no context???\n", current->pid);
+      TPRINT("Pid %d does rt_sigreturn but no context???\n", current->pid);
     }
   }
 
@@ -20452,7 +20429,7 @@ record_rt_sigaction(int sig, const struct sigaction __user *act, struct sigactio
     pretval = ARGSKMALLOC(sizeof(struct sigaction), GFP_KERNEL);
     if (pretval == NULL)
     {
-      printk("record_rt_sigaction: can't allocate buffer\n");
+      TPRINT("record_rt_sigaction: can't allocate buffer\n");
       return -ENOMEM;
     }
     if (copy_from_user(pretval, oact, sizeof(struct sigaction)))
@@ -20480,12 +20457,12 @@ replay_rt_sigaction(int sig, const struct sigaction __user *act, struct sigactio
     retparams = prt->rp_saved_retparams;
     // this is an application syscall (with Pin)
     (*(int *)(prt->app_syscall_addr)) = 999;
-    printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__, __LINE__, current->pid);
+    TPRINT("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__, __LINE__, current->pid);
     // actually perform rt_sigaction
     retval = sys_rt_sigaction(sig, act, oact, sigsetsize);
     if (rc != retval)
     {
-      printk("ERROR: sigaction mismatch, got %ld, expected %ld", retval, rc);
+      TPRINT("ERROR: sigaction mismatch, got %ld, expected %ld", retval, rc);
       syscall_mismatch();
     }
   }
@@ -20500,7 +20477,7 @@ replay_rt_sigaction(int sig, const struct sigaction __user *act, struct sigactio
     {
       if (copy_to_user(oact, retparams, sizeof(struct sigaction)))
       {
-        printk("Pid %d replay_rt_sigaction cannot copy oact %p to user\n", current->pid, oact);
+        TPRINT("Pid %d replay_rt_sigaction cannot copy oact %p to user\n", current->pid, oact);
       }
     }
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct sigaction));
@@ -20530,7 +20507,7 @@ record_rt_sigprocmask(int how, sigset_t __user *set, sigset_t __user *oset, size
     buf = ARGSKMALLOC(sizeof(u_long) + sigsetsize, GFP_KERNEL);
     if (buf == NULL)
     {
-      printk("record_rt_sigprocmask: can't alloc buffer\n");
+      TPRINT("record_rt_sigprocmask: can't alloc buffer\n");
       return -ENOMEM;
     }
     *((u_long *) buf) = sigsetsize;
@@ -20563,7 +20540,7 @@ replay_rt_sigprocmask(int how, sigset_t __user *set, sigset_t __user *oset, size
 
     if (rc != retval)
     {
-      printk("ERROR: sigprocmask expected %ld, got %ld\n", rc, retval);
+      TPRINT("ERROR: sigprocmask expected %ld, got %ld\n", rc, retval);
       syscall_mismatch();
     }
 
@@ -20572,7 +20549,7 @@ replay_rt_sigprocmask(int how, sigset_t __user *set, sigset_t __user *oset, size
       if (prt->rp_saved_psr->sysnum == 14)
       {
         (*(int *)(prt->app_syscall_addr)) = 999;
-        printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__, __LINE__, current->pid);
+        TPRINT("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__, __LINE__, current->pid);
       }
     }
   }
@@ -20585,8 +20562,8 @@ replay_rt_sigprocmask(int how, sigset_t __user *set, sigset_t __user *oset, size
   {
     size = *((size_t *) retparams);
     if (size != sigsetsize)
-      printk("Pid %d has diff sigsetsize %lu than %lu\n", current->pid, sigsetsize, size);
-    if (copy_to_user(oset, retparams + sizeof(size_t), size)) printk("Pid %d cannot copy to user\n", current->pid);
+      TPRINT("Pid %d has diff sigsetsize %lu than %lu\n", current->pid, sigsetsize, size);
+    if (copy_to_user(oset, retparams + sizeof(size_t), size)) TPRINT("Pid %d cannot copy to user\n", current->pid);
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + size);
   }
   return rc;
@@ -20609,13 +20586,13 @@ record_rt_sigpending(sigset_t __user *set, size_t sigsetsize)
     pretval = ARGSKMALLOC(sizeof(long) + sigsetsize, GFP_KERNEL);
     if (pretval == NULL)
     {
-      printk("record_rt_sigpending: can't allocate buffer\n");
+      TPRINT("record_rt_sigpending: can't allocate buffer\n");
       return -ENOMEM;
     }
     *((u_long *) pretval) = sigsetsize;
     if (copy_from_user(pretval + sizeof(u_long), set, sigsetsize))
     {
-      printk("record_rt_sigpending: can't copy to buffer\n");
+      TPRINT("record_rt_sigpending: can't copy to buffer\n");
       ARGSKFREE(pretval, sizeof(u_long) + sigsetsize);
       rc = -EFAULT;
     }
@@ -20635,7 +20612,7 @@ replay_rt_sigpending(sigset_t __user *set, size_t sigsetsize)
   if (retparams)
   {
     len = *((u_long *) retparams);
-    if (copy_to_user(set, retparams + sizeof(u_long), len)) printk("replay_rt_sigpending: pid %d cannot copy to user\n", current->pid);
+    if (copy_to_user(set, retparams + sizeof(u_long), len)) TPRINT("replay_rt_sigpending: pid %d cannot copy to user\n", current->pid);
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + len);
   }
 
@@ -20683,7 +20660,7 @@ record_pread64(unsigned int fd, char __user *buf, size_t count, loff_t pos)
 
   new_syscall_enter(17);
   DPRINT("pid %d, record read off of fd %d\n", current->pid, fd);
-  //printk("%s %d: In else? of macro?\n", __func__, __LINE__);
+  //TPRINT("%s %d: In else? of macro?\n", __func__, __LINE__);
   is_cache_file = is_record_cache_file_lock(current->record_thrd->rp_cache_files, fd);
 
   rc = sys_pread64(fd, buf, count, pos);
@@ -20712,7 +20689,7 @@ record_pread64(unsigned int fd, char __user *buf, size_t count, loff_t pos)
     fdt = files_fdtable(files);
     if (fd >= fdt->max_fds)
     {
-      printk("record_read: invalid fd but read succeeded?\n");
+      TPRINT("record_read: invalid fd but read succeeded?\n");
       record_cache_file_unlock(current->record_thrd->rp_cache_files, fd);
       return -EINVAL;
     }
@@ -20726,7 +20703,7 @@ record_pread64(unsigned int fd, char __user *buf, size_t count, loff_t pos)
       pretval = ARGSKMALLOC(sizeof(u_int) + sizeof(loff_t), GFP_KERNEL);
       if (pretval == NULL)
       {
-        printk("record_read: can't allocate pos buffer\n");
+        TPRINT("record_read: can't allocate pos buffer\n");
         record_cache_file_unlock(current->record_thrd->rp_cache_files, fd);
         return -ENOMEM;
       }
@@ -20746,7 +20723,7 @@ record_pread64(unsigned int fd, char __user *buf, size_t count, loff_t pos)
         map = filp->replayfs_filemap;
         //replayfs_filemap_init(&map, replayfs_alloc, filp);
 
-        //printk("%s %d - %p: Reading %d\n", __func__, __LINE__, current, fd);
+        //TPRINT("%s %d - %p: Reading %d\n", __func__, __LINE__, current, fd);
         if (filp->replayfs_filemap)
         {
           entry = replayfs_filemap_read(map, pos, rc);
@@ -20779,13 +20756,13 @@ record_pread64(unsigned int fd, char __user *buf, size_t count, loff_t pos)
       pretval = ARGSKMALLOC(rc + sizeof(u_int), GFP_KERNEL);
       if (pretval == NULL)
       {
-        printk("record_read: can't allocate buffer\n");
+        TPRINT("record_read: can't allocate buffer\n");
         return -ENOMEM;
       }
       *((u_int *) pretval) = 0;
       if (copy_from_user(pretval + sizeof(u_int), buf, rc))
       {
-        printk("record_read: can't copy to buffer\n");
+        TPRINT("record_read: can't copy to buffer\n");
         ARGSKFREE(pretval, rc + sizeof(u_int));
         return -EFAULT;
       }
@@ -20822,7 +20799,7 @@ replay_pread64(unsigned int fd, char __user *buf, size_t count, loff_t pos)
       retval = sys_pread64(cache_fd, buf, rc, off);
       if (retval != rc)
       {
-        printk("pid %d read from cache file %d files %p orig fd %u off %ld returns %ld not expected %ld\n", current->pid, cache_fd, current->replay_thrd->rp_cache_files, fd, (long) off, retval, rc);
+        TPRINT("pid %d read from cache file %d files %p orig fd %u off %ld returns %ld not expected %ld\n", current->pid, cache_fd, current->replay_thrd->rp_cache_files, fd, (long) off, retval, rc);
         return syscall_mismatch();
       }
       consume_size = sizeof(u_int) + sizeof(loff_t);
@@ -20845,7 +20822,7 @@ replay_pread64(unsigned int fd, char __user *buf, size_t count, loff_t pos)
     {
       // uncached read
       DPRINT("uncached read of fd %u\n", fd);
-      if (copy_to_user(buf, retparams + sizeof(u_int), rc)) printk("replay_read: pid %d cannot copy %ld bytes to user\n", current->pid, rc);
+      if (copy_to_user(buf, retparams + sizeof(u_int), rc)) TPRINT("replay_read: pid %d cannot copy %ld bytes to user\n", current->pid, rc);
       consume_size = sizeof(u_int) + rc;
       argsconsume(current->replay_thrd->rp_record_thread, consume_size);
     }
@@ -20987,7 +20964,7 @@ record_getcwd(char __user *buf, unsigned long size)
     recbuf = ARGSKMALLOC(rc, GFP_KERNEL);
     if (recbuf == NULL)
     {
-      printk("record_getcwd: can't allocate buffer\n");
+      TPRINT("record_getcwd: can't allocate buffer\n");
       return -ENOMEM;
     }
     if (copy_from_user(recbuf, buf, rc))
@@ -21028,14 +21005,14 @@ record_capget(cap_user_header_t header, cap_user_data_t dataptr)
     retvals = ARGSKMALLOC(sizeof(u_long) + size, GFP_KERNEL);
     if (retvals == NULL)
     {
-      printk("record_capget: can't allocate buffer\n");
+      TPRINT("record_capget: can't allocate buffer\n");
       return -ENOMEM;
     }
     *((u_long *) retvals) = size;
 
     if (copy_from_user(retvals + sizeof(u_long), header, sizeof(struct __user_cap_header_struct)))
     {
-      printk("record_capget: unable to copy header from user\n");
+      TPRINT("record_capget: unable to copy header from user\n");
       ARGSKFREE(retvals, sizeof(u_long) + size);
       return -EFAULT;
     }
@@ -21043,7 +21020,7 @@ record_capget(cap_user_header_t header, cap_user_data_t dataptr)
     {
       if (copy_from_user(retvals + sizeof(u_long) + sizeof(struct __user_cap_header_struct), dataptr, tocopy * sizeof(struct __user_cap_data_struct)))
       {
-        printk("record_capget: pid %d unable to copy dataptr from user address %p\n", current->pid, dataptr);
+        TPRINT("record_capget: pid %d unable to copy dataptr from user address %p\n", current->pid, dataptr);
         ARGSKFREE(retvals, sizeof(u_long) + size);
         return -EFAULT;
       }
@@ -21069,14 +21046,14 @@ replay_capget(cap_user_header_t header, cap_user_data_t dataptr)
     size = *((u_long *) pretvals);
     if (copy_to_user(header, pretvals + sizeof(u_long), sizeof(struct __user_cap_header_struct)))
     {
-      printk("Pid %d replay_capget cannot copy header to user\n", current->pid);
+      TPRINT("Pid %d replay_capget cannot copy header to user\n", current->pid);
       return syscall_mismatch();
     }
     if (dataptr)
     {
       if (copy_to_user(dataptr, pretvals + sizeof(u_long) + sizeof(struct __user_cap_header_struct), tocopy * sizeof(struct __user_cap_data_struct)))
       {
-        printk("Pid %d replay_capget cannot copy dataptr to user\n", current->pid);
+        TPRINT("Pid %d replay_capget cannot copy dataptr to user\n", current->pid);
         return syscall_mismatch();
       }
     }
@@ -21199,7 +21176,7 @@ record_vfork_handler(struct task_struct *tsk)
   tsk->record_thrd = new_record_thread(prg, tsk->pid, NULL);
   if (tsk->record_thrd == NULL)
   {
-    printk("record_vfork_handler: cannot allocate record thread\n");
+    TPRINT("record_vfork_handler: cannot allocate record thread\n");
     rg_unlock(prg);
     return;
   }
@@ -21223,14 +21200,14 @@ record_vfork_handler(struct task_struct *tsk)
   if (slab == NULL)
   {
     rg_unlock(prg);
-    printk("record_vfork_handler: no memory for slab\n");
+    TPRINT("record_vfork_handler: no memory for slab\n");
     return;
   }
   if (add_argsalloc_node(tsk->record_thrd, slab, argsalloc_size))
   {
     rg_unlock(prg);
     VFREE(slab);
-    printk("Pid %d record_vfork: error adding argsalloc_node\n", current->pid);
+    TPRINT("Pid %d record_vfork: error adding argsalloc_node\n", current->pid);
     return;
   }
 #ifdef LOG_COMPRESS_1
@@ -21238,14 +21215,14 @@ record_vfork_handler(struct task_struct *tsk)
   if (slab == NULL)
   {
     rg_unlock(prg);
-    printk("record_vfork_handler: no memory for slab (clog)\n");
+    TPRINT("record_vfork_handler: no memory for slab (clog)\n");
     return;
   }
   if (add_clog_node(tsk->record_thrd, slab, argsalloc_size))
   {
     rg_unlock(prg);
     VFREE(slab);
-    printk("Pid %d record_vfork: error adding clog_node\n", current->pid);
+    TPRINT("Pid %d record_vfork: error adding clog_node\n", current->pid);
     return;
   }
 #endif
@@ -21317,7 +21294,7 @@ replay_vfork_handler(struct task_struct *tsk)
   {
     if (prept->rp_record_thread == prt)
     {
-      printk("[DIFF]replay_vfork_handler: record thread already cloned?\n");
+      TPRINT("[DIFF]replay_vfork_handler: record thread already cloned?\n");
       ds_list_iter_destroy(iter);
       rg_unlock(prg->rg_rec_group);
       return;
@@ -21381,7 +21358,7 @@ replay_vfork(unsigned long clone_flags, unsigned long stack_start, struct pt_reg
   {
     rc = prt->rp_saved_rc;
     (*(int *)(prt->app_syscall_addr)) = 999;
-    printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__, __LINE__, current->pid);
+    TPRINT("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__, __LINE__, current->pid);
   }
   else
   {
@@ -21402,7 +21379,7 @@ replay_vfork(unsigned long clone_flags, unsigned long stack_start, struct pt_reg
     MPRINT("Pid %d in replay_vfork spawns child %d\n", current->pid, pid);
     if (pid < 0)
     {
-      printk("[DIFF]replay_vfork: second vfork failed, rc=%d\n", pid);
+      TPRINT("[DIFF]replay_vfork: second vfork failed, rc=%d\n", pid);
       return syscall_mismatch();
     }
 
@@ -21418,7 +21395,7 @@ replay_vfork(unsigned long clone_flags, unsigned long stack_start, struct pt_reg
     ret = wait_event_interruptible_timeout(prt->rp_waitq, prt->rp_status == REPLAY_STATUS_RUNNING, SCHED_TO);
 
     rg_lock(prg->rg_rec_group);
-    if (ret == 0) printk("Replay pid %d timed out waiting for vfork to complete\n", current->pid);
+    if (ret == 0) TPRINT("Replay pid %d timed out waiting for vfork to complete\n", current->pid);
     if (prt->rp_status != REPLAY_STATUS_RUNNING)
     {
       MPRINT("Replay pid %d woken up during vfork but not running.  We must want it to die\n", current->pid);
@@ -21458,7 +21435,7 @@ shim_vfork(unsigned long clone_flags, unsigned long stack_start, struct pt_regs 
     // mcc: I'm not sure what it means for Pin to vfork,
     // but this seems to be the right thing to do:
     // actually execute the vfork, remove the replay_thrd, and let it run.
-    printk("Pid %d - WARN - Pin is actually running a vfork! -- is this bad?\n", current->pid);
+    TPRINT("Pid %d - WARN - Pin is actually running a vfork! -- is this bad?\n", current->pid);
     child_pid = do_fork(clone_flags, stack_start, regs, stack_size, parent_tidptr, child_tidptr);
     tsk = pid_task(find_vpid(child_pid), PIDTYPE_PID);
     tsk->replay_thrd = NULL;
@@ -21546,7 +21523,7 @@ void theia_mmap_ahg(int fd, u_long address, u_long len, uint16_t prot,
   pahgv = (struct mmap_ahgv *)KMALLOC(sizeof(struct mmap_ahgv), GFP_KERNEL);
   if (pahgv == NULL)
   {
-    printk("theia_mmap_ahg: failed to KMALLOC.\n");
+    TPRINT("theia_mmap_ahg: failed to KMALLOC.\n");
     return;
   }
   pahgv->pid = current->pid;
@@ -21582,7 +21559,7 @@ record_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
   }
 
   rc = sys_mmap_pgoff(addr, len, prot, flags, fd, pgoff);
-  //  printk("mmap record is done. rc:%lx\n", rc);
+  //  TPRINT("mmap record is done. rc:%lx\n", rc);
   //Yang
   theia_mmap_ahg((int)fd, addr, len, (uint16_t)prot, flags, pgoff, rc);
 
@@ -21603,7 +21580,7 @@ record_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
     {
       recbuf = ARGSKMALLOC(sizeof(struct mmap_pgoff_retvals), GFP_KERNEL);
       add_file_to_cache(vma->vm_file, &recbuf->dev, &recbuf->ino, &recbuf->mtime);
-      //      printk("record_mmap_pgoff: rc: %lx, vm_file->fdentry->d_iname: %s, prot: %lu.\n", rc, vma->vm_file->f_dentry->d_iname, prot);
+      //      TPRINT("record_mmap_pgoff: rc: %lx, vm_file->fdentry->d_iname: %s, prot: %lu.\n", rc, vma->vm_file->f_dentry->d_iname, prot);
       //      sprintf(vm_file_path, "%s", vma->vm_file->f_dentry->d_iname);
 
       path = d_path(&(vma->vm_file->f_path), vm_file_path, PATH_MAX);
@@ -21649,7 +21626,7 @@ record_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
       }
 
       ret = sys_mprotect(rc, len, PROT_NONE);
-      //      printk("protection of a shared page will be changed, ret %d\n", ret);
+      //      TPRINT("protection of a shared page will be changed, ret %d\n", ret);
     }
   }
 #endif
@@ -21693,7 +21670,7 @@ replay_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
     recbuf = (struct mmap_pgoff_retvals *) prt->rp_saved_retparams;
     psr = prt->rp_saved_psr;
     (*(int *)(prt->app_syscall_addr)) = 999;
-    printk("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__, __LINE__, current->pid);
+    TPRINT("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__, __LINE__, current->pid);
   }
   else
   {
@@ -21708,7 +21685,7 @@ replay_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
     DPRINT("replay_mmap_pgoff opens cache file %x %lx %lx.%lx, fd = %d\n", recbuf->dev, recbuf->ino, recbuf->mtime.tv_sec, recbuf->mtime.tv_nsec, given_fd);
     if (given_fd < 0)
     {
-      printk("replay_mmap_pgoff: can't open cache file, rc=%d\n", given_fd);
+      TPRINT("replay_mmap_pgoff: can't open cache file, rc=%d\n", given_fd);
       syscall_mismatch();
     }
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct mmap_pgoff_retvals));
@@ -21720,18 +21697,18 @@ replay_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
   }
   else if (given_fd >= 0)
   {
-    printk("replay_mmap_pgoff: fd is %d but there are no return values recorded\n", given_fd);
+    TPRINT("replay_mmap_pgoff: fd is %d but there are no return values recorded\n", given_fd);
   }
 
   retval = sys_mmap_pgoff(rc, len, prot, (flags | MAP_FIXED), given_fd, pgoff);
   node = list_first_entry(&(current->replay_thrd->rp_record_thread)->rp_argsalloc_list, struct argsalloc_node, list);
-  printk("base addr: %p\n", node->pos);
+  TPRINT("base addr: %p\n", node->pos);
   //print_mem(node->pos, 1024);
   DPRINT("Pid %d replays mmap_pgoff with address %lx len %lx input address %lx fd %d flags %lx prot %lx pgoff %lx returning %lx, flags & MAP_FIXED %lu\n", current->pid, addr, len, rc, given_fd, flags, prot, pgoff, retval, flags & MAP_FIXED);
 
   if (rc != retval)
   {
-    printk("Replay mmap_pgoff returns different value %lx than %lx\n", retval, rc);
+    TPRINT("Replay mmap_pgoff returns different value %lx than %lx\n", retval, rc);
     syscall_mismatch();
   }
 
@@ -21744,30 +21721,30 @@ replay_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
   //  if (vma && rc >= vma->vm_start && vma->vm_file) {
   if (vma)
   {
-    printk("vma ok\n");
+    TPRINT("vma ok\n");
     if (vma->vm_file)
     {
-      printk("vm_file ok\n");
+      TPRINT("vm_file ok\n");
       if (rc >= vma->vm_start)
       {
-        printk("rc>=vm_start ok\n");
-        printk("replay_mmap_pgoff: rc: %lx, vm_file->fdentry->d_iname: %s, prot: %lu.\n", rc, vma->vm_file->f_dentry->d_iname, prot);
+        TPRINT("rc>=vm_start ok\n");
+        TPRINT("replay_mmap_pgoff: rc: %lx, vm_file->fdentry->d_iname: %s, prot: %lu.\n", rc, vma->vm_file->f_dentry->d_iname, prot);
         sprintf(vm_file_path, "%s", vma->vm_file->f_dentry->d_iname);
 
       }
       else
-        printk("vm_start: %lx\n", vma->vm_start);
+        TPRINT("vm_start: %lx\n", vma->vm_start);
     }
   }
   else
-    printk("vma is %p\n", vma);
+    TPRINT("vma is %p\n", vma);
   up_read(&mm->mmap_sem);
 
-  printk("base addr1: %p\n", node->pos);
+  TPRINT("base addr1: %p\n", node->pos);
   //print_mem(node->pos, 1024);
   /*
     if(given_fd == 5) { // only for this test
-      printk("replay: protection about myregion1 will be changed\n");
+      TPRINT("replay: protection about myregion1 will be changed\n");
       sys_mprotect(rc, len, PROT_NONE);
     }
   */
@@ -21781,7 +21758,7 @@ replay_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
       reserve_memory(rc, len);
     }
   }
-  printk("base addr2: %p\n", node->pos);
+  TPRINT("base addr2: %p\n", node->pos);
   //print_mem(node->pos, 1024);
 
   return rc;
@@ -21860,7 +21837,7 @@ theia_sys_mmap(unsigned long addr, unsigned long len, unsigned long prot, unsign
       }
 
       ret = sys_mprotect(rc, len, PROT_NONE);
-      //      printk("[logging]protection of a shared page will be changed, ret %d, %s\n", ret, path);
+      //      TPRINT("[logging]protection of a shared page will be changed, ret %d, %s\n", ret, path);
     }
   }
 #endif
@@ -21887,12 +21864,12 @@ record_newstat(char __user *filename, struct stat __user *statbuf)
 
     if (pretval == NULL)
     {
-      printk("record_stat: can't allocate buffer\n");
+      TPRINT("record_stat: can't allocate buffer\n");
       return -ENOMEM;
     }
     if (copy_from_user(pretval, statbuf, sizeof(struct stat)))
     {
-      printk("record_stat: can't copy to buffer\n");
+      TPRINT("record_stat: can't copy to buffer\n");
       ARGSKFREE(pretval, sizeof(struct stat));
       pretval = NULL;
       rc = -EFAULT;
@@ -21923,12 +21900,12 @@ record_newlstat(char __user *filename, struct stat __user *statbuf)
 
     if (pretval == NULL)
     {
-      printk("record_stat64: can't allocate buffer\n");
+      TPRINT("record_stat64: can't allocate buffer\n");
       return -ENOMEM;
     }
     if (copy_from_user(pretval, statbuf, sizeof(struct stat)))
     {
-      printk("record_stat64: can't copy to buffer\n");
+      TPRINT("record_stat64: can't copy to buffer\n");
       ARGSKFREE(pretval, sizeof(struct stat));
       pretval = NULL;
       rc = -EFAULT;
@@ -21958,16 +21935,16 @@ record_newfstat(int fd, struct stat __user *statbuf)
   {
 
     pretval = ARGSKMALLOC(sizeof(struct stat), GFP_KERNEL);
-    printk("[%s|%d] in record_newfstat: sizeof stat: %lu\n", __func__, __LINE__, sizeof(struct stat));
+    TPRINT("[%s|%d] in record_newfstat: sizeof stat: %lu\n", __func__, __LINE__, sizeof(struct stat));
 
     if (pretval == NULL)
     {
-      printk("record_fstat: can't allocate buffer\n");
+      TPRINT("record_fstat: can't allocate buffer\n");
       return -ENOMEM;
     }
     if (copy_from_user(pretval, statbuf, sizeof(struct stat)))
     {
-      printk("record_fstat: can't copy to buffer\n");
+      TPRINT("record_fstat: can't copy to buffer\n");
       ARGSKFREE(pretval, sizeof(struct stat));
       pretval = NULL;
       rc = -EFAULT;
@@ -22017,12 +21994,12 @@ record_getgroups(int gidsetsize, gid_t __user *grouplist)
     pretval = ARGSKMALLOC(sizeof(gid_t) * rc, GFP_KERNEL);
     if (pretval == NULL)
     {
-      printk("record_getgroups: can't allocate buffer\n");
+      TPRINT("record_getgroups: can't allocate buffer\n");
       return -ENOMEM;
     }
     if (copy_from_user(pretval, grouplist, sizeof(gid_t)*rc))
     {
-      printk("record_getgroups: can't copy from user %p into %p\n", grouplist, pretval);
+      TPRINT("record_getgroups: can't copy from user %p into %p\n", grouplist, pretval);
       ARGSKFREE(pretval, sizeof(gid_t)*rc);
       return -EFAULT;
     }
@@ -22039,7 +22016,7 @@ replay_getgroups(int gidsetsize, gid_t __user *grouplist)
   long rc = get_next_syscall(115, (char **) &retparams);
   if (retparams)
   {
-    if (copy_to_user(grouplist, retparams, sizeof(gid_t)*rc)) printk("Pid %d cannot copy groups to user\n", current->pid);
+    if (copy_to_user(grouplist, retparams, sizeof(gid_t)*rc)) TPRINT("Pid %d cannot copy groups to user\n", current->pid);
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(gid_t)*rc);
   }
   return rc;
@@ -22071,7 +22048,7 @@ record_getresuid(uid_t __user *ruid, uid_t __user *euid, uid_t __user *suid)
     pretval = ARGSKMALLOC(sizeof(uid_t) * 3, GFP_KERNEL);
     if (pretval == NULL)
     {
-      printk("record_getresuid: can't allocate buffer\n");
+      TPRINT("record_getresuid: can't allocate buffer\n");
       return -ENOMEM;
     }
     if (copy_from_user(pretval, ruid, sizeof(uid_t)) ||
@@ -22100,13 +22077,13 @@ replay_getresuid(uid_t __user *ruid, uid_t __user *euid, uid_t __user *suid)
           copy_to_user(euid, retparams + 1, sizeof(uid_t)) ||
           copy_to_user(suid, retparams + 2, sizeof(uid_t)))
       {
-        printk("replay_getresuid: pid %d cannot copy uids to user\n", current->pid);
+        TPRINT("replay_getresuid: pid %d cannot copy uids to user\n", current->pid);
       }
       argsconsume(current->replay_thrd->rp_record_thread, 3 * sizeof(uid_t));
     }
     else
     {
-      printk("getresuid has return values but non-negative rc?\n");
+      TPRINT("getresuid has return values but non-negative rc?\n");
     }
   }
   return rc;
@@ -22130,7 +22107,7 @@ record_getresgid(gid_t __user *rgid, gid_t __user *egid, gid_t __user *sgid)
     pretval = ARGSKMALLOC(sizeof(gid_t) * 3, GFP_KERNEL);
     if (pretval == NULL)
     {
-      printk("record_getresgid: can't allocate buffer\n");
+      TPRINT("record_getresgid: can't allocate buffer\n");
       return -ENOMEM;
     }
     if (copy_from_user(pretval, rgid, sizeof(gid_t)) ||
@@ -22159,13 +22136,13 @@ replay_getresgid(gid_t __user *rgid, gid_t __user *egid, gid_t __user *sgid)
           copy_to_user(egid, retparams + 1, sizeof(gid_t)) ||
           copy_to_user(sgid, retparams + 2, sizeof(gid_t)))
       {
-        printk("replay_getresgid: pid %d cannot copy gids to user\n", current->pid);
+        TPRINT("replay_getresgid: pid %d cannot copy gids to user\n", current->pid);
       }
       argsconsume(current->replay_thrd->rp_record_thread, 3 * sizeof(gid_t));
     }
     else
     {
-      printk("getresgid has return values but non-negative rc?\n");
+      TPRINT("getresgid has return values but non-negative rc?\n");
     }
   }
   return rc;
@@ -22225,14 +22202,14 @@ void theia_setuid_ahg(uid_t uid, int rc)
   if (is_process_new2(current->pid, current->start_time.tv_sec))
     recursive_packahgv_process();
 
-  //  printk("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
+  //  TPRINT("theia_read_ahg clock", current->record_thrd->rp_precord_clock);
   // Yang: regardless of the return value, passes the failed syscall also
   //  if(rc >= 0)
   {
     pahgv = (struct setuid_ahgv *)KMALLOC(sizeof(struct setuid_ahgv), GFP_KERNEL);
     if (pahgv == NULL)
     {
-      printk("theia_setuid_ahg: failed to KMALLOC.\n");
+      TPRINT("theia_setuid_ahg: failed to KMALLOC.\n");
       return;
     }
     pahgv->pid = current->pid;
@@ -22301,13 +22278,13 @@ record_mincore(unsigned long start, size_t len, unsigned char __user *vec)
     pretvals = ARGSKMALLOC(sizeof(u_long) + pages, GFP_KERNEL);
     if (!pretvals)
     {
-      printk("record_mincore: can't allocate return buffer\n");
+      TPRINT("record_mincore: can't allocate return buffer\n");
       return -ENOMEM;
     }
     *((u_long *) pretvals) = pages;
     if (copy_from_user(pretvals + sizeof(u_long), vec, pages))
     {
-      printk("record_mincore: faulted on readback\n");
+      TPRINT("record_mincore: faulted on readback\n");
       ARGSKFREE(pretvals, sizeof(u_long) + pages);
       return -EFAULT;
     }
@@ -22356,7 +22333,7 @@ replay_madvise(unsigned long start, size_t len_in, int behavior)
 
   if (rc != retval)
   {
-    printk("Replay madvise returns different val %lu than %lu\n", retval, rc);
+    TPRINT("Replay madvise returns different val %lu than %lu\n", retval, rc);
     syscall_mismatch();
   }
 
@@ -22406,7 +22383,7 @@ record_futex_ignored(u32 __user *uaddr, int op, u32 val, struct timespec __user 
       change_log_special ();*/
 
       atomic_set(&current->record_thrd->rp_group->rg_det_time.flag, 1);
-      //printk ("Pid %d futex_wait timeout after waiting for %lu nsec, rc = %ld\n", current->pid, utime->tv_nsec, rc);
+      //TPRINT ("Pid %d futex_wait timeout after waiting for %lu nsec, rc = %ld\n", current->pid, utime->tv_nsec, rc);
     }
   }
   return rc;
@@ -22424,7 +22401,7 @@ record_futex(u32 __user *uaddr, int op, u32 val, struct timespec __user *utime, 
   new_syscall_done(202, rc);
   pregs = get_pt_regs(NULL);
   // Really should not get here because it means we are missing synchronizations at user level
-  printk("Pid %d in replay futex uaddr=%p, op=%d, val=%d, ip=%lx, sp=%lx, bp=%lx\n", current->pid, uaddr, op, val, pregs->ip, pregs->sp, pregs->bp);
+  TPRINT("Pid %d in replay futex uaddr=%p, op=%d, val=%d, ip=%lx, sp=%lx, bp=%lx\n", current->pid, uaddr, op, val, pregs->ip, pregs->sp, pregs->bp);
   new_syscall_exit(202, NULL);
 
   return rc;
@@ -22437,7 +22414,7 @@ replay_futex(u32 __user *uaddr, int op, u32 val, struct timespec __user *utime, 
   long rc = get_next_syscall(202, NULL);
   pregs = get_pt_regs(NULL);
   // Really should not get here because it means we are missing synchronizations at user level
-  printk("Pid %d in replay futex uaddr=%p, op=%d, val=%d, ip=%lx, sp=%lx, bp=%lx\n", current->pid, uaddr, op, val, pregs->ip, pregs->sp, pregs->bp);
+  TPRINT("Pid %d in replay futex uaddr=%p, op=%d, val=%d, ip=%lx, sp=%lx, bp=%lx\n", current->pid, uaddr, op, val, pregs->ip, pregs->sp, pregs->bp);
   return rc;
 }
 
@@ -22463,7 +22440,7 @@ record_sched_getaffinity(pid_t pid, unsigned int len, unsigned long __user *user
     pretval = ARGSKMALLOC(sizeof(u_long) + len, GFP_KERNEL);
     if (pretval == NULL)
     {
-      printk("record_sched_getaffinity: can't allocate buffer\n");
+      TPRINT("record_sched_getaffinity: can't allocate buffer\n");
       return -ENOMEM;
     }
     *((u_long *) pretval) = len;
@@ -22518,12 +22495,12 @@ record_io_getevents(aio_context_t ctx_id, long min_nr, long nr, struct io_event 
     pretvals = ARGSKMALLOC(rc * sizeof(struct io_event), GFP_KERNEL);
     if (pretvals == NULL)
     {
-      printk("record_io_getevents: can't allocate buffer with %ld record\n", rc);
+      TPRINT("record_io_getevents: can't allocate buffer with %ld record\n", rc);
       return -ENOMEM;
     }
     if (copy_from_user(pretvals, events, rc * sizeof(struct io_event)))
     {
-      printk("record_io_getevents: can't copy buffer with %ld record\n", rc);
+      TPRINT("record_io_getevents: can't copy buffer with %ld record\n", rc);
       ARGSKFREE(pretvals, rc * sizeof(struct io_event));
       return -EFAULT;
     }
@@ -22543,7 +22520,7 @@ replay_io_getevents(aio_context_t ctx_id, long min_nr, long nr, struct io_event 
   {
     if (copy_to_user(events, retparams, rc * sizeof(struct io_event)))
     {
-      printk("Pid %d cannot copy io_getevents retvals to user\n", current->pid);
+      TPRINT("Pid %d cannot copy io_getevents retvals to user\n", current->pid);
     }
     argsconsume(current->replay_thrd->rp_record_thread, rc * sizeof(struct io_event));
   }
@@ -22589,7 +22566,7 @@ replay_exit_group(int error_code)
     }
     else
     {
-      printk("cannot tell thread %d to exit because it is not a replay thread???\n", t->pid);
+      TPRINT("cannot tell thread %d to exit because it is not a replay thread???\n", t->pid);
     }
   }
   rg_unlock(prg->rg_rec_group);
@@ -22626,12 +22603,12 @@ record_epoll_wait(int epfd, struct epoll_event __user *events, int maxevents, in
     pretvals = ARGSKMALLOC(rc * sizeof(struct epoll_event), GFP_KERNEL);
     if (pretvals == NULL)
     {
-      printk("record_epoll_wait: can't allocate buffer with %ld record\n", rc);
+      TPRINT("record_epoll_wait: can't allocate buffer with %ld record\n", rc);
       return -ENOMEM;
     }
     if (copy_from_user(pretvals, events, rc * sizeof(struct epoll_event)))
     {
-      printk("record_epoll_wait: can't copy buffer with %ld record\n", rc);
+      TPRINT("record_epoll_wait: can't copy buffer with %ld record\n", rc);
       ARGSKFREE(pretvals, rc * sizeof(struct epoll_event));
       return -EFAULT;
     }
@@ -22651,7 +22628,7 @@ replay_epoll_wait(int epfd, struct epoll_event __user *events, int maxevents, in
   {
     if (copy_to_user(events, retparams, rc * sizeof(struct epoll_event)))
     {
-      printk("Pid %d cannot copy epoll_wait retvals to user\n", current->pid);
+      TPRINT("Pid %d cannot copy epoll_wait retvals to user\n", current->pid);
     }
     argsconsume(current->replay_thrd->rp_record_thread, rc * sizeof(struct epoll_event));
   }
@@ -22683,7 +22660,7 @@ replay_remap_file_pages(unsigned long start, unsigned long size, unsigned long p
   retval = sys_remap_file_pages(start, size, prot, pgoff, flags);
   if (rc != retval)
   {
-    printk("replay_remap_file_pages for pid %d returns different value %lu than %lu\n", current->pid, retval, rc);
+    TPRINT("replay_remap_file_pages for pid %d returns different value %lu than %lu\n", current->pid, retval, rc);
     return syscall_mismatch();
   }
   return rc;
@@ -22724,10 +22701,10 @@ static asmlinkage long record_clock_gettime_ignored(const clockid_t which_clock,
   rc = sys_clock_gettime(which_clock, tp);
 
   if (!tp) BUG(); /// fix if needed
-  if (DET_TIME_DEBUG) printk("Pid %d clock_(ignored)_gettime_enter %lu, %lu\n", current->pid, tp->tv_sec, tp->tv_nsec);
+  if (DET_TIME_DEBUG) TPRINT("Pid %d clock_(ignored)_gettime_enter %lu, %lu\n", current->pid, tp->tv_sec, tp->tv_nsec);
   if (which_clock != CLOCK_MONOTONIC && which_clock != CLOCK_REALTIME)
   {
-    printk("Other clock_gettime? which_clock:%d\n", which_clock);
+    TPRINT("Other clock_gettime? which_clock:%d\n", which_clock);
     atomic_set(&prg->rg_det_time.flag, 1);
     BUG();
   }
@@ -22737,7 +22714,7 @@ static asmlinkage long record_clock_gettime_ignored(const clockid_t which_clock,
     struct timeval tv;
     tv.tv_sec = tp->tv_sec;
     tv.tv_usec = (tp->tv_nsec + 999) / 1000; //round up as time shouldn't go back
-    if (DET_TIME_DEBUG) printk("Pid %d CLOCK_REALTIME converted to %lu, %lu\n", current->pid, tv.tv_sec, tv.tv_usec);
+    if (DET_TIME_DEBUG) TPRINT("Pid %d CLOCK_REALTIME converted to %lu, %lu\n", current->pid, tv.tv_sec, tv.tv_usec);
     if (!atomic_read(&prg->rg_det_time.flag))
     {
       time_diff = get_diff_gettimeofday(&prg->rg_det_time, &tv, current_clock);
@@ -22760,7 +22737,7 @@ static asmlinkage long record_clock_gettime_ignored(const clockid_t which_clock,
       }
     }
   }
-  if (DET_TIME_DEBUG) printk("Pid %d clock_(ignored)_gettime_exit %lu, %lu\n", current->pid, tp->tv_sec, tp->tv_nsec);
+  if (DET_TIME_DEBUG) TPRINT("Pid %d clock_(ignored)_gettime_exit %lu, %lu\n", current->pid, tp->tv_sec, tp->tv_nsec);
   atomic_set(&prg->rg_det_time.flag, 0);
   mutex_unlock(&prg->rg_time_mutex);
   return rc;
@@ -22789,10 +22766,10 @@ static asmlinkage long record_clock_gettime(const clockid_t which_clock, struct 
 
 #ifdef TIME_TRICK
   if (!tp) BUG(); /// fix if needed
-  if (DET_TIME_DEBUG) printk("Pid %d clock_gettime actual time %lu, %lu\n", current->pid, tp->tv_sec, tp->tv_nsec);
+  if (DET_TIME_DEBUG) TPRINT("Pid %d clock_gettime actual time %lu, %lu\n", current->pid, tp->tv_sec, tp->tv_nsec);
   if (which_clock != CLOCK_MONOTONIC && which_clock != CLOCK_REALTIME)
   {
-    printk("Other clock_gettime? which_clock:%d\n", which_clock);
+    TPRINT("Other clock_gettime? which_clock:%d\n", which_clock);
     atomic_set(&prg->rg_det_time.flag, 1);
   }
   mutex_lock(&prg->rg_time_mutex);
@@ -22801,7 +22778,7 @@ static asmlinkage long record_clock_gettime(const clockid_t which_clock, struct 
     struct timeval tv;
     tv.tv_sec = tp->tv_sec;
     tv.tv_usec = (tp->tv_nsec + 999) / 1000; //round up as time shouldn't go back
-    printk("Pid %d CLOCK_REALTIME converted to %lu, %lu\n", current->pid, tv.tv_sec, tv.tv_usec);
+    TPRINT("Pid %d CLOCK_REALTIME converted to %lu, %lu\n", current->pid, tv.tv_sec, tv.tv_usec);
     if (!atomic_read(&prg->rg_det_time.flag))
     {
       time_diff = get_diff_gettimeofday(&prg->rg_det_time, &tv, current_clock);
@@ -22816,7 +22793,7 @@ static asmlinkage long record_clock_gettime(const clockid_t which_clock, struct 
         calc_det_gettimeofday(&prg->rg_det_time, &tv, current_clock);
         tp->tv_sec = tv.tv_sec;
         tp->tv_nsec = tv.tv_usec * 1000;
-        if (DET_TIME_DEBUG) printk("Pid %d clock_gettime returns det time\n", current->pid);
+        if (DET_TIME_DEBUG) TPRINT("Pid %d clock_gettime returns det time\n", current->pid);
         fake_time = 1;
       }
     }
@@ -22840,12 +22817,12 @@ static asmlinkage long record_clock_gettime(const clockid_t which_clock, struct 
       else
       {
         calc_det_clock_gettime(&prg->rg_det_time, tp, current_clock);
-        if (DET_TIME_DEBUG) printk("Pid %d clock_gettime returns det time\n", current->pid);
+        if (DET_TIME_DEBUG) TPRINT("Pid %d clock_gettime returns det time\n", current->pid);
         fake_time = 1;
       }
     }
   }
-  if (DET_TIME_DEBUG) printk("Pid %d clock_gettime finally returns %lu, %lu\n", current->pid, tp->tv_sec, tp->tv_nsec);
+  if (DET_TIME_DEBUG) TPRINT("Pid %d clock_gettime finally returns %lu, %lu\n", current->pid, tp->tv_sec, tp->tv_nsec);
   atomic_set(&prg->rg_det_time.flag, 0);
   cnew_syscall_done(228, rc, -1, 0);
   mutex_unlock(&prg->rg_time_mutex);
@@ -22866,12 +22843,12 @@ static asmlinkage long record_clock_gettime(const clockid_t which_clock, struct 
       pretval = ARGSKMALLOC(sizeof(struct timespec), GFP_KERNEL);
       if (pretval == NULL)
       {
-        printk("record_clock_gettime: can't allocate buffer\n");
+        TPRINT("record_clock_gettime: can't allocate buffer\n");
         return -ENOMEM;
       }
       if (copy_from_user(pretval, tp, sizeof(struct timespec)))
       {
-        printk("record_clock_gettime: can't copy to buffer\n");
+        TPRINT("record_clock_gettime: can't copy to buffer\n");
         ARGSKFREE(pretval, sizeof(struct timespec));
         pretval = NULL;
         rc = -EFAULT;
@@ -22932,7 +22909,7 @@ static asmlinkage long replay_clock_gettime(const clockid_t which_clock, struct 
   if (retparams)
   {
     if (copy_to_user(tp, retparams, sizeof(struct timespec)))
-      printk("replay_clock_gettime: pid %d cannot copy to user\n", current->pid);
+      TPRINT("replay_clock_gettime: pid %d cannot copy to user\n", current->pid);
 #ifdef LOG_COMPRESS_1
     node = clog_mark_done_replay();
     decodeValue(&value, 1, 0, 0, node);
@@ -22956,10 +22933,10 @@ static asmlinkage long replay_clock_gettime(const clockid_t which_clock, struct 
     if (log_compress_debug) BUG_ON(retparams->tv_nsec != c_retparams.tv_nsec);
     SYSCALL_CACHE_REP.tp.tv_nsec += value;
     if (copy_to_user(tp, &c_retparams, sizeof(struct timespec)))
-      printk("replay_clock_gettime: pid %d cannot copy to user\n", current->pid);
+      TPRINT("replay_clock_gettime: pid %d cannot copy to user\n", current->pid);
 #endif
 #ifdef TIME_TRICK
-    if (DET_TIME_DEBUG) printk("clock_gettime returns actual time. actual %ld, %ld\n", tp->tv_sec, tp->tv_nsec);
+    if (DET_TIME_DEBUG) TPRINT("clock_gettime returns actual time. actual %ld, %ld\n", tp->tv_sec, tp->tv_nsec);
     if (which_clock == CLOCK_MONOTONIC)
     {
       if (is_shift)
@@ -23000,9 +22977,9 @@ static asmlinkage long replay_clock_gettime(const clockid_t which_clock, struct 
       tp->tv_nsec = tv.tv_usec * 1000;
 
     }
-    if (DET_TIME_DEBUG) printk("clock_gettime returns deterministic time.\n");
+    if (DET_TIME_DEBUG) TPRINT("clock_gettime returns deterministic time.\n");
   }
-  if (DET_TIME_DEBUG) printk("Pid %d clock_gettime finally returns %lu, %lu\n", current->pid, tp->tv_sec, tp->tv_nsec);
+  if (DET_TIME_DEBUG) TPRINT("Pid %d clock_gettime finally returns %lu, %lu\n", current->pid, tp->tv_sec, tp->tv_nsec);
 #endif
 
   return rc;
@@ -23037,7 +23014,7 @@ record_get_mempolicy(int __user *policy, unsigned long __user *nmask, unsigned l
     pretvals = ARGSKMALLOC(sizeof(u_long) + sizeof(int) + copy, GFP_KERNEL);
     if (!pretvals)
     {
-      printk("record_get_mempolicy: can't allocate return buffer\n");
+      TPRINT("record_get_mempolicy: can't allocate return buffer\n");
       return -ENOMEM;
     }
     *((u_long *) pretvals) = sizeof(int) + copy;
@@ -23048,7 +23025,7 @@ record_get_mempolicy(int __user *policy, unsigned long __user *nmask, unsigned l
     }
     if (copy_from_user(pretvals + sizeof(u_long) + sizeof(int), nmask, copy))
     {
-      printk("record_get_mempolicy: faulted on readback\n");
+      TPRINT("record_get_mempolicy: faulted on readback\n");
       ARGSKFREE(pretvals, sizeof(u_long) + sizeof(int) + copy);
       return -EFAULT;
     }
@@ -23104,7 +23081,7 @@ record_waitid(int which, pid_t upid, struct siginfo __user *infop, int options, 
     retvals = ARGSKMALLOC(sizeof(struct waitid_retvals), GFP_KERNEL);
     if (retvals == NULL)
     {
-      printk("record_waitid: can't allocate buffer\n");
+      TPRINT("record_waitid: can't allocate buffer\n");
       return -ENOMEM;
     }
 
@@ -23112,7 +23089,7 @@ record_waitid(int which, pid_t upid, struct siginfo __user *infop, int options, 
     {
       if (copy_from_user(&retvals->info, infop, sizeof(struct siginfo)))
       {
-        printk("record_waitid: unable to copy siginfo from user\n");
+        TPRINT("record_waitid: unable to copy siginfo from user\n");
         ARGSKFREE(retvals, sizeof(struct waitid_retvals));
         return -EFAULT;
       }
@@ -23121,7 +23098,7 @@ record_waitid(int which, pid_t upid, struct siginfo __user *infop, int options, 
     {
       if (copy_from_user(&retvals->ru, ru, sizeof(struct rusage)))
       {
-        printk("record_waitid: unable to copy rusage from user\n");
+        TPRINT("record_waitid: unable to copy rusage from user\n");
         ARGSKFREE(retvals, sizeof(struct waitid_retvals));
         return -EFAULT;
       }
@@ -23143,7 +23120,7 @@ replay_waitid(int which, pid_t upid, struct siginfo __user *infop, int options, 
     {
       if (copy_to_user(infop, &pretvals->info, sizeof(struct siginfo)))
       {
-        printk("Pid %d replay_waitid cannot copy status to user\n", current->pid);
+        TPRINT("Pid %d replay_waitid cannot copy status to user\n", current->pid);
         return syscall_mismatch();
       }
     }
@@ -23151,7 +23128,7 @@ replay_waitid(int which, pid_t upid, struct siginfo __user *infop, int options, 
     {
       if (copy_to_user(ru, &pretvals->ru, sizeof(struct rusage)))
       {
-        printk("Pid %d replay_waitid cannot copy status to user\n", current->pid);
+        TPRINT("Pid %d replay_waitid cannot copy status to user\n", current->pid);
         return syscall_mismatch();
       }
     }
@@ -23181,13 +23158,13 @@ record_keyctl(int option, unsigned long arg2, unsigned long arg3, unsigned long 
       recbuf = ARGSKMALLOC(arg4 + sizeof(u_long), GFP_KERNEL);
       if (!recbuf)
       {
-        printk("record_keyctl: can't allocate return buffer\n");
+        TPRINT("record_keyctl: can't allocate return buffer\n");
         return -ENOMEM;
       }
       *(u_long *) recbuf = arg4;
       if (copy_from_user(recbuf + sizeof(u_long), (char __user *) arg3, arg4))
       {
-        printk("record_keyctl: faulted on readback\n");
+        TPRINT("record_keyctl: faulted on readback\n");
         return -EFAULT;
       }
     }
@@ -23265,7 +23242,7 @@ record_pselect6(int n, fd_set __user *inp, fd_set __user *outp, fd_set __user *e
   pretvals = ARGSKMALLOC(sizeof(struct pselect6_retvals), GFP_KERNEL);
   if (pretvals == NULL)
   {
-    printk("record_pselect6: can't allocate buffer\n");
+    TPRINT("record_pselect6: can't allocate buffer\n");
     return -ENOMEM;
   }
   memset(pretvals, 0, sizeof(struct pselect6_retvals));
@@ -23290,19 +23267,19 @@ replay_pselect6(int n, fd_set __user *inp, fd_set __user *outp, fd_set __user *e
   long rc = get_next_syscall(270, (char **) &retparams);
   if (retparams->has_inp && copy_to_user(inp, &retparams->inp, sizeof(fd_set)))
   {
-    printk("Pid %d cannot copy inp to user\n", current->pid);
+    TPRINT("Pid %d cannot copy inp to user\n", current->pid);
   }
   if (retparams->has_outp && copy_to_user(outp, &retparams->outp, sizeof(fd_set)))
   {
-    printk("Pid %d cannot copy outp to user\n", current->pid);
+    TPRINT("Pid %d cannot copy outp to user\n", current->pid);
   }
   if (retparams->has_exp && copy_to_user(exp, &retparams->exp, sizeof(fd_set)))
   {
-    printk("Pid %d cannot copy exp to user\n", current->pid);
+    TPRINT("Pid %d cannot copy exp to user\n", current->pid);
   }
   if (retparams->has_tsp && copy_to_user(tsp, &retparams->tsp, sizeof(struct timespec)))
   {
-    printk("Pid %d cannot copy tvp to user\n", current->pid);
+    TPRINT("Pid %d cannot copy tvp to user\n", current->pid);
   }
   argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct pselect6_retvals));
 
@@ -23325,13 +23302,13 @@ record_ppoll(struct pollfd __user *ufds, unsigned int nfds, struct timespec __us
   pretvals = ARGSKMALLOC(sizeof(u_long) + nfds * sizeof(struct pollfd), GFP_KERNEL);
   if (pretvals == NULL)
   {
-    printk("record_ppoll: can't allocate buffer\n");
+    TPRINT("record_ppoll: can't allocate buffer\n");
     return -ENOMEM;
   }
   *((u_long *)pretvals) = nfds * sizeof(struct pollfd);
   if (copy_from_user(pretvals + sizeof(u_long), ufds, nfds * sizeof(struct pollfd)))
   {
-    printk("record_ppoll: can't copy retvals\n");
+    TPRINT("record_ppoll: can't copy retvals\n");
     ARGSKFREE(pretvals, sizeof(u_long) + nfds * sizeof(struct pollfd));
     return -EFAULT;
   }
@@ -23350,7 +23327,7 @@ replay_ppoll(struct pollfd __user *ufds, unsigned int nfds, struct timespec __us
   rc = get_next_syscall(271, (char **) &retparams);
   if (copy_to_user(ufds, retparams + sizeof(u_long), nfds * sizeof(struct pollfd)))
   {
-    printk("Pid %d cannot copy inp to user\n", current->pid);
+    TPRINT("Pid %d cannot copy inp to user\n", current->pid);
   }
   argsconsume(current->replay_thrd->rp_record_thread, nfds * sizeof(struct pollfd));
 
@@ -23382,18 +23359,18 @@ record_get_robust_list(int pid, struct robust_list_head __user *__user *head_ptr
     retvals = ARGSKMALLOC(sizeof(struct get_robust_list_retvals), GFP_KERNEL);
     if (retvals == NULL)
     {
-      printk("record_get_robust_list: can't allocate buffer\n");
+      TPRINT("record_get_robust_list: can't allocate buffer\n");
       return -ENOMEM;
     }
     if (copy_from_user(&retvals->head_ptr, head_ptr, sizeof(struct robust_list_head __user *)))
     {
-      printk("record_get_robust_list: unable to copy head_ptr from user\n");
+      TPRINT("record_get_robust_list: unable to copy head_ptr from user\n");
       ARGSKFREE(retvals, sizeof(struct get_robust_list_retvals));
       return -EFAULT;
     }
     if (copy_from_user(&retvals->len, len_ptr, sizeof(size_t)))
     {
-      printk("record_get_robust_list: unable to copy len from user\n");
+      TPRINT("record_get_robust_list: unable to copy len from user\n");
       ARGSKFREE(retvals, sizeof(struct get_robust_list_retvals));
       return -EFAULT;
     }
@@ -23412,12 +23389,12 @@ replay_get_robust_list(int pid, struct robust_list_head __user *__user *head_ptr
   {
     if (copy_to_user(head_ptr, &pretvals->head_ptr, sizeof(struct robust_list_head __user *)))
     {
-      printk("Pid %d replay_get_robust_list cannot copy head_ptr to user\n", current->pid);
+      TPRINT("Pid %d replay_get_robust_list cannot copy head_ptr to user\n", current->pid);
       return syscall_mismatch();
     }
     if (copy_to_user(len_ptr, &pretvals->len, sizeof(size_t)))
     {
-      printk("Pid %d replay_get_robust_list cannot copy len to user\n", current->pid);
+      TPRINT("Pid %d replay_get_robust_list cannot copy len to user\n", current->pid);
       return syscall_mismatch();
     }
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct get_robust_list_retvals));
@@ -23447,14 +23424,14 @@ record_splice(int fd_in, loff_t __user *off_in, int fd_out, loff_t __user *off_o
     pretvals = ARGSKMALLOC(sizeof(struct splice_retvals), GFP_KERNEL);
     if (pretvals == NULL)
     {
-      printk("record_splice: can't allocate buffer\n");
+      TPRINT("record_splice: can't allocate buffer\n");
       return -ENOMEM;
     }
     if (off_in)
     {
       if (copy_from_user(&pretvals->off_in, off_in, sizeof(loff_t)))
       {
-        printk("record_splic: pid %d cannot copy off_in from user\n", current->pid);
+        TPRINT("record_splic: pid %d cannot copy off_in from user\n", current->pid);
         ARGSKFREE(pretvals, sizeof(struct splice_retvals));
         return -EFAULT;
       }
@@ -23463,7 +23440,7 @@ record_splice(int fd_in, loff_t __user *off_in, int fd_out, loff_t __user *off_o
     {
       if (copy_from_user(&pretvals->off_out, off_out, sizeof(loff_t)))
       {
-        printk("record_splice: pid %d cannot copy off_out from user\n", current->pid);
+        TPRINT("record_splice: pid %d cannot copy off_out from user\n", current->pid);
         ARGSKFREE(pretvals, sizeof(struct splice_retvals));
         return -EFAULT;
       }
@@ -23487,7 +23464,7 @@ replay_splice(int fd_in, loff_t __user *off_in, int fd_out, loff_t __user *off_o
     {
       if (copy_to_user(off_in, &retparams->off_in, sizeof(loff_t)))
       {
-        printk("replay_splice: pid %d cannot copy off_in to user\n", current->pid);
+        TPRINT("replay_splice: pid %d cannot copy off_in to user\n", current->pid);
         return syscall_mismatch();
       }
     }
@@ -23495,7 +23472,7 @@ replay_splice(int fd_in, loff_t __user *off_in, int fd_out, loff_t __user *off_o
     {
       if (copy_to_user(off_out, &retparams->off_out, sizeof(loff_t)))
       {
-        printk("replay_splice: pid %d cannot copy tz to user\n", current->pid);
+        TPRINT("replay_splice: pid %d cannot copy tz to user\n", current->pid);
         return syscall_mismatch();
       }
     }
@@ -23524,13 +23501,13 @@ record_move_pages(pid_t pid, unsigned long nr_pages, const void __user *__user *
     pretvals = ARGSKMALLOC(sizeof(u_long) + nr_pages * sizeof(int), GFP_KERNEL);
     if (!pretvals)
     {
-      printk("record_move_pages: can't allocate return buffer\n");
+      TPRINT("record_move_pages: can't allocate return buffer\n");
       return -ENOMEM;
     }
     *((u_long *) pretvals) = nr_pages;
     if (copy_from_user(pretvals + sizeof(u_long), status, nr_pages * sizeof(int)))
     {
-      printk("record_move_pages: faulted on readback\n");
+      TPRINT("record_move_pages: faulted on readback\n");
       ARGSKFREE(pretvals, sizeof(u_long) + nr_pages * sizeof(int));
       return -EFAULT;
     }
@@ -23572,14 +23549,14 @@ record_getcpu(unsigned __user *cpup, unsigned __user *nodep, struct getcpu_cache
     pretval = ARGSKMALLOC(sizeof(unsigned) * 2, GFP_KERNEL);
     if (pretval == NULL)
     {
-      printk("record_getcpu: can't allocate buffer\n");
+      TPRINT("record_getcpu: can't allocate buffer\n");
       return -ENOMEM;
     }
     if (cpup)
     {
       if (copy_from_user(pretval, cpup, sizeof(unsigned)))
       {
-        printk("record_getcpu: can't copy cpup\n");
+        TPRINT("record_getcpu: can't copy cpup\n");
         ARGSKFREE(pretval, sizeof(unsigned) * 2);
         return -EFAULT;
       }
@@ -23588,7 +23565,7 @@ record_getcpu(unsigned __user *cpup, unsigned __user *nodep, struct getcpu_cache
     {
       if (copy_from_user(pretval + 1, nodep, sizeof(unsigned)))
       {
-        printk("record_getcpu: can't copy cpup\n");
+        TPRINT("record_getcpu: can't copy cpup\n");
         ARGSKFREE(pretval, sizeof(unsigned) * 2);
         return -EFAULT;
       }
@@ -23612,14 +23589,14 @@ replay_getcpu(unsigned __user *cpup, unsigned __user *nodep, struct getcpu_cache
       {
         if (copy_to_user(cpup, retparams, sizeof(unsigned)))
         {
-          printk("replay_getcpu: pid %d cannot copy cpup to user\n", current->pid);
+          TPRINT("replay_getcpu: pid %d cannot copy cpup to user\n", current->pid);
         }
       }
       if (nodep)
       {
         if (copy_to_user(nodep, retparams + 1, sizeof(unsigned)))
         {
-          printk("replay_getcpu: pid %d cannot copy nodep to user\n", current->pid);
+          TPRINT("replay_getcpu: pid %d cannot copy nodep to user\n", current->pid);
         }
       }
       argsconsume(current->replay_thrd->rp_record_thread, 2 * sizeof(unsigned));
@@ -23644,12 +23621,12 @@ record_epoll_pwait(int epfd, struct epoll_event __user *events, int maxevents, i
     pretvals = ARGSKMALLOC(rc * sizeof(struct epoll_event), GFP_KERNEL);
     if (pretvals == NULL)
     {
-      printk("record_epoll_pwait: can't allocate buffer with %ld record\n", rc);
+      TPRINT("record_epoll_pwait: can't allocate buffer with %ld record\n", rc);
       return -ENOMEM;
     }
     if (copy_from_user(pretvals, events, rc * sizeof(struct epoll_event)))
     {
-      printk("record_epoll_pwait: can't copy buffer with %ld record\n", rc);
+      TPRINT("record_epoll_pwait: can't copy buffer with %ld record\n", rc);
       ARGSKFREE(pretvals, rc * sizeof(struct epoll_event));
       return -EFAULT;
     }
@@ -23669,7 +23646,7 @@ replay_epoll_pwait(int epfd, struct epoll_event __user *events, int maxevents, i
   {
     if (copy_to_user(events, retparams, rc * sizeof(struct epoll_event)))
     {
-      printk("Pid %d cannot copy epoll_pwait retvals to user\n", current->pid);
+      TPRINT("Pid %d cannot copy epoll_pwait retvals to user\n", current->pid);
     }
     argsconsume(current->replay_thrd->rp_record_thread, rc * sizeof(struct epoll_event));
   }
@@ -23705,7 +23682,7 @@ record_pipe2(int __user *fildes, int flags)
     pretval = ARGSKMALLOC(2 * sizeof(int), GFP_KERNEL);
     if (pretval == NULL)
     {
-      printk("record_pipe2: can't allocate buffer\n");
+      TPRINT("record_pipe2: can't allocate buffer\n");
       return -ENOMEM;
     }
     if (copy_from_user(pretval, fildes, 2 * sizeof(int)))
@@ -23922,11 +23899,11 @@ replay_prlimit64(pid_t pid, unsigned int resource, const struct rlimit64 __user 
   if (new_rlim)
   {
     rc = sys_prlimit64(pid, resource, new_rlim, old_rlim);
-    if (rc != rc_orig) printk("Pid %d: prlimit64 pid %d resource %u changed its return in replay, rec %ld rep %ld\n", current->pid, pid, resource, rc_orig, rc);
+    if (rc != rc_orig) TPRINT("Pid %d: prlimit64 pid %d resource %u changed its return in replay, rec %ld rep %ld\n", current->pid, pid, resource, rc_orig, rc);
   }
   if (retparams)
   {
-    if (copy_to_user(old_rlim, retparams, sizeof(struct rlimit64))) printk("Pid %d replay_prlimit cannot copy to user\n", current->pid);
+    if (copy_to_user(old_rlim, retparams, sizeof(struct rlimit64))) TPRINT("Pid %d replay_prlimit cannot copy to user\n", current->pid);
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct rlimit64));
   }
   DPRINT("replay_prlimit64 pid %d resource %u returns %ld\n", pid, resource, rc_orig);
@@ -23956,14 +23933,14 @@ record_name_to_handle_at(int dfd, const char __user *name, struct file_handle __
     pretvals = ARGSKMALLOC(sizeof(struct name_to_handle_at_retvals), GFP_KERNEL);
     if (pretvals == NULL)
     {
-      printk("record_name_to_handle_at: can't allocate buffer\n");
+      TPRINT("record_name_to_handle_at: can't allocate buffer\n");
       return -ENOMEM;
     }
     if (handle)
     {
       if (copy_from_user(&pretvals->handle, handle, sizeof(struct file_handle)))
       {
-        printk("record_name_to_handle_at: pid %d cannot copy handle from user\n", current->pid);
+        TPRINT("record_name_to_handle_at: pid %d cannot copy handle from user\n", current->pid);
         ARGSKFREE(pretvals, sizeof(struct name_to_handle_at_retvals));
         return -EFAULT;
       }
@@ -23972,7 +23949,7 @@ record_name_to_handle_at(int dfd, const char __user *name, struct file_handle __
     {
       if (copy_from_user(&pretvals->mnt_id, mnt_id, sizeof(int)))
       {
-        printk("record_name_to_handle_at: pid %d cannot copy mnt_id from user\n", current->pid);
+        TPRINT("record_name_to_handle_at: pid %d cannot copy mnt_id from user\n", current->pid);
         ARGSKFREE(pretvals, sizeof(struct name_to_handle_at_retvals));
         return -EFAULT;
       }
@@ -23995,7 +23972,7 @@ replay_name_to_handle_at(int dfd, const char __user *name, struct file_handle __
     {
       if (copy_to_user(handle, &retparams->handle, sizeof(struct file_handle)))
       {
-        printk("replay_name_to_handle_at: pid %d cannot copy handle to user\n", current->pid);
+        TPRINT("replay_name_to_handle_at: pid %d cannot copy handle to user\n", current->pid);
         return syscall_mismatch();
       }
     }
@@ -24003,7 +23980,7 @@ replay_name_to_handle_at(int dfd, const char __user *name, struct file_handle __
     {
       if (copy_to_user(mnt_id, &retparams->mnt_id, sizeof(int)))
       {
-        printk("replay_name_to_handle_at: pid %d cannot copy tz to user\n", current->pid);
+        TPRINT("replay_name_to_handle_at: pid %d cannot copy tz to user\n", current->pid);
         return syscall_mismatch();
       }
     }
@@ -24064,12 +24041,12 @@ record_process_vm_readv(pid_t pid, const struct iovec __user *lvec, unsigned lon
   {
     if (!tsk->record_thrd)
     {
-      printk("[ERROR] pid %d records process_vm_read of non-recordig pid %d\n", current->pid, pid);
+      TPRINT("[ERROR] pid %d records process_vm_read of non-recordig pid %d\n", current->pid, pid);
       return sys_process_vm_readv(pid, lvec, liovcnt, rvec, riovcnt, flags);
     }
     else if (tsk->record_thrd->rp_group != current->record_thrd->rp_group)
     {
-      printk("[ERROR] pid %d records process_vm_read of pid %d in different record group - must merge\n", current->pid, pid);
+      TPRINT("[ERROR] pid %d records process_vm_read of pid %d in different record group - must merge\n", current->pid, pid);
       return sys_process_vm_readv(pid, lvec, liovcnt, rvec, riovcnt, flags);
     } // Now we know two tasks are in same record group, so memory ops should be deterministic (unless they incorrectly involve replay-specific structures) */
   }
@@ -24098,13 +24075,13 @@ replay_process_vm_readv(pid_t pid, const struct iovec __user *lvec, unsigned lon
       retval = sys_process_vm_readv(tmp->rp_record_thread->rp_record_pid, lvec, liovcnt, rvec, riovcnt, flags);
       if (rc != retval)
       {
-        printk("process_vm_readv returns %ld on replay but returned %ld on record\n", retval, rc);
+        TPRINT("process_vm_readv returns %ld on replay but returned %ld on record\n", retval, rc);
         syscall_mismatch();
       }
       return rc;
     }
   }
-  printk("process_vm_readv: pid %d cannot find record pid %d in replay group\n", current->pid, pid);
+  TPRINT("process_vm_readv: pid %d cannot find record pid %d in replay group\n", current->pid, pid);
   return syscall_mismatch();
 }
 
@@ -24120,12 +24097,12 @@ record_process_vm_writev(pid_t pid, const struct iovec __user *lvec, unsigned lo
   {
     if (!tsk->record_thrd)
     {
-      printk("[ERROR] pid %d records process_vm_writev of non-recordig pid %d\n", current->pid, pid);
+      TPRINT("[ERROR] pid %d records process_vm_writev of non-recordig pid %d\n", current->pid, pid);
       return sys_process_vm_writev(pid, lvec, liovcnt, rvec, riovcnt, flags);
     }
     else if (tsk->record_thrd->rp_group != current->record_thrd->rp_group)
     {
-      printk("[ERROR] pid %d records process_vm_writev of pid %d in different record group - must merge\n", current->pid, pid);
+      TPRINT("[ERROR] pid %d records process_vm_writev of pid %d in different record group - must merge\n", current->pid, pid);
       return sys_process_vm_writev(pid, lvec, liovcnt, rvec, riovcnt, flags);
     } // Now we know two tasks are in same record group, so memory ops should be deterministic (unless they incorrectly involve replay-specific structures) */
   }
@@ -24154,13 +24131,13 @@ replay_process_vm_writev(pid_t pid, const struct iovec __user *lvec, unsigned lo
       retval = sys_process_vm_writev(tmp->rp_record_thread->rp_record_pid, lvec, liovcnt, rvec, riovcnt, flags);
       if (rc != retval)
       {
-        printk("process_vm_writev returns %ld on replay but returned %ld on record\n", retval, rc);
+        TPRINT("process_vm_writev returns %ld on replay but returned %ld on record\n", retval, rc);
         syscall_mismatch();
       }
       return rc;
     }
   }
-  printk("process_vm_writev: pid %d cannot find record pid %d in replay group\n", current->pid, pid);
+  TPRINT("process_vm_writev: pid %d cannot find record pid %d in replay group\n", current->pid, pid);
   return syscall_mismatch();
 }
 
@@ -24184,7 +24161,7 @@ asmlinkage long shim_process_vm_writev(pid_t pid, const struct iovec __user *lve
     struct task_struct *tsk = pid_task(find_vpid(pid), PIDTYPE_PID);
     if (tsk && tsk->record_thrd)
     {
-      printk("[ERROR]: non-recorded process %d modifying the address space of recorded thread %d\n", current->pid, pid);
+      TPRINT("[ERROR]: non-recorded process %d modifying the address space of recorded thread %d\n", current->pid, pid);
     }
   }
   //SHIM_CALL(process_vm_writev, 311, pid, lvec, liovcnt, rvec, riovcnt, flags);
@@ -24221,13 +24198,13 @@ struct file *ahg_init_log_write(struct record_thread *prect, loff_t *ppos, int *
     rc = sys_newstat(filename, &st);
     if (rc < 0)
     {
-      printk("Stat of file %s failed\n", filename);
+      TPRINT("Stat of file %s failed\n", filename);
       ret = NULL;
       goto out;
     }
     *ppos = st.st_size;
     /*
-    printk("%s %d: Attempting to re-open log %s\n", __func__, __LINE__,
+    TPRINT("%s %d: Attempting to re-open log %s\n", __func__, __LINE__,
         filename);
         */
     flags = O_WRONLY | O_APPEND | O_LARGEFILE;
@@ -24238,13 +24215,13 @@ struct file *ahg_init_log_write(struct record_thread *prect, loff_t *ppos, int *
   {
     flags = O_WRONLY | O_CREAT | O_TRUNC | O_LARGEFILE;
     *pfd = sys_open(filename, flags, 0777);
-    //printk("%s %d: Creating log %s\n", __func__, __LINE__, filename);
+    //TPRINT("%s %d: Creating log %s\n", __func__, __LINE__, filename);
     if (*pfd > 0)
     {
       rc = sys_fchmod(*pfd, 0777);
       if (rc == -1)
       {
-        printk("Pid %d fchmod of klog %s failed\n", current->pid, filename);
+        TPRINT("Pid %d fchmod of klog %s failed\n", current->pid, filename);
       }
     }
     MPRINT("Opened log file %s\n", filename);
@@ -24291,13 +24268,13 @@ struct file *init_log_write(struct record_thread *prect, loff_t *ppos, int *pfd)
     rc = sys_newstat(filename, &st);
     if (rc < 0)
     {
-      printk("Stat of file %s failed\n", filename);
+      TPRINT("Stat of file %s failed\n", filename);
       ret = NULL;
       goto out;
     }
     *ppos = st.st_size;
     /*
-    printk("%s %d: Attempting to re-open log %s\n", __func__, __LINE__,
+    TPRINT("%s %d: Attempting to re-open log %s\n", __func__, __LINE__,
         filename);
         */
     flags = O_WRONLY | O_APPEND | O_LARGEFILE;
@@ -24314,13 +24291,13 @@ struct file *init_log_write(struct record_thread *prect, loff_t *ppos, int *pfd)
       rc = sys_fchmod(*pfd, 0777);
       if (rc == -1)
       {
-        printk("Pid %d fchmod of klog %s failed\n", current->pid, filename);
+        TPRINT("Pid %d fchmod of klog %s failed\n", current->pid, filename);
       }
     }
     MPRINT("Opened log file %s\n", filename);
     if (*pfd < 0)
     {
-      printk("%s %d: Cannot open log file %s", __func__, __LINE__, filename);
+      TPRINT("%s %d: Cannot open log file %s", __func__, __LINE__, filename);
       ret = NULL;
       goto out;
     }
@@ -24328,13 +24305,13 @@ struct file *init_log_write(struct record_thread *prect, loff_t *ppos, int *pfd)
 #endif
     flags = O_WRONLY | O_CREAT | O_TRUNC | O_LARGEFILE;
     *pfd = sys_open(filename, flags, 0777);
-    //printk("%s %d: Creating log %s\n", __func__, __LINE__, filename);
+    //TPRINT("%s %d: Creating log %s\n", __func__, __LINE__, filename);
     if (*pfd > 0)
     {
       rc = sys_fchmod(*pfd, 0777);
       if (rc == -1)
       {
-        printk("Pid %d fchmod of klog %s failed\n", current->pid, filename);
+        TPRINT("Pid %d fchmod of klog %s failed\n", current->pid, filename);
       }
     }
     MPRINT("Opened log file %s\n", filename);
@@ -24346,7 +24323,7 @@ struct file *init_log_write(struct record_thread *prect, loff_t *ppos, int *pfd)
   {
     /*
     dump_stack();
-    printk ("%s %d: Cannot open log file %s, rc = %d flags = %d\n", __func__,
+    TPRINT ("%s %d: Cannot open log file %s, rc = %d flags = %d\n", __func__,
         __LINE__, filename, *pfd, flags);
         */
     ret = NULL;
@@ -24368,7 +24345,7 @@ void term_log_write(struct file *file, int fd)
   fput(file);
 
   rc = sys_close(fd);
-  if (rc < 0) printk("term_log_write: file close failed with rc %d\n", rc);
+  if (rc < 0) TPRINT("term_log_write: file close failed with rc %d\n", rc);
 }
 
 void write_begin_log(struct file *file, loff_t *ppos, struct record_thread *prect)
@@ -24389,28 +24366,28 @@ void write_begin_log(struct file *file, loff_t *ppos, struct record_thread *prec
   copyed = vfs_write(file, (char *) &hpc1, sizeof(unsigned long long), ppos);
   if (copyed != sizeof(unsigned long long))
   {
-    printk("[WARN] Pid %d write_hpc_calibration, expected to write %lu got %d (1)\n",
+    TPRINT("[WARN] Pid %d write_hpc_calibration, expected to write %lu got %d (1)\n",
            current->pid, sizeof(unsigned long long), copyed);
   }
 
   copyed = vfs_write(file, (char *) &tv1, sizeof(struct timeval), ppos);
   if (copyed != sizeof(struct timeval))
   {
-    printk("[WARN] Pid %d write_hpc_calibration, expected to write %lu got %d (2)\n",
+    TPRINT("[WARN] Pid %d write_hpc_calibration, expected to write %lu got %d (2)\n",
            current->pid, sizeof(struct timeval), copyed);
   }
 
   copyed = vfs_write(file, (char *) &hpc2, sizeof(unsigned long long), ppos);
   if (copyed != sizeof(unsigned long long))
   {
-    printk("[WARN] Pid %d write_hpc_calibration, expected to write %lu got %d (3)\n",
+    TPRINT("[WARN] Pid %d write_hpc_calibration, expected to write %lu got %d (3)\n",
            current->pid, sizeof(unsigned long long), copyed);
   }
 
   copyed = vfs_write(file, (char *) &tv2, sizeof(struct timeval), ppos);
   if (copyed != sizeof(struct timeval))
   {
-    printk("[WARN] Pid %d write_hpc_calibration, expected to write %lu got %d (4)\n",
+    TPRINT("[WARN] Pid %d write_hpc_calibration, expected to write %lu got %d (4)\n",
            current->pid, sizeof(struct timeval), copyed);
   }
 }
@@ -24436,7 +24413,7 @@ static ssize_t write_log_data(struct file *file, loff_t *ppos, struct record_thr
   pvec = KMALLOC(sizeof(struct iovec) * UIO_MAXIOV, GFP_KERNEL);
   if (pvec == NULL)
   {
-    printk("Cannot allocate iovec for write_log_data\n");
+    TPRINT("Cannot allocate iovec for write_log_data\n");
     return 0;
   }
 
@@ -24450,25 +24427,25 @@ static ssize_t write_log_data(struct file *file, loff_t *ppos, struct record_thr
   copyed = vfs_write(file, (char *) &hpc1, sizeof(unsigned long long), ppos);
   if (copyed != sizeof(unsigned long long))
   {
-    printk("[WARN] Pid %d write_hpc_calibration, expected to write %d got %d (1)\n", current->pid, sizeof(unsigned long long), copyed);
+    TPRINT("[WARN] Pid %d write_hpc_calibration, expected to write %d got %d (1)\n", current->pid, sizeof(unsigned long long), copyed);
   }
 
   copyed = vfs_write(file, (char *) &tv1, sizeof(struct timeval), ppos);
   if (copyed != sizeof(struct timeval))
   {
-    printk("[WARN] Pid %d write_hpc_calibration, expected to write %d got %d (2)\n", current->pid, sizeof(struct timeval), copyed);
+    TPRINT("[WARN] Pid %d write_hpc_calibration, expected to write %d got %d (2)\n", current->pid, sizeof(struct timeval), copyed);
   }
 
   copyed = vfs_write(file, (char *) &hpc2, sizeof(unsigned long long), ppos);
   if (copyed != sizeof(unsigned long long))
   {
-    printk("[WARN] Pid %d write_hpc_calibration, expected to write %d got %d (3)\n", current->pid, sizeof(unsigned long long), copyed);
+    TPRINT("[WARN] Pid %d write_hpc_calibration, expected to write %d got %d (3)\n", current->pid, sizeof(unsigned long long), copyed);
   }
 
   copyed = vfs_write(file, (char *) &tv2, sizeof(struct timeval), ppos);
   if (copyed != sizeof(struct timeval))
   {
-    printk("[WARN] Pid %d write_hpc_calibration, expected to write %d got %d (4)\n", current->pid, sizeof(struct timeval), copyed);
+    TPRINT("[WARN] Pid %d write_hpc_calibration, expected to write %d got %d (4)\n", current->pid, sizeof(struct timeval), copyed);
   }
 #endif
 
@@ -24476,7 +24453,7 @@ static ssize_t write_log_data(struct file *file, loff_t *ppos, struct record_thr
   copyed = vfs_write(file, (char *) &count, sizeof(count), ppos);
   if (copyed != sizeof(count))
   {
-    printk("write_log_data: tried to write record count, got rc %zd\n", copyed);
+    TPRINT("write_log_data: tried to write record count, got rc %zd\n", copyed);
     KFREE(pvec);
     return -EINVAL;
   }
@@ -24486,7 +24463,7 @@ static ssize_t write_log_data(struct file *file, loff_t *ppos, struct record_thr
   copyed = vfs_write(file, (char *) psr, sizeof(struct syscall_result) * count, ppos);
   if (copyed != sizeof(struct syscall_result)*count)
   {
-    printk("write_log_data: tried to write %lu, got rc %zd\n", sizeof(struct syscall_result)*count, copyed);
+    TPRINT("write_log_data: tried to write %lu, got rc %zd\n", sizeof(struct syscall_result)*count, copyed);
     KFREE(pvec);
     return -EINVAL;
   }
@@ -24501,7 +24478,7 @@ static ssize_t write_log_data(struct file *file, loff_t *ppos, struct record_thr
   copyed = vfs_write(file, (char *) &data_len, sizeof(data_len), ppos);
   if (copyed != sizeof(data_len))
   {
-    printk("write_log_data: tried to write ancillary data length, got rc %zd, sizeof(count): %lu, sizeof(data_len): %lu\n", copyed, sizeof(count), sizeof(data_len));
+    TPRINT("write_log_data: tried to write ancillary data length, got rc %zd, sizeof(count): %lu, sizeof(data_len): %lu\n", copyed, sizeof(count), sizeof(data_len));
     KFREE(pvec);
     return -EINVAL;
   }
@@ -24558,7 +24535,7 @@ int read_log_data_internal(struct record_thread *prect, struct syscall_result *p
   MPRINT("Open returns %d\n", fd);
   if (fd < 0)
   {
-    printk("read_log_data: cannot open log file %s\n", filename);
+    TPRINT("read_log_data: cannot open log file %s\n", filename);
     return -EINVAL;
   }
 
@@ -24574,7 +24551,7 @@ int read_log_data_internal(struct record_thread *prect, struct syscall_result *p
   }
   if (rc != 2 * sizeof(unsigned long long) + 2 * sizeof(struct timeval))
   {
-    printk("vfs_read returns %d, sizeof calibration constants %d\n", rc, 2 * sizeof(unsigned long long) + 2 * sizeof(struct timeval));
+    TPRINT("vfs_read returns %d, sizeof calibration constants %d\n", rc, 2 * sizeof(unsigned long long) + 2 * sizeof(struct timeval));
     BUG();
     goto error;
   }
@@ -24594,14 +24571,14 @@ int read_log_data_internal(struct record_thread *prect, struct syscall_result *p
   rc = vfs_read(file, (char *) &psr[0], sizeof(struct syscall_result) * count, pos);
   if (rc != sizeof(struct syscall_result)*count)
   {
-    printk("vfs_read returns %d when %lu of records expected\n", rc, sizeof(struct syscall_result)*count);
+    TPRINT("vfs_read returns %d when %lu of records expected\n", rc, sizeof(struct syscall_result)*count);
     goto error;
   }
 
   rc = vfs_read(file, (char *) &data_len, sizeof(data_len), pos);
   if (rc != sizeof(data_len))
   {
-    printk("vfs_read returns %d, sizeof(data_len) %lu\n", rc, sizeof(data_len));
+    TPRINT("vfs_read returns %d, sizeof(data_len) %lu\n", rc, sizeof(data_len));
     *syscall_count = 0;
     goto error;
   }
@@ -24614,7 +24591,7 @@ int read_log_data_internal(struct record_thread *prect, struct syscall_result *p
     rc = add_argsalloc_node(prect, slab, data_len);
     if (rc)
     {
-      printk("read_log_data_internal: pid %d argalloc: problem adding argsalloc_node\n", current->pid);
+      TPRINT("read_log_data_internal: pid %d argalloc: problem adding argsalloc_node\n", current->pid);
       VFREE(slab);
       *syscall_count = 0;
       goto error;
@@ -24624,11 +24601,11 @@ int read_log_data_internal(struct record_thread *prect, struct syscall_result *p
     rc = vfs_read(file, node->pos, data_len, pos);
     if (rc != data_len)
     {
-      printk("read_log_data_internal: vfs_read of ancillary data returns %d, epected %lu\n", rc, data_len);
+      TPRINT("read_log_data_internal: vfs_read of ancillary data returns %d, epected %lu\n", rc, data_len);
       *syscall_count = 0;
       goto error;
     }
-    printk("read in klog: len %lu\n", data_len);
+    TPRINT("read in klog: len %lu\n", data_len);
     print_mem(node->pos, data_len);
   }
 
@@ -24636,7 +24613,7 @@ int read_log_data_internal(struct record_thread *prect, struct syscall_result *p
   fput(file);
 
   rc = sys_close(fd);
-  if (rc < 0) printk("read_log_data: file close failed with rc %d\n", rc);
+  if (rc < 0) TPRINT("read_log_data: file close failed with rc %d\n", rc);
   set_fs(old_fs);
 
   return 0;
@@ -24644,7 +24621,7 @@ int read_log_data_internal(struct record_thread *prect, struct syscall_result *p
 error:
   fput(file);
   rc = sys_close(fd);
-  if (rc < 0) printk("read_log_data: file close failed with rc %d\n", rc);
+  if (rc < 0) TPRINT("read_log_data: file close failed with rc %d\n", rc);
   set_fs(old_fs);
   return rc;
 }
@@ -24674,14 +24651,14 @@ void write_mmap_log(struct record_group *prg)
   fd = sys_open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
   if (fd < 0)
   {
-    printk("Pid %d write_mmap_log: could not open file %s, %d\n", current->pid, filename, fd);
+    TPRINT("Pid %d write_mmap_log: could not open file %s, %d\n", current->pid, filename, fd);
     return;
   }
   file = fget(fd);
 
   if (!file)
   {
-    printk("Pid %d write_mmap_log, could not open file %s\n", current->pid, filename);
+    TPRINT("Pid %d write_mmap_log, could not open file %s\n", current->pid, filename);
     return;
   }
 
@@ -24695,7 +24672,7 @@ void write_mmap_log(struct record_group *prg)
     copyed = vfs_write(file, (char *) pmapping, sizeof(struct reserved_mapping), &pos);
     if (copyed != sizeof(struct reserved_mapping))
     {
-      printk("[WARN] Pid %d write reserved_mapping, expected to write %lu got %d\n", current->pid, sizeof(struct reserved_mapping), copyed);
+      TPRINT("[WARN] Pid %d write reserved_mapping, expected to write %lu got %d\n", current->pid, sizeof(struct reserved_mapping), copyed);
     }
   }
   ds_list_iter_destroy(iter);
@@ -24731,7 +24708,7 @@ long read_mmap_log(struct record_group *precg)
   fd = sys_open(filename, O_RDONLY, 0644);
   if (fd < 0)
   {
-    printk("read_mmap_log: cannot open log file %s\n", filename);
+    TPRINT("read_mmap_log: cannot open log file %s\n", filename);
     return -EINVAL;
   }
   file = fget(fd);
@@ -24742,7 +24719,7 @@ long read_mmap_log(struct record_group *precg)
   rc = sys_newstat(filename, &st);
   if (rc < 0)
   {
-    printk("read_mmap_log: cannot stat file %s, %ld\n", filename, rc);
+    TPRINT("read_mmap_log: cannot stat file %s, %ld\n", filename, rc);
     return -EINVAL;
   }
   num_entries = st.st_size / (sizeof(struct reserved_mapping));
@@ -24753,13 +24730,13 @@ long read_mmap_log(struct record_group *precg)
     pmapping = KMALLOC(sizeof(struct reserved_mapping), GFP_KERNEL);
     if (pmapping == NULL)
     {
-      printk("read_mmap_log: Cannot allocate new reserve mapping\n");
+      TPRINT("read_mmap_log: Cannot allocate new reserve mapping\n");
       return -ENOMEM;
     }
     rc = vfs_read(file, (char *) pmapping, sizeof(struct reserved_mapping), &pos);
     if (rc < 0)
     {
-      printk("Pid %d problem reading in a reserved mapping, rc %ld\n", current->pid, rc);
+      TPRINT("Pid %d problem reading in a reserved mapping, rc %ld\n", current->pid, rc);
       KFREE(pmapping);
       return rc;
     }
@@ -24775,7 +24752,7 @@ long read_mmap_log(struct record_group *precg)
 
   fput(file);
   rc = sys_close((unsigned int)fd);
-  if (rc < 0) printk("read_log_data: file close failed with rc %ld\n", rc);
+  if (rc < 0) TPRINT("read_log_data: file close failed with rc %ld\n", rc);
   set_fs(old_fs);
   return rc;
 }
@@ -24802,7 +24779,7 @@ struct file *init_clog_write(struct record_thread *prect, loff_t *ppos, int *pfd
     rc = sys_newstat(filename, &st);
     if (rc < 0)
     {
-      printk("Stat of file %s failed\n", filename);
+      TPRINT("Stat of file %s failed\n", filename);
       return NULL;
     }
     *ppos = st.st_size;
@@ -24811,12 +24788,12 @@ struct file *init_clog_write(struct record_thread *prect, loff_t *ppos, int *pfd
   }
   else
   {
-    printk("Pid %d open clog file %s, the uncompressed log is not opened yet.\n", prect->rp_record_pid, filename);
+    TPRINT("Pid %d open clog file %s, the uncompressed log is not opened yet.\n", prect->rp_record_pid, filename);
   }
   set_fs(old_fs);
   if (*pfd < 0)
   {
-    printk("Cannot open clog file %s, rc = %d\n", filename, *pfd);
+    TPRINT("Cannot open clog file %s, rc = %d\n", filename, *pfd);
     return NULL;
   }
 
@@ -24830,7 +24807,7 @@ void term_clog_write(struct file *file, int fd)
   fput(file);
 
   rc = sys_close(fd);
-  if (rc < 0) printk("term_clog_write: file close failed with rc %d\n", rc);
+  if (rc < 0) TPRINT("term_clog_write: file close failed with rc %d\n", rc);
 }
 
 static ssize_t write_clog_data(struct file *file, loff_t *ppos, struct record_thread *prect, struct syscall_result *psr, int count)
@@ -24854,7 +24831,7 @@ static ssize_t write_clog_data(struct file *file, loff_t *ppos, struct record_th
   pvec = KMALLOC(sizeof(struct iovec) * UIO_MAXIOV, GFP_KERNEL);
   if (pvec == NULL)
   {
-    printk("Cannot allocate iovec for write_clog_data\n");
+    TPRINT("Cannot allocate iovec for write_clog_data\n");
     return 0;
   }
 
@@ -24868,32 +24845,32 @@ static ssize_t write_clog_data(struct file *file, loff_t *ppos, struct record_th
   copyed = vfs_write(file, (char *) &hpc1, sizeof(unsigned long long), ppos);
   if (copyed != sizeof(unsigned long long))
   {
-    printk("[WARN] Pid %d write_hpc_calibration, expected to write %d got %d (1)\n", current->pid, sizeof(unsigned long long), copyed);
+    TPRINT("[WARN] Pid %d write_hpc_calibration, expected to write %d got %d (1)\n", current->pid, sizeof(unsigned long long), copyed);
   }
 
   copyed = vfs_write(file, (char *) &tv1, sizeof(struct timeval), ppos);
   if (copyed != sizeof(struct timeval))
   {
-    printk("[WARN] Pid %d write_hpc_calibration, expected to write %d got %d (2)\n", current->pid, sizeof(struct timeval), copyed);
+    TPRINT("[WARN] Pid %d write_hpc_calibration, expected to write %d got %d (2)\n", current->pid, sizeof(struct timeval), copyed);
   }
 
   copyed = vfs_write(file, (char *) &hpc2, sizeof(unsigned long long), ppos);
   if (copyed != sizeof(unsigned long long))
   {
-    printk("[WARN] Pid %d write_hpc_calibration, expected to write %d got %d (3)\n", current->pid, sizeof(unsigned long long), copyed);
+    TPRINT("[WARN] Pid %d write_hpc_calibration, expected to write %d got %d (3)\n", current->pid, sizeof(unsigned long long), copyed);
   }
 
   copyed = vfs_write(file, (char *) &tv2, sizeof(struct timeval), ppos);
   if (copyed != sizeof(struct timeval))
   {
-    printk("[WARN] Pid %d write_hpc_calibration, expected to write %d got %d (4)\n", current->pid, sizeof(struct timeval), copyed);
+    TPRINT("[WARN] Pid %d write_hpc_calibration, expected to write %d got %d (4)\n", current->pid, sizeof(struct timeval), copyed);
   }
 #endif
 
   /* First write out syscall records in a bunch */
   /*copyed = vfs_write(file, (char *) &count, sizeof(count), ppos);
   if (copyed != sizeof(count)) {
-    printk ("write_clog_data: tried to write record count, got rc %d\n", copyed);
+    TPRINT ("write_clog_data: tried to write record count, got rc %d\n", copyed);
     KFREE (pvec);
     return -EINVAL;
   }
@@ -24902,7 +24879,7 @@ static ssize_t write_clog_data(struct file *file, loff_t *ppos, struct record_th
 
   copyed = vfs_write(file, (char *) psr, sizeof(struct syscall_result)*count, ppos);
   if (copyed != sizeof(struct syscall_result)*count) {
-    printk ("write_clog_data: tried to write %d, got rc %d\n", sizeof(struct syscall_result)*count, copyed);
+    TPRINT ("write_clog_data: tried to write %d, got rc %d\n", sizeof(struct syscall_result)*count, copyed);
     KFREE (pvec);
     return -EINVAL;
   }*/
@@ -24917,7 +24894,7 @@ static ssize_t write_clog_data(struct file *file, loff_t *ppos, struct record_th
   copyed = vfs_write(file, (char *) &data_len, sizeof(data_len), ppos);
   if (copyed != sizeof(count))
   {
-    printk("write_clog_data: tried to write ancillary data length, got rc %d\n", copyed);
+    TPRINT("write_clog_data: tried to write ancillary data length, got rc %d\n", copyed);
     KFREE(pvec);
     return -EINVAL;
   }
@@ -24980,7 +24957,7 @@ int read_clog_data_internal(struct record_thread *prect, struct syscall_result *
   MPRINT("Open returns %d\n", fd);
   if (fd < 0)
   {
-    printk("read_clog_data: cannot open log file %s\n", filename);
+    TPRINT("read_clog_data: cannot open log file %s\n", filename);
     return -EINVAL;
   }
 
@@ -24996,7 +24973,7 @@ int read_clog_data_internal(struct record_thread *prect, struct syscall_result *
   }
   if (rc != 2 * sizeof(unsigned long long) + 2 * sizeof(struct timeval))
   {
-    printk("vfs_read returns %d, sizeof calibration constants %d\n", rc, 2 * sizeof(unsigned long long) + 2 * sizeof(struct timeval));
+    TPRINT("vfs_read returns %d, sizeof calibration constants %d\n", rc, 2 * sizeof(unsigned long long) + 2 * sizeof(struct timeval));
     BUG();
     goto error;
   }
@@ -25014,14 +24991,14 @@ int read_clog_data_internal(struct record_thread *prect, struct syscall_result *
 
   rc = vfs_read (file, (char *) &psr[0], sizeof(struct syscall_result)*count, pos);
   if (rc != sizeof(struct syscall_result)*count) {
-    printk ("vfs_read returns %d when %d of records expected\n", rc, sizeof(struct syscall_result)*count);
+    TPRINT ("vfs_read returns %d when %d of records expected\n", rc, sizeof(struct syscall_result)*count);
     goto error;
   }*/
 
   rc = vfs_read(file, (char *) &data_len, sizeof(data_len), pos);
   if (rc != sizeof(data_len))
   {
-    printk("vfs_read returns %d, sizeof(data_len) %d\n", rc, sizeof(data_len));
+    TPRINT("vfs_read returns %d, sizeof(data_len) %d\n", rc, sizeof(data_len));
     //*syscall_count = 0;
     goto error;
   }
@@ -25034,7 +25011,7 @@ int read_clog_data_internal(struct record_thread *prect, struct syscall_result *
     rc = add_clog_node(prect, slab, data_len);
     if (rc)
     {
-      printk("read_clog_data_internal: pid %d argalloc: problem adding clog_node\n", current->pid);
+      TPRINT("read_clog_data_internal: pid %d argalloc: problem adding clog_node\n", current->pid);
       VFREE(slab);
       //*syscall_count = 0;
       goto error;
@@ -25044,7 +25021,7 @@ int read_clog_data_internal(struct record_thread *prect, struct syscall_result *
     rc = vfs_read(file, node->pos, data_len, pos);
     if (rc != data_len)
     {
-      printk("read_clog_data_internal: vfs_read of ancillary data returns %d, epected %lu\n", rc, data_len);
+      TPRINT("read_clog_data_internal: vfs_read of ancillary data returns %d, epected %lu\n", rc, data_len);
       //*syscall_count = 0;
       goto error;
     }
@@ -25054,7 +25031,7 @@ int read_clog_data_internal(struct record_thread *prect, struct syscall_result *
   fput(file);
 
   rc = sys_close(fd);
-  if (rc < 0) printk("read_clog_data: file close failed with rc %d\n", rc);
+  if (rc < 0) TPRINT("read_clog_data: file close failed with rc %d\n", rc);
   set_fs(old_fs);
 
   return 0;
@@ -25062,7 +25039,7 @@ int read_clog_data_internal(struct record_thread *prect, struct syscall_result *
 error:
   fput(file);
   rc = sys_close(fd);
-  if (rc < 0) printk("read_clog_data: file close failed with rc %d\n", rc);
+  if (rc < 0) TPRINT("read_clog_data: file close failed with rc %d\n", rc);
   set_fs(old_fs);
   return rc;
 
@@ -25127,7 +25104,7 @@ int do_is_record(struct ctl_table *table, int write, void __user *buffer,
   */
 
   /*
-  printk("%s %d: Returning proc entry with lenp %u, ppos %lld\n", __func__,
+  TPRINT("%s %d: Returning proc entry with lenp %u, ppos %lld\n", __func__,
       __LINE__, *lenp, *ppos);
       */
   return 0;
