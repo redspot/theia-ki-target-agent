@@ -15822,10 +15822,10 @@ record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct 
     struct sock *peer;
     struct sock *sk = sock->sk;
     peer = unix_peer_get(sk);
-    ret = track_usually_pt2pt_write_begin(peer, sock->file);
-    sock_put(peer);
-
-    fput(sock->file);
+    if (peer) {
+      ret = track_usually_pt2pt_write_begin(peer, sock->file);
+      sock_put(peer);
+    }
   }
 #endif
 
