@@ -8959,7 +8959,7 @@ void packahgv_process(struct task_struct *tsk)
   char *fpathbuf = NULL;
   char *fpath = NULL;
   char *fpath_b64 = NULL;
-  bool fpath_b64_alloced = false;
+  bool fpath_b64_alloced = false, args_b64_allocated = false;
   struct mm_struct *mm;
   char *args = NULL;
   int i;
@@ -9000,18 +9000,28 @@ void packahgv_process(struct task_struct *tsk)
     {
       unsigned long arg_start = mm->arg_start;
       unsigned long arg_len   = mm->arg_end - arg_start;
+      unsigned long space_cnt = 0;
       args = (char *)vmalloc(arg_len+1);
       copy_from_user((void *)args, (const void __user *)arg_start, arg_len);
 
       for (i = 0; i < arg_len - 1; ++i)
       {
-        if (args[i] == '\0')
+        if (args[i] == '\0') {
           args[i] = ' ';
+          space_cnt++;
+        }
       }
       args[arg_len] = '\0';
+
+      if (args && !IS_ERR(args) && strlen(args) > 0) {
+        if(space_cnt >= arg_len-1)
+          args_b64 = fpath_b64;
+        else {
+          args_b64 = base64_encode(args, strlen(args), NULL);
+          args_b64_allocated = true;
+        }
+      }
     }
-    if (args && !IS_ERR(args) && strlen(args) > 0)
-      args_b64 = base64_encode(args, strlen(args), NULL);
     if (!args_b64)
       args_b64 = args_bkp;
 
@@ -9044,7 +9054,8 @@ void packahgv_process(struct task_struct *tsk)
       vfree(fpath_b64);
     vfree(buf);
     if (args) {
-      vfree(args_b64);
+      if(args_b64_allocated)
+        vfree(args_b64);
       vfree(args);
     }
   }
