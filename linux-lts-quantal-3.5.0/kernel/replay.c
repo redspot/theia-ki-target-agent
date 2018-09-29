@@ -8876,6 +8876,9 @@ char *get_task_fullpath(struct task_struct *tsk, char *buf, size_t buflen)
   else
     path = NULL;
 
+  mmput(mm);
+  fput(exe_file);
+
   return path;
 }
 
@@ -8888,8 +8891,10 @@ bool get_cmdline(struct task_struct *tsk, char *buffer) {
   int i;
 
   mm = get_task_mm(tsk);
-  if (!mm || !mm->arg_end || !buffer)
+  if (!mm || !mm->arg_end || !buffer) {
+    if (mm) mmput(mm);
     return false;
+  }
 
   len = mm->arg_end - mm->arg_start;
 
@@ -8921,6 +8926,8 @@ bool get_cmdline(struct task_struct *tsk, char *buffer) {
     }
   }
   buffer[len] = '\0';
+
+  mmput(mm);
 
   if (space_cnt > len)
     return false;
