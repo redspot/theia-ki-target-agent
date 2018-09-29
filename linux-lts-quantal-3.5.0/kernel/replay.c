@@ -621,9 +621,8 @@ void path2uuid(const struct path path, char *uuid_str)
   ino = path.dentry->d_inode->i_ino;
   uid = path.dentry->d_inode->i_uid;
   gid = path.dentry->d_inode->i_gid;
-
-  sprintf(uuid_str, "%lx|%lx|%ld|%ld", dev, ino,
-          cr_time.tv_sec, cr_time.tv_nsec);
+  sprintf(uuid_str, "%lx|%lx|%ld|%ld|%u/%u", dev, ino,
+          cr_time.tv_sec, cr_time.tv_nsec, uid, gid);
 }
 
 bool fd2uuid(int fd, char *uuid_str)
