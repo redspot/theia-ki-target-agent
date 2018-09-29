@@ -8854,7 +8854,7 @@ char *get_file_fullpath(struct file *opened_file, char *buf, size_t buflen)
 
 char *get_task_fullpath(struct task_struct *tsk, char *buf, size_t buflen)
 {
-  struct mm_struct *mm = tsk->mm;
+  struct mm_struct *mm = get_task_mm(tsk);
   struct file *exe_file;
   char *path = NULL;
 
@@ -8898,7 +8898,7 @@ bool get_cmdline(struct task_struct *tsk, char *buffer) {
 
   res = access_process_vm(tsk, mm->arg_start, buffer, len, 0);
     
-  // secproctitle
+  // setproctitle
   if (res > 0 && buffer[res-1] != '\0' && len < PAGE_SIZE) {
     len = strnlen(buffer, res);
     if (len < res) {
