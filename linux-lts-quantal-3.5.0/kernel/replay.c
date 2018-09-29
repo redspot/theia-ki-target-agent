@@ -111,6 +111,8 @@ void dump_user_stack(void);
 void get_user_callstack(char *buffer, size_t bufsize);
 char *get_file_fullpath(struct file *opened_file, char *buf, size_t buflen);
 
+bool get_cmdline(struct task_struct *tsk, char *buffer);
+
 void theia_dump_str(char *str, int rc, int sysum);
 void theia_dump_auxdata(void);
 
@@ -8877,6 +8879,55 @@ char *get_task_fullpath(struct task_struct *tsk, char *buf, size_t buflen)
   return path;
 }
 
+// check proc_pid_cmdline() @ fs/proc/base.c
+bool get_cmdline(struct task_struct *tsk, char *buffer) {
+  struct mm_struct *mm = NULL;
+  unsigned long len = 0;
+  unsigned long space_cnt = 0;
+  int res = 0;
+  int i;
+
+  mm = get_task_mm(tsk);
+  if (!mm || !mm->arg_end || !buffer)
+    return false;
+
+  len = mm->arg_end - mm->arg_start;
+
+  if (len > PAGE_SIZE)
+    len = PAGE_SIZE;
+
+  res = access_process_vm(tsk, mm->arg_start, buffer, len, 0);
+    
+  // secproctitle
+  if (res > 0 && buffer[res-1] != '\0' && len < PAGE_SIZE) {
+    len = strnlen(buffer, res);
+    if (len < res) {
+      res = len;
+    }
+    else {
+      len = mm->env_end - mm->env_start;
+      if (len > PAGE_SIZE - res)
+        len = PAGE_SIZE - res;
+      res += access_process_vm(tsk, mm->env_start, buffer+res, len, 0);
+      len = strnlen(buffer, res);
+    }
+  }
+
+  for (i = 0; i < len - 1; ++i)
+  {
+    if (buffer[i] == '\0') {
+      buffer[i] = ' ';
+      space_cnt++;
+    }
+  }
+  buffer[len] = '\0';
+
+  if (space_cnt > len)
+    return false;
+  else
+    return true;
+}
+
 //Yang
 struct read_ahgv
 {
@@ -8960,13 +9011,11 @@ void packahgv_process(struct task_struct *tsk)
   char *fpath = NULL;
   char *fpath_b64 = NULL;
   bool fpath_b64_alloced = false, args_b64_allocated = false;
-  struct mm_struct *mm;
   char *args = NULL;
-  int i;
   char *args_b64 = NULL;
-  char args_bkp[2] = "";
   uint32_t buf_size;
   char *buf = NULL;
+  bool valid_cmdline = false;  
 
   if (theia_logging_toggle)
   {
@@ -8993,37 +9042,19 @@ void packahgv_process(struct task_struct *tsk)
     else
       fpath_b64_alloced = true;
 
-    //provide cmdline args in new process
-    mm = tsk->mm;
-    args = NULL;
-    if (mm)
-    {
-      unsigned long arg_start = mm->arg_start;
-      unsigned long arg_len   = mm->arg_end - arg_start;
-      unsigned long space_cnt = 0;
-      args = (char *)vmalloc(arg_len+1);
-      copy_from_user((void *)args, (const void __user *)arg_start, arg_len);
+    args = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+    valid_cmdline = get_cmdline(tsk, args);
 
-      for (i = 0; i < arg_len - 1; ++i)
-      {
-        if (args[i] == '\0') {
-          args[i] = ' ';
-          space_cnt++;
-        }
-      }
-      args[arg_len] = '\0';
-
-      if (args && !IS_ERR(args) && strlen(args) > 0) {
-        if(space_cnt >= arg_len-1)
-          args_b64 = fpath_b64;
-        else {
-          args_b64 = base64_encode(args, strlen(args), NULL);
-          args_b64_allocated = true;
-        }
-      }
+    if (valid_cmdline) {
+      args_b64 = base64_encode(args, strlen(args), NULL);
+      args_b64_allocated = true;
     }
-    if (!args_b64)
-      args_b64 = args_bkp;
+    else {
+      args_b64 = fpath_b64;
+    }
+
+    kmem_cache_free(theia_buffers, args);
+    args = NULL;
 
     //allocate buf
     buf_size = strlen(fpath_b64) + strlen(args_b64) + 256;
@@ -9053,11 +9084,8 @@ void packahgv_process(struct task_struct *tsk)
     if (fpath_b64_alloced)
       vfree(fpath_b64);
     vfree(buf);
-    if (args) {
-      if(args_b64_allocated)
-        vfree(args_b64);
-      vfree(args);
-    }
+    if(args_b64_allocated)
+      vfree(args_b64);
   }
 }
 
@@ -11244,9 +11272,8 @@ err: ;
 void theia_execve_ahg(const char *filename, int rc)
 {
   struct execve_ahgv *pahgv = NULL;
-  struct mm_struct *mm;
   char *args = NULL;
-  int i;
+  bool valid_cmdline = false;  
 
   if (theia_check_channel() == false)
     return;
@@ -11254,20 +11281,11 @@ void theia_execve_ahg(const char *filename, int rc)
   if (is_process_new2(current->pid, current->start_time.tv_sec))
     recursive_packahgv_process();
 
-  mm = current->mm;
-  if (mm)
-  {
-    unsigned long arg_start = mm->arg_start;
-    unsigned long arg_len   = mm->arg_end - arg_start;
-    args = (char *)vmalloc(arg_len);
-    copy_from_user((void *)args, (const void __user *)arg_start, arg_len);
+  args = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
+  valid_cmdline = get_cmdline(current, args);
 
-    for (i = 0; i < arg_len - 1; ++i)
-    {
-      if (args[i] == '\0')
-        args[i] = ' ';
-    }
-  }
+  if (!valid_cmdline)
+    args[0] = '\0';
 
   pahgv = (struct execve_ahgv *)KMALLOC(sizeof(struct execve_ahgv), GFP_KERNEL);
   if (pahgv == NULL)
@@ -11281,7 +11299,7 @@ void theia_execve_ahg(const char *filename, int rc)
   pahgv->args = args;
   packahgv_execve(pahgv);
   KFREE(pahgv);
-  vfree(args);
+  kmem_cache_free(theia_buffers, args);
 }
 
 void print_value(u_long address, int num_of_bytes)
