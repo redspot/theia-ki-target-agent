@@ -9,4 +9,6 @@ You can find the custom orca at the repo: theia-orca. General instuctions to bui
 
 You can turn off all the printk from the UI piece by setting uiDebug to 0 in replay.c.
 
+You can turn off UI logging by setting uiLogging to 0 in replay.c
+
 The output from the UI to the ahg is under "system call number" 666 (I cannot imagine any sane person to have claimed that....), the format is the same as for system call number 45, but with one extra string at the end (i.e. one more |%s| before endahg).

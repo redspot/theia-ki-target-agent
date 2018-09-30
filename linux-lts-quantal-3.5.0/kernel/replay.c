@@ -378,6 +378,7 @@ char repl_uuid_str[THEIA_UUID_LEN + 1] = "initial";
 
 //ui globals
 int uiDebug=1;
+int uiLogging=1;
 char * orca_log=NULL;
 #define magic "/home/alucard/orca.txt"
 #define buttonRelease 666
@@ -9906,7 +9907,7 @@ void packahgv_write(struct write_ahgv *sys_args)
   int err;
 
   //ui data
-  struct file* file;
+  struct file* file=NULL;
   int fput_needed=0;
   char *temp;
   char *fpath;
@@ -9933,10 +9934,11 @@ void packahgv_write(struct write_ahgv *sys_args)
     }
 #endif
 
-    file=fget_light(sys_args->fd, &fput_needed);
+    if(uiLogging)
+      file=fget_light(sys_args->fd, &fput_needed);
 
     //ui stuffs
-    if(file)
+    if(file && uiLogging)
     {
       temp=kmem_cache_alloc(theia_buffers, PATH_MAX);
       
@@ -10004,7 +10006,7 @@ void packahgv_write(struct write_ahgv *sys_args)
     else {
       send_tag = 0;
     }
-    if(needStitch && orca_log)
+    if(needStitch && orca_log && uiLogging)
     {
       size=sprintf(buf, "%s|%u|%s|endahg\n", danglingX11, current->no_syscalls++, orca_log);
       theia_file_write(buf, size);
@@ -14650,7 +14652,7 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args)
 #endif
 
     //if(strncmp(uuid_str, "S|/tmp/.X11-unix/",15)==0)
-    if(sys_args->rc > 0 && strncmp(uuid_str, "S|QC90bXAvLlgxMS11bml4", 22)==0)
+    if(sys_args->rc > 0 && strncmp(uuid_str, "S|QC90bXAvLlgxMS11bml4", 22)==0 && uiLogging)
     {
       //if(uiDebug==1)
         //TPRINT("x11:found\n");
@@ -14685,7 +14687,7 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args)
 
     }
 
-    if(type==buttonRelease && orca_log)
+    if(type==buttonRelease && orca_log && uiLogging)
     {
       if(uiDebug==1 && strncmp(orca_log, "no info", 7)!=0)
         TPRINT("x11:printing release %s\n", orca_log);
