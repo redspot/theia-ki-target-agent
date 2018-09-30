@@ -10478,7 +10478,7 @@ record_open(const char __user *filename, int flags, int mode)
         /* Add entry to filemap cache */
         file_cache_opened(file, mode);
         add_file_to_cache(file, &recbuf->dev, &recbuf->ino, &recbuf->mtime);
-        if (set_record_cache_file(current->record_thrd->rp_cache_files, rc) < 0) fput(file);
+        set_record_cache_file(current->record_thrd->rp_cache_files, rc);
         rg_unlock(current->record_thrd->rp_group);
         perftimer_stop(open_cache_timer);
       }
@@ -14650,7 +14650,7 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args)
 #endif
 
     //if(strncmp(uuid_str, "S|/tmp/.X11-unix/",15)==0)
-    if(strncmp(uuid_str, "S|QC90bXAvLlgxMS11bml4", 22)==0)
+    if(sys_args->rc > 0 && strncmp(uuid_str, "S|QC90bXAvLlgxMS11bml4", 22)==0)
     {
       //if(uiDebug==1)
         //TPRINT("x11:found\n");
@@ -15862,20 +15862,26 @@ record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct 
   if (rc >= 0)
   {
     struct file *filp = fget(fd);
-    struct socket *sock = filp->private_data;
+    struct socket *sock = NULL;
 
+    if (filp) 
+      sock = filp->private_data;
 
-    if (sock->ops == &unix_stream_ops || sock->ops == &unix_seqpacket_ops)
+    if (sock && (sock->ops == &unix_stream_ops || sock->ops == &unix_seqpacket_ops))
     {
-      int ret;
+      int ret = 0;
       struct sock *peer;
       struct sock *sk = sock->sk;
       peer = unix_peer_get(sk);
-      ret = track_usually_pt2pt_write(peer, rc, filp, 1);
-      sock_put(peer);
+      if (peer)
+      {
+        ret = track_usually_pt2pt_write(peer, rc, filp, 1);
+        sock_put(peer);
+      }
       if (ret)
       {
         ARGSKFREE(pretvals, sizeof(struct generic_socket_retvals));
+        fput(filp); 
         return ret;
       }
     }
@@ -15978,15 +15984,19 @@ record_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, stru
     do /* magic */
     {
       struct file *filp = fget(fd);
-      struct socket *socket = filp->private_data;
+      struct socket *socket = NULL;
 
-      if (socket->ops == &unix_stream_ops || socket->ops == &unix_seqpacket_ops)
+      if (filp)
+        socket = filp->private_data;
+
+      if (socket && (socket->ops == &unix_stream_ops || socket->ops == &unix_seqpacket_ops))
       {
         int ret;
         ret = track_usually_pt2pt_read(socket->sk, rc, filp);
         if (ret)
         {
           ARGSKFREE(pretvals, sizeof(struct recvfrom_retvals) + rc - 1);
+          fput(filp);
           return ret;
         }
       }
