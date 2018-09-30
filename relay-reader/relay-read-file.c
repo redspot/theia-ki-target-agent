@@ -43,6 +43,7 @@
 #include <sys/sysinfo.h>
 #include <linux/unistd.h>
 #include <linux/kernel.h>
+#include <limits.h>
 
 // I have no idea why string.h doesnt have this
 void *memrchr(const void *s, int c, size_t n);
@@ -71,7 +72,7 @@ int portno = 10000;
 /* maximum number of CPUs we can handle - change if more */
 #define NR_CPUS 256
 static size_t READ_BUF_LEN = 256 * 1024;
-static size_t ROTATE_SIZE = (1*1024*1024*1024);
+static size_t ROTATE_SIZE = LONG_MAX;
 
 /* internal variables */
 static unsigned int ncpus;
