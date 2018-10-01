@@ -45,6 +45,13 @@
 #include <linux/kernel.h>
 #include <limits.h>
 
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <netinet/in.h>
+#include <net/if.h>
+#include <arpa/inet.h>
+
+
 // I have no idea why string.h doesnt have this
 void *memrchr(const void *s, int c, size_t n);
 
@@ -87,6 +94,47 @@ static void close_app_files(void);
 static int kill_percpu_threads(int n);
 static int create_percpu_threads(void);
 ssize_t chk_write(int fd, const void *buf, size_t count);
+
+uint8_t get_ip_last_seg(char *full_ip) {
+  const int magic_limit = 3;
+  int cnt = 0;
+  char* partial_ip;
+  const char *dot = ".";
+  partial_ip = full_ip;
+
+  for(cnt=0;cnt<magic_limit;cnt++) {
+    char* index = NULL;
+    if((index = strstr(partial_ip, dot))!=NULL)
+      partial_ip = index+1;
+  }
+  return atoi(partial_ip);
+}
+
+uint8_t get_last_ip_seg()
+{
+  int fd;
+  struct ifreq ifr;
+  char *last_seg;
+
+  fd = socket(AF_INET, SOCK_DGRAM, 0);
+
+  /* I want to get an IPv4 IP address */
+  ifr.ifr_addr.sa_family = AF_INET;
+
+  /* I want IP address attached to "eth0" */
+  strncpy(ifr.ifr_name, "eth0", IFNAMSIZ-1);
+
+  ioctl(fd, SIOCGIFADDR, &ifr);
+
+  close(fd);
+
+  /* display result */
+  printf("%s\n", inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
+
+  last_seg = inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr);   
+
+  return get_ip_last_seg(last_seg);
+}
 
 int main(int argc, char **argv)
 {
@@ -146,7 +194,8 @@ static void *reader_thread(void *data)
 {
 	int hostfd = -1;
   char filename[50];
-  int dump_ctr = 1;
+  uint8_t dump_id = get_last_ip_seg();
+  int dump_cnt = 1;
 	char buf[READ_BUF_LEN + 1];
   char* newline;
 	int rc, cpu = (int)(long)data;
@@ -156,7 +205,7 @@ static void *reader_thread(void *data)
   printf("reader thread starting for cpu %i\n", cpu);
 
 	// use a file
-  sprintf(filename, "/data/ahg.dump.%d", dump_ctr);
+  sprintf(filename, "/data/ahg.dump.%u.%d", dump_id, dump_cnt);
 	hostfd = open(filename, O_RDWR|O_CREAT, 0777);
 
 	do {
@@ -196,8 +245,8 @@ static void *reader_thread(void *data)
       chk_write(hostfd, buf, slen);
       chk_write(hostfd, eof_tag, strlen(eof_tag));
       close(hostfd);
-      dump_ctr ++;
-      sprintf(filename, "/data/ahg.dump.%d", dump_ctr);
+      dump_cnt ++;
+      sprintf(filename, "/data/ahg.dump.%u.%d", dump_id,dump_cnt);
       hostfd = open(filename, O_RDWR|O_CREAT, 0777);
       chk_write(hostfd, newline + 1, rc - slen);
     }
