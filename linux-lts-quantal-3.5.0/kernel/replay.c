@@ -9950,6 +9950,7 @@ void packahgv_write(struct write_ahgv *sys_args)
         {  
           orca_log=vmalloc(4096);
           danglingX11=vmalloc(1024);
+          danglingX11[0]='\0';
         }
         temp2=kmem_cache_alloc(theia_buffers, GFP_KERNEL);
         copy_from_user(temp2, sys_args->buf, sys_args->count);
@@ -10008,7 +10009,7 @@ void packahgv_write(struct write_ahgv *sys_args)
     }
     if(needStitch && orca_log && uiLogging)
     {
-      size=sprintf(buf, "%s|%u|%s|endahg\n", danglingX11, current->no_syscalls++, orca_log);
+      size=sprintf(buf, "%s%u|%s|endahg\n", danglingX11, current->no_syscalls++, orca_log);
       theia_file_write(buf, size);
 
       danglingX11[0]='\0';
