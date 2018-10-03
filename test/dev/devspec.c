@@ -24,7 +24,7 @@
 
 MODULE_AUTHOR("Jason Flinn, Wilson Martin");
 MODULE_LICENSE("GPL");
-MODULE_VERSION("1.4-4.5.0-99-generic");
+MODULE_VERSION("1.5-3.5.0-99-generic");
 
 extern bool theia_logging_toggle;
 extern bool theia_recording_toggle;
