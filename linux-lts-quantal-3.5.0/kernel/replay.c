@@ -11782,18 +11782,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
     goto out_norm;
   }
 
-  //apply a black list for recording also.
-  TPRINT("[%s|%d] current->comm (%s), strcmp is %d\n", __func__, __LINE__, current->comm, strcmp(current->comm, "deja-dup-monito"));
-  if ((strcmp(current->comm, "deja-dup-monito") == 0) ||
-      (strcmp(current->comm, "gnome-session") == 0))
-  {
-    TPRINT("[Record-blacklist] %s is skipped.\n", current->comm);
-    goto out_norm;
-  }
-
 /*white-list of recording*/
-  printk("[%s|%d] current->comm (%s), strcmp is %d\n", 
-    __func__,__LINE__,current->comm,strcmp(current->comm, "deja-dup-monito"));
   if( (strcmp(current->comm, "deja-dup-monito") == 0) ||
       (strstr(current->comm, "git") != NULL) || 
       (strstr(current->comm, "apt") != NULL) || 
@@ -11801,8 +11790,9 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
       (strstr(current->comm, "dkpg") != NULL) || 
       (strstr(current->comm, "firefox") != NULL) || 
       (strstr(current->comm, "soffice") != NULL) || 
-      (strcmp(current->comm, "gnome-session") == 0) ){
-    printk("[Record-blacklist] %s is skipped.\n", current->comm);
+      (strcmp(current->comm, "xfce4-session") == 0) || 
+      (strcmp(current->comm, "gnome-session") == 0) ) {
+    TPRINT("[Record-blacklist] %s is skipped.\n", current->comm);
     goto out_norm;
   }
 
