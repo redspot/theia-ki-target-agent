@@ -11800,6 +11800,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
       (strstr(current->comm, "stat") != NULL) || 
       (strstr(current->comm, "dkpg") != NULL) || 
       (strstr(current->comm, "firefox") != NULL) || 
+      (strstr(current->comm, "soffice") != NULL) || 
       (strcmp(current->comm, "gnome-session") == 0) ){
     printk("[Record-blacklist] %s is skipped.\n", current->comm);
     goto out_norm;
