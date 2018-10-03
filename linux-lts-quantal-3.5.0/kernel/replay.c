@@ -381,7 +381,7 @@ char repl_uuid_str[THEIA_UUID_LEN + 1] = "initial";
 int uiDebug=1;
 //int uiLogging=1;
 char * orca_log=NULL;
-#define magic "/run/theia-orca"
+#define orca_file_name "/tmp/orca.txt"
 #define buttonRelease 666
 #define buttonPress 667
 
@@ -9945,7 +9945,7 @@ void packahgv_write(struct write_ahgv *sys_args)
       
       fpath=get_file_fullpath(file, temp, PATH_MAX);
       fput_light(file, fput_needed);
-      if(strcmp(fpath, magic)==0 && sys_args->count<4096)
+      if(strcmp(fpath, orca_file_name)==0 && sys_args->count<4096)
       {
         if(!orca_log)
         {  
@@ -14705,6 +14705,7 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args)
         sprintf(danglingX11, "startahg|%d|%d|%ld|%s|%ld|%d|%ld|%ld|",
                    buttonRelease, sys_args->pid, current->start_time.tv_sec,
                    uuid_str, sys_args->rc, current->tgid, sec, nsec);
+        goto err;
       }
     }
     else
