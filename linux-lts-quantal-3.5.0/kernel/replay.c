@@ -11758,6 +11758,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
   // TPRINT("in theia_start_execve: filename %s\n", filename);
 
   mm_segment_t old_fs = get_fs();
+
   set_fs(KERNEL_DS);
 
   if (theia_recording_toggle == 0
@@ -11790,7 +11791,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
     goto out_norm;
   }
 
-  if (theia_recording_toggle == 1)
+  if (theia_recording_toggle == 1 && __envp)
   {
     TPRINT("/dev/spec0 ready ! filename: %s\n", filename);
     //should be ready to add the process to record_group
