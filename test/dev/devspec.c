@@ -24,11 +24,12 @@
 
 MODULE_AUTHOR("Jason Flinn, Wilson Martin");
 MODULE_LICENSE("GPL");
-MODULE_VERSION("1.4-3.5.0-99-generic");
+MODULE_VERSION("1.4-4.5.0-99-generic");
 
 extern bool theia_logging_toggle;
 extern bool theia_recording_toggle;
 extern bool theia_cross_toggle;
+extern bool theia_ui_toggle;
 extern bool theia_active_path;
 extern unsigned long theia_active_path_timeout;
 extern struct theia_replay_register_data_type theia_replay_register_data;
@@ -149,6 +150,8 @@ static ssize_t flag_show(struct kobject *kobj, struct kobj_attribute *attr,
     flag = theia_recording_toggle;
   else if (strcmp(attr->attr.name, "theia_active_path") == 0)
     flag = theia_active_path;
+  else if (strcmp(attr->attr.name, "theia_ui_toggle")==0)
+    flag=theia_ui_toggle;
   else
     return -EINVAL;
   return sprintf(buf, "%d\n", flag);
@@ -182,6 +185,10 @@ static ssize_t flag_store(struct kobject *kobj, struct kobj_attribute *attr,
     if (theia_recording_toggle == 1 && flag == 0 && theia_secure_flag == 1)
       return -EINVAL;
     theia_recording_toggle = flag;
+  } else if (strcmp(attr->attr.name, "theia_ui_toggle")==0) {
+    if (theia_ui_toggle==1 && flag==0 && theia_secure_flag==1)
+      return -EINVAL;
+    theia_ui_toggle=flag;
   } else if (strcmp(attr->attr.name, "theia_active_path") == 0) {
     theia_active_path = flag;
   } else
@@ -193,6 +200,8 @@ static struct kobj_attribute logging_toggle_attribute =
 __ATTR(theia_logging_toggle, 0600, flag_show, flag_store);
 static struct kobj_attribute recording_toggle_attribute =
 __ATTR(theia_recording_toggle, 0600, flag_show, flag_store);
+static struct kobj_attribute ui_toggle_attribute =
+__ATTR(theia_ui_toggle, 0600, flag_show, flag_store);
 static struct kobj_attribute active_path_attribute =
 __ATTR(theia_active_path, 0600, flag_show, flag_store);
 
@@ -232,6 +241,7 @@ static struct attribute *theia_attrs[] = {
   &libpath_attribute.attr,
   &logging_toggle_attribute.attr,
   &recording_toggle_attribute.attr,
+  &ui_toggle_attribute.attr,
   &active_path_attribute.attr,
   &active_path_timeout_attribute.attr,
   &proc_whitelist_attribute.attr,

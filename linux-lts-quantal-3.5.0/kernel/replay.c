@@ -254,7 +254,8 @@ char theia_linker[MAX_LOGDIR_STRLEN + 1];
 EXPORT_SYMBOL(theia_linker);
 char theia_libpath[MAX_LIBPATH_STRLEN + 1];
 EXPORT_SYMBOL(theia_libpath);
-
+bool theia_ui_toggle = 1;
+EXPORT_SYMBOL(theia_ui_toggle);
 char theia_proc_whitelist[MAX_WHITELIST_STRLEN + 1];
 EXPORT_SYMBOL(theia_proc_whitelist);
 size_t theia_proc_whitelist_len;
@@ -378,9 +379,9 @@ char repl_uuid_str[THEIA_UUID_LEN + 1] = "initial";
 
 //ui globals
 int uiDebug=1;
-int uiLogging=1;
+//int uiLogging=1;
 char * orca_log=NULL;
-#define magic "/home/alucard/orca.txt"
+#define magic "/run/theia-orca"
 #define buttonRelease 666
 #define buttonPress 667
 
@@ -9934,11 +9935,11 @@ void packahgv_write(struct write_ahgv *sys_args)
     }
 #endif
 
-    if(uiLogging)
+    if(theia_ui_toggle)
       file=fget_light(sys_args->fd, &fput_needed);
 
     //ui stuffs
-    if(file && uiLogging)
+    if(file && theia_ui_toggle)
     {
       temp=kmem_cache_alloc(theia_buffers, PATH_MAX);
       
@@ -10007,7 +10008,7 @@ void packahgv_write(struct write_ahgv *sys_args)
     else {
       send_tag = 0;
     }
-    if(needStitch && orca_log && uiLogging)
+    if(needStitch && orca_log && theia_ui_toggle)
     {
       size=sprintf(buf, "%s%u|%s|endahg\n", danglingX11, current->no_syscalls++, orca_log);
       theia_file_write(buf, size);
@@ -14653,7 +14654,7 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args)
 #endif
 
     //if(strncmp(uuid_str, "S|/tmp/.X11-unix/",15)==0)
-    if(sys_args->rc > 0 && strncmp(uuid_str, "S|QC90bXAvLlgxMS11bml4", 22)==0 && uiLogging)
+    if(sys_args->rc > 0 && strncmp(uuid_str, "S|QC90bXAvLlgxMS11bml4", 22)==0 && theia_ui_toggle)
     {
       //if(uiDebug==1)
         //TPRINT("x11:found\n");
@@ -14688,7 +14689,7 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args)
 
     }
 
-    if(type==buttonRelease && orca_log && uiLogging)
+    if(type==buttonRelease && orca_log && theia_ui_toggle)
     {
       if(uiDebug==1 && strncmp(orca_log, "no info", 7)!=0)
         TPRINT("x11:printing release %s\n", orca_log);
