@@ -11783,15 +11783,15 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
   }
 
 /*white-list of recording*/
-  if( (strcmp(current->comm, "deja-dup-monito") == 0) ||
+  if( (strstr(current->comm, "deja-dup") != NULL) ||
       (strstr(current->comm, "git") != NULL) || 
       (strstr(current->comm, "apt") != NULL) || 
       (strstr(current->comm, "stat") != NULL) || 
       (strstr(current->comm, "dkpg") != NULL) || 
       (strstr(current->comm, "firefox") != NULL) || 
       (strstr(current->comm, "soffice") != NULL) || 
-      (strcmp(current->comm, "xfce4-session") == 0) || 
-      (strcmp(current->comm, "gnome-session") == 0) ) {
+      (strstr(current->comm, "xfce4") != NULL) || 
+      (strstr(current->comm, "gnome") != NULL) ) {
     TPRINT("[Record-blacklist] %s is skipped.\n", current->comm);
     goto out_norm;
   }
