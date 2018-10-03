@@ -11791,6 +11791,20 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
     goto out_norm;
   }
 
+/*white-list of recording*/
+  printk("[%s|%d] current->comm (%s), strcmp is %d\n", 
+    __func__,__LINE__,current->comm,strcmp(current->comm, "deja-dup-monito"));
+  if( (strcmp(current->comm, "deja-dup-monito") == 0) ||
+      (strstr(current->comm, "git") != NULL) || 
+      (strstr(current->comm, "apt") != NULL) || 
+      (strstr(current->comm, "stat") != NULL) || 
+      (strstr(current->comm, "dkpg") != NULL) || 
+      (strstr(current->comm, "firefox") != NULL) || 
+      (strcmp(current->comm, "gnome-session") == 0) ){
+    printk("[Record-blacklist] %s is skipped.\n", current->comm);
+    goto out_norm;
+  }
+
   if (theia_recording_toggle == 1 && __envp)
   {
     TPRINT("/dev/spec0 ready ! filename: %s\n", filename);
