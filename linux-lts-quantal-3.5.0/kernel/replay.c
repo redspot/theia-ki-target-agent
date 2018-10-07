@@ -8899,21 +8899,21 @@ bool get_cmdline(struct task_struct *tsk, char *buffer) {
 
   len = mm->arg_end - mm->arg_start;
 
-  if (len > PAGE_SIZE)
-    len = PAGE_SIZE;
+  if (len > THEIA_KMEM_SIZE-1)
+    len = THEIA_KMEM_SIZE - 1;
 
   res = access_process_vm(tsk, mm->arg_start, buffer, len, 0);
     
   // setproctitle
-  if (res > 0 && buffer[res-1] != '\0' && len < PAGE_SIZE) {
+  if (res > 0 && buffer[res-1] != '\0' && len < THEIA_KMEM_SIZE-1) {
     len = strnlen(buffer, res);
     if (len < res) {
       res = len;
     }
     else {
       len = mm->env_end - mm->env_start;
-      if (len > PAGE_SIZE - res)
-        len = PAGE_SIZE - res;
+      if (len > THEIA_KMEM_SIZE-1 - res)
+        len = THEIA_KMEM_SIZE-1 - res;
       res += access_process_vm(tsk, mm->env_start, buffer+res, len, 0);
       len = strnlen(buffer, res);
     }
