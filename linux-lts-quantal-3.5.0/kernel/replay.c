@@ -1506,7 +1506,7 @@ atomic_t vmalloc_cnt = ATOMIC_INIT(0);
 
 /* Constant defintions */
 
-#define SIGNAL_WHILE_SYSCALL_IGNORED 53
+#define SIGNAL_WHILE_SYSCALL_IGNORED 405
 
 /* Variables configurable via /proc file system */
 unsigned int syslog_recs = 2000;
