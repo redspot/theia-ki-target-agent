@@ -86,6 +86,8 @@
 #include <linux/netlink.h>
 #include <net/theia_cross_track.h>
 
+#include <linux/dcache.h>
+
 //xdou
 #include <linux/xcomp.h>
 #include <linux/encodebuffer.h>
@@ -102,6 +104,14 @@
 #include "../kernel/replay_graph/replayfs_perftimer.h"
 
 #include <linux/base64.h>
+
+/* max_len should be smaller than or equal to the size of target */
+inline void strncpy_safe(char *target, const char *source, long max_len)
+{
+  long len = strnlen(source, max_len);
+  strncpy(target, source, len);
+  target[len] = '\0';
+}
 
 //SL
 struct timespec ext4_get_crtime(struct inode *inode);
@@ -630,7 +640,7 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
     }
     //Yang: we need these later:
     if (uuid_str[0] != '\0')
-      strncpy(rec_uuid_str, uuid_str, THEIA_UUID_LEN);
+      strncpy_safe(rec_uuid_str, uuid_str, THEIA_UUID_LEN);
   }
   else
   {
@@ -2246,7 +2256,7 @@ recycle_shared_clock(char *path)
   }
   else
   {
-    strcpy(pnew->path, path);
+    strncpy_safe(pnew->path, path, MAX_LOGDIR_STRLEN);
     pnew->next = paths_to_free;
     paths_to_free = pnew;
   }
@@ -3004,7 +3014,7 @@ new_record_group(char *logdir)
 
   if (logdir)
   {
-    strncpy(prg->rg_logdir, logdir, MAX_LOGDIR_STRLEN + 1);
+    strncpy_safe(prg->rg_logdir, logdir, MAX_LOGDIR_STRLEN);
   }
   else
   {
@@ -3483,8 +3493,7 @@ void get_user_callstack(char *buffer, size_t bufsize)
       }
       else {
 //        sprintf(ret_str, "[%s]=%lx", uuid_str, trace.entries[i]);
-        strncpy(ret_str, uuid_str, THEIA_UUID_LEN);
-        ret_str[THEIA_UUID_LEN-1] = '\0';
+        strncpy_safe(ret_str, uuid_str, THEIA_UUID_LEN);
       }
       ptr = ret_str;
     }
@@ -4656,7 +4665,7 @@ patch_for_libpath(struct record_group *prg, char *p, int present)
         TPRINT("patch_for_libpath: unable to allocate new env\n");
         return NULL;
       }
-      strcpy(env[i], prg->rg_libpath);
+      strncpy_safe(env[i], prg->rg_libpath, strlen(prg->rg_libpath));
       DPRINT("pid %d: put libpath at index %d\n", current->pid, i);
     }
     else
@@ -4667,7 +4676,7 @@ patch_for_libpath(struct record_group *prg, char *p, int present)
         TPRINT("patch_for_libpath: unable to allocate env. %d of length %d\n", i, len);
         return NULL;
       }
-      strcpy(env[i], p + sizeof(int));
+      strncpy_safe(env[i], p + sizeof(int), len-1);
     }
     p += sizeof(int) + len;
   }
@@ -4680,7 +4689,7 @@ patch_for_libpath(struct record_group *prg, char *p, int present)
       TPRINT("patch_for_libpath: unable to allocate new env\n");
       return NULL;
     }
-    strcpy(env[i], prg->rg_libpath);
+    strncpy_safe(env[i], prg->rg_libpath, strlen(prg->rg_libpath));
     env[i + 1] = NULL;
   }
   else
@@ -4739,7 +4748,7 @@ patch_buf_for_libpath(struct record_group *prg, char *buf, int *pbuflen, int pre
     p = newbuf + buflen;
     *((int *) p) = strlen(prg->rg_libpath) + 1;
     p += sizeof(int);
-    strcpy(p, prg->rg_libpath);
+    strncpy_safe(p, prg->rg_libpath, strlen(prg->rg_libpath));
   }
   else
   {
@@ -4747,8 +4756,8 @@ patch_buf_for_libpath(struct record_group *prg, char *buf, int *pbuflen, int pre
     p = newbuf + skip_len;
     *((int *) p) = strlen(prg->rg_libpath) + 1;
     p += sizeof(int);
-    strcpy(p, prg->rg_libpath);
-    p += strlen(prg->rg_libpath) + 1;
+    strncpy_safe(p, prg->rg_libpath, strlen(prg->rg_libpath));
+    p += strnlen(prg->rg_libpath, MAX_LIBPATH_STRLEN) + 1;
     memcpy(p, buf + skip_len + sizeof(int) + env_len, buflen - skip_len - sizeof(int) - env_len);
   }
 
@@ -4847,7 +4856,7 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
   BUG_ON(IS_ERR_OR_NULL(linker));
   if (linker)
   {
-    strncpy(current->record_thrd->rp_group->rg_linker, linker, MAX_LOGDIR_STRLEN);
+    strncpy_safe(current->record_thrd->rp_group->rg_linker, linker, MAX_LOGDIR_STRLEN);
     MPRINT("Set linker for record process to %s\n", linker);
   }
 
@@ -4905,8 +4914,7 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
     TPRINT("fork_replay: libpath not found\n");
 
     prg->rg_libpath = KMALLOC(theia_libpath_len+1, GFP_KERNEL);
-    strncpy(prg->rg_libpath, theia_libpath, theia_libpath_len);
-    prg->rg_libpath[theia_libpath_len] = '\0';
+    strncpy_safe(prg->rg_libpath, theia_libpath, theia_libpath_len);
     TPRINT("hardcoded libpath is (%s)", prg->rg_libpath);
     //    return -EINVAL;
   }
@@ -5064,7 +5072,7 @@ int fork_replay(char __user *logdir, const char __user *const __user *args,
 
   if (linker)
   {
-    strncpy(current->record_thrd->rp_group->rg_linker, linker, MAX_LOGDIR_STRLEN);
+    strncpy_safe(current->record_thrd->rp_group->rg_linker, linker, MAX_LOGDIR_STRLEN);
     MPRINT("Set linker for record process to %s\n", linker);
   }
 
@@ -5138,8 +5146,7 @@ int fork_replay(char __user *logdir, const char __user *const __user *args,
     TPRINT("fork_replay: libpath not found\n");
 
     prg->rg_libpath = KMALLOC(theia_libpath_len+1, GFP_KERNEL);
-    strncpy(prg->rg_libpath, theia_libpath, theia_libpath_len);
-    prg->rg_libpath[theia_libpath_len] = '\0';
+    strncpy_safe(prg->rg_libpath, theia_libpath, theia_libpath_len);
     TPRINT("hardcoded libpath is (%s)", prg->rg_libpath);
     //    return -EINVAL;
   }
@@ -5246,7 +5253,7 @@ replay_ckpt_wakeup(int attach_pin, char *logdir, char *linker, int fd, int follo
   atomic_dec(&prect->rp_refcnt);
 
   // Restore the checkpoint
-  strcpy(ckpt, logdir);
+  strncpy_safe(ckpt, logdir, MAX_LOGDIR_STRLEN);
   strcat(ckpt, "/ckpt");
 
 #ifdef TIME_TRICK
@@ -5279,7 +5286,7 @@ replay_ckpt_wakeup(int attach_pin, char *logdir, char *linker, int fd, int follo
 
   if (linker)
   {
-    strncpy(current->replay_thrd->rp_group->rg_rec_group->rg_linker, linker, MAX_LOGDIR_STRLEN);
+    strncpy_safe(current->replay_thrd->rp_group->rg_rec_group->rg_linker, linker, MAX_LOGDIR_STRLEN);
     MPRINT("Set linker for replay process to %s\n", linker);
   }
 
@@ -6511,7 +6518,7 @@ get_next_syscall_enter(struct replay_thread *prt, struct replay_group *prg, int 
   if (syscall == 0 || syscall == 1 || syscall == 44 ||
       syscall == 45 || syscall == 46 || syscall == 47)
   {
-    strcpy(repl_uuid_str, (char *)argshead(prect));
+    strncpy_safe(repl_uuid_str, (char *)argshead(prect), THEIA_UUID_LEN);
     TPRINT("syscall %d, repl_uuid is %s, repl_uuid_str len is %lu, retparam len is %lu\n", syscall, repl_uuid_str, strlen(repl_uuid_str), strlen((char *)argshead(prect)));
     argsconsume(prect, strlen(repl_uuid_str) + 1);
   }
@@ -9199,7 +9206,7 @@ void packahgv_process_bin(struct task_struct *tsk)
     fpath = get_task_fullpath(tsk, fpathbuf, PATH_MAX);
     if (!fpath)
     {
-      strncpy(fpathbuf, tsk->comm, TASK_COMM_LEN);
+      strncpy_safe(fpathbuf, tsk->comm, TASK_COMM_LEN);
     }
     buf_ahg->size_fpathbuf = strlen(fpath);
     TPRINT("fpath:(%s),size:%hu\n", fpathbuf, buf_ahg->size_fpathbuf);
@@ -9222,9 +9229,9 @@ void packahgv_process_bin(struct task_struct *tsk)
     curr_ptr += 2;
     memcpy(curr_ptr, (void *)buf_ahg, sizeof(struct process_pack_ahg));
     curr_ptr += sizeof(struct process_pack_ahg);
-    strncpy((char *)curr_ptr, ids, buf_ahg->size_ids);
+    strncpy_safe((char *)curr_ptr, ids, buf_ahg->size_ids);
     curr_ptr += buf_ahg->size_ids;
-    strncpy((char *)curr_ptr, fpath, buf_ahg->size_fpathbuf);
+    strncpy_safe((char *)curr_ptr, fpath, buf_ahg->size_fpathbuf);
     curr_ptr += buf_ahg->size_fpathbuf;
     sprintf((char *)curr_ptr, "endahg");
 
@@ -9438,7 +9445,8 @@ record_read(unsigned int fd, char __user *buf, size_t count)
     record_cache_file_unlock(current->record_thrd->rp_cache_files, fd);
     return -ENOMEM;
   }
-  strcpy((char *)puuid, rec_uuid_str);
+  strncpy_safe((char *)puuid, rec_uuid_str, THEIA_UUID_LEN);
+  puuid[THEIA_UUID_LEN] = '\0';
   DPRINT("rec_uuid_str is %s, rc %ld, is_cache %d,clock %d\n", rec_uuid_str, rc, is_cache_file, atomic_read(current->record_thrd->rp_precord_clock));
   DPRINT("copied to pretval is (%s)\n", (char *)puuid);
 
@@ -10025,7 +10033,7 @@ void packahgv_write(struct write_ahgv *sys_args)
         temp2[sys_args->count]=0;
         if(strstr(temp2, "app.name"))
         {
-          strncpy(orca_log, temp2, 4095);
+          strncpy_safe(orca_log, temp2, 4095);
           timeInd=strstr(orca_log, "time=");
           if(timeInd)
           {
@@ -10188,7 +10196,8 @@ record_write(unsigned int fd, const char __user *buf, size_t count)
     TPRINT("record_write: can't allocate pos buffer for rec_uuid_str\n");
     return -ENOMEM;
   }
-  strcpy((char *)puuid, rec_uuid_str);
+  strncpy_safe((char *)puuid, rec_uuid_str, THEIA_UUID_LEN);
+  puuid[THEIA_UUID_LEN] = '\0';
   TPRINT("write: rec_uuid_str is %s,clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
   TPRINT("write: copied to pretval is (%s)\n", (char *)puuid);
 
@@ -10303,7 +10312,7 @@ struct open_ahgv
 {
   int             pid;
   int             fd;
-  char            filename[204];
+  char            filename[PATH_MAX+1];
   int             flags;
   int             mode;
   u_long          dev;
@@ -10463,7 +10472,7 @@ void theia_open_ahg(const char __user *filename, int flags, int mode, long rc, b
     fput_light(file, fput_needed);
     if (!IS_ERR(fpath))   /* sometimes we can't obtain fullpath */
     {
-      strncpy(pahgv->filename, fpath, 204);
+      strncpy_safe(pahgv->filename, fpath, PATH_MAX);
       vfree(fpathbuf);
     }
     else
@@ -10861,8 +10870,7 @@ void theia_unlink_ahgx(const char *kfilename)
       fpath = get_file_fullpath(file, pbuf, THEIA_DPATH_LEN);
       if (IS_ERR_OR_NULL(fpath))
       {
-        strncpy(pbuf, kfilename, THEIA_DPATH_LEN);
-        pbuf[THEIA_DPATH_LEN - 1] = 0x0;
+        strncpy_safe(pbuf, kfilename, THEIA_DPATH_LEN-1);
         fpath = pbuf;
       }
 
@@ -10995,8 +11003,7 @@ void theia_unlinkat_ahgx(int dfd, const char *kfilename, int flag)
       fpath = get_file_fullpath(file, pbuf, THEIA_DPATH_LEN);
       if (IS_ERR_OR_NULL(fpath))
       {
-        strncpy(pbuf, kfilename, THEIA_DPATH_LEN);
-        pbuf[THEIA_DPATH_LEN - 1] = 0x0;
+        strncpy_safe(pbuf, kfilename, THEIA_DPATH_LEN-1);
         fpath = pbuf;
       }
 
@@ -11123,8 +11130,7 @@ void theia_openat_ahgx(int fd, const char __user *filename, int flag, int mode)
     fpath = get_file_fullpath(file, pbuf, THEIA_DPATH_LEN);
     if (IS_ERR_OR_NULL(fpath))
     {
-      strncpy(pbuf, filename, THEIA_DPATH_LEN);
-      pbuf[THEIA_DPATH_LEN - 1] = 0x0;
+      strncpy_safe(pbuf, filename, THEIA_DPATH_LEN-1);
       fpath = pbuf;
     }
 
@@ -11240,7 +11246,7 @@ struct execve_retvals
 struct execve_ahgv
 {
   int  pid;
-  char filename[204];
+  char filename[PATH_MAX+1];
   int  is_user_remote;
   int  rc;
   char *args;
@@ -11296,8 +11302,7 @@ void packahgv_execve(struct execve_ahgv *sys_args)
         fpath = get_file_fullpath(file, pbuf, THEIA_DPATH_LEN);
         if (IS_ERR_OR_NULL(fpath))
         {
-          strncpy(pbuf, sys_args->filename, THEIA_DPATH_LEN);
-          pbuf[THEIA_DPATH_LEN - 1] = 0x0;
+          strncpy_safe(pbuf, sys_args->filename, THEIA_DPATH_LEN-1);
           fpath = pbuf;
         }
         fput_light(file, fput_needed);
@@ -11380,7 +11385,7 @@ void theia_execve_ahg(const char *filename, int rc)
     return;
   }
   pahgv->pid = current->pid;
-  strncpy(pahgv->filename, filename, sizeof(pahgv->filename));
+  strncpy_safe(pahgv->filename, filename, PATH_MAX);
   pahgv->rc = rc;
   pahgv->args = args;
   packahgv_execve(pahgv);
@@ -11523,7 +11528,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
         current->record_thrd = NULL;
         return -ENOMEM;
       }
-      strcpy(precg->rg_linker, prt->rp_group->rg_linker);
+      strncpy_safe(precg->rg_linker, prt->rp_group->rg_linker, MAX_LOGDIR_STRLEN);
       precg->rg_save_mmap_flag = prt->rp_group->rg_save_mmap_flag;
 
       MPRINT("Pid %d - splits a new record group with logdir %s, save_mmap_flag %d\n", current->pid, precg->rg_logdir, precg->rg_save_mmap_flag);
@@ -11537,7 +11542,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
           current->record_thrd = NULL;
           return -ENOMEM;
         }
-        strcpy(precg->rg_libpath, prt->rp_group->rg_libpath);
+        strncpy_safe(precg->rg_libpath, prt->rp_group->rg_libpath, MAX_LIBPATH_STRLEN);
       }
 
       prect = new_record_thread(precg, current->pid, NULL);
@@ -11742,7 +11747,7 @@ replay_execve(const char *filename, const char __user *const __user *__argv, con
         // Save id because group may be deleted
         logid = retparams->data.new_group.log_id;
         app_syscall_addr = prt->app_syscall_addr;
-        strcpy(linker, prg->rg_rec_group->rg_linker);
+        strncpy_safe(linker, prg->rg_rec_group->rg_linker, MAX_LOGDIR_STRLEN);
         follow_splits = prg->rg_follow_splits;
 
         // Now remove reference to the replay group
@@ -11900,7 +11905,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
           theia_recording_toggle = 0;
           goto out_norm;
         }
-        strncpy(theia_linker, followed_path, MAX_LOGDIR_STRLEN + 1);
+        strncpy_safe(theia_linker, followed_path, MAX_LOGDIR_STRLEN);
       }
     }
 
@@ -12470,8 +12475,7 @@ void packahgv_mount(struct mount_ahgv *sys_args)
         fpath = get_file_fullpath(file, pbuf, THEIA_DPATH_LEN);
         if (IS_ERR_OR_NULL(fpath))
         {
-          strncpy(pbuf, sys_args->devname, THEIA_DPATH_LEN);
-          pbuf[THEIA_DPATH_LEN - 1] = 0x0;
+          strncpy_safe(pbuf, sys_args->devname, THEIA_DPATH_LEN-1);
           fpath = pbuf;
         }
         fput_light(file, fput_needed);
@@ -12481,8 +12485,7 @@ void packahgv_mount(struct mount_ahgv *sys_args)
     else
     {
       strcpy(uuid_str, "I|0|0|0|0|-1/-1"); /* imaginary file, e.g., debugfs */
-      strncpy(pbuf, sys_args->devname, THEIA_DPATH_LEN);
-      pbuf[THEIA_DPATH_LEN - 1] = 0x0;
+      strncpy_safe(pbuf, sys_args->devname, THEIA_DPATH_LEN-1);
       fpath = pbuf;
     }
     set_fs(old_fs);
@@ -14333,8 +14336,9 @@ void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char *i
 
       *port = THEIA_INVALID_PORT;
       strcpy(ip, "LOCAL");
-      if (un_sockaddr->sun_path[0] != '\0')
-        strncpy(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX);
+      if (un_sockaddr->sun_path[0] != '\0') {
+        strncpy_safe(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX-1);
+      }
       else { /* an abstract socket address */
         if (addrlen-sizeof(sa_family_t) > 0) {
           sun_path[0] = '@';
@@ -14435,8 +14439,9 @@ void get_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_f
 
       *port = THEIA_INVALID_PORT;
       strcpy(ip, "LOCAL");
-      if (un_sockaddr->sun_path[0] != '\0')
-        strncpy(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX);
+      if (un_sockaddr->sun_path[0] != '\0') {
+        strncpy_safe(sun_path, un_sockaddr->sun_path, UNIX_PATH_MAX-1);
+      }
       else { /* an abstract socket address */
         if (!len) {
           pr_err("getname error: len = %i\n", len);
@@ -14574,7 +14579,7 @@ void packahgv_accept(struct accept_ahgv *sys_args)
     if (strlen(sys_args->ip) == 0)
       strcpy(ip, "NA");
     else
-      strcpy(ip, sys_args->ip);
+      strncpy_safe(ip, sys_args->ip, 49);
     if (sys_args->sa_family == AF_LOCAL)
     {
       size = snprintf(buf, THEIA_KMEM_SIZE, "startahg|%d|%d|%ld|%ld|%d|L%s|%lu|%d|%ld|%ld|endahg\n",
@@ -15943,7 +15948,7 @@ record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct 
     TPRINT("record_sendto: can't allocate pos buffer for rec_uuid_str\n");
     return -ENOMEM;
   }
-  strcpy((char *)puuid, rec_uuid_str);
+  strncpy_safe((char *)puuid, rec_uuid_str, THEIA_UUID_LEN);
   pr_debug("sendto: rec_uuid_str is %s,clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
   pr_debug("sendto: copied to pretval is (%s)\n", (char *)puuid);
 
@@ -16041,7 +16046,7 @@ record_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, stru
     TPRINT("record_recvfrom: can't allocate pos buffer for rec_uuid_str\n");
     return -ENOMEM;
   }
-  strcpy((char *)puuid, rec_uuid_str);
+  strncpy_safe((char *)puuid, rec_uuid_str, THEIA_UUID_LEN);
   pr_debug("recvfrom: rec_uuid_str is %s, clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
   pr_debug("recvfrom: copied to pretval is (%s)\n", (char *)puuid);
 
@@ -16147,7 +16152,7 @@ record_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags)
     TPRINT("record_sendmsg: can't allocate pos buffer for rec_uuid_str\n");
     return -ENOMEM;
   }
-  strcpy((char *)puuid, rec_uuid_str);
+  strncpy_safe((char *)puuid, rec_uuid_str, THEIA_UUID_LEN);
   pr_debug("sendmsg: rec_uuid_str is %s, clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
   pr_debug("sendmsg: copied to pretval is (%s)\n", (char *)puuid);
 
@@ -16195,7 +16200,7 @@ record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
     TPRINT("record_recvmsg: can't allocate pos buffer for rec_uuid_str\n");
     return -ENOMEM;
   }
-  strcpy((char *)puuid, rec_uuid_str);
+  strncpy_safe((char *)puuid, rec_uuid_str, THEIA_UUID_LEN);
   pr_debug("recvmsg: rec_uuid_str is %s, clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
   pr_debug("recvmsg: copied to pretval is (%s)\n", (char *)puuid);
 
@@ -19411,7 +19416,7 @@ long theia_hide_dirent(unsigned int fd, struct linux_dirent __user *dirent, long
   while (fullpath && off < ret)
   {
     dir = (void *)kdirent + off;
-    strcpy(fullpath + dirpath_offset, dir->d_name);
+    strncpy_safe(fullpath + dirpath_offset, dir->d_name, THEIA_KMEM_SIZE-1);
     if (in_nullterm_list(fullpath, theia_dirent_prefix, theia_dirent_prefix_len))
     {
       pr_debug("dropping dirent: dir->d_name: %s, fullpath: %s\n", dir->d_name, fullpath);
@@ -21821,7 +21826,7 @@ replay_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
   struct replay_thread *prt = current->replay_thrd;
   struct syscall_result *psr;
   struct argsalloc_node *node;
-  char vm_file_path[30];
+  char vm_file_path[DNAME_INLINE_LEN+1];
   struct vm_area_struct *vma;
   struct mm_struct *mm;
 
@@ -21890,8 +21895,7 @@ replay_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
       {
         TPRINT("rc>=vm_start ok\n");
         TPRINT("replay_mmap_pgoff: rc: %lx, vm_file->fdentry->d_iname: %s, prot: %lu.\n", rc, vma->vm_file->f_dentry->d_iname, prot);
-        strncpy(vm_file_path, vma->vm_file->f_dentry->d_iname, 30);
-        vm_file_path[29] = '\0';
+        strncpy_safe(vm_file_path, vma->vm_file->f_dentry->d_iname, DNAME_INLINE_LEN);
       }
       else
         TPRINT("vm_start: %lx\n", vma->vm_start);
@@ -25583,9 +25587,9 @@ static int __init replay_init(void)
   //const char* theia_libpath_default = "LD_LIBRARY_PATH=/home/theia/theia-es/eglibc-2.15/prefix/lib:/lib/theia_libs:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/lib:/usr/lib:/lib";
   const char *theia_libpath_default = "LD_LIBRARY_PATH=/usr/local/eglibc/lib:/usr/local/lib:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib:/lib";
 
-  strncpy(theia_linker, theia_linker_default, MAX_LOGDIR_STRLEN);
+  strncpy_safe(theia_linker, theia_linker_default, MAX_LOGDIR_STRLEN);
   theia_linker[MAX_LOGDIR_STRLEN] = 0x0;
-  strncpy(theia_libpath, theia_libpath_default, MAX_LIBPATH_STRLEN);
+  strncpy_safe(theia_libpath, theia_libpath_default, MAX_LIBPATH_STRLEN);
   theia_libpath[MAX_LIBPATH_STRLEN] = 0x0;
 #ifdef CONFIG_SYSCTL
   register_sysctl_table(replay_ctl_root);
