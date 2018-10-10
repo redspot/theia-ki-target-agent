@@ -964,21 +964,6 @@ void get_curr_time(long *sec, long *nsec)
   return;
 }
 
-struct black_pid glb_blackpid;
-
-bool is_pid_match(int taskid_to_avoid[], int length)
-{
-  int i = 0;
-  for (i = 0; i < length; i++)
-  {
-    if (taskid_to_avoid[i] == glb_blackpid.pid[0] ||
-        taskid_to_avoid[i] == glb_blackpid.pid[1] ||
-        taskid_to_avoid[i] == glb_blackpid.pid[2])
-      return true;
-  }
-
-  return false;
-}
 /*
  * subbuf_start() relay callback.
  *
@@ -1962,8 +1947,6 @@ struct replay_thread
 
 /* Prototypes */
 struct file *init_log_write(struct record_thread *prect, loff_t *ppos, int *pfd);
-//Yang
-struct file *ahg_init_log_write(struct record_thread *prect, loff_t *ppos, int *pfd);
 
 void term_log_write(struct file *file, int fd);
 int read_log_data(struct record_thread *prt);
@@ -12402,21 +12385,14 @@ inline void theia_lseek_ahgx(unsigned int fd, off_t offset, unsigned int origin,
 
 //64port
 SIMPLE_SHIM3(mknod, 133, const char __user *, filename, int, mode, unsigned, dev);
-//SIMPLE_SHIM2(chmod, 90, const char __user *, filename, mode_t,  mode);
-//SIMPLE_SHIM2(fchmod, 91, unsigned int, fd, mode_t, mode);
-//SIMPLE_SHIM3(chown, 92, const char __user *, filename, uid_t, user, gid_t, group);
-//SIMPLE_SHIM3(fchown, 93, unsigned int, fd, uid_t, user, gid_t, group);
-//SIMPLE_SHIM3(lchown, 94, const char __user *, filename, uid_t, user, gid_t, group);
 SIMPLE_SHIM3(lseek, 8, unsigned int, fd, off_t, offset, unsigned int, origin);
 
-//THEIA_SHIM3(mknod, 133, const char __user *, filename, int, mode, unsigned, dev);
 THEIA_SHIM2(chmod, 90, char __user *, filename, mode_t,  mode);
 THEIA_SHIM2(fchmod, 91, unsigned int, fd, mode_t, mode);
 
 THEIA_SHIM3(chown, 92, char __user *, filename, uid_t, user, gid_t, group);
 THEIA_SHIM3(lchown, 94, char __user *, filename, uid_t, user, gid_t, group);
 THEIA_SHIM3(fchown, 93, unsigned int, fd, uid_t, user, gid_t, group);
-//THEIA_SHIM3(lseek, 8, unsigned int, fd, off_t, offset, unsigned int, origin);
 
 SIMPLE_SHIM0(getpid, 39);
 
@@ -12951,7 +12927,8 @@ record_brk(unsigned long brk)
         size = rc - prt->rp_group->rg_prev_brk;
         if (size)
         {
-          MPRINT("Pid %d brk increased size by %lu, reserve %lx to %lx\n", current->pid, size, prt->rp_group->rg_prev_brk, rc);
+          MPRINT("Pid %d brk increased size by %lu, reserve %lx to %lx\n", 
+            current->pid, size, prt->rp_group->rg_prev_brk, rc);
           reserve_memory(prt->rp_group->rg_prev_brk, size);
           prt->rp_group->rg_prev_brk = rc;
         }
@@ -12981,7 +12958,8 @@ replay_brk(unsigned long brk)
   {
     rc = prt->rp_saved_rc;
     (*(int *)(prt->app_syscall_addr)) = 999;
-    TPRINT("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", __func__, __LINE__, current->pid);
+    TPRINT("[%s|%d] pid %d, prt->app_syscall_addr is set to 999\n", 
+      __func__, __LINE__, current->pid);
   }
   else
   {
@@ -13036,7 +13014,8 @@ replay_brk(unsigned long brk)
         size = retval - prt->rp_record_thread->rp_group->rg_prev_brk;
         if (size)
         {
-          MPRINT("Pid %d brk increased size by %lx, reserve %lx to %lx\n", current->pid, size, prt->rp_record_thread->rp_group->rg_prev_brk, retval);
+          MPRINT("Pid %d brk increased size by %lx, reserve %lx to %lx\n", 
+      current->pid, size, prt->rp_record_thread->rp_group->rg_prev_brk, retval);
           reserve_memory(prt->rp_record_thread->rp_group->rg_prev_brk, size);
           prt->rp_record_thread->rp_group->rg_prev_brk = retval;
         }
@@ -14446,7 +14425,7 @@ void get_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_f
       }
       else { /* an abstract socket address */
         if (!len) {
-          pr_err("getname error: len = %i\n", len);
+          pr_debug("getname error: len = %i\n", len);
           return;
         }
         if (len-sizeof(sa_family_t) > 0) {
@@ -24342,84 +24321,6 @@ asmlinkage long shim_process_vm_writev(pid_t pid, const struct iovec __user *lve
 
 SIMPLE_SHIM5(kcmp, 312, pid_t, pid1, pid_t, pid2, int, type, unsigned long, idx1, unsigned long, idx2);
 
-//Yang
-//Need to rewrite init_log_write to write to ahg log file.
-struct file *ahg_init_log_write(struct record_thread *prect, loff_t *ppos, int *pfd)
-{
-  char filename[MAX_LOGDIR_STRLEN + 20];
-  //  struct stat64 st;
-  //64port
-  struct stat st;
-  mm_segment_t old_fs;
-  int rc;
-  struct file *ret = NULL;
-  int flags;
-
-  debug_flag = 0;
-
-  rc = snprintf(filename, MAX_LOGDIR_STRLEN+20, "%s/ahglog.id.%d", prect->rp_group->rg_logdir, prect->rp_record_pid);
-  if (rc < 0)
-  {
-    TPRINT("ahg_init_log_write: rg_logdir is too long\n");
-    ret = NULL;
-    goto out;
-  }
-
-  old_fs = get_fs();
-  set_fs(KERNEL_DS);
-  if (prect->ahg_rp_log_opened)
-  {
-    //rc = sys_stat64(filename, &st);
-    //64port
-    rc = sys_newstat(filename, &st);
-    if (rc < 0)
-    {
-      TPRINT("Stat of file %s failed\n", filename);
-      ret = NULL;
-      goto out;
-    }
-    *ppos = st.st_size;
-    /*
-    TPRINT("%s %d: Attempting to re-open log %s\n", __func__, __LINE__,
-        filename);
-        */
-    flags = O_WRONLY | O_APPEND | O_LARGEFILE;
-    *pfd = sys_open(filename, flags, 0777);
-    MPRINT("Reopened log file %s, pos = %ld\n", filename, (long) *ppos);
-  }
-  else
-  {
-    flags = O_WRONLY | O_CREAT | O_TRUNC | O_LARGEFILE;
-    *pfd = sys_open(filename, flags, 0777);
-    //TPRINT("%s %d: Creating log %s\n", __func__, __LINE__, filename);
-    if (*pfd > 0)
-    {
-      rc = sys_fchmod(*pfd, 0777);
-      if (rc == -1)
-      {
-        TPRINT("Pid %d fchmod of klog %s failed\n", current->pid, filename);
-      }
-    }
-    MPRINT("Opened log file %s\n", filename);
-    *ppos = 0;
-    prect->ahg_rp_log_opened = 1;
-  }
-  set_fs(old_fs);
-  if (*pfd < 0)
-  {
-    ret = NULL;
-    goto out;
-  }
-
-  ret = fget(*pfd);
-
-out:
-  debug_flag = 0;
-
-  return ret;
-}
-
-
 struct file *init_log_write(struct record_thread *prect, loff_t *ppos, int *pfd)
 {
   char filename[MAX_LOGDIR_STRLEN + 20];
@@ -25612,10 +25513,6 @@ static int __init replay_init(void)
 
   /* Performance monitoring */
   perftimer_init();
-
-  glb_blackpid.pid[0] = 0;
-  glb_blackpid.pid[1] = 0;
-  glb_blackpid.pid[2] = 0;
 
   //theia_replay_register init
   theia_replay_register_data.pid = 0;
