@@ -5148,7 +5148,6 @@ int fork_replay(char __user *logdir, const char __user *const __user *args,
   show_kernel_stack((u_long*)cur_rsp);
   */
 
-  TPRINT("Yang after entering record_execve in fork_replay\n");
   if (retval) TPRINT("fork_replay: execve returns %ld\n", retval);
   return retval;
 }
@@ -5441,7 +5440,6 @@ _new_syscall_exit(long sysnum, void *retparams, void *ahgparams)
   psr->flags = retparams ? (psr->flags | SR_HAS_RETPARAMS) : psr->flags;
   //Yang
   psr->flags = ahgparams ? (psr->flags | SR_HAS_AHGPARAMS) : psr->flags;
-  //  TPRINT("new_syscall_exit flag is %x\n",psr->flags);
 #ifdef USE_HPC
   psr->hpc_end = rdtsc();
 #endif
@@ -6817,7 +6815,6 @@ get_next_syscall(int syscall, char **ppretparams)
   {
     if ((*(int *)(prt->app_syscall_addr)) != 999)
     {
-      (*(int *)(prt->app_syscall_addr)) = 0;
       (*(int *)(prt->app_syscall_addr)) = 997; //Yang: in syscall_64.tbl, 0 is read.. we use 997 instead
       TPRINT("[%s|%d] pid %d, prt->app_syscall_addr is set to 997\n", __func__, __LINE__, current->pid);
     }
@@ -6863,7 +6860,6 @@ cget_next_syscall(int syscall, char **ppretparams, u_char *flag, long prediction
   {
     if ((*(int *)(prt->app_syscall_addr)) != 999)
     {
-      //(*(int*)(prt->app_syscall_addr)) = 0;
       (*(int *)(prt->app_syscall_addr)) = 997; //Yang: in syscall_64.tbl, 0 is read.. we use 997 instead
       TPRINT("[%s|%d] pid %d, prt->app_syscall_addr is set to 997\n", __func__, __LINE__, current->pid);
     }
@@ -10139,7 +10135,8 @@ record_write(unsigned int fd, const char __user *buf, size_t count)
     new_syscall_enter(1);
     new_syscall_done(1, count);
     memset(kbuf, 0, sizeof(kbuf));
-    if (copy_from_user(kbuf, buf, count < 179 ? count : 180)) TPRINT("record_write: cannot copy kstring\n");
+    if (copy_from_user(kbuf, buf, count < 179 ? count : 180)) 
+      TPRINT("record_write: cannot copy kstring\n");
     //    TPRINT ("Pid %d clock %d logged clock %ld records: %s", current->pid, atomic_read(current->record_thrd->rp_precord_clock)-1, current->record_thrd->rp_expected_clock-1, kbuf);
     new_syscall_exit(1, NULL);
     return count;
@@ -10622,7 +10619,8 @@ void packahgv_close(struct close_ahgv *sys_args)
     int size = 0;
     get_curr_time(&sec, &nsec);
     size = snprintf(buf, THEIA_KMEM_SIZE-1, "startahg|%d|%d|%ld|%d|%d|%ld|%ld|endahg\n", 3,
-                   sys_args->pid, current->start_time.tv_sec, sys_args->fd, current->tgid, sec, nsec);
+                   sys_args->pid, current->start_time.tv_sec, 
+                   sys_args->fd, current->tgid, sec, nsec);
     if (size < 0)
     {
       pr_warn("%s() size = %i\n", __FUNCTION__, size);
@@ -13074,12 +13072,14 @@ void packahgv_ioctl(struct ioctl_ahgv *sys_args)
     theia_dump_auxdata();
 #endif
 
-    size = snprintf(buf, THEIA_KMEM_SIZE-1, "startahg|%d|%d|%ld|%s|%d|%ld|%ld|%d|%ld|%ld|%u|endahg\n",
+    size = snprintf(buf, THEIA_KMEM_SIZE-1, 
+                  "startahg|%d|%d|%ld|%s|%d|%ld|%ld|%d|%ld|%ld|%u|endahg\n",
                    16, sys_args->pid, current->start_time.tv_sec,
                    uuid_str, sys_args->cmd, sys_args->arg, sys_args->rc, current->tgid,
                    sec, nsec, current->no_syscalls++);
 #else
-    size = snprintf(buf, THEIA_KMEM_SIZE-1, "startahg|%d|%d|%ld|%d|%d|%ld|%ld|%d|%ld|%ld|endahg\n",
+    size = snprintf(buf, THEIA_KMEM_SIZE-1, 
+                   "startahg|%d|%d|%ld|%d|%d|%ld|%ld|%d|%ld|%ld|endahg\n",
                    16, sys_args->pid, current->start_time.tv_sec,
                    sys_args->fd, sys_args->cmd, sys_args->arg, sys_args->rc, current->tgid,
                    sec, nsec);
@@ -13908,7 +13908,8 @@ void packahgv_munmap(struct munmap_ahgv *sys_args)
     theia_dump_auxdata();
 #endif
 
-    size = snprintf(buf, THEIA_KMEM_SIZE-1, "startahg|%d|%d|%ld|%ld|%lx|%ld|%d|%ld|%ld|%u|endahg\n",
+    size = snprintf(buf, THEIA_KMEM_SIZE-1, 
+                   "startahg|%d|%d|%ld|%ld|%lx|%ld|%d|%ld|%ld|%u|endahg\n",
                    11, sys_args->pid, current->start_time.tv_sec, sys_args->rc,
                    sys_args->addr, sys_args->len, current->tgid, sec, nsec, current->no_syscalls++);
     if (size < 0)
@@ -15601,7 +15602,6 @@ long theia_sys_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags)
   long rc;
   rc = sys_sendmsg(fd, msg, flags);
 
-  //TPRINT("sendmsg is called!, pid %d, ret %ld\n", current->pid,rc);
   // Yang: regardless of the return value, passes the failed syscall also
   //  if (rc >= 0)
   if (rc != -EAGAIN)
@@ -17403,7 +17403,7 @@ long theia_sys_shmat(int shmid, char __user *shmaddr, int shmflg)
   ipcp = ipc_lock(&ns->ids[IPC_SHM_IDS], shmid);
   if (IS_ERR(ipcp))
   {
-    TPRINT("theia_sys_ipc: cannot lock ipc for shmat\n");
+    TPRINT("theia_sys_shmat: cannot lock ipc for shmat\n");
     return -EINVAL;
   }
   shp = container_of(ipcp, struct shmid_kernel, shm_perm);
@@ -17458,7 +17458,7 @@ record_shmat(int shmid, char __user *shmaddr, int shmflg)
   ipcp = ipc_lock(&ns->ids[IPC_SHM_IDS], shmid);
   if (IS_ERR(ipcp))
   {
-    TPRINT("theia_sys_ipc: cannot lock ipc for shmat\n");
+    TPRINT("theia_sys_shmat: cannot lock ipc for shmat\n");
     return -EINVAL;
   }
   shp = container_of(ipcp, struct shmid_kernel, shm_perm);
@@ -17480,7 +17480,7 @@ record_shmat(int shmid, char __user *shmaddr, int shmflg)
     ipcp = ipc_lock(&ns->ids[IPC_SHM_IDS], shmid);
     if (IS_ERR(ipcp))
     {
-      TPRINT("record_ipc: cannot lock ipc for shmat\n");
+      TPRINT("record_shmat: cannot lock ipc for shmat\n");
       return -EINVAL;
     }
     shp = container_of(ipcp, struct shmid_kernel, shm_perm);
@@ -17491,7 +17491,7 @@ record_shmat(int shmid, char __user *shmaddr, int shmflg)
     patretval = (struct shmat_retvals *) pretval;
     if (patretval == NULL)
     {
-      TPRINT("record_ipc(shmat) can't allocate buffer\n");
+      TPRINT("record_shmat(shmat) can't allocate buffer\n");
       return -ENOMEM;
     }
     patretval->len = sizeof(struct shmat_retvals) - sizeof(u_long);
@@ -17631,14 +17631,14 @@ record_shmctl(int shmid, int cmd, struct shmid_ds __user *buf)
       pretval = ARGSKMALLOC(sizeof(u_long) + sizeof(int) + len, GFP_KERNEL);
       if (pretval == NULL)
       {
-        TPRINT("record_ipc (shmctl): can't allocate return value\n");
+        TPRINT("record_shmctl: can't allocate return value\n");
         return -ENOMEM;
       }
       *((u_long *) pretval) = sizeof(int) + len;
       *((int *) pretval + sizeof(u_long)) = SHMCTL;
       if (copy_from_user(pretval + sizeof(u_long) + sizeof(int), buf, len))
       {
-        TPRINT("record_ipc (shmctl): can't copy data from user\n");
+        TPRINT("record_shmctl: can't copy data from user\n");
         ARGSKFREE(pretval, sizeof(u_long) + sizeof(int) + len);
         return -EFAULT;
       }
@@ -18014,445 +18014,7 @@ void theia_ipc_ahg(long rc, uint call, int first, u_long second,
   }
 }
 
-int theia_sys_ipc(uint call, int first, u_long second,
-                  u_long third, void __user *ptr, long fifth)
-{
-  long rc;
 
-  rc = sys_ipc(call, first, second, third, ptr, fifth);
-
-  if (call == SHMAT)
-  {
-    unsigned long raddr = 0;
-    struct shmid_kernel *shp;
-    u_long size;
-    struct ipc_namespace *ns = current->nsproxy->ipc_ns;
-    struct kern_ipc_perm *ipcp;
-
-    get_user(raddr, (unsigned long __user *) third);
-    theia_ipc_ahg(rc, call, first, second, raddr, ptr, fifth);
-
-    if (theia_logging_toggle == 0)
-      return rc;
-
-    ipcp = ipc_lock(&ns->ids[IPC_SHM_IDS], first);
-    if (IS_ERR(ipcp))
-    {
-      TPRINT("theia_sys_ipc: cannot lock ipc for shmat\n");
-      return -EINVAL;
-    }
-    shp = container_of(ipcp, struct shmid_kernel, shm_perm);
-    size = shp->shm_segsz;
-    ipc_unlock(&shp->shm_perm);
-
-#ifdef THEIA_TRACK_SHMAT
-    int ret = 0;
-    ret = sys_mprotect(raddr, size, PROT_NONE);
-    int __user *address = NULL;
-    int np = size / 0x1000;
-    if (size % 0x1000) ++np;
-    if (!ret)
-    {
-      int i;
-      for (i = 0; i < np; ++i)
-      {
-        address = (int __user *)(raddr + i * 0x1000);
-        *address = *address;
-      }
-
-      ret = sys_mprotect(rc, size, PROT_NONE);
-      //      TPRINT("protection of a shared page will be changed, ret %d, %d\n", ret, np);
-    }
-#endif
-  }
-  else if (call == SHMGET)
-  {
-    theia_ipc_ahg(rc, call, first, second, third, ptr, fifth);
-  }
-
-  return rc;
-}
-
-//obsolete: 32bit abi
-static asmlinkage long
-record_ipc(uint call, int first, u_long second, u_long third, void __user *ptr, long fifth)
-{
-  mm_segment_t old_fs;
-  char *pretval = NULL;
-  u_long len = 0;
-  long rc;
-
-  new_syscall_enter(117);
-  rc = sys_ipc(call, first, second, third, ptr, fifth);
-
-  //Yang
-  if (call == SHMAT)
-  {
-    unsigned long raddr = 0;
-    get_user(raddr, (unsigned long __user *) third);
-    theia_ipc_ahg(rc, call, first, second, raddr, ptr, fifth);
-  }
-  else if (call == SHMGET)
-  {
-    theia_ipc_ahg(rc, call, first, second, third, ptr, fifth);
-  }
-
-  new_syscall_done(117, rc);
-  if (rc >= 0)
-  {
-    switch (call)
-    {
-      case MSGCTL:
-        switch (second)
-        {
-          case IPC_STAT:
-          case MSG_STAT:
-            len = sizeof(struct msqid64_ds);
-            break;
-          case IPC_INFO:
-          case MSG_INFO:
-            len = sizeof(struct msginfo);
-            break;
-
-        }
-        if (len > 0)
-        {
-          pretval = ARGSKMALLOC(sizeof(u_long) + sizeof(int) + len, GFP_KERNEL);
-          if (pretval == NULL)
-          {
-            TPRINT("record_ipc (msgctl): can't allocate return value\n");
-            return -ENOMEM;
-          }
-          *((u_long *) pretval) = sizeof(int) + len;
-          *((int *) pretval + sizeof(u_long)) = call;
-          if (copy_from_user(pretval + sizeof(u_long) + sizeof(int), ptr, len))
-          {
-            ARGSKFREE(pretval, sizeof(u_long) + sizeof(int) + len);
-            return -EFAULT;
-          }
-        }
-        break;
-      case MSGRCV:
-        pretval = ARGSKMALLOC(sizeof(u_long) + sizeof(long) + rc, GFP_KERNEL);
-        if (pretval == NULL)
-        {
-          TPRINT("record_ipc (msgrcv): can't allocate return value\n");
-          return -ENOMEM;
-        }
-        *((u_long *) pretval) = sizeof(int) + sizeof(long) + rc;
-        *((int *) pretval + sizeof(u_long)) = call;
-        if (copy_from_user(pretval + sizeof(u_long) + sizeof(int), ptr, sizeof(long) + rc))
-        {
-          ARGSKFREE(pretval, sizeof(u_long) + sizeof(int) + sizeof(long) + rc);
-          return -EFAULT;
-        }
-        break;
-      case SEMCTL:
-        switch (second)
-        {
-          case IPC_STAT:
-          case MSG_STAT:
-            len = sizeof(struct semid_ds);
-            break;
-          case IPC_INFO:
-          case MSG_INFO:
-            len = sizeof(struct seminfo);
-            break;
-          case GETALL:
-          {
-            union semun fourth;
-            struct semid_ds info;
-            fourth.buf = &info;
-            old_fs = get_fs();
-            set_fs(KERNEL_DS);
-            sys_semctl(first, second, IPC_STAT, fourth);
-            set_fs(old_fs);
-            len = info.sem_nsems * sizeof(u_short);
-            break;
-          }
-        }
-        if (len > 0)
-        {
-          pretval = ARGSKMALLOC(sizeof(u_long) + sizeof(int) + len, GFP_KERNEL);
-          if (pretval == NULL)
-          {
-            TPRINT("record_ipc (semctl): can't allocate return value\n");
-            return -ENOMEM;
-          }
-          *((u_long *) pretval) = sizeof(int) + len;
-          *((int *) pretval + sizeof(u_long)) = call;
-          if (copy_from_user(pretval + sizeof(u_long) + sizeof(int), ptr, len))
-          {
-            ARGSKFREE(pretval, sizeof(u_long) + sizeof(int) + len);
-            return -EFAULT;
-          }
-        }
-        break;
-      case SHMAT:
-      {
-        struct shmat_retvals *patretval;
-        unsigned long raddr;
-        struct shmid_kernel *shp;
-        u_long size;
-        struct ipc_namespace *ns = current->nsproxy->ipc_ns;
-        struct kern_ipc_perm *ipcp;
-
-        get_user(raddr, (unsigned long __user *) third);
-
-        // Need to get size in case we need to attach PIN on replay
-        ipcp = ipc_lock(&ns->ids[IPC_SHM_IDS], first);
-        if (IS_ERR(ipcp))
-        {
-          TPRINT("record_ipc: cannot lock ipc for shmat\n");
-          return -EINVAL;
-        }
-        shp = container_of(ipcp, struct shmid_kernel, shm_perm);
-        size = shp->shm_segsz;
-        ipc_unlock(&shp->shm_perm);
-
-        pretval = ARGSKMALLOC(sizeof(struct shmat_retvals), GFP_KERNEL);
-        patretval = (struct shmat_retvals *) pretval;
-        if (patretval == NULL)
-        {
-          TPRINT("record_ipc(shmat) can't allocate buffer\n");
-          return -ENOMEM;
-        }
-        patretval->len = sizeof(struct shmat_retvals) - sizeof(u_long);
-        patretval->call = call;
-        patretval->size = size;
-        patretval->raddr = raddr;
-
-#ifdef THEIA_TRACK_SHMAT
-        int ret = 0;
-        ret = sys_mprotect(raddr, size, PROT_NONE);
-        int __user *address = NULL;
-        int np = size / 0x1000;
-        if (size % 0x1000) ++np;
-        if (!ret)
-        {
-          int i;
-          for (i = 0; i < np; ++i)
-          {
-            address = (int __user *)(raddr + i * 0x1000);
-            *address = *address;
-          }
-
-          ret = sys_mprotect(rc, size, PROT_NONE);
-          //        TPRINT("protection of a shared page will be changed, ret %d, %d\n", ret, np);
-        }
-#endif
-
-        if (current->record_thrd->rp_group->rg_save_mmap_flag)
-        {
-          MPRINT("Pid %d, shmat reserve memory %lx len %lx\n",
-                 current->pid,
-                 patretval->raddr, patretval->size);
-          reserve_memory(patretval->raddr, patretval->size);
-        }
-
-        break;
-      }
-      case SHMCTL:
-      {
-        int cmd = second;
-        switch (cmd)
-        {
-          case IPC_STAT:
-          case SHM_STAT:
-            len = sizeof(struct shmid_ds);
-            break;
-          case IPC_INFO:
-          case SHM_INFO:
-            len = sizeof(struct shminfo);
-            break;
-        }
-        if (len > 0)
-        {
-          pretval = ARGSKMALLOC(sizeof(u_long) + sizeof(int) + len, GFP_KERNEL);
-          if (pretval == NULL)
-          {
-            TPRINT("record_ipc (shmctl): can't allocate return value\n");
-            return -ENOMEM;
-          }
-          *((u_long *) pretval) = sizeof(int) + len;
-          *((int *) pretval + sizeof(u_long)) = call;
-          if (copy_from_user(pretval + sizeof(u_long) + sizeof(int), ptr, len))
-          {
-            TPRINT("record_ipc (shmctl): can't copy data from user\n");
-            ARGSKFREE(pretval, sizeof(u_long) + sizeof(int) + len);
-            return -EFAULT;
-          }
-        }
-        break;
-      }
-    }
-  }
-  new_syscall_exit(117, pretval);
-  return rc;
-}
-
-static asmlinkage long
-replay_ipc(uint call, int first, u_long second, u_long third, void __user *ptr, long fifth)
-{
-  char *retparams;
-  long retval;
-  long rc = get_next_syscall(117, (char **) &retparams);
-  int repid, cmd;
-
-  switch (call)
-  {
-    case MSGCTL:
-    case MSGRCV:
-    case SEMCTL:
-      if (retparams && ptr)
-      {
-        u_long len = *((u_long *) retparams);
-        if (copy_to_user(ptr, retparams + sizeof(u_long) + sizeof(int), len - sizeof(int)))
-        {
-          TPRINT("replay_ipc (call %d): pid %d cannot copy to user\n", call, current->pid);
-          return syscall_mismatch();
-        }
-        argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + len);
-      }
-      return rc;
-    case SHMAT:
-      if (rc == 0)
-      {
-        struct shmat_retvals *atretparams = (struct shmat_retvals *) retparams;
-
-        if (current->replay_thrd->rp_record_thread->rp_group->rg_save_mmap_flag)
-        {
-          MPRINT("Pid %d, replay shmat reserve memory %lx len %lx\n",
-                 current->pid,
-                 atretparams->raddr, atretparams->size);
-          reserve_memory(atretparams->raddr, atretparams->size);
-        }
-
-        // do_shmat checks to see if there are any existing mmaps in the region to be shmat'ed. So we'll have to munmap our preallocations for this region
-        // before proceding.
-        if (is_pin_attached())
-        {
-          struct sysv_shm *tmp;
-          tmp = KMALLOC(sizeof(struct sysv_shm), GFP_KERNEL);
-          if (tmp == NULL)
-          {
-            TPRINT("Pid %d: could not alllocate for sysv_shm\n", current->pid);
-            return -ENOMEM;
-          }
-          tmp->addr = atretparams->raddr;
-          tmp->len = atretparams->size;
-          list_add(&tmp->list, &current->replay_thrd->rp_sysv_shms);
-
-          MPRINT("  Pin is attached to pid %d - munmap preallocation before shmat at addr %lx size %lu\n", current->pid, atretparams->raddr, atretparams->size);
-          retval = sys_munmap(atretparams->raddr, atretparams->size);
-          if (retval) TPRINT("[WARN]Pid %d shmat failed to munmap the preallocation at addr %lx size %lu\n", current->pid, rc, atretparams->size);
-        }
-
-        // redo the mapping with at the same address returned during recording
-        repid = find_sysv_mapping(current->replay_thrd, first);
-        retval = sys_ipc(call, repid, rc, third, (void __user *) atretparams->raddr, fifth);
-        if (retval != rc)
-        {
-          TPRINT("replay_ipc(shmat) returns different value %ld than %ld\n", retval, rc);
-          return syscall_mismatch();
-        }
-        if (retval == 0)
-        {
-          u_long raddr;
-          get_user(raddr, (unsigned long __user *) third);
-          TPRINT("Pid %d replays SHMAT success address %lx\n", current->pid, raddr);
-          if (raddr != atretparams->raddr)
-          {
-            TPRINT("replay_ipc(shmat) returns different address %lx than %lx\n", raddr, atretparams->raddr);
-          }
-        }
-        argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct shmat_retvals));
-      }
-      return rc;
-    case SHMDT:
-      retval = sys_ipc(call, first, second, third, ptr, fifth);
-      if (retval != rc)
-      {
-        TPRINT("replay_ipc(shmdt) returns different value %ld than %ld\n", retval, rc);
-        return syscall_mismatch();
-      }
-      /*
-       * For Pin support, we need to preallocate this again if this memory area that was just munmap'ed
-       */
-      if (!retval && is_pin_attached())
-      {
-        u_long size = 0;
-        struct sysv_shm *tmp;
-        struct sysv_shm *tmp_safe;
-        list_for_each_entry_safe(tmp, tmp_safe, &current->replay_thrd->rp_sysv_shms, list)
-        {
-          if (tmp->addr == (u_long)ptr)
-          {
-            size = tmp->len;
-            list_del(&tmp->list);
-            KFREE(tmp);
-          }
-        }
-        if (size == 0)
-        {
-          MPRINT("Pid %d replay shmdt: could not find shm %lx ???\n", current->pid, (u_long) ptr);
-          syscall_mismatch();
-        }
-
-        MPRINT("Pid %d Remove shm at addr %lx, len %lx\n", current->pid, (u_long) ptr, size);
-        preallocate_after_munmap((u_long) ptr, size);
-      }
-
-      return rc;
-    case SHMGET:
-      retval = sys_ipc(call, first, second, third, ptr, fifth);
-      if ((rc < 0 && retval >= 0) || (rc >= 0 && retval < 0))
-      {
-        TPRINT("Pid %d replay_ipc SHMGET, on record we got %ld, but replay we got %ld\n", current->pid, rc, retval);
-        return syscall_mismatch();
-      }
-
-      // put a mapping from the re-run replay identifier (pseudo), to the record one
-      if (add_sysv_mapping(current->replay_thrd, rc, retval))
-      {
-        TPRINT("Pid %d replay_ipc SHMGET, could not add replay identifier mapping, replay: %ld, record %ld\n", current->pid, retval, rc);
-        return syscall_mismatch();
-      }
-      return rc;
-    case SHMCTL:
-      cmd = second;
-      (void)ipc_parse_version(&cmd);
-      switch (cmd)
-      {
-        case IPC_STAT:
-        case IPC_INFO:
-        case SHM_STAT:
-        case SHM_INFO:
-          if (retparams && ptr)
-          {
-            u_long len = *((u_long *) retparams);
-            if (copy_to_user(ptr, retparams + sizeof(u_long) + sizeof(int), len - sizeof(int)))
-            {
-              TPRINT("replay_ipc (call %d): pid %d cannot copy to user\n", call, current->pid);
-              return syscall_mismatch();
-            }
-            argsconsume(current->replay_thrd->rp_record_thread, sizeof(u_long) + len);
-          }
-          break;
-        case IPC_RMID:
-          repid = find_sysv_mapping(current->replay_thrd, first);
-          return sys_ipc(call, repid, second, third, ptr, fifth);
-      }
-      return rc;
-  }
-  return rc;
-}
-
-asmlinkage long shim_ipc(uint call, int first, u_long second, u_long third, void __user *ptr, long fifth)
-//SHIM_CALL (ipc, 117, call, first, second, third, ptr, fifth);
-SHIM_CALL_MAIN(117, record_ipc(call, first, second, third, ptr, fifth),
-               replay_ipc(call, first, second, third, ptr, fifth),
-               theia_sys_ipc(call, first, second, third, ptr, fifth))
 
 SIMPLE_SHIM1(fsync, 74, unsigned int, fd);
 
