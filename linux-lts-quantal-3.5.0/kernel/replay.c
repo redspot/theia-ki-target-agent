@@ -145,7 +145,7 @@ inline void get_local_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *s
 }
 
 /* For debugging failing fs operations */
-int debug_flag = 0;
+static int debug_flag = 0;
 
 #define SUBBUF_SIZE 262144
 #define N_SUBBUFS 4
@@ -175,13 +175,8 @@ void get_ids(char *ids);
 /* inode:[dev:ino], ip:[ip/path:port], pipe:[xxxx], anon_inode:[xxxx] */
 bool fd2uuid(int fd, char *uuid_str);
 bool addr2uuid(struct socket *sock, struct sockaddr *dest_addr, char *uuid_str);
-
-bool startsWith(const char *pre, const char *str)
-{
-  size_t lenpre = strlen(pre),
-         lenstr = strlen(str);
-  return lenstr < lenpre ? false : strncmp(pre, str, lenpre) == 0;
-}
+bool file2uuid(struct file *file, char *uuid_str, int fd);
+void path2uuid(const struct path path, char *uuid_str);
 
 #define THEIA_DIRECT_FILE_WRITE 1
 #undef THEIA_DIRECT_FILE_WRITE
@@ -313,7 +308,7 @@ EXPORT_SYMBOL(theia_replay_register_data);
 // If defined, use file cache for reads of read-only files
 #define CACHE_READS
 
-unsigned int theia_debug = 1;
+static unsigned int theia_debug = 1;
 #define TPRINT if(theia_debug) pr_debug
 
 /* These #defines can be found in replay_config.h */
@@ -385,19 +380,19 @@ unsigned int replay_pause_tool = 0;
 #define ahg_new_syscall_exit(sysnum, retparam, ahgparam) _new_syscall_exit(sysnum, retparam, ahgparam)
 
 //Yang: inode etc for replay and pin
-char rec_uuid_str[THEIA_UUID_LEN + 1];
-char repl_uuid_str[THEIA_UUID_LEN + 1] = "initial";
+static char rec_uuid_str[THEIA_UUID_LEN + 1];
+static char repl_uuid_str[THEIA_UUID_LEN + 1] = "initial";
 
 //ui globals
-int uiDebug=1;
+static int uiDebug=1;
 //int uiLogging=1;
-char * orca_log=NULL;
+static char * orca_log=NULL;
 #define orca_file_name "/tmp/orca.txt"
 #define buttonRelease 666
 #define buttonPress 667
 
-long lastPress=0;
-char * danglingX11=NULL;
+static long lastPress=0;
+static char * danglingX11=NULL;
 bool in_nullterm_list(char *target, char *list, size_t list_len);
 
 bool theia_check_channel(void)
@@ -710,7 +705,7 @@ bool fd2uuid(int fd, char *uuid_str)
 
 #define THEIA_AUX_META_LEN 120
 // dump aux data: callstack, ids, ...
-void theia_dump_auxdata()
+void theia_dump_auxdata(void)
 {
   char ids[IDS_LEN+1];
   char *callstack;
@@ -775,7 +770,7 @@ void theia_dump_str(char *str, int rc, int sysnum)
   }
 }
 
-void theia_dump_ss(const char __user *str1, const char __user *str2, int rc, int sysnum)
+static void theia_dump_ss(const char __user *str1, const char __user *str2, int rc, int sysnum)
 {
   char *pcwd = NULL;
   struct path path;
@@ -836,7 +831,7 @@ void theia_dump_ss(const char __user *str1, const char __user *str2, int rc, int
 #endif
 }
 
-void theia_dump_sd(const char __user *str, int val, int rc, int sysnum)
+static void theia_dump_sd(const char __user *str, int val, int rc, int sysnum)
 {
   char *pcwd = NULL;
   struct path path;
@@ -882,7 +877,7 @@ void theia_dump_sd(const char __user *str, int val, int rc, int sysnum)
 #endif
 }
 
-void theia_dump_sdd(const char __user *str, int val1, int val2, int rc, int sysnum)
+static void theia_dump_sdd(const char __user *str, int val1, int val2, int rc, int sysnum)
 {
   char *pcwd = NULL;
   struct path path;
@@ -928,11 +923,11 @@ void theia_dump_sdd(const char __user *str, int val1, int val2, int rc, int sysn
 #endif
 }
 
-void theia_dump_at_sd(int dfd, const char __user *str, int val, int rc, int sysnum)
+static void theia_dump_at_sd(int dfd, const char __user *str, int val, int rc, int sysnum)
 {
 }
 
-void theia_dump_dd(long val1, long val2, int rc, int sysnum)
+static void theia_dump_dd(long val1, long val2, int rc, int sysnum)
 {
   char *buf;
   buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
@@ -941,7 +936,7 @@ void theia_dump_dd(long val1, long val2, int rc, int sysnum)
   kmem_cache_free(theia_buffers, buf);
 }
 
-void theia_dump_ddd(int val1, int val2, int val3, int rc, int sysnum)
+static void theia_dump_ddd(int val1, int val2, int val3, int rc, int sysnum)
 {
   char *buf;
   buf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
@@ -1085,26 +1080,26 @@ static bool theia_opened_inode_tree_init = false;
 
 /* Performance evaluation timers... micro monitoring */
 //struct perftimer *write_btwn_timer;
-struct perftimer *write_in_timer;
-struct perftimer *write_sys_timer;
-struct perftimer *write_filemap_timer;
-struct perftimer *write_traceread_timer;
+static struct perftimer *write_in_timer;
+static struct perftimer *write_sys_timer;
+static struct perftimer *write_filemap_timer;
+static struct perftimer *write_traceread_timer;
 
 //struct perftimer *read_btwn_timer;
-struct perftimer *read_in_timer;
-struct perftimer *read_cache_timer;
-struct perftimer *read_sys_timer;
-struct perftimer *read_traceread_timer;
-struct perftimer *read_filemap_timer;
+static struct perftimer *read_in_timer;
+static struct perftimer *read_cache_timer;
+static struct perftimer *read_sys_timer;
+static struct perftimer *read_traceread_timer;
+static struct perftimer *read_filemap_timer;
 
-struct perftimer *open_timer;
-struct perftimer *open_sys_timer;
-struct perftimer *open_intercept_timer;
-struct perftimer *open_cache_timer;
+static struct perftimer *open_timer;
+static struct perftimer *open_sys_timer;
+static struct perftimer *open_intercept_timer;
+static struct perftimer *open_cache_timer;
 
-struct perftimer *close_timer;
-struct perftimer *close_sys_timer;
-struct perftimer *close_intercept_timer;
+static struct perftimer *close_timer;
+static struct perftimer *close_sys_timer;
+static struct perftimer *close_intercept_timer;
 
 /* Keep track of open inodes */
 
@@ -1721,59 +1716,6 @@ static void rg_unlock(struct record_group *prg)
 #define rg_unlock(prg) mutex_unlock(&(prg)->rg_mutex);
 #endif
 
-static inline void *
-my_kmalloc(size_t size, gfp_t flags, int line)
-{
-  void *ptr;
-  ptr = kmalloc(size, flags);
-
-  DPRINT("Pid %d allocated %p\n", current->pid, ptr);
-  return ptr;
-}
-
-static inline void
-my_kfree(const void *ptr, int line)
-{
-  DPRINT("Pid %d freeing %p\n", current->pid, ptr);
-
-  CHECK_K_PTR(ptr);
-  kfree(ptr);
-}
-
-/* static inline */ void
-check_KFREE(const void *x)
-{
-  if (x && !IS_ERR(x))
-  {
-    if ((u_long) x < 0xc0000000)
-    {
-      TPRINT("  ERROR: freeing obviously bogus value %p\n", x);
-      BUG_ON(1);
-    }
-    else
-    {
-      KFREE(x);
-    }
-  }
-}
-
-static inline void
-check_putname(const char *name)
-{
-  if (name && !IS_ERR(name))
-  {
-    if ((u_long) name < 0xc0000000)
-    {
-      TPRINT("  ERROR: bogus name: %p\n", name);
-      BUG_ON(1);
-    }
-    else
-    {
-      putname(name);
-    }
-  }
-}
-
 static long
 rm_cmp(void *rm1, void *rm2)
 {
@@ -2135,7 +2077,7 @@ void print_memory_areas(void)
   }
   else
   {
-    existing_mmap = 0;
+    existing_mmap = NULL;
   }
   TPRINT("Pid %d let's print out the memory mappings:\n", current->pid);
   while (existing_mmap)
@@ -2625,7 +2567,7 @@ inline void add_fake_time_syscall(struct record_group *prg)
 #endif
 
 //long clock_predict = 0;
-int c_detail = 0;
+static int c_detail = 0;
 #define log_compress_debug 0
 
 #ifdef LOG_COMPRESS
@@ -3166,7 +3108,7 @@ new_record_thread(struct record_group *prg, u_long recpid, struct record_cache_f
   prp->rp_elog_opened = 0;
   prp->rp_read_elog_pos = 0;
 #endif
-  prp->rp_ignore_flag_addr = 0;
+  prp->rp_ignore_flag_addr = NULL;
 
   prp->rp_precord_clock = prp->rp_group->rg_pkrecord_clock;
   prp->rp_expected_clock = 0;
@@ -3210,7 +3152,7 @@ new_record_thread(struct record_group *prg, u_long recpid, struct record_cache_f
 
 #ifdef LOG_COMPRESS
   //xdou
-  prp->rp_ignore_flag_addr = 0;
+  prp->rp_ignore_flag_addr = NULL;
   init_clog_struct(&prp->rp_clog);
 #endif
   get_record_group(prg);
@@ -4387,7 +4329,7 @@ unsigned long get_clock_value(void)
 }
 EXPORT_SYMBOL(get_clock_value);
 
-long get_record_group_id(__u64 *prg_id)
+long get_record_group_id(__u64 __user *prg_id)
 {
   if (current->record_thrd)
   {
@@ -5509,7 +5451,7 @@ static int defer_signal(struct record_thread *prt, int signr, siginfo_t *info)
   return -1;
 }
 
-int get_record_ignore_flag()
+int get_record_ignore_flag(void)
 {
   struct record_thread *prt = current->record_thrd;
   int ignore_flag = 0;
@@ -5877,7 +5819,7 @@ write_user_log(struct record_thread *prect)
   }
   DPRINT("Pid %d: log current address is at %lx\n", current->pid, next);
   start = (char __user *) phead + sizeof(struct pthread_log_head);
-  to_write = (char *) next - start;
+  to_write = (char __user *) next - start;
   MPRINT("Pid %d - need to write %ld bytes of user log\n", current->pid, to_write);
   if (to_write == 0)
   {
@@ -9225,7 +9167,7 @@ void packahgv_process_bin(struct task_struct *tsk)
 }
 
 #define TSK_STACK_SIZE 100
-void recursive_packahgv_process()
+void recursive_packahgv_process(void)
 {
   struct task_struct *tsk_stack[TSK_STACK_SIZE];
   int stack_top = 0, i;
@@ -14996,7 +14938,7 @@ static const char* inet_ntop6(const u_char *src, char *dst, size_t size)
    * Keep this in mind if you think this function should have been coded
    * to use pointer overlays.  All the world's not a VAX.
    */
-  const size_t size_ipv6_tplt = sizeof "ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255";
+#define size_ipv6_tplt 46
   char tmp[size_ipv6_tplt], *tp;
   struct { int base, len; } best, cur;
   u_int words[NS_IN6ADDRSZ / NS_INT16SZ];
@@ -15053,7 +14995,7 @@ static const char* inet_ntop6(const u_char *src, char *dst, size_t size)
     /* Is this address an encapsulated IPv4? */
     if (i == 6 && best.base == 0 &&
         (best.len == 6 || (best.len == 5 && words[5] == 0xffff))) {
-      if (!inet_ntop4(src+12, tp, sizeof tmp - (tp - tmp)))
+      if (!inet_ntop4(src+12, tp, size_ipv6_tplt - (tp - tmp)))
         return (NULL);
       tp += strlen(tp);
       break;
@@ -15356,7 +15298,7 @@ void theia_recvfrom_ahg(long rc, int fd, void __user *ubuf, size_t size, unsigne
     /* use socket fd */
   }
   else {
-    if (addr != NULL && addr_len > 0) {
+    if (addr != NULL && addr_len != NULL) {
       pahgv_recvfrom->sock_fd = -1; /* ignore socket (no connection) */
       if (copy_from_user((char*)&pahgv_recvfrom->src_addr, (char*)addr, sizeof(struct sockaddr))) {
         TPRINT ("theia_recvfrom_ahg: failed to copy src_addr %p\n", addr);
