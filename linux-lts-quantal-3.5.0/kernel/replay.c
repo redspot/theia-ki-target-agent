@@ -10102,9 +10102,9 @@ record_write(unsigned int fd, const char __user *buf, size_t count)
         track_usually_pt2pt_write_begin(filp->f_dentry->d_inode, filp);
       }
 #endif
+      //Yang
+      fput(filp);
     }
-    //Yang
-    fput(filp);
   }
   new_syscall_enter(1);
   size = sys_write(fd, buf, count);
@@ -15927,7 +15927,7 @@ record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct 
     }
 
     if(filp)
-    fput(filp);
+      fput(filp);
   }
 
   new_syscall_exit(44, pretvals);
