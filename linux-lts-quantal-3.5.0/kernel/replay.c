@@ -15926,6 +15926,7 @@ record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct 
       *is_cached = 0;
     }
 
+    if(filp)
     fput(filp);
   }
 
@@ -16041,7 +16042,8 @@ record_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, stru
         *is_cached = 0;
       }
 
-      fput(filp);
+      if(filp)
+        fput(filp);
     }
     while (0);
 #endif
@@ -20520,35 +20522,37 @@ record_pwrite64(unsigned int fd, const char __user *buf, size_t count, loff_t po
     struct inode *inode;
 
     filp = fget(fd);
-    inode = filp->f_dentry->d_inode;
+    if(filp) {
+      inode = filp->f_dentry->d_inode;
 
-    /*if (inode->i_rdev == 0 && MAJOR(inode->i_sb->s_dev) != 0 && filp->)*/
-    if (filp->replayfs_filemap)
-    {
-      loff_t fpos;
-      struct replayfs_filemap *map;
-      map = filp->replayfs_filemap;
-      if (map == NULL)
+      /*if (inode->i_rdev == 0 && MAJOR(inode->i_sb->s_dev) != 0 && filp->)*/
+      if (filp->replayfs_filemap)
       {
-        replayfs_file_opened(filp);
+        loff_t fpos;
+        struct replayfs_filemap *map;
         map = filp->replayfs_filemap;
+        if (map == NULL)
+        {
+          replayfs_file_opened(filp);
+          map = filp->replayfs_filemap;
+        }
+
+        BUG_ON(map == NULL);
+        //replayfs_filemap_init(&map, replayfs_alloc, filp);
+
+        fpos = pos;
+        if (fpos >= 0)
+        {
+          replayfs_filemap_write(map, current->record_thrd->rp_group->rg_id, current->record_thrd->rp_record_pid,
+              current->record_thrd->rp_count, 0, fpos, size);
+        }
+
+        replayfs_diskalloc_sync(map->entries.allocator);
+
+        //replayfs_filemap_destroy(&map);
       }
-
-      BUG_ON(map == NULL);
-      //replayfs_filemap_init(&map, replayfs_alloc, filp);
-
-      fpos = pos;
-      if (fpos >= 0)
-      {
-        replayfs_filemap_write(map, current->record_thrd->rp_group->rg_id, current->record_thrd->rp_record_pid,
-                               current->record_thrd->rp_count, 0, fpos, size);
-      }
-
-      replayfs_diskalloc_sync(map->entries.allocator);
-
-      //replayfs_filemap_destroy(&map);
+      fput(filp);
     }
-    fput(filp);
   }
 #endif
   new_syscall_exit(18, pretparams);
