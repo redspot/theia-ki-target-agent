@@ -194,6 +194,9 @@ static void *reader_thread(void *data)
 {
 	int hostfd = -1;
   char filename[50];
+  char record_name[50];
+  char cache_name[50];
+  char record_name_prefix[50];
   uint8_t dump_id = get_last_ip_seg();
   int dump_cnt = 1;
 	char buf[READ_BUF_LEN + 1];
@@ -201,12 +204,30 @@ static void *reader_thread(void *data)
 	int rc, cpu = (int)(long)data;
 	struct pollfd pollfd;
   size_t fsize, slen;
+  struct stat st = {0};
 
   printf("reader thread starting for cpu %i\n", cpu);
 
-	// use a file
-  sprintf(filename, "/data/ahg.dump.%u.%d", dump_id, dump_cnt);
+	// ahg dump naming
+  snprintf(filename, 50, "/data/ahg.dump.%u.%d", dump_id, dump_cnt);
 	hostfd = open(filename, O_RDWR|O_CREAT, 0777);
+
+//  snprintf(record_name_prefix, 50, "/data/%u", dump_id);
+//  snprintf(record_name, 50, "/data/%u/replay_logdb", dump_id);
+//  snprintf(cache_name, 50, "/data/%u/replay_cache", dump_id);
+//
+//  if (stat(record_name_prefix, &st) == -1) {
+//    mkdir(record_name_prefix, 0777);
+//    mkdir(record_name, 0777);
+//    mkdir(cache_name, 0777);
+//  }
+//
+//  if(symlink(record_name, "/data/replay_logdb") != 0) {
+//    printf("record log symlink error: %s\n",strerror(errno));
+//  }
+//  if(symlink(cache_name, "/data/replay_cache") != 0) {
+//    printf("cache log symlink error: %s\n",strerror(errno));
+//  }
 
 	do {
 		pollfd.fd = relay_file[cpu];

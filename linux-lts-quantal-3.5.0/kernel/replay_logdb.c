@@ -7,8 +7,10 @@
 #include <asm/uaccess.h>
 
 #define LOGDB_DIR "/data/replay_logdb/"
-#define LOGDB_INDEX LOGDB_DIR "ndx"
+//#define LOGDB_INDEX LOGDB_DIR "ndx"
 #define LOGID_INCREMENT 4096
+
+extern char glb_record_log_dir[50];
 
 // Global variables
 DEFINE_MUTEX(replay_id_mutex);
@@ -33,6 +35,7 @@ get_replay_id (void)
 	mm_segment_t old_fs = get_fs();
 	__u64 ret_id;
 	int fd, rc;
+  char logdb_index[70];
 
 	RID_LOCK;
 	set_fs(KERNEL_DS);
@@ -40,7 +43,8 @@ get_replay_id (void)
 	if (max_logid <= last_logid) {
 
 		// First, get maximum log id that was saved persitently to disk
-		fd = sys_open (LOGDB_INDEX, O_RDWR, 0);
+    snprintf(logdb_index, 70, "%sndx", glb_record_log_dir);
+		fd = sys_open (logdb_index, O_RDWR, 0);
 		if (fd >= 0) {
 
 			rc = sys_read (fd, (char *) &max_logid, sizeof(max_logid));
@@ -64,7 +68,7 @@ get_replay_id (void)
 				
 		} else if (fd == -ENOENT) {
 
-			fd = sys_open (LOGDB_INDEX, O_RDWR | O_CREAT | O_EXCL, 0666);
+			fd = sys_open (logdb_index, O_RDWR | O_CREAT | O_EXCL, 0666);
 			if (fd <= 0) {
 				printk ("get_replay_id: cannot create new index file, rc=%d\n", fd);
 				sys_close (fd);
@@ -74,7 +78,7 @@ get_replay_id (void)
 			}
 
 		} else {
-			printk ("get_replay_id: cannot open %s,rc=%d\n", LOGDB_INDEX, fd);
+			printk ("get_replay_id: cannot open %s,rc=%d\n", logdb_index, fd);
 			set_fs(old_fs);
 			RID_UNLOCK;
 			return 0;
@@ -98,7 +102,7 @@ get_replay_id (void)
 	ret_id = ++last_logid;
 
 	if (ret_id >= max_logid) {
-		fd = sys_open (LOGDB_INDEX, O_RDWR, 0);
+		fd = sys_open (logdb_index, O_RDWR, 0);
 
 		// Need to allocate some more ids
 		max_logid += LOGID_INCREMENT;
@@ -124,7 +128,8 @@ get_replay_id (void)
 void
 get_logdir_for_replay_id (__u64 id, char* buf)
 {
-	sprintf (buf, "%srec_%lld", LOGDB_DIR, id);
+	//sprintf (buf, "%srec_%lld", LOGDB_DIR, id);
+	sprintf (buf, "%srec_%lld", glb_record_log_dir, id);
 }
 
 int

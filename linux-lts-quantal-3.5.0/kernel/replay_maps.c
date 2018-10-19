@@ -25,8 +25,10 @@
 
 #define DPRINT(x,...)
 
-char cache_dir[] = "/data/replay_cache";
+//char cache_dir[] = "/data/replay_cache";
 #define COPY_CHUNK 4096
+
+extern char glb_cache_log_dir[50];
 
 // We hold the record lock when this function is called
 int add_file_to_cache (struct file* vm_file, dev_t* pdev, unsigned long* pino, struct timespec* pmtime) 
@@ -46,7 +48,7 @@ int add_file_to_cache (struct file* vm_file, dev_t* pdev, unsigned long* pino, s
 
 	*pino = inode->i_ino;
 	*pdev = inode->i_sb->s_dev;
-	sprintf (cname, "%s/%x_%lx", cache_dir, inode->i_sb->s_dev, inode->i_ino);
+	sprintf (cname, "%s/%x_%lx", glb_cache_log_dir, inode->i_sb->s_dev, inode->i_ino);
 	DPRINT ("looking for cache file %s\n", cname);
 
 	old_fs = get_fs();
@@ -74,7 +76,7 @@ int add_file_to_cache (struct file* vm_file, dev_t* pdev, unsigned long* pino, s
 			printk("%s %d: Versioning file %x_%lx_%lu_%lu @ %lu\n", __func__, __LINE__,
 					inode->i_sb->s_dev, inode->i_ino, st.st_mtime, st.st_mtime_nsec,
 					get_clock_value());
-			sprintf (nname, "%s/%x_%lx_%lu_%lu", cache_dir, inode->i_sb->s_dev, inode->i_ino, st.st_mtime, st.st_mtime_nsec);
+			sprintf (nname, "%s/%x_%lx_%lu_%lu", glb_cache_log_dir, inode->i_sb->s_dev, inode->i_ino, st.st_mtime, st.st_mtime_nsec);
 			rc = sys_rename (cname, nname);
 		}
 	}
@@ -94,7 +96,7 @@ int add_file_to_cache (struct file* vm_file, dev_t* pdev, unsigned long* pino, s
 
 	// Create cache file as a temp file, then do an atomic rename - this prevents incomplete cache files if we happen
 	// to be aborted in the middle
-	sprintf (tname, "/%s/cf_%d\n", cache_dir, current->pid);
+	sprintf (tname, "/%s/cf_%d\n", glb_cache_log_dir, current->pid);
 	fd = sys_open (tname, O_CREAT|O_TRUNC|O_WRONLY, mode);
 	if (fd < 0) {
 		DPRINT ("add_file_to_cache: cannot create cache file %s, rc=%d\n", cname, fd);
@@ -159,7 +161,7 @@ int get_cache_file_name (char* cname, dev_t dev, u_long ino, struct timespec mti
 	int rc;
 
 	// check if most recent cache file is still valid
-	sprintf (cname, "%s/%x_%lx", cache_dir, dev, ino);
+	sprintf (cname, "%s/%x_%lx", glb_cache_log_dir, dev, ino);
 	
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
@@ -177,7 +179,7 @@ int get_cache_file_name (char* cname, dev_t dev, u_long ino, struct timespec mti
 	DPRINT ("replay mod time: %ld.%ld\n", mtime.tv_sec, mtime.tv_nsec);
 	
 	if (st.st_mtime != mtime.tv_sec || st.st_mtime_nsec != mtime.tv_nsec) {
-		sprintf (cname, "%s/%x_%lx_%lu_%lu", cache_dir, dev, ino, mtime.tv_sec, mtime.tv_nsec);
+		sprintf (cname, "%s/%x_%lx_%lu_%lu", glb_cache_log_dir, dev, ino, mtime.tv_sec, mtime.tv_nsec);
 	}
 	set_fs(old_fs);
 
@@ -194,7 +196,7 @@ int open_cache_file (dev_t dev, u_long ino, struct timespec mtime, int flags)
 	int fd, rc;
 
         // check if most recent cache file is still valid
-	sprintf (cname, "%s/%x_%lx", cache_dir, dev, ino);
+	sprintf (cname, "%s/%x_%lx", glb_cache_log_dir, dev, ino);
 	
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
@@ -217,7 +219,7 @@ int open_cache_file (dev_t dev, u_long ino, struct timespec mtime, int flags)
 		fd = sys_open (cname, flags, 0);
 	} else {
 		// otherwise, open a past versio
-		sprintf (cname, "%s/%x_%lx_%lu_%lu", cache_dir, dev, ino, mtime.tv_sec, mtime.tv_nsec);
+		sprintf (cname, "%s/%x_%lx_%lu_%lu", glb_cache_log_dir, dev, ino, mtime.tv_sec, mtime.tv_nsec);
 		DPRINT ("opening cache file %s\n", cname);
 		fd = sys_open (cname, flags, 0);
 	}
@@ -240,7 +242,7 @@ int open_mmap_cache_file (dev_t dev, u_long ino, struct timespec mtime, int is_w
 	char* buffer;
 
         // check if most recent cache file is still valid
-	sprintf (cname, "%s/%x_%lx", cache_dir, dev, ino);
+	sprintf (cname, "%s/%x_%lx", glb_cache_log_dir, dev, ino);
 	
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
@@ -262,7 +264,7 @@ int open_mmap_cache_file (dev_t dev, u_long ino, struct timespec mtime, int is_w
 		fd = sys_open (cname, O_RDONLY, 0);
 	} else {
 		// otherwise, open a past versio
-		sprintf (cname, "%s/%x_%lx_%lu_%lu", cache_dir, dev, ino, mtime.tv_sec, mtime.tv_nsec);
+		sprintf (cname, "%s/%x_%lx_%lu_%lu", glb_cache_log_dir, dev, ino, mtime.tv_sec, mtime.tv_nsec);
 		fd = sys_open (cname, O_RDONLY, 0);
 	}
 	if (fd < 0) printk ("open_cache_file: cannot open cache file %s, rc=%d\n", cname, fd);

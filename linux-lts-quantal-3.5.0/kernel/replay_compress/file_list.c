@@ -16,6 +16,8 @@
 #include <linux/replay.h>
 #include <linux/file_list.h>
 
+extern char glb_record_log_dir[50];
+
 int init_file_list (struct file_list_struct* file_list, char* file_list_path) {
 	mm_segment_t old_fs = get_fs ();
 	int fd, rc = -1, copyed;
@@ -26,7 +28,8 @@ int init_file_list (struct file_list_struct* file_list, char* file_list_path) {
 
 	mutex_init (&file_list->file_list_mutex);
 	
-	file_list_path = "/data/replay_logdb/file_list";
+	//file_list_path = "/data/replay_logdb/file_list";
+  sprintf(file_list_path, "%sfile_list", glb_record_log_dir);
 
 	printk ("Pid %d begins init_file_list, filename %s\n", current->pid, file_list_path);
 	set_fs (KERNEL_DS);

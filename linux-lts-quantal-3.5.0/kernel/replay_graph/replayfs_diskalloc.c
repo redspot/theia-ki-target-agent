@@ -344,6 +344,7 @@ static void remove_from_free_list(struct page_data *data, struct list_head *head
 #define remove_from_lru_list(_U, X, _P, _O) list_del(X)
 #define check_not_in_lru(X)
 #endif
+extern char glb_cache_log_dir[50];
 
 int glbl_diskalloc_init(void) {
 	int ret = 0;
@@ -358,6 +359,10 @@ int glbl_diskalloc_init(void) {
 		struct file *filp;
 		struct page *page;
 		struct replayfs_btree_meta *meta;
+
+    char replayfs_disk_file[70];
+
+    snprintf(replayfs_disk_file, 70, "%s/replaymap.disk", glb_cache_log_dir);
 
 		mm_segment_t old_fs;
 
@@ -389,7 +394,7 @@ int glbl_diskalloc_init(void) {
 		old_fs = get_fs();
 		set_fs(KERNEL_DS);
 		atomic_set(&open_in_replay, 1);
-		filp = filp_open(REPLAYFS_DISK_FILE, O_RDWR|O_LARGEFILE, 0777);
+		filp = filp_open(replayfs_disk_file, O_RDWR|O_LARGEFILE, 0777);
 		atomic_set(&open_in_replay, 0);
 		set_fs(old_fs);
 		if (IS_ERR(filp)) {
@@ -398,7 +403,7 @@ int glbl_diskalloc_init(void) {
 			loff_t index;
 
 			atomic_set(&open_in_replay, 1);
-			filp = filp_open(REPLAYFS_DISK_FILE, O_RDWR | O_CREAT | O_LARGEFILE, 0777);
+			filp = filp_open(replayfs_disk_file, O_RDWR | O_CREAT | O_LARGEFILE, 0777);
 			atomic_set(&open_in_replay, 0);
 
 			replayfs_alloc = replayfs_diskalloc_create_with_extent(filp);

@@ -24973,6 +24973,9 @@ static struct ctl_table replay_ctl_root[] =
 };
 #endif
 
+char glb_record_log_dir[50];
+char glb_cache_log_dir[50];
+
 static int __init replay_init(void)
 {
   mm_segment_t old_fs;
@@ -25001,6 +25004,9 @@ static int __init replay_init(void)
   //const char* theia_libpath_default = "LD_LIBRARY_PATH=/home/theia/theia-es/eglibc-2.15/prefix/lib:/lib/theia_libs:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/lib:/usr/lib:/lib";
   const char *theia_libpath_default = "LD_LIBRARY_PATH=/usr/local/eglibc/lib:/usr/local/lib:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib:/lib";
 
+  char device_uuid[13] = "57326B15EDBC";
+  dmi_get_system_info();
+
   strncpy_safe(theia_linker, theia_linker_default, MAX_LOGDIR_STRLEN);
   theia_linker[MAX_LOGDIR_STRLEN] = 0x0;
   strncpy_safe(theia_libpath, theia_libpath_default, MAX_LIBPATH_STRLEN);
@@ -25018,6 +25024,10 @@ static int __init replay_init(void)
   BUG_ON(len > MAX_DIRENT_STRLEN);
   memcpy(theia_dirent_prefix, hide_list, len);
   theia_dirent_prefix_len = len;
+
+  /* record log directory setting */
+  snprintf(glb_record_log_dir, 50, "/data/%s/replay_logdb/", device_uuid);
+  snprintf(glb_cache_log_dir, 50, "/data/%s/replay_cache", device_uuid);
 
   /* Performance monitoring */
   perftimer_init();
