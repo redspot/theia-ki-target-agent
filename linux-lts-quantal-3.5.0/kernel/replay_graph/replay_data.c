@@ -42,7 +42,6 @@
  * TODO: From Mike, learn how to start a replay pragmatically inside the kernel
  */
 #define REPLAY_RESUME_PROG "/home/ddevec/omniplay/test/resume"
-#define REPLAYFS_LOG_DIR "/data/replay_logdb/"
 
 /* strlen + _ + "8digithex" + _ + "16digithex" */
 #define REPLAYFS_LOG_DIRLEN strlen(REPLAYFS_LOG_DIR)+8+16+2
@@ -333,8 +332,7 @@ static int replay_desc_start(struct replay_desc *replay) {
 
 	dir_hash = hash64(replay->unique_id);
 	BUG_ON(replay->unique_id <= 0);
-	sprintf(argv[1], REPLAYFS_LOG_DIR "rec_%lld",
-			(unsigned long long)replay->unique_id);
+  get_logdir_for_replay_id((__u64)replay->unique_id, argv[1]);
 
 	/* Now launch the child's thread */
 	debugk("%s %d: Launching a new replay process (id): %016llX\n", __func__,

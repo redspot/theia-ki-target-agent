@@ -24,7 +24,7 @@
 
 MODULE_AUTHOR("Jason Flinn, Wilson Martin");
 MODULE_LICENSE("GPL");
-MODULE_VERSION("1.5-3.5.0-99-generic");
+MODULE_VERSION("1.6-3.5.0-99-generic");
 
 extern bool theia_logging_toggle;
 extern bool theia_recording_toggle;
@@ -41,6 +41,7 @@ extern char theia_dirent_prefix[];
 extern size_t theia_dirent_prefix_len;
 extern struct rchan *theia_chan;
 extern int theia_secure_flag;
+extern void ensure_replayfs_paths(void);
 
 static int majorNumber;
 static struct class*  charClass  = NULL;
@@ -182,6 +183,9 @@ static ssize_t flag_store(struct kobject *kobj, struct kobj_attribute *attr,
       pr_err("error: cannot enable recording if num_online_cpus() > 1\n");
       return -EINVAL;
     }
+    if(theia_recording_toggle == 0 && flag == 1) {
+      ensure_replayfs_paths();
+    }
     if (theia_recording_toggle == 1 && flag == 0 && theia_secure_flag == 1)
       return -EINVAL;
     theia_recording_toggle = flag;
@@ -310,6 +314,7 @@ static long spec_psdev_ioctl (struct file* file, u_int cmd, u_long data)
         pr_err("error: cannot enable recording if num_online_cpus() > 1\n");
         return -EINVAL;
       }
+      ensure_replayfs_paths();
       theia_recording_toggle = 1;
       pr_info("Theia recording on\n");
       return 0;

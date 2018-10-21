@@ -348,6 +348,8 @@ static void remove_from_free_list(struct page_data *data, struct list_head *head
 int glbl_diskalloc_init(void) {
 	int ret = 0;
 	int val;
+  char* buf = NULL;
+  char displaymap_default[] = "/data/replay_cache/replaymap.disk";
 
 	/* Run the initialization once */
 	//debugk("%s %d: Initing!!!! (akslekdj)\n", __func__, __LINE__);
@@ -389,7 +391,14 @@ int glbl_diskalloc_init(void) {
 		old_fs = get_fs();
 		set_fs(KERNEL_DS);
 		atomic_set(&open_in_replay, 1);
-		filp = filp_open(REPLAYFS_DISK_FILE, O_RDWR|O_LARGEFILE, 0777);
+    buf = kmalloc(PAGE_SIZE, GFP_ATOMIC);
+    if (buf) {
+      strcpy(buf, REPLAYFS_CACHE_DIR);
+      strcat(buf, "replaymap.disk");
+      filp = filp_open(buf, O_RDWR|O_LARGEFILE, 0777);
+    } else {
+      filp = filp_open(displaymap_default, O_RDWR|O_LARGEFILE, 0777);
+    }
 		atomic_set(&open_in_replay, 0);
 		set_fs(old_fs);
 		if (IS_ERR(filp)) {
@@ -398,7 +407,8 @@ int glbl_diskalloc_init(void) {
 			loff_t index;
 
 			atomic_set(&open_in_replay, 1);
-			filp = filp_open(REPLAYFS_DISK_FILE, O_RDWR | O_CREAT | O_LARGEFILE, 0777);
+      if (buf) filp = filp_open(buf, O_RDWR | O_CREAT | O_LARGEFILE, 0777);
+      else filp = filp_open(displaymap_default, O_RDWR | O_CREAT | O_LARGEFILE, 0777);
 			atomic_set(&open_in_replay, 0);
 
 			replayfs_alloc = replayfs_diskalloc_create_with_extent(filp);
@@ -455,6 +465,7 @@ int glbl_diskalloc_init(void) {
 		}
 	}
 
+  if (buf) kfree(buf);
 	return ret;
 }
 

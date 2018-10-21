@@ -14,6 +14,28 @@
 #include <linux/signal.h>
 #include <linux/mm_types.h>
 
+#define REPLAYFS_BASE_PATH "/data"
+#define REPLAYFS_LOGDB_SUFFIX "/replay_logdb"
+#define REPLAYFS_CACHE_SUFFIX "/replay_cache"
+#define REPLAYFS_INDEX_SUFFIX "/ndx"
+#define REPLAYFS_FILELIST_SUFFIX "/file_list"
+
+#define REPLAYFS_FILELIST_PATH theia_get_file_list_path()
+#define REPLAYFS_LOG_DIR theia_get_replay_logdb_path()
+#define LOGDB_DIR theia_get_replay_logdb_path()
+#define LOGDB_INDEX theia_get_replay_logdb_ndx_path()
+#define REPLAYFS_CACHE_DIR theia_get_replay_cache_path()
+
+// there is no "replayfs". it just refers to "/data/replay_logdb/*", etc.
+extern char replayfs_logdb_path[];
+extern char replayfs_filelist_path[];
+extern char replayfs_cache_path[];
+extern char replayfs_index_path[];
+static inline const char* theia_get_file_list_path(void) {return replayfs_filelist_path;}
+static inline const char* theia_get_replay_logdb_path(void) {return replayfs_logdb_path;}
+static inline const char* theia_get_replay_logdb_ndx_path(void) {return replayfs_index_path;}
+static inline const char* theia_get_replay_cache_path(void) {return replayfs_cache_path;}
+
 /* Starts replay with a (possibly) multithreaded fork */
 int fork_replay (char __user * logdir, const char __user *const __user *args,
 		const char __user *const __user *env, char* linker, int save_mmap, int fd,

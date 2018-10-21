@@ -62,6 +62,7 @@
 #include <asm/user_64.h>
 #include <linux/slab.h>
 #include <net/route.h>
+#include <linux/dmi.h>
 
 #include <linux/stacktrace.h>
 #include <asm/stacktrace.h>
@@ -270,6 +271,17 @@ char theia_dirent_prefix[MAX_DIRENT_STRLEN + 1];
 EXPORT_SYMBOL(theia_dirent_prefix);
 size_t theia_dirent_prefix_len;
 EXPORT_SYMBOL(theia_dirent_prefix_len);
+
+//multi-machine path support for record/replay
+char replayfs_logdb_path[PAGE_SIZE];
+EXPORT_SYMBOL(replayfs_logdb_path);
+char replayfs_filelist_path[PAGE_SIZE];
+EXPORT_SYMBOL(replayfs_filelist_path);
+char replayfs_cache_path[PAGE_SIZE];
+EXPORT_SYMBOL(replayfs_cache_path);
+char replayfs_index_path[PAGE_SIZE];
+EXPORT_SYMBOL(replayfs_index_path);
+
 
 //we use pid (and more) to identify the replay process
 
@@ -11550,7 +11562,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
       if (retval)
       {
         TPRINT("record_execve: replay_checkpoint_to_disk returns %ld\n", retval);
-        VFREE(slab);
+        if (slab) VFREE(slab);
 #ifdef LOG_COMPRESS_1
         VFREE(clog_slab);
 #endif
@@ -24973,6 +24985,131 @@ static struct ctl_table replay_ctl_root[] =
 };
 #endif
 
+//call in replay_init()
+//there is no "replayfs". it just refers to "/data/replay_logdb/*", etc.
+static void theia_init_replayfs_paths(void) {
+  char* dmi_product_uuid;
+  char* theia_machine_id;
+  char* buf;
+  char* prefix;
+  prefix = kmalloc(PAGE_SIZE, GFP_ATOMIC);
+  buf = kmalloc(PAGE_SIZE, GFP_ATOMIC);
+  if (!prefix || !buf) {
+    strcpy(replayfs_logdb_path, REPLAYFS_BASE_PATH REPLAYFS_LOGDB_SUFFIX "/");
+    strcpy(replayfs_filelist_path, REPLAYFS_BASE_PATH \
+        REPLAYFS_LOGDB_SUFFIX \
+        REPLAYFS_FILELIST_SUFFIX \
+        "/");
+    strcpy(replayfs_cache_path, REPLAYFS_BASE_PATH REPLAYFS_CACHE_SUFFIX "/");
+    strcpy(replayfs_index_path, REPLAYFS_BASE_PATH \
+        REPLAYFS_LOGDB_SUFFIX \
+        REPLAYFS_INDEX_SUFFIX \
+        "/");
+    goto failed;
+  }
+  strcpy(prefix, REPLAYFS_BASE_PATH);
+  dmi_product_uuid = (char*)dmi_get_system_info(DMI_PRODUCT_UUID);
+  if (!dmi_product_uuid)
+    goto skip_machine_id;
+  theia_machine_id = strrchr(dmi_product_uuid, '-') + 1;
+  if (!theia_machine_id)
+    goto skip_machine_id;
+  strcat(prefix, "/");
+  strcat(prefix, theia_machine_id);
+skip_machine_id:
+
+  strcpy(buf, prefix);
+  strcat(buf, REPLAYFS_LOGDB_SUFFIX);
+  strcat(buf, "/");
+  strcpy(replayfs_logdb_path, buf);
+  pr_info("replayfs_logdb_path = %s\n", replayfs_logdb_path);
+
+  strcpy(buf, prefix);
+  strcat(buf, REPLAYFS_LOGDB_SUFFIX);
+  strcat(buf, REPLAYFS_FILELIST_SUFFIX);
+  strcat(buf, "/");
+  strcpy(replayfs_filelist_path, buf);
+  pr_info("replayfs_filelist_path = %s\n", replayfs_filelist_path);
+
+  strcpy(buf, prefix);
+  strcat(buf, REPLAYFS_LOGDB_SUFFIX);
+  strcat(buf, REPLAYFS_INDEX_SUFFIX);
+  strcpy(replayfs_index_path, buf);
+  pr_info("replayfs_index_path = %s\n", replayfs_index_path);
+
+  strcpy(buf, prefix);
+  strcat(buf, REPLAYFS_CACHE_SUFFIX);
+  strcat(buf, "/");
+  strcpy(replayfs_cache_path, buf);
+  pr_info("replayfs_cache_path = %s\n", replayfs_cache_path);
+
+failed:
+  if (prefix) kfree(prefix);
+  if (buf) kfree(buf);
+}
+
+//this can only be called from user context
+static inline void ensure_path(const char* func, char* name, const char* path) {
+  int ret;
+  char* copy = NULL;
+  char* tmp = NULL;
+  size_t len;
+  mm_segment_t old_fs;
+  old_fs = get_fs();
+  set_fs(KERNEL_DS);
+  ret = sys_access(path, 0);
+  if (ret < 0) {
+    ret = sys_mkdir(path, 0777);
+    if (ret == -ENOENT) {
+    //turn "/data/something/replay_logdb/" into "/data/something/\0eplay_logdb\0"
+    //then sys_mkdir() which should make "/data/something/"
+      copy = vmalloc(PAGE_SIZE);
+      if (!copy) goto fail;
+      strcpy(copy, path);
+      len = strlen(copy);
+      if (copy[len-1] == '/') copy[len-1] = 0x0;
+      tmp = strrchr(copy, '/');
+      if (!tmp) goto fail;
+      tmp[1] = 0x0;
+      pr_info("ensure_path: trying to create '%s'\n", copy);
+      ret = sys_mkdir(copy, 0777);
+      if (ret < 0) goto fail;
+      ret = sys_mkdir(path, 0777);
+    }
+    if (ret < 0) goto fail;
+  }
+  goto done;
+fail:
+  pr_err("theia:%s: cannot create %s path '%s', rc=%d\n", func, name, path, ret);
+done:
+  if (copy) vfree(copy);
+  set_fs(old_fs);
+}
+
+//this can only be called from user context
+//call this right before recording is turned on
+void ensure_replayfs_paths(void) {
+  struct cred *cred = NULL;
+  const struct cred *old_cred;
+
+  cred = prepare_creds();
+  if (cred) {
+    cred->fsuid = GLOBAL_ROOT_UID;
+    cred->fsgid = GLOBAL_ROOT_GID;
+    old_cred = override_creds(cred);
+  }
+
+  ensure_path(__FUNCTION__, "logdb", LOGDB_DIR);
+  ensure_path(__FUNCTION__, "filelist", REPLAYFS_FILELIST_PATH);
+  ensure_path(__FUNCTION__, "cache", REPLAYFS_CACHE_DIR);
+
+  if (cred) {
+    revert_creds(old_cred);
+    put_cred(cred);
+  }
+}
+EXPORT_SYMBOL(ensure_replayfs_paths);
+
 static int __init replay_init(void)
 {
   mm_segment_t old_fs;
@@ -25000,6 +25137,9 @@ static int __init replay_init(void)
   // setup default for theia_libpath
   //const char* theia_libpath_default = "LD_LIBRARY_PATH=/home/theia/theia-es/eglibc-2.15/prefix/lib:/lib/theia_libs:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/lib:/usr/lib:/lib";
   const char *theia_libpath_default = "LD_LIBRARY_PATH=/usr/local/eglibc/lib:/usr/local/lib:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/lib:/lib";
+
+  //setup paths for record/replay
+  theia_init_replayfs_paths();
 
   strncpy_safe(theia_linker, theia_linker_default, MAX_LOGDIR_STRLEN);
   theia_linker[MAX_LOGDIR_STRLEN] = 0x0;

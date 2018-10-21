@@ -6,8 +6,6 @@
 #include <linux/replay.h>
 #include <asm/uaccess.h>
 
-#define LOGDB_DIR "/data/replay_logdb/"
-#define LOGDB_INDEX LOGDB_DIR "ndx"
 #define LOGID_INCREMENT 4096
 
 // Global variables

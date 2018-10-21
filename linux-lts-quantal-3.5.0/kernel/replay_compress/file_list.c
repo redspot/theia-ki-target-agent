@@ -26,7 +26,7 @@ int init_file_list (struct file_list_struct* file_list, char* file_list_path) {
 
 	mutex_init (&file_list->file_list_mutex);
 	
-	file_list_path = "/data/replay_logdb/file_list";
+	file_list_path = (char*)REPLAYFS_FILELIST_PATH;
 
 	printk ("Pid %d begins init_file_list, filename %s\n", current->pid, file_list_path);
 	set_fs (KERNEL_DS);
