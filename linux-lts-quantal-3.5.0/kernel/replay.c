@@ -24992,55 +24992,65 @@ static void theia_init_replayfs_paths(void) {
   char* theia_machine_id;
   char* buf;
   char* prefix;
+  size_t safe_len = PAGE_SIZE - 1;
+  memset(replayfs_logdb_path, 0, sizeof(replayfs_logdb_path));
+  memset(replayfs_filelist_path, 0, sizeof(replayfs_filelist_path));
+  memset(replayfs_cache_path, 0, sizeof(replayfs_cache_path));
+  memset(replayfs_index_path, 0, sizeof(replayfs_index_path));
   prefix = kmalloc(PAGE_SIZE, GFP_ATOMIC);
   buf = kmalloc(PAGE_SIZE, GFP_ATOMIC);
   if (!prefix || !buf) {
-    strcpy(replayfs_logdb_path, REPLAYFS_BASE_PATH REPLAYFS_LOGDB_SUFFIX "/");
-    strcpy(replayfs_filelist_path, REPLAYFS_BASE_PATH \
+    strncpy(replayfs_logdb_path, REPLAYFS_BASE_PATH REPLAYFS_LOGDB_SUFFIX "/", safe_len);
+    strncpy(replayfs_filelist_path, REPLAYFS_BASE_PATH \
         REPLAYFS_LOGDB_SUFFIX \
         REPLAYFS_FILELIST_SUFFIX \
-        "/");
-    strcpy(replayfs_cache_path, REPLAYFS_BASE_PATH REPLAYFS_CACHE_SUFFIX "/");
-    strcpy(replayfs_index_path, REPLAYFS_BASE_PATH \
+        "/", safe_len);
+    strncpy(replayfs_cache_path, REPLAYFS_BASE_PATH REPLAYFS_CACHE_SUFFIX "/", safe_len);
+    strncpy(replayfs_index_path, REPLAYFS_BASE_PATH \
         REPLAYFS_LOGDB_SUFFIX \
         REPLAYFS_INDEX_SUFFIX \
-        "/");
+        "/", safe_len);
     goto failed;
   }
-  strcpy(prefix, REPLAYFS_BASE_PATH);
+  memset(prefix, 0, PAGE_SIZE);
+  strncpy(prefix, REPLAYFS_BASE_PATH, safe_len);
   dmi_product_uuid = (char*)dmi_get_system_info(DMI_PRODUCT_UUID);
   if (!dmi_product_uuid)
     goto skip_machine_id;
   theia_machine_id = strrchr(dmi_product_uuid, '-') + 1;
   if (!theia_machine_id)
     goto skip_machine_id;
-  strcat(prefix, "/");
-  strcat(prefix, theia_machine_id);
+  strncat(prefix, "/", safe_len - strnlen(prefix, safe_len));
+  strncat(prefix, theia_machine_id, safe_len - strnlen(prefix, safe_len));
 skip_machine_id:
 
-  strcpy(buf, prefix);
-  strcat(buf, REPLAYFS_LOGDB_SUFFIX);
-  strcat(buf, "/");
-  strcpy(replayfs_logdb_path, buf);
+  memset(buf, 0, PAGE_SIZE);
+  strncpy(buf, prefix, safe_len);
+  strncat(buf, REPLAYFS_LOGDB_SUFFIX, safe_len - strnlen(buf, safe_len));
+  strncat(buf, "/", safe_len - strnlen(buf, safe_len));
+  strncpy(replayfs_logdb_path, buf, safe_len);
   pr_info("replayfs_logdb_path = %s\n", replayfs_logdb_path);
 
-  strcpy(buf, prefix);
-  strcat(buf, REPLAYFS_LOGDB_SUFFIX);
-  strcat(buf, REPLAYFS_FILELIST_SUFFIX);
-  strcat(buf, "/");
-  strcpy(replayfs_filelist_path, buf);
+  memset(buf, 0, PAGE_SIZE);
+  strncpy(buf, prefix, safe_len);
+  strncat(buf, REPLAYFS_LOGDB_SUFFIX, safe_len - strnlen(buf, safe_len));
+  strncat(buf, REPLAYFS_FILELIST_SUFFIX, safe_len - strnlen(buf, safe_len));
+  strncat(buf, "/", safe_len - strnlen(buf, safe_len));
+  strncpy(replayfs_filelist_path, buf, safe_len);
   pr_info("replayfs_filelist_path = %s\n", replayfs_filelist_path);
 
-  strcpy(buf, prefix);
-  strcat(buf, REPLAYFS_LOGDB_SUFFIX);
-  strcat(buf, REPLAYFS_INDEX_SUFFIX);
-  strcpy(replayfs_index_path, buf);
+  memset(buf, 0, PAGE_SIZE);
+  strncpy(buf, prefix, safe_len);
+  strncat(buf, REPLAYFS_LOGDB_SUFFIX, safe_len - strnlen(buf, safe_len));
+  strncat(buf, REPLAYFS_INDEX_SUFFIX, safe_len - strnlen(buf, safe_len));
+  strncpy(replayfs_index_path, buf, safe_len);
   pr_info("replayfs_index_path = %s\n", replayfs_index_path);
 
-  strcpy(buf, prefix);
-  strcat(buf, REPLAYFS_CACHE_SUFFIX);
-  strcat(buf, "/");
-  strcpy(replayfs_cache_path, buf);
+  memset(buf, 0, PAGE_SIZE);
+  strncpy(buf, prefix, safe_len);
+  strncat(buf, REPLAYFS_CACHE_SUFFIX, safe_len - strnlen(buf, safe_len));
+  strncat(buf, "/", safe_len - strnlen(buf, safe_len));
+  strncpy(replayfs_cache_path, buf, safe_len);
   pr_info("replayfs_cache_path = %s\n", replayfs_cache_path);
 
 failed:
