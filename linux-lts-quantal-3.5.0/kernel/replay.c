@@ -107,9 +107,9 @@
 #include <linux/base64.h>
 
 /* max_len should be smaller than or equal to the size of target */
-inline void strncpy_safe(char *target, const char *source, long max_len)
+inline void strncpy_safe(char *target, const char *source, size_t max_len)
 {
-  long len = strnlen(source, max_len);
+  size_t len = strnlen(source, max_len - 1);
   strncpy(target, source, len);
   target[len] = '\0';
 }
