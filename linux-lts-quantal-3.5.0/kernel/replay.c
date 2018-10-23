@@ -25018,11 +25018,11 @@ static void theia_init_replayfs_paths(void) {
   if (res < 0) goto failed;
   pr_info("replayfs_logdb_path = %s\n", replayfs_logdb_path);
 
-  res = snprintf(replayfs_filelist_path, safe_len, "%s%s%s/", prefix, REPLAYFS_LOGDB_SUFFIX, REPLAYFS_FILELIST_SUFFIX);
+  res = snprintf(replayfs_filelist_path, safe_len, "%s%s%s", prefix, REPLAYFS_LOGDB_SUFFIX, REPLAYFS_FILELIST_SUFFIX);
   if (res < 0) goto failed;
   pr_info("replayfs_filelist_path = %s\n", replayfs_filelist_path);
 
-  res = snprintf(replayfs_index_path, safe_len, "%s%s%s/", prefix, REPLAYFS_LOGDB_SUFFIX, REPLAYFS_INDEX_SUFFIX);
+  res = snprintf(replayfs_index_path, safe_len, "%s%s%s", prefix, REPLAYFS_LOGDB_SUFFIX, REPLAYFS_INDEX_SUFFIX);
   if (res < 0) goto failed;
   pr_info("replayfs_index_path = %s\n", replayfs_index_path);
 
@@ -25053,9 +25053,11 @@ static inline void ensure_path(const char* func, char* name, const char* path) {
   char* copy = NULL;
   char* ptr = NULL;
   mm_segment_t old_fs;
+  mode_t old_mask;
 
   old_fs = get_fs();
   set_fs(KERNEL_DS);
+  old_mask = sys_umask(0);
 
   copy = vmalloc(PAGE_SIZE);
   if (!copy) goto failed;
@@ -25084,6 +25086,7 @@ failed:
   pr_err("theia:%s: cannot create %s path '%s', rc=%d\n", func, name, path, ret);
 done:
   if (copy) vfree(copy);
+  sys_umask(old_mask);
   set_fs(old_fs);
 }
 
@@ -25101,7 +25104,6 @@ void ensure_replayfs_paths(void) {
   }
 
   ensure_path(__FUNCTION__, "logdb", LOGDB_DIR);
-  ensure_path(__FUNCTION__, "filelist", REPLAYFS_FILELIST_PATH);
   ensure_path(__FUNCTION__, "cache", REPLAYFS_CACHE_DIR);
 
   if (cred) {
