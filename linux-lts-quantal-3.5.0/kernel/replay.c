@@ -24988,108 +24988,99 @@ static struct ctl_table replay_ctl_root[] =
 //call in replay_init()
 //there is no "replayfs". it just refers to "/data/replay_logdb/*", etc.
 static void theia_init_replayfs_paths(void) {
-  char* dmi_product_uuid;
-  char* theia_machine_id;
-  char* buf;
-  char* prefix;
+  char* dmi_product_uuid = NULL;
+  char* theia_machine_id = NULL;
+  char* prefix = NULL;
   size_t safe_len = PAGE_SIZE - 1;
-  memset(replayfs_logdb_path, 0, sizeof(replayfs_logdb_path));
-  memset(replayfs_filelist_path, 0, sizeof(replayfs_filelist_path));
-  memset(replayfs_cache_path, 0, sizeof(replayfs_cache_path));
-  memset(replayfs_index_path, 0, sizeof(replayfs_index_path));
+  int res = 0;
+  memset(replayfs_logdb_path, 0, PAGE_SIZE);
+  memset(replayfs_filelist_path, 0, PAGE_SIZE);
+  memset(replayfs_cache_path, 0, PAGE_SIZE);
+  memset(replayfs_index_path, 0, PAGE_SIZE);
   prefix = kmalloc(PAGE_SIZE, GFP_ATOMIC);
-  buf = kmalloc(PAGE_SIZE, GFP_ATOMIC);
-  if (!prefix || !buf) {
-    strncpy(replayfs_logdb_path, REPLAYFS_BASE_PATH REPLAYFS_LOGDB_SUFFIX "/", safe_len);
-    strncpy(replayfs_filelist_path, REPLAYFS_BASE_PATH \
-        REPLAYFS_LOGDB_SUFFIX \
-        REPLAYFS_FILELIST_SUFFIX \
-        "/", safe_len);
-    strncpy(replayfs_cache_path, REPLAYFS_BASE_PATH REPLAYFS_CACHE_SUFFIX "/", safe_len);
-    strncpy(replayfs_index_path, REPLAYFS_BASE_PATH \
-        REPLAYFS_LOGDB_SUFFIX \
-        REPLAYFS_INDEX_SUFFIX \
-        "/", safe_len);
+  if (prefix == NULL)
     goto failed;
-  }
-  memset(prefix, 0, PAGE_SIZE);
-  strncpy(prefix, REPLAYFS_BASE_PATH, safe_len);
-  dmi_product_uuid = (char*)dmi_get_system_info(DMI_PRODUCT_UUID);
-  if (!dmi_product_uuid)
-    goto skip_machine_id;
-  theia_machine_id = strrchr(dmi_product_uuid, '-') + 1;
-  if (!theia_machine_id)
-    goto skip_machine_id;
-  strncat(prefix, "/", safe_len - strnlen(prefix, safe_len));
-  strncat(prefix, theia_machine_id, safe_len - strnlen(prefix, safe_len));
-skip_machine_id:
 
-  memset(buf, 0, PAGE_SIZE);
-  strncpy(buf, prefix, safe_len);
-  strncat(buf, REPLAYFS_LOGDB_SUFFIX, safe_len - strnlen(buf, safe_len));
-  strncat(buf, "/", safe_len - strnlen(buf, safe_len));
-  strncpy(replayfs_logdb_path, buf, safe_len);
+  dmi_product_uuid = (char*)dmi_get_system_info(DMI_PRODUCT_UUID);
+  if (dmi_product_uuid)
+    theia_machine_id = strrchr(dmi_product_uuid, '-') + 1;
+
+  memset(prefix, 0, PAGE_SIZE);
+  if (!dmi_product_uuid || !theia_machine_id) {
+    strncpy_safe(prefix, REPLAYFS_BASE_PATH, safe_len);
+  }
+  else {
+    res = snprintf(prefix, safe_len, "%s/%s", REPLAYFS_BASE_PATH, theia_machine_id);
+    if (res < 0) goto failed;
+  }
+
+  res = snprintf(replayfs_logdb_path, safe_len, "%s%s/", prefix, REPLAYFS_LOGDB_SUFFIX);
+  if (res < 0) goto failed;
   pr_info("replayfs_logdb_path = %s\n", replayfs_logdb_path);
 
-  memset(buf, 0, PAGE_SIZE);
-  strncpy(buf, prefix, safe_len);
-  strncat(buf, REPLAYFS_LOGDB_SUFFIX, safe_len - strnlen(buf, safe_len));
-  strncat(buf, REPLAYFS_FILELIST_SUFFIX, safe_len - strnlen(buf, safe_len));
-  strncat(buf, "/", safe_len - strnlen(buf, safe_len));
-  strncpy(replayfs_filelist_path, buf, safe_len);
+  res = snprintf(replayfs_filelist_path, safe_len, "%s%s%s/", prefix, REPLAYFS_LOGDB_SUFFIX, REPLAYFS_FILELIST_SUFFIX);
+  if (res < 0) goto failed;
   pr_info("replayfs_filelist_path = %s\n", replayfs_filelist_path);
 
-  memset(buf, 0, PAGE_SIZE);
-  strncpy(buf, prefix, safe_len);
-  strncat(buf, REPLAYFS_LOGDB_SUFFIX, safe_len - strnlen(buf, safe_len));
-  strncat(buf, REPLAYFS_INDEX_SUFFIX, safe_len - strnlen(buf, safe_len));
-  strncpy(replayfs_index_path, buf, safe_len);
+  res = snprintf(replayfs_index_path, safe_len, "%s%s%s/", prefix, REPLAYFS_LOGDB_SUFFIX, REPLAYFS_INDEX_SUFFIX);
+  if (res < 0) goto failed;
   pr_info("replayfs_index_path = %s\n", replayfs_index_path);
 
-  memset(buf, 0, PAGE_SIZE);
-  strncpy(buf, prefix, safe_len);
-  strncat(buf, REPLAYFS_CACHE_SUFFIX, safe_len - strnlen(buf, safe_len));
-  strncat(buf, "/", safe_len - strnlen(buf, safe_len));
-  strncpy(replayfs_cache_path, buf, safe_len);
+  res = snprintf(replayfs_cache_path, safe_len, "%s%s/", prefix, REPLAYFS_CACHE_SUFFIX);
+  if (res < 0) goto failed;
   pr_info("replayfs_cache_path = %s\n", replayfs_cache_path);
 
+  goto done;
+
 failed:
+  strncpy_safe(replayfs_logdb_path, REPLAYFS_BASE_PATH REPLAYFS_LOGDB_SUFFIX "/", safe_len);
+  strncpy_safe(replayfs_filelist_path, REPLAYFS_BASE_PATH \
+      REPLAYFS_LOGDB_SUFFIX \
+      REPLAYFS_FILELIST_SUFFIX \
+      "/", safe_len);
+  strncpy_safe(replayfs_cache_path, REPLAYFS_BASE_PATH REPLAYFS_CACHE_SUFFIX "/", safe_len);
+  strncpy_safe(replayfs_index_path, REPLAYFS_BASE_PATH \
+      REPLAYFS_LOGDB_SUFFIX \
+      REPLAYFS_INDEX_SUFFIX \
+      "/", safe_len);
+done:
   if (prefix) kfree(prefix);
-  if (buf) kfree(buf);
 }
 
 //this can only be called from user context
 static inline void ensure_path(const char* func, char* name, const char* path) {
-  int ret;
+  int ret = -1;
   char* copy = NULL;
-  char* tmp = NULL;
-  size_t len;
+  char* ptr = NULL;
   mm_segment_t old_fs;
+
   old_fs = get_fs();
   set_fs(KERNEL_DS);
-  ret = sys_access(path, 0);
-  if (ret < 0) {
-    ret = sys_mkdir(path, 0777);
-    if (ret == -ENOENT) {
-    //turn "/data/something/replay_logdb/" into "/data/something/\0eplay_logdb\0"
-    //then sys_mkdir() which should make "/data/something/"
-      copy = vmalloc(PAGE_SIZE);
-      if (!copy) goto fail;
-      strcpy(copy, path);
-      len = strlen(copy);
-      if (copy[len-1] == '/') copy[len-1] = 0x0;
-      tmp = strrchr(copy, '/');
-      if (!tmp) goto fail;
-      tmp[1] = 0x0;
+
+  copy = vmalloc(PAGE_SIZE);
+  if (!copy) goto failed;
+
+  strncpy_safe(copy, path, PAGE_SIZE);
+
+  for (ptr = copy+1; *ptr; ++ptr) {
+    if (*ptr == '/') {
+      *ptr = '\0';
       pr_info("ensure_path: trying to create '%s'\n", copy);
       ret = sys_mkdir(copy, 0777);
-      if (ret < 0) goto fail;
-      ret = sys_mkdir(path, 0777);
+      if (ret != 0 && ret != -EEXIST) {
+        goto failed;
+      }
+      *ptr = '/';
     }
-    if (ret < 0) goto fail;
+  }
+  pr_info("ensure_path: trying to create '%s'\n", copy);
+  ret = sys_mkdir(copy, 0777);
+  if (ret != 0 && ret != -EEXIST) {
+    goto failed;
   }
   goto done;
-fail:
+
+failed:
   pr_err("theia:%s: cannot create %s path '%s', rc=%d\n", func, name, path, ret);
 done:
   if (copy) vfree(copy);
