@@ -167,7 +167,7 @@ int get_cache_file_name (char* cname, dev_t dev, u_long ino, struct timespec mti
 //64port
 	rc = sys_newstat (cname, &st);
 	if (rc < 0) {
-		printk ("get_cache_file_name: cannot stat cache file, rc=%d\n", rc);
+		printk ("get_cache_file_name: cannot stat cache file, rc=%d, cname %s\n", rc, cname);
 		set_fs(old_fs);
 		return -ENOENT;
 	}
