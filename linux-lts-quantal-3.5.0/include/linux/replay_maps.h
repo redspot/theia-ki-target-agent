@@ -1,7 +1,7 @@
 #ifndef __REPLAY_MAPS_H__
 #define __REPLAY_MAPS_H__
 
-#define CACHE_FILENAME_SIZE 64
+#define CACHE_FILENAME_SIZE 256
 
 // Makes a copy of the specified file in the cache (if not already present) 
 // The recgroup lock must be held when calling this function
