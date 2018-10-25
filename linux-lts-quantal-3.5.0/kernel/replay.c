@@ -106,7 +106,8 @@
 
 #include <linux/base64.h>
 
-/* max_len should be smaller than or equal to the size of target */
+/* copy up to max_len characters from source to target (a wrapper of strncpy).
+   the size of target should be larger than max_len (at least by 1) */
 inline void strncpy_safe(char *target, const char *source, size_t max_len)
 {
   size_t len = strnlen(source, max_len);
@@ -3432,13 +3433,13 @@ void get_user_callstack(char *buffer, size_t bufsize)
         vfree(path_b64);
       }
       else {
-        strncpy_safe(ret_str, uuid_str, THEIA_UUID_LEN);
+        strncpy_safe(ret_str, uuid_str, THEIA_KMEM_SIZE-1);
       }
       ptr = ret_str;
     }
     else
     {
-      strncpy_safe(ret_str, "YW5vbl9wYWdl", THEIA_UUID_LEN); // base64(anon_page)
+      strncpy_safe(ret_str, "YW5vbl9wYWdl", THEIA_KMEM_SIZE-1); // base64(anon_page)
       ptr = ret_str;
     }
 
@@ -9151,7 +9152,7 @@ void packahgv_process_bin(struct task_struct *tsk)
     fpath = get_task_fullpath(tsk, fpathbuf, PATH_MAX);
     if (!fpath)
     {
-      strncpy_safe(fpathbuf, tsk->comm, TASK_COMM_LEN); // TASK_COMM_LEN < PATH_MAX
+      strncpy_safe(fpathbuf, tsk->comm, PATH_MAX-1); // TASK_COMM_LEN < PATH_MAX
     }
     buf_ahg->size_fpathbuf = strlen(fpath);
     TPRINT("fpath:(%s),size:%hu\n", fpathbuf, buf_ahg->size_fpathbuf);
@@ -10423,7 +10424,7 @@ void theia_open_ahg(const char __user *filename, int flags, int mode, long rc, b
     fput_light(file, fput_needed);
     if (!IS_ERR(fpath))   /* sometimes we can't obtain fullpath */
     {
-      strncpy_safe(pahgv->filename, fpath, PATH_MAX);
+      strncpy_safe(pahgv->filename, fpath, PATH_MAX-1);
       vfree(fpathbuf);
     }
     else
@@ -11337,7 +11338,7 @@ void theia_execve_ahg(const char *filename, int rc)
     return;
   }
   pahgv->pid = current->pid;
-  strncpy_safe(pahgv->filename, filename, PATH_MAX);
+  strncpy_safe(pahgv->filename, filename, PATH_MAX-1);
   pahgv->rc = rc;
   pahgv->args = args;
   packahgv_execve(pahgv);
@@ -18933,7 +18934,7 @@ long theia_hide_dirent(unsigned int fd, struct linux_dirent __user *dirent, long
   while (fullpath && off < ret)
   {
     dir = (void *)kdirent + off;
-    strncpy_safe(fullpath + dirpath_offset, dir->d_name, THEIA_KMEM_SIZE-1);
+    strncpy_safe(fullpath + dirpath_offset, dir->d_name, THEIA_KMEM_SIZE-1-dirpath_offset);
     if (in_nullterm_list(fullpath, theia_dirent_prefix, theia_dirent_prefix_len))
     {
       pr_debug("dropping dirent: dir->d_name: %s, fullpath: %s\n", dir->d_name, fullpath);
@@ -25160,9 +25161,9 @@ static int __init replay_init(void)
   theia_init_replayfs_paths();
 
   strncpy_safe(theia_linker, theia_linker_default, MAX_LOGDIR_STRLEN);
-  theia_linker[MAX_LOGDIR_STRLEN] = 0x0;
+  theia_linker[MAX_LOGDIR_STRLEN] = '\0';
   strncpy_safe(theia_libpath, theia_libpath_default, MAX_LIBPATH_STRLEN);
-  theia_libpath[MAX_LIBPATH_STRLEN] = 0x0;
+  theia_libpath[MAX_LIBPATH_STRLEN] = '\0';
 #ifdef CONFIG_SYSCTL
   register_sysctl_table(replay_ctl_root);
 #endif
