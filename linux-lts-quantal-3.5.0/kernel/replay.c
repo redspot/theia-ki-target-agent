@@ -5174,9 +5174,10 @@ replay_ckpt_wakeup(int attach_pin, char *logdir, char *linker, int fd, int follo
     return -ENOMEM;
   }
   
-  copy_len = logdir - strstr(logdir, "replay_logdb");
+  copy_len = strstr(logdir, "replay_logdb") - logdir;
   if(!(copy_len > 0 && copy_len < CACHE_FILENAME_SIZE)) {
     destroy_record_group(precg);
+    TPRINT("copy_len is not valid %d\n", copy_len);
     return -ENOMEM;
   }
   memcpy(cache_dir, logdir, copy_len); 
