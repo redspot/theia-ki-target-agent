@@ -1658,7 +1658,9 @@ struct replay_group
   u_long rg_max_brk;          // Maximum value of brk address
   ds_list_t *rg_used_address_list; // List of addresses that will be used by the application (and hence, not by pin)
   int rg_follow_splits;       // Ture if we should replay any split-off replay groups
+  char cache_dir[CACHE_FILENAME_SIZE];
 };
+
 
 struct argsalloc_node
 {
@@ -2868,7 +2870,7 @@ inline long get_log_special_second(void)
 
 /* Creates a new replay group for the replaying process info */
 static struct replay_group *
-new_replay_group(struct record_group *prec_group, int follow_splits)
+new_replay_group(struct record_group *prec_group, int follow_splits, char *cache_dir)
 {
   struct replay_group *prg;
 
@@ -2894,6 +2896,9 @@ new_replay_group(struct record_group *prec_group, int follow_splits)
 
   prg->rg_reserved_mem_list = ds_list_create(rm_cmp, 0, 1);
   prg->rg_used_address_list = NULL;
+
+  strncpy_safe(prg->cache_dir, cache_dir, CACHE_FILENAME_SIZE);
+  printk("prg->cache_dir: (%s)\n", prg->cache_dir);
 
   // Record group should not be destroyed before replay group
   get_record_group(prec_group);
@@ -5147,6 +5152,8 @@ replay_ckpt_wakeup(int attach_pin, char *logdir, char *linker, int fd, int follo
   struct timeval tv;
   struct timespec tp;
 #endif
+  int copy_len = 0;
+  char cache_dir[CACHE_FILENAME_SIZE];
 
   MPRINT("In replay_ckpt_wakeup\n");
   if (current->record_thrd || current->replay_thrd)
@@ -5166,8 +5173,15 @@ replay_ckpt_wakeup(int attach_pin, char *logdir, char *linker, int fd, int follo
     destroy_record_group(precg);
     return -ENOMEM;
   }
-
-  prepg = new_replay_group(precg, follow_splits);
+  
+  copy_len = logdir - strstr(logdir, "replay_logdb");
+  if(!(copy_len > 0 && copy_len < CACHE_FILENAME_SIZE)) {
+    destroy_record_group(precg);
+    return -ENOMEM;
+  }
+  memcpy(cache_dir, logdir, copy_len); 
+  cache_dir[copy_len] = '\0';
+  prepg = new_replay_group(precg, follow_splits, cache_dir);
   if (prepg == NULL)
   {
     destroy_record_group(precg);
@@ -8752,7 +8766,7 @@ long file_cache_check_version(int fd, struct file *filp,
 long file_cache_update_replay_file(int rc, struct open_retvals *retvals)
 {
   int fd;
-  fd = open_cache_file(retvals->dev, retvals->ino, retvals->mtime, O_RDWR);
+  fd = open_cache_file(retvals->dev, retvals->ino, retvals->mtime, O_RDWR, current->replay_thrd->rp_group->cache_dir);
 
   if (set_replay_cache_file(current->replay_thrd->rp_cache_files, rc, fd) < 0)
   {
@@ -10521,7 +10535,7 @@ replay_open(const char __user *filename, int flags, int mode)
   DPRINT("replay_open: trying to open %s, rc %ld\n", filename, rc);
   if (pretvals)
   {
-    fd = open_cache_file(pretvals->dev, pretvals->ino, pretvals->mtime, flags);
+    fd = open_cache_file(pretvals->dev, pretvals->ino, pretvals->mtime, flags, current->replay_thrd->rp_group->cache_dir);
     DPRINT("replay_open: opened cache file %s flags %x fd is %ld rc is %ld\n", filename, flags, fd, rc);
     if (set_replay_cache_file(current->replay_thrd->rp_cache_files, rc, fd) < 0) sys_close(fd);
     argsconsume(current->replay_thrd->rp_record_thread, sizeof(struct open_retvals));
@@ -11714,7 +11728,7 @@ replay_execve(const char *filename, const char __user *const __user *__argv, con
       current->replay_thrd->random_values.cnt = 0;
 
       rg_lock(prt->rp_record_thread->rp_group);
-      get_cache_file_name(name, retparams->data.same_group.dev, retparams->data.same_group.ino, retparams->data.same_group.mtime);
+      get_cache_file_name(name, retparams->data.same_group.dev, retparams->data.same_group.ino, retparams->data.same_group.mtime, prt->rp_group->cache_dir);
       rg_unlock(prt->rp_record_thread->rp_group);
 
       old_fs = get_fs();
@@ -13807,7 +13821,7 @@ replay_uselib(const char __user *library)
   if (recbuf)
   {
     rg_lock(prt->rp_record_thread->rp_group);
-    get_cache_file_name(name, recbuf->dev, recbuf->ino, recbuf->mtime);
+    get_cache_file_name(name, recbuf->dev, recbuf->ino, recbuf->mtime, prt->rp_group->cache_dir);
     rg_unlock(prt->rp_record_thread->rp_group);
     old_fs = get_fs();
     set_fs(KERNEL_DS);
@@ -21350,7 +21364,7 @@ replay_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
   if (recbuf)
   {
     rg_lock(prt->rp_record_thread->rp_group);
-    given_fd = open_mmap_cache_file(recbuf->dev, recbuf->ino, recbuf->mtime, (prot & PROT_WRITE) && (flags & MAP_SHARED));
+    given_fd = open_mmap_cache_file(recbuf->dev, recbuf->ino, recbuf->mtime, (prot & PROT_WRITE) && (flags & MAP_SHARED), prt->rp_group->cache_dir);
     rg_unlock(prt->rp_record_thread->rp_group);
     DPRINT("replay_mmap_pgoff opens cache file %x %lx %lx.%lx, fd = %d\n", recbuf->dev, recbuf->ino, recbuf->mtime.tv_sec, recbuf->mtime.tv_nsec, given_fd);
     if (given_fd < 0)

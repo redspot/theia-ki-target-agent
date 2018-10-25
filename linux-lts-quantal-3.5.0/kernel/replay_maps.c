@@ -22,6 +22,7 @@
 #include <asm/uaccess.h>
 
 #include <linux/replay.h>
+#include <linux/sched.h>
 
 #define DPRINT(x,...)
 
@@ -149,7 +150,7 @@ int add_file_to_cache (struct file* vm_file, dev_t* pdev, unsigned long* pino, s
 	return 0;
 }
 
-int get_cache_file_name (char* cname, dev_t dev, u_long ino, struct timespec mtime)
+int get_cache_file_name (char* cname, dev_t dev, u_long ino, struct timespec mtime, char *cache_dir)
 {
 	mm_segment_t old_fs;
 	//struct stat64 st;
@@ -157,8 +158,9 @@ int get_cache_file_name (char* cname, dev_t dev, u_long ino, struct timespec mti
 	struct stat st;
 	int rc;
 
-	// check if most recent cache file is still valid
-	sprintf (cname, "%s/%x_%lx", REPLAYFS_CACHE_DIR, dev, ino);
+        // check if most recent cache file is still valid
+	sprintf (cname, "%s/%x_%lx", cache_dir, dev, ino);
+
 	
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
@@ -176,14 +178,14 @@ int get_cache_file_name (char* cname, dev_t dev, u_long ino, struct timespec mti
 	DPRINT ("replay mod time: %ld.%ld\n", mtime.tv_sec, mtime.tv_nsec);
 	
 	if (st.st_mtime != mtime.tv_sec || st.st_mtime_nsec != mtime.tv_nsec) {
-		sprintf (cname, "%s/%x_%lx_%lu_%lu", REPLAYFS_CACHE_DIR, dev, ino, mtime.tv_sec, mtime.tv_nsec);
+		sprintf (cname, "%s/%x_%lx_%lu_%lu", cache_dir, dev, ino, mtime.tv_sec, mtime.tv_nsec);
 	}
 	set_fs(old_fs);
 
 	return 0;
 }
 
-int open_cache_file (dev_t dev, u_long ino, struct timespec mtime, int flags)
+int open_cache_file (dev_t dev, u_long ino, struct timespec mtime, int flags, char *cache_dir)
 {
 	char cname[CACHE_FILENAME_SIZE];
 	mm_segment_t old_fs;
@@ -193,8 +195,8 @@ int open_cache_file (dev_t dev, u_long ino, struct timespec mtime, int flags)
 	int fd, rc;
 
         // check if most recent cache file is still valid
-	sprintf (cname, "%s/%x_%lx", REPLAYFS_CACHE_DIR, dev, ino);
-	
+	sprintf (cname, "%s/%x_%lx", cache_dir, dev, ino);
+
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
 	
@@ -216,7 +218,7 @@ int open_cache_file (dev_t dev, u_long ino, struct timespec mtime, int flags)
 		fd = sys_open (cname, flags, 0);
 	} else {
 		// otherwise, open a past versio
-		sprintf (cname, "%s/%x_%lx_%lu_%lu", REPLAYFS_CACHE_DIR, dev, ino, mtime.tv_sec, mtime.tv_nsec);
+		sprintf (cname, "%s/%x_%lx_%lu_%lu", cache_dir, dev, ino, mtime.tv_sec, mtime.tv_nsec);
 		DPRINT ("opening cache file %s\n", cname);
 		fd = sys_open (cname, flags, 0);
 	}
@@ -225,7 +227,7 @@ int open_cache_file (dev_t dev, u_long ino, struct timespec mtime, int flags)
 	return fd;
 }
 
-int open_mmap_cache_file (dev_t dev, u_long ino, struct timespec mtime, int is_write)
+int open_mmap_cache_file (dev_t dev, u_long ino, struct timespec mtime, int is_write, char *cache_dir)
 {
 	char cname[CACHE_FILENAME_SIZE], tname[CACHE_FILENAME_SIZE];
 	mm_segment_t old_fs;
@@ -239,7 +241,7 @@ int open_mmap_cache_file (dev_t dev, u_long ino, struct timespec mtime, int is_w
 	char* buffer;
 
         // check if most recent cache file is still valid
-	sprintf (cname, "%s/%x_%lx", REPLAYFS_CACHE_DIR, dev, ino);
+	sprintf (cname, "%s/%x_%lx", cache_dir, dev, ino);
 	
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
@@ -261,7 +263,7 @@ int open_mmap_cache_file (dev_t dev, u_long ino, struct timespec mtime, int is_w
 		fd = sys_open (cname, O_RDONLY, 0);
 	} else {
 		// otherwise, open a past versio
-		sprintf (cname, "%s/%x_%lx_%lu_%lu", REPLAYFS_CACHE_DIR, dev, ino, mtime.tv_sec, mtime.tv_nsec);
+		sprintf (cname, "%s/%x_%lx_%lu_%lu", cache_dir, dev, ino, mtime.tv_sec, mtime.tv_nsec);
 		fd = sys_open (cname, O_RDONLY, 0);
 	}
 	if (fd < 0) printk ("open_cache_file: cannot open cache file %s, rc=%d\n", cname, fd);
