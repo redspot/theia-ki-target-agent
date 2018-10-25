@@ -22254,7 +22254,7 @@ replay_exit_group(int error_code)
     }
   }
   rg_unlock(prg->rg_rec_group);
-  MPRINT("replay_exit_group set all threads to exit\n");
+  printk("replay_exit_group set all threads to exit\n");
   sys_exit_group(error_code);  /* Signals should wake up any wakers */
 }
 
