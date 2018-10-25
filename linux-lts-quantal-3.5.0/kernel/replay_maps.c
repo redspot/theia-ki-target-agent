@@ -28,10 +28,12 @@
 
 #define COPY_CHUNK 4096
 
+#define CACHE_FILENAME_SIZE_S 128
+
 // We hold the record lock when this function is called
 int add_file_to_cache (struct file* vm_file, dev_t* pdev, unsigned long* pino, struct timespec* pmtime) 
 {
-	char cname[CACHE_FILENAME_SIZE], nname[CACHE_FILENAME_SIZE], tname[CACHE_FILENAME_SIZE];
+	char cname[CACHE_FILENAME_SIZE_S], nname[CACHE_FILENAME_SIZE_S], tname[CACHE_FILENAME_SIZE_S];
 	//struct stat64 st;
 //64port
 	struct stat st;

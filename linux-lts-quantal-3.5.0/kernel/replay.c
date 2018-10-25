@@ -1658,7 +1658,7 @@ struct replay_group
   u_long rg_max_brk;          // Maximum value of brk address
   ds_list_t *rg_used_address_list; // List of addresses that will be used by the application (and hence, not by pin)
   int rg_follow_splits;       // Ture if we should replay any split-off replay groups
-  char cache_dir[CACHE_FILENAME_SIZE];
+  char cache_dir[CACHE_FILENAME_SIZE+1];
 };
 
 
@@ -9151,7 +9151,7 @@ void packahgv_process_bin(struct task_struct *tsk)
     fpath = get_task_fullpath(tsk, fpathbuf, PATH_MAX);
     if (!fpath)
     {
-      strncpy_safe(fpathbuf, tsk->comm, TASK_COMM_LEN);
+      strncpy_safe(fpathbuf, tsk->comm, TASK_COMM_LEN); // TASK_COMM_LEN < PATH_MAX
     }
     buf_ahg->size_fpathbuf = strlen(fpath);
     TPRINT("fpath:(%s),size:%hu\n", fpathbuf, buf_ahg->size_fpathbuf);
@@ -25077,7 +25077,7 @@ static inline void ensure_path(const char* func, char* name, const char* path) {
   copy = vmalloc(PAGE_SIZE);
   if (!copy) goto failed;
 
-  strncpy_safe(copy, path, PAGE_SIZE);
+  strncpy_safe(copy, path, PAGE_SIZE-1);
 
   for (ptr = copy+1; *ptr; ++ptr) {
     if (*ptr == '/') {
