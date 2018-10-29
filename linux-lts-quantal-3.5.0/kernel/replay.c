@@ -132,18 +132,18 @@ void theia_setuid_ahg(uid_t uid, int rc);
 
 #define MAX_SOCK_ADDR      128
 #define THEIA_INVALID_PORT 0
-void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char *ip, u_long *port, char *sun_path, sa_family_t *sa_family);
+bool get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char *ip, u_long *port, char *sun_path, sa_family_t *sa_family);
 
-void get_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_family_t *sa_family, bool is_peer);
+bool get_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_family_t *sa_family, bool is_peer);
 
-inline void get_peer_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_family_t *sa_family)
+inline bool get_peer_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_family_t *sa_family)
 {
-  get_ip_port_sockfd(sockfd, ip, port, sun_path, sa_family, true);
+  return get_ip_port_sockfd(sockfd, ip, port, sun_path, sa_family, true);
 }
 
-inline void get_local_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_family_t *sa_family)
+inline bool get_local_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_family_t *sa_family)
 {
-  get_ip_port_sockfd(sockfd, ip, port, sun_path, sa_family, false);
+  return get_ip_port_sockfd(sockfd, ip, port, sun_path, sa_family, false);
 }
 
 /* For debugging failing fs operations */
@@ -508,8 +508,10 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
       if (sock)
       {
         sockfd_put(sock);
-        get_peer_ip_port_sockfd(fd, ip, (u_long *)&port, sun_path, &sa_family);
-        get_local_ip_port_sockfd(fd, local_ip, (u_long *)&local_port, local_sun_path, &sa_family);
+        if (false == get_peer_ip_port_sockfd(fd, ip, (u_long *)&port, sun_path, &sa_family)) 
+          return false;
+        if (false == get_local_ip_port_sockfd(fd, local_ip, (u_long *)&local_port, local_sun_path, &sa_family))
+          return false;
         if (strcmp(ip, "LOCAL") == 0)
         {
           sun_path_b64 = base64_encode(sun_path, strlen(sun_path), NULL);
@@ -14249,7 +14251,7 @@ void print_mem(void *addr, int length)
   }
 }
 
-void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char *ip, u_long *port, char *sun_path, sa_family_t *sa_family)
+bool get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char *ip, u_long *port, char *sun_path, sa_family_t *sa_family)
 {
   char address[MAX_SOCK_ADDR];
   struct sockaddr *basic_sockaddr;
@@ -14265,7 +14267,7 @@ void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char *i
     *port = THEIA_INVALID_PORT;
     strcpy(ip, "NA");
     strcpy(sun_path, "NA");
-    return;
+    return false;
   }
   basic_sockaddr = (struct sockaddr *)address;
 
@@ -14302,7 +14304,7 @@ void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char *i
       }
       if (strlen(sun_path) == 0) {
         pr_err("sun_path error: length is zero\n");
-        return;
+        return false;
       }
       break;
     case AF_NETLINK: ;
@@ -14320,9 +14322,11 @@ void get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char *i
       strcpy(ip, "NA");
       strcpy(sun_path, "NA");
   }
+
+  return true;
 }
 
-void get_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_family_t *sa_family, bool is_peer)
+bool get_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_family_t *sa_family, bool is_peer)
 {
   char address[MAX_SOCK_ADDR];
   struct sockaddr *sockaddr;
@@ -14346,6 +14350,10 @@ void get_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_f
     pr_err("sockfd_lookup error: %d\n", err);
   }
 
+  if (len == 0) {
+    return false;
+  }
+
   *port = THEIA_INVALID_PORT;
   if(is_peer == false) {//local ip
     strcpy(ip, "127.0.0.1");
@@ -14359,7 +14367,7 @@ void get_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_f
   if (err && err != -ENOTCONN)
   {
     pr_debug("getname error: err %d, sock is null? %d\n", err, sock == NULL);
-    return;
+    return false;
   }
 
   sockaddr = (struct sockaddr *)address;
@@ -14367,7 +14375,7 @@ void get_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_f
   if (IS_ERR_OR_NULL(sockaddr))
   {
     pr_err("get_ip_port_sockfd: sockaddr is NULL\n");
-    return;
+    return false;
   }
   else
   {
@@ -14396,18 +14404,14 @@ void get_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_f
       }
       else { /* an abstract socket address */
         if (!len) {
-          pr_debug("getname error: len = %i\n", len);
-          return;
+          sun_path[0] = '\0'; // a socket is not bound
+          return false;
         }
         if (len-sizeof(sa_family_t) > 0) {
           sun_path[0] = '@';
           strncpy(sun_path+1, un_sockaddr->sun_path + 1, len-sizeof(sa_family_t));
           sun_path[len-sizeof(sa_family_t)] = '\0';
         }
-      }
-      if (strlen(sun_path) == 0) {
-        pr_err("sun_path error: length is zero\n");
-        return;
       }
       break;
     case AF_NETLINK: ;
@@ -14425,6 +14429,8 @@ void get_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_f
       *port = THEIA_INVALID_PORT;
       break;
   }
+
+  return true;
 }
 
 //Yang
@@ -14590,14 +14596,13 @@ bool addr2uuid(struct socket *sock, struct sockaddr *dest_addr, char *uuid_str) 
   snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%lu|%s|%lu|-1/-1", ip, port, local_ip, local_port);
   
   return true;
-
 }
 
 struct sendto_ahgv
 {
   int             pid;
   int             sock_fd;
-  struct sockaddr dest_addr;
+  struct sockaddr_storage dest_addr;
   long            rc;
   sa_family_t     sa_family;
   char            sun_path[UNIX_PATH_MAX];
@@ -14621,7 +14626,7 @@ void packahgv_sendto(struct sendto_ahgv *sys_args)
         goto err; 
     }
     else {
-      if (addr2uuid(NULL, &sys_args->dest_addr, uuid_str) == false)
+      if (addr2uuid(NULL, (struct sockaddr*)&sys_args->dest_addr, uuid_str) == false)
         goto err;
     }
 
@@ -14668,7 +14673,7 @@ struct recvfrom_ahgv
 {
   int             pid;
   int             sock_fd;
-  struct sockaddr src_addr;
+  struct sockaddr_storage src_addr;
   long            rc;
   sa_family_t     sa_family;
   char            sun_path[UNIX_PATH_MAX];
@@ -14699,7 +14704,7 @@ void packahgv_recvfrom(struct recvfrom_ahgv *sys_args)
         goto err; 
     }
     else {
-      if (addr2uuid(NULL, &sys_args->src_addr, uuid_str) == false)
+      if (addr2uuid(NULL, (struct sockaddr*)&sys_args->src_addr, uuid_str) == false)
         goto err;
     }
 
@@ -14803,7 +14808,7 @@ struct sendmsg_ahgv
 {
   int         pid;
   int         sock_fd;
-  struct sockaddr dest_addr;
+  struct sockaddr_storage dest_addr;
   long        rc;
   sa_family_t sa_family;
   char        sun_path[UNIX_PATH_MAX];
@@ -14827,7 +14832,7 @@ void packahgv_sendmsg(struct sendmsg_ahgv *sys_args)
         goto err; 
     }
     else {
-      if (addr2uuid(NULL, &sys_args->dest_addr, uuid_str) == false)
+      if (addr2uuid(NULL, (struct sockaddr*)&sys_args->dest_addr, uuid_str) == false)
         goto err;
     }
 #ifdef THEIA_AUX_DATA
@@ -14858,7 +14863,7 @@ struct recvmsg_ahgv
 {
   int         pid;
   int         sock_fd;
-  struct sockaddr src_addr;
+  struct sockaddr_storage src_addr;
   long        rc;
   sa_family_t sa_family;
   char        sun_path[UNIX_PATH_MAX];
@@ -14882,7 +14887,7 @@ void packahgv_recvmsg(struct recvmsg_ahgv *sys_args)
         goto err; 
     }
     else {
-      if (addr2uuid(NULL, &sys_args->src_addr, uuid_str) == false)
+      if (addr2uuid(NULL, (struct sockaddr*)&sys_args->src_addr, uuid_str) == false)
         goto err;
     }
 
@@ -15167,12 +15172,21 @@ void theia_connect_ahg(long rc, int fd, struct sockaddr __user *uservaddr, int a
   sock = sockfd_lookup(fd, &err);
   if (sock) {
     sockfd_put(sock);
-    get_peer_ip_port_sockfd(fd, pahgv_connect->ip, &(pahgv_connect->port), pahgv_connect->sun_path, &(pahgv_connect->sa_family));
+    if (false == get_peer_ip_port_sockfd(fd, pahgv_connect->ip, &(pahgv_connect->port), pahgv_connect->sun_path, &(pahgv_connect->sa_family))) {
+      pahgv_connect->sock_fd = -1;
+      if (false == get_ip_port_sockaddr(uservaddr, addrlen, pahgv_connect->ip, &(pahgv_connect->port), pahgv_connect->sun_path, &(pahgv_connect->sa_family))) {
+        KFREE(pahgv_connect);
+        return;
+      }
+    }
   }
   else {
     pr_err("sockfd_lookup error: %d\n", err);
     pahgv_connect->sock_fd = -1;
-    get_ip_port_sockaddr(uservaddr, addrlen, pahgv_connect->ip, &(pahgv_connect->port), pahgv_connect->sun_path, &(pahgv_connect->sa_family));
+    if (false == get_ip_port_sockaddr(uservaddr, addrlen, pahgv_connect->ip, &(pahgv_connect->port), pahgv_connect->sun_path, &(pahgv_connect->sa_family))) {
+      KFREE(pahgv_connect);
+      return;
+    }
   }
 
   packahgv_connect(pahgv_connect);
@@ -15209,11 +15223,19 @@ void theia_accept_ahg(long rc, int fd, struct sockaddr __user *upeer_sockaddr, i
   sock = sockfd_lookup(fd, &err);
   if (sock) {
     sockfd_put(sock);
-    get_peer_ip_port_sockfd(fd, pahgv_accept->ip, &(pahgv_accept->port), pahgv_accept->sun_path, &(pahgv_accept->sa_family));
+    if (false == get_peer_ip_port_sockfd(fd, pahgv_accept->ip, &(pahgv_accept->port), pahgv_accept->sun_path, &(pahgv_accept->sa_family))) {
+      if (false == get_ip_port_sockaddr(upeer_sockaddr, *upeer_addrlen, pahgv_accept->ip, &(pahgv_accept->port), pahgv_accept->sun_path, &(pahgv_accept->sa_family))) {
+        KFREE(pahgv_accept);
+        return;
+      }
+    }
   }
   else {
     pr_err("sockfd_lookup error: %d\n", err);
-    get_ip_port_sockaddr(upeer_sockaddr, *upeer_addrlen, pahgv_accept->ip, &(pahgv_accept->port), pahgv_accept->sun_path, &(pahgv_accept->sa_family));
+    if (false == get_ip_port_sockaddr(upeer_sockaddr, *upeer_addrlen, pahgv_accept->ip, &(pahgv_accept->port), pahgv_accept->sun_path, &(pahgv_accept->sa_family))) {
+      KFREE(pahgv_accept);
+      return;
+    }
   }
 
   packahgv_accept(pahgv_accept);
@@ -15264,7 +15286,7 @@ void theia_sendto_ahg(long rc, int fd, void __user *buff, size_t len, unsigned i
   else {
     if (addr != NULL && addr_len > 0) {
       pahgv_sendto->sock_fd = -1; /* ignore socket (no connection) */
-      if (copy_from_user((char*)&pahgv_sendto->dest_addr, (char*)addr, sizeof(struct sockaddr))) {
+      if (copy_from_user((char*)&pahgv_sendto->dest_addr, (char*)addr, addr_len)) {
         TPRINT ("theia_sendto_ahg: failed to copy dest_addr %p\n", addr);
         goto out;
       }
@@ -15328,7 +15350,7 @@ void theia_recvfrom_ahg(long rc, int fd, void __user *ubuf, size_t size, unsigne
   else {
     if (addr != NULL && addr_len != NULL) {
       pahgv_recvfrom->sock_fd = -1; /* ignore socket (no connection) */
-      if (copy_from_user((char*)&pahgv_recvfrom->src_addr, (char*)addr, sizeof(struct sockaddr))) {
+      if (copy_from_user((char*)&pahgv_recvfrom->src_addr, (char*)addr, *addr_len)) {
         TPRINT ("theia_recvfrom_ahg: failed to copy src_addr %p\n", addr);
         goto out;
       }
@@ -25114,6 +25136,8 @@ void ensure_replayfs_paths(void) {
 
   cred = prepare_creds();
   if (cred) {
+    cred->euid = GLOBAL_ROOT_UID;
+    cred->egid = GLOBAL_ROOT_GID;
     cred->fsuid = GLOBAL_ROOT_UID;
     cred->fsgid = GLOBAL_ROOT_GID;
     old_cred = override_creds(cred);
