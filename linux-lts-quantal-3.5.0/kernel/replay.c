@@ -25046,7 +25046,7 @@ static void theia_init_replayfs_paths(void) {
   }
 
   memset(prefix, 0, PAGE_SIZE);
-  if (!dmi_product_uuid || !theia_machine_id) {
+  if (!dmi_product_uuid) {
     strncpy_safe(prefix, REPLAYFS_BASE_PATH, safe_len);
   }
   else {
