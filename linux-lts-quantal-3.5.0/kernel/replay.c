@@ -25027,7 +25027,7 @@ static struct ctl_table replay_ctl_root[] =
 //there is no "replayfs". it just refers to "/data/replay_logdb/*", etc.
 static void theia_init_replayfs_paths(void) {
   char* dmi_product_uuid = NULL;
-  char* theia_machine_id = NULL;
+  char theia_machine_id[9];
   char* prefix = NULL;
   size_t safe_len = PAGE_SIZE - 1;
   int res = 0;
@@ -25040,8 +25040,10 @@ static void theia_init_replayfs_paths(void) {
     goto failed;
 
   dmi_product_uuid = (char*)dmi_get_system_info(DMI_PRODUCT_UUID);
-  if (dmi_product_uuid)
-    theia_machine_id = strrchr(dmi_product_uuid, '-') + 1;
+  if (dmi_product_uuid) {
+    memcpy(theia_machine_id, dmi_product_uuid, 8);
+    theia_machine_id[8] = '\0';
+  }
 
   memset(prefix, 0, PAGE_SIZE);
   if (!dmi_product_uuid || !theia_machine_id) {
