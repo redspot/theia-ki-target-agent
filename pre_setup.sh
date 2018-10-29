@@ -39,9 +39,10 @@ spec_priv() {
     fi
     ln -s ${DIR}/test/dev ${SPEC_PATH}
     # dkms will not rebuild even if code changes. so, rotate in by version num to force
-    if ! dkms status spec/${SPEC_VER} | grep -q ^spec; then
-        dkms add -m spec -v ${SPEC_VER}
+    if dkms status spec/${SPEC_VER} | grep -q ^spec; then
+        dkms remove -m spec -v ${SPEC_VER} -k 3.5.0-99-generic
     fi
+    dkms add -m spec -v ${SPEC_VER}
 }
 pg_unpriv() {
     patchguard_src="${DIR}/patchguard/patchguard.c"
