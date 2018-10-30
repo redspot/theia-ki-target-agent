@@ -11790,6 +11790,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
   const char *devfile = "/dev/spec0";
   struct path linker_path;
   int save_mmap = 1;
+  struct module *spec_mod;
 
   // TPRINT("in theia_start_execve: filename %s\n", filename);
 
@@ -11802,6 +11803,14 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
   {
     goto out_norm;
   }
+
+  mutex_lock_interruptible(&module_mutex);
+  //this will not find a module that is not loaded yet
+  spec_mod = find_module("spec");
+  mutex_unlock(&module_mutex);
+
+  if (spec_mod)
+    pr_debug("%s: spec module found by name\n", __FUNCTION__);
 
   ret = sys_access(devfile, 0/*F_OK*/);
   if (ret < 0)  //for ensure the inert_spec.sh is done before record starts.
