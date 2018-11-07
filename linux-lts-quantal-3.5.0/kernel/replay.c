@@ -456,10 +456,11 @@ bool theia_check_channel(void)
       fpath = get_file_fullpath(mm->exe_file, fpathbuf, PATH_MAX);
     up_read(&mm->mmap_sem);
   }
-  if (!IS_ERR_OR_NULL(fpath) && in_nullterm_list(fpathbuf, theia_proc_whitelist, theia_proc_whitelist_len)) {
+  if (!IS_ERR_OR_NULL(fpath) && in_nullterm_list(fpath, theia_proc_whitelist, theia_proc_whitelist_len)) {
+    if (fpathbuf)
       vfree(fpathbuf);
-      set_fs(old_fs);
-      return false;
+    set_fs(old_fs);
+    return false;
   }
   if (fpathbuf)
     vfree(fpathbuf);
