@@ -206,7 +206,7 @@ static void *reader_thread(void *data)
 
 	// use a file
   sprintf(filename, "/data/ahg.dump.%u.%d", dump_id, dump_cnt);
-	hostfd = open(filename, O_RDWR|O_CREAT, 0777);
+	hostfd = open(filename, O_RDWR|O_CREAT|O_APPEND, 0777);
 
 	do {
 		pollfd.fd = relay_file[cpu];
@@ -247,7 +247,7 @@ static void *reader_thread(void *data)
       close(hostfd);
       dump_cnt ++;
       sprintf(filename, "/data/ahg.dump.%u.%d", dump_id,dump_cnt);
-      hostfd = open(filename, O_RDWR|O_CREAT, 0777);
+      hostfd = open(filename, O_RDWR|O_CREAT|O_APPEND, 0777);
       chk_write(hostfd, newline + 1, rc - slen);
     }
 	} while (1);
