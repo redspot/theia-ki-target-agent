@@ -11581,7 +11581,6 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
       if (retval)
       {
         TPRINT("record_execve: replay_checkpoint_to_disk returns %ld\n", retval);
-        if (slab) VFREE(slab);
 #ifdef LOG_COMPRESS_1
         VFREE(clog_slab);
 #endif
