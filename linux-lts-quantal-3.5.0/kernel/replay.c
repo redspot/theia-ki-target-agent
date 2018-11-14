@@ -9396,8 +9396,7 @@ record_read(unsigned int fd, char __user *buf, size_t count)
     record_cache_file_unlock(current->record_thrd->rp_cache_files, fd);
     return -ENOMEM;
   }
-  strncpy_safe((char *)puuid, rec_uuid_str, THEIA_UUID_LEN);
-  puuid[THEIA_UUID_LEN] = '\0';
+  strncpy_safe((char *)puuid, rec_uuid_str, strlen(rec_uuid_str));
   DPRINT("rec_uuid_str is %s, rc %ld, is_cache %d,clock %d\n", rec_uuid_str, rc, is_cache_file, atomic_read(current->record_thrd->rp_precord_clock));
   DPRINT("copied to pretval is (%s)\n", (char *)puuid);
 
@@ -10151,8 +10150,7 @@ record_write(unsigned int fd, const char __user *buf, size_t count)
     TPRINT("record_write: can't allocate pos buffer for rec_uuid_str\n");
     return -ENOMEM;
   }
-  strncpy_safe((char *)puuid, rec_uuid_str, THEIA_UUID_LEN);
-  puuid[THEIA_UUID_LEN] = '\0';
+  strncpy_safe((char *)puuid, rec_uuid_str, strlen(rec_uuid_str));
   TPRINT("write: rec_uuid_str is %s,clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
   TPRINT("write: copied to pretval is (%s)\n", (char *)puuid);
 
@@ -15931,7 +15929,7 @@ record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct 
     TPRINT("record_sendto: can't allocate pos buffer for rec_uuid_str\n");
     return -ENOMEM;
   }
-  strncpy_safe((char *)puuid, rec_uuid_str, THEIA_UUID_LEN);
+  strncpy_safe((char *)puuid, rec_uuid_str, strlen(rec_uuid_str));
   pr_debug("sendto: rec_uuid_str is %s,clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
   pr_debug("sendto: copied to pretval is (%s)\n", (char *)puuid);
 
@@ -16030,7 +16028,7 @@ record_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, stru
     TPRINT("record_recvfrom: can't allocate pos buffer for rec_uuid_str\n");
     return -ENOMEM;
   }
-  strncpy_safe((char *)puuid, rec_uuid_str, THEIA_UUID_LEN);
+  strncpy_safe((char *)puuid, rec_uuid_str, strlen(rec_uuid_str));
   pr_debug("recvfrom: rec_uuid_str is %s, clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
   pr_debug("recvfrom: copied to pretval is (%s)\n", (char *)puuid);
 
@@ -16137,7 +16135,7 @@ record_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags)
     TPRINT("record_sendmsg: can't allocate pos buffer for rec_uuid_str\n");
     return -ENOMEM;
   }
-  strncpy_safe((char *)puuid, rec_uuid_str, THEIA_UUID_LEN);
+  strncpy_safe((char *)puuid, rec_uuid_str, strlen(rec_uuid_str));
   pr_debug("sendmsg: rec_uuid_str is %s, clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
   pr_debug("sendmsg: copied to pretval is (%s)\n", (char *)puuid);
 
@@ -16185,7 +16183,7 @@ record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
     TPRINT("record_recvmsg: can't allocate pos buffer for rec_uuid_str\n");
     return -ENOMEM;
   }
-  strncpy_safe((char *)puuid, rec_uuid_str, THEIA_UUID_LEN);
+  strncpy_safe((char *)puuid, rec_uuid_str, strlen(rec_uuid_str));
   pr_debug("recvmsg: rec_uuid_str is %s, clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
   pr_debug("recvmsg: copied to pretval is (%s)\n", (char *)puuid);
 
