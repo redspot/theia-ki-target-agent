@@ -12503,23 +12503,9 @@ void theia_mount_ahg(char __user *dev_name, char __user *dir_name, char __user *
 
     pahgv->pid = current->pid;
 
-    if ((copied_length = strncpy_from_user(pahgv->devname, dev_name, sizeof(pahgv->devname))) != strlen(dev_name))
-    {
-      TPRINT("theia_mount_ahg: can't copy devname to ahgv, devname length %lu, copied %d, devname:%s\n", strlen(dev_name), copied_length, dev_name);
-      KFREE(pahgv);
-    }
-
-    if ((copied_length = strncpy_from_user(pahgv->dirname, dir_name, sizeof(pahgv->dirname))) != strlen(dir_name))
-    {
-      TPRINT("theia_mount_ahg: can't copy dir_name to ahgv, dir_name length %lu, copied %d, dir_name:%s\n", strlen(dir_name), copied_length, dir_name);
-      KFREE(pahgv);
-    }
-
-    if ((copied_length = strncpy_from_user(pahgv->type, type, sizeof(pahgv->type))) != strlen(type))
-    {
-      TPRINT("theia_mount_ahg: can't copy type to ahgv, type length %lu, copied %d, type:%s\n", strlen(type), copied_length, type);
-      KFREE(pahgv);
-    }
+    strncpy_safe_from_user(pahgv->devname, dev_name, sizeof(pahgv->devname));
+    strncpy_safe_from_user(pahgv->dirname, dir_name, sizeof(pahgv->dirname));
+    strncpy_safe_from_user(pahgv->type, type, sizeof(pahgv->type));
 
     pahgv->flags = flags;
     pahgv->rc = rc;
