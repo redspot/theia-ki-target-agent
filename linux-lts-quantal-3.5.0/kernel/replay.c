@@ -115,6 +115,15 @@ inline void strncpy_safe(char *target, const char *source, size_t max_len)
   target[len] = '\0';
 }
 
+inline int strncpy_safe_from_user(char *target, const char __user *source, size_t max_len)
+{
+  int ret;
+  size_t len = strnlen_user(source, max_len);
+  ret = strncpy_from_user(target, source, len);
+  target[len] = '\0';
+  return ret;
+}
+
 //SL
 struct timespec ext4_get_crtime(struct inode *inode);
 unsigned long get_shm_segsz(int shmid);
@@ -10372,7 +10381,6 @@ void theia_open_ahg(const char __user *filename, int flags, int mode, long rc, b
   struct file *file;
   struct inode *inode;
   struct open_ahgv *pahgv = NULL;
-  int copied_length = 0;
   int fput_needed = 0;
   char *fpathbuf;
   char *fpath;
@@ -10406,12 +10414,7 @@ void theia_open_ahg(const char __user *filename, int flags, int mode, long rc, b
   {
     pahgv->dev = 0;
     pahgv->ino = 0;
-    if ((copied_length = strncpy_from_user(pahgv->filename, filename, sizeof(pahgv->filename))) != strlen(filename))
-    {
-      TPRINT("theia_open_ahg: can't copy filename to ahgv, filename length %lu, copied %d, filename:%s\n", strlen(filename), copied_length, filename);
-      KFREE(pahgv);
-      return;
-    }
+    strncpy_safe_from_user(pahgv->filename, filename, sizeof(pahgv->filename)-1);
   }
   else
   {
@@ -10431,12 +10434,7 @@ void theia_open_ahg(const char __user *filename, int flags, int mode, long rc, b
     else
     {
       vfree(fpathbuf);
-      if ((copied_length = strncpy_from_user(pahgv->filename, filename, sizeof(pahgv->filename))) != strlen(filename))
-      {
-        TPRINT("theia_open_ahg: can't copy filename to ahgv, filename length %lu, copied %d, filename:%s\n", strlen(filename), copied_length, filename);
-        KFREE(pahgv);
-        return;
-      }
+      strncpy_safe_from_user(pahgv->filename, filename, sizeof(pahgv->filename)-1);
     }
   }
 
