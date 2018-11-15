@@ -12503,9 +12503,9 @@ void theia_mount_ahg(char __user *dev_name, char __user *dir_name, char __user *
 
     pahgv->pid = current->pid;
 
-    strncpy_safe_from_user(pahgv->devname, dev_name, sizeof(pahgv->devname));
-    strncpy_safe_from_user(pahgv->dirname, dir_name, sizeof(pahgv->dirname));
-    strncpy_safe_from_user(pahgv->type, type, sizeof(pahgv->type));
+    strncpy_safe_from_user(pahgv->devname, dev_name, sizeof(pahgv->devname)-1);
+    strncpy_safe_from_user(pahgv->dirname, dir_name, sizeof(pahgv->dirname)-1);
+    strncpy_safe_from_user(pahgv->type, type, sizeof(pahgv->type)-1);
 
     pahgv->flags = flags;
     pahgv->rc = rc;
