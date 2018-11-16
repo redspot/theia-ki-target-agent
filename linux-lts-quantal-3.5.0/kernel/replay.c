@@ -110,16 +110,29 @@
    the size of target should be larger than max_len (at least by 1) */
 inline void strncpy_safe(char *target, const char *source, size_t max_len)
 {
-  size_t len = strnlen(source, max_len);
+  size_t len;
+  if(!source) {
+    len = 0;
+    goto out;
+  }
+  len = strnlen(source, max_len);
   strncpy(target, source, len);
+out:
   target[len] = '\0';
 }
 
 inline int strncpy_safe_from_user(char *target, const char __user *source, size_t max_len)
 {
   int ret;
-  size_t len = strnlen_user(source, max_len);
+  size_t len;
+  if(!source) {
+    ret = -1;
+    len = 0;
+    goto out;
+  }
+  len = strnlen_user(source, max_len);
   ret = strncpy_from_user(target, source, len);
+out:
   target[len] = '\0';
   return ret;
 }
@@ -9074,9 +9087,11 @@ void packahgv_process(struct task_struct *tsk)
     if (!fpath)   /* sometimes we can't obtain fullpath */
     {
       fpath = tsk->comm;
+      fpath_b64 = base64_encode(fpath, strnlen(fpath,TASK_COMM_LEN-1), NULL);
     }
+    else
+      fpath_b64 = base64_encode(fpath, strnlen(fpath,PATH_MAX-1), NULL);
 
-    fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
     if (!fpath_b64) 
       fpath_b64 = "";
     else
@@ -9153,7 +9168,7 @@ void packahgv_process_bin(struct task_struct *tsk)
     buf_ahg->pid = tsk->pid;
     buf_ahg->task_sec = tsk->start_time.tv_sec;
     get_ids(ids);
-    buf_ahg->size_ids = strlen(ids);
+    buf_ahg->size_ids = strnlen(ids,IDS_LEN);
     TPRINT("ids:(%s),size:%hu\n", ids, buf_ahg->size_ids);
     buf_ahg->p_pid = tsk->real_parent->pid;
     if (ptsk)
@@ -9166,7 +9181,7 @@ void packahgv_process_bin(struct task_struct *tsk)
     {
       strncpy_safe(fpathbuf, tsk->comm, PATH_MAX-1); // TASK_COMM_LEN < PATH_MAX
     }
-    buf_ahg->size_fpathbuf = strlen(fpath);
+    buf_ahg->size_fpathbuf = strnlen(fpath, PATH_MAX-1);
     TPRINT("fpath:(%s),size:%hu\n", fpathbuf, buf_ahg->size_fpathbuf);
     buf_ahg->is_user_remote = is_remote(tsk);
     buf_ahg->tgid = tsk->tgid;
@@ -9398,7 +9413,7 @@ record_read(unsigned int fd, char __user *buf, size_t count)
     theia_read_ahg(fd, rc);
 
   //Yang: we get the inode
-  puuid = ARGSKMALLOC(strlen(rec_uuid_str) + 1, GFP_KERNEL);
+  puuid = ARGSKMALLOC(strnlen(rec_uuid_str,THEIA_UUID_LEN) + 1, GFP_KERNEL);
   if (puuid == NULL)
   {
     TPRINT("record_read: can't allocate pos buffer for rec_uuid_str\n");
@@ -10307,7 +10322,7 @@ void packahgv_open(struct open_ahgv *sys_args)
     if (fd2uuid(sys_args->fd, uuid_str) == false)
       return;
 
-    filename_b64 = base64_encode(sys_args->filename, strlen(sys_args->filename), NULL);
+    filename_b64 = base64_encode(sys_args->filename, strnlen(sys_args->filename,PATH_MAX), NULL);
     if (!filename_b64) 
       filename_b64 = "";
     else
@@ -10826,7 +10841,7 @@ void theia_unlink_ahgx(const char *kfilename)
         fpath = pbuf;
       }
 
-      fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+      fpath_b64 = base64_encode(fpath, strnlen(fpath,THEIA_DPATH_LEN-1), NULL);
       if (!fpath_b64) 
         fpath_b64 = "";
       else
@@ -10959,7 +10974,7 @@ void theia_unlinkat_ahgx(int dfd, const char *kfilename, int flag)
         fpath = pbuf;
       }
 
-      fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+      fpath_b64 = base64_encode(fpath, strnlen(fpath, THEIA_DPATH_LEN-1), NULL);
       if (!fpath_b64) 
         fpath_b64 = "";
       else
@@ -11086,7 +11101,7 @@ void theia_openat_ahgx(int fd, const char __user *filename, int flag, int mode)
       fpath = pbuf;
     }
 
-    fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+    fpath_b64 = base64_encode(fpath, strnlen(fpath,THEIA_DPATH_LEN-1), NULL);
     if (!fpath_b64) 
       fpath_b64 = "";
     else
@@ -11269,7 +11284,7 @@ void packahgv_execve(struct execve_ahgv *sys_args)
     }
     set_fs(old_fs);
 
-    fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+    fpath_b64 = base64_encode(fpath, strnlen(fpath, THEIA_DPATH_LEN-1), NULL);
     if (!fpath_b64) 
       fpath_b64 = "";
     else
@@ -11993,7 +12008,7 @@ inline void theia_chmod_ahgx(char __user *filename, mode_t mode, long rc, int sy
   if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
     fpath = filename;
 
-  fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+  fpath_b64 = base64_encode(fpath, strnlen(fpath, THEIA_DPATH_LEN-1), NULL);
   if (!fpath_b64) 
     fpath_b64 = "";
   else
@@ -12041,7 +12056,7 @@ inline void theia_fchmod_ahgx(unsigned int fd, mode_t mode, long rc, int sysnum)
   if (file2uuid(file, uuid_str, fd) == false)
     goto err;
 
-  fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+  fpath_b64 = base64_encode(fpath, strnlen(fpath, THEIA_DPATH_LEN-1), NULL);
   if (!fpath_b64) 
     fpath_b64 = "";
   else
@@ -12110,7 +12125,7 @@ inline void theia_fchmodat_ahgx(int dfd, char __user *filename, int mode,
   if (fpath == NULL)
     goto err;
 
-  fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+  fpath_b64 = base64_encode(fpath, strnlen(fpath,THEIA_DPATH_LEN-1), NULL);
   if (!fpath_b64) 
     fpath_b64 = "";
   else
@@ -12159,7 +12174,7 @@ inline void theia_fchown_ahgx(unsigned int fd, uid_t user, gid_t group, long rc,
   if (file2uuid(file, uuid_str, fd) == false)
     goto err;
 
-  fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+  fpath_b64 = base64_encode(fpath, strnlen(fpath, THEIA_DPATH_LEN-1), NULL);
   if (!fpath_b64) 
     fpath_b64 = "";
   else
@@ -12211,7 +12226,7 @@ inline void theia_lchown_ahgx(char __user *filename, uid_t user, gid_t group,
   if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
     fpath = filename;
 
-  fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+  fpath_b64 = base64_encode(fpath, strnlen(fpath, THEIA_DPATH_LEN-1), NULL);
   if (!fpath_b64) 
     fpath_b64 = "";
   else
@@ -12258,7 +12273,7 @@ inline void theia_chown_ahgx(char __user *filename, uid_t user,
   if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
     fpath = filename;
 
-  fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+  fpath_b64 = base64_encode(fpath, strnlen(fpath, THEIA_DPATH_LEN-1), NULL);
   if (!fpath_b64) 
     fpath_b64 = "";
   else
@@ -12307,7 +12322,7 @@ inline void theia_fchownat_ahgx(int dfd, char __user *filename, uid_t user,
     if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
       fpath = filename;
 
-    fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+    fpath_b64 = base64_encode(fpath, strnlen(fpath, THEIA_DPATH_LEN-1), NULL);
     if (!fpath_b64) 
       fpath_b64 = "";
     else
@@ -12328,7 +12343,7 @@ inline void theia_fchownat_ahgx(int dfd, char __user *filename, uid_t user,
       if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
         fpath = filename;
 
-      fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+      fpath_b64 = base64_encode(fpath, strnlen(fpath,THEIA_DPATH_LEN-1), NULL);
       if (!fpath_b64) 
         fpath_b64 = "";
       else
@@ -12445,7 +12460,7 @@ void packahgv_mount(struct mount_ahgv *sys_args)
 
     get_curr_time(&sec, &nsec);
 
-    fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+    fpath_b64 = base64_encode(fpath, strnlen(fpath, THEIA_DPATH_LEN-1), NULL);
     if (!fpath_b64) 
       fpath_b64 = "";
     else
@@ -14291,7 +14306,7 @@ bool get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char *i
 //        if (addrlen != sizeof(sa_family_t))
 //            sun_path[addrlen-sizeof(sa_family_t)] = '\0';
       }
-      if (strlen(sun_path) == 0) {
+      if (strnlen(sun_path,UNIX_PATH_MAX-1) == 0) {
         pr_err("sun_path error: length is zero\n");
         return false;
       }
@@ -18933,7 +18948,7 @@ long theia_hide_dirent(unsigned int fd, struct linux_dirent __user *dirent, long
     if (!IS_ERR(dirpath))
     {
       fullpath = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
-      dirpath_offset = strlen(dirpath);
+      dirpath_offset = strnlen(dirpath, PATH_MAX-1);
       strncpy(fullpath, dirpath, dirpath_offset);
       fullpath[dirpath_offset] = '/';
       dirpath_offset++;
@@ -20797,7 +20812,7 @@ void theia_sendfile64_ahgx(int out_fd, int in_fd, loff_t __user *offset, size_t 
       fpath = pbuf;
     }
 
-    fpath_b64 = base64_encode(fpath, strlen(fpath), NULL);
+    fpath_b64 = base64_encode(fpath, strnlen(fpath, THEIA_DPATH_LEN-1), NULL);
     if (!fpath_b64) 
       fpath_b64 = "";
     else
