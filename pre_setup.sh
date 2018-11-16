@@ -31,7 +31,7 @@ spec_unpriv() {
 }
 spec_priv() {
     # if symlink, then delete and replace. we have 2 gocd agents, so paths can change
-    if [ -e ${SPEC_PATH} -a -L ${SPEC_PATH} ]; then
+    if [ -L ${SPEC_PATH} ]; then
         rm ${SPEC_PATH}
     # if exists and not a symlink, dont nuke it
     elif [ -e ${SPEC_PATH} -a ! -L ${SPEC_PATH} ]; then
@@ -58,7 +58,7 @@ pg_unpriv() {
 }
 pg_priv() {
     # if symlink, then delete and replace. we have 2 gocd agents, so paths can change
-	if [ -e ${PATCHGUARD_PATH} -a -L ${PATCHGUARD_PATH} ]; then
+	if [ -L ${PATCHGUARD_PATH} ]; then
 		rm ${PATCHGUARD_PATH}
     # if exists and not a symlink, dont nuke it
 	elif [ -e ${PATCHGUARD_PATH} -a ! -L ${PATCHGUARD_PATH} ]; then
