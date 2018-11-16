@@ -524,7 +524,7 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
           return false;
         if (strcmp(ip, "LOCAL") == 0)
         {
-          sun_path_b64 = base64_encode(sun_path, strlen(sun_path), NULL);
+          sun_path_b64 = base64_encode(sun_path, strnlen(sun_path, UNIX_PATH_MAX-1), NULL);
           if (!sun_path_b64) 
             sun_path_b64 = "";
 
@@ -548,7 +548,7 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
                 lino = st.st_ino;
               }
             }
-            local_sun_path_b64 = base64_encode(local_sun_path, strlen(local_sun_path), NULL);
+            local_sun_path_b64 = base64_encode(local_sun_path, strnlen(local_sun_path, UNIX_PATH_MAX-1), NULL);
             if (!local_sun_path_b64) 
               local_sun_path_b64 = "";
             rc = snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%lx/%lx|%s|%lx/%lx", sun_path_b64, dev, ino, local_sun_path_b64, ldev, lino);
@@ -581,7 +581,7 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
                 lino = st.st_ino;
               }
             }
-            local_sun_path_b64 = base64_encode(local_sun_path, strlen(local_sun_path), NULL);
+            local_sun_path_b64 = base64_encode(local_sun_path, strnlen(local_sun_path, UNIX_PATH_MAX-1), NULL);
             if (!local_sun_path_b64) 
               local_sun_path_b64 = "";
             rc = snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%lx/%lx", ip, port, local_sun_path_b64, ldev, lino);
@@ -3455,7 +3455,7 @@ void get_user_callstack(char *buffer, size_t bufsize)
       ptr = ret_str;
     }
 
-    if (strlen(buffer) + strlen(ptr) > bufsize - 1)
+    if (strnlen(buffer, bufsize-1) + strnlen(ptr, THEIA_KMEM_SIZE-1) > bufsize - 1)
       break;
     strcat(buffer, ptr);
     strcat(buffer, "|");
@@ -4318,8 +4318,8 @@ EXPORT_SYMBOL(get_log_id);
 int get_inode_for_pin(u_long inode)
 {
   TPRINT("received get_inode_for_pin request!!!!, inode %lx, repl_uuid_str is %s\n", inode, repl_uuid_str);
-  copy_to_user((char *)inode, repl_uuid_str, strlen(repl_uuid_str));
-  ((char *)inode)[strlen(repl_uuid_str)] = '\0';
+  copy_to_user((char *)inode, repl_uuid_str, strnlen(repl_uuid_str, THEIA_UUID_LEN));
+  ((char *)inode)[strnlen(repl_uuid_str, THEIA_UUID_LEN)] = '\0';
   return 0;
 }
 EXPORT_SYMBOL(get_inode_for_pin);
@@ -4827,7 +4827,7 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
     retval = snprintf(str, MAX_LOGDIR_STRLEN+1, "%s\n", prg->rg_logdir);
     if (retval < 0) TPRINT("fork_replay_theia: rg_logdir is too long\n");
 
-    sys_write(pipe_fd, str, strlen(str));
+    sys_write(pipe_fd, str, strnlen(str, MAX_LOGDIR_STRLEN));
 
     set_fs(old_fs);
   }
@@ -5043,7 +5043,7 @@ int fork_replay(char __user *logdir, const char __user *const __user *args,
     retval = snprintf(str, MAX_LOGDIR_STRLEN+1, "%s\n", prg->rg_logdir);
     if (retval < 0) TPRINT("fork_replay: rg_logdir is too long\n");
 
-    sys_write(pipe_fd, str, strlen(str));
+    sys_write(pipe_fd, str, strnlen(str, MAX_LOGDIR_STRLEN));
 
     set_fs(old_fs);
   }
@@ -5058,7 +5058,7 @@ int fork_replay(char __user *logdir, const char __user *const __user *args,
   snprintf(ckpt, MAX_LOGDIR_STRLEN+10, "%s/ckpt", prg->rg_logdir);
   BUG_ON(IS_ERR_OR_NULL(theia_libpath));
   //MAX_LIBPAT_STRLEN+1 because theia_libpath should have 1 extra byte for null byte
-  theia_libpath_len = strnlen(theia_libpath, MAX_LIBPATH_STRLEN + 1);
+  theia_libpath_len = strnlen(theia_libpath, MAX_LIBPATH_STRLEN);
   argbuf = copy_args(args, env, &argbuflen, theia_libpath, theia_libpath_len);
 
   if (argbuf == NULL)
@@ -12482,7 +12482,6 @@ err: ;
 void theia_mount_ahg(char __user *dev_name, char __user *dir_name, char __user *type, unsigned long flags, int rc)
 {
   struct mount_ahgv *pahgv = NULL;
-  int copied_length = 0;
 
   if (theia_check_channel() == false)
     return;
@@ -14287,8 +14286,7 @@ bool get_ip_port_sockaddr(struct sockaddr __user *sockaddr, int addrlen, char *i
       else { /* an abstract socket address */
         if (addrlen-sizeof(sa_family_t) > 0) {
           sun_path[0] = '@';
-          strncpy(sun_path+1, un_sockaddr->sun_path + 1, addrlen-sizeof(sa_family_t));
-          sun_path[addrlen-sizeof(sa_family_t)] = '\0';
+          strncpy_safe(sun_path+1, un_sockaddr->sun_path + 1, (addrlen-sizeof(sa_family_t))<UNIX_PATH_MAX-1?(addrlen-sizeof(sa_family_t)):UNIX_PATH_MAX-2);
         }
 //        if (addrlen != sizeof(sa_family_t))
 //            sun_path[addrlen-sizeof(sa_family_t)] = '\0';
@@ -14400,8 +14398,7 @@ bool get_ip_port_sockfd(int sockfd, char *ip, u_long *port, char *sun_path, sa_f
         }
         if (len-sizeof(sa_family_t) > 0) {
           sun_path[0] = '@';
-          strncpy(sun_path+1, un_sockaddr->sun_path + 1, len-sizeof(sa_family_t));
-          sun_path[len-sizeof(sa_family_t)] = '\0';
+          strncpy_safe(sun_path+1, un_sockaddr->sun_path + 1, (len-sizeof(sa_family_t))<UNIX_PATH_MAX-1?(len-sizeof(sa_family_t)):UNIX_PATH_MAX-2);
         }
       }
       break;
