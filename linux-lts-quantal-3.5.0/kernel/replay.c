@@ -10418,6 +10418,14 @@ void theia_open_ahg(const char __user *filename, int flags, int mode, long rc, b
   pahgv->mode = mode;
   //  pahgv->is_new = is_new; /* ignore arg */
   pahgv->is_new = true;
+  pahgv->dev = 0;
+  pahgv->ino = 0;
+  pahgv->filename[0] = '\0';
+
+  if (rc == -EFAULT) {
+    snprintf(pahgv->filename, sizeof(pahgv->filename)-1, "%p", (void*)filename);
+    goto done;
+  }
 
   file = NULL;
   if (rc >= 0)
@@ -10427,8 +10435,6 @@ void theia_open_ahg(const char __user *filename, int flags, int mode, long rc, b
 
   if (!file)
   {
-    pahgv->dev = 0;
-    pahgv->ino = 0;
     strncpy_safe_from_user(pahgv->filename, filename, sizeof(pahgv->filename)-1);
   }
   else
@@ -10453,9 +10459,7 @@ void theia_open_ahg(const char __user *filename, int flags, int mode, long rc, b
     }
   }
 
-  //Yang: temp avoiding the "Text file busy" for spec cpu2006
-  //  sprintf(pahgv->filename, "hellojacket");
-
+done:
   //Reuse dmesg channel
   packahgv_open(pahgv);
   KFREE(pahgv);
