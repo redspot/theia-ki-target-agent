@@ -123,14 +123,14 @@ out:
 
 inline int strncpy_safe_from_user(char *target, const char __user *source, size_t max_len)
 {
-  int ret;
-  size_t len;
+  int ret = -EFAULT;
+  size_t len = 0;
   if(!source) {
-    ret = -1;
-    len = 0;
     goto out;
   }
   len = strnlen_user(source, max_len);
+  if (!access_ok(VERIFY_READ, source, len))
+    goto out;
   ret = strncpy_from_user(target, source, len);
 out:
   target[len] = '\0';
