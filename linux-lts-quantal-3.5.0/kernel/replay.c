@@ -8908,23 +8908,15 @@ char *get_task_fullpath(struct task_struct *tsk, char *buf, size_t buflen)
     return NULL;
 
   exe_file = get_mm_exe_file(mm);
-  if (exe_file)
-  {
-    path = d_path(&(exe_file->f_path), buf, buflen);
-    if (!IS_ERR(path))
-    {
-      if (path[0] == '\0')
-        path = NULL;
-    }
-    else
-      path = NULL;
-  }
-  else
+  if (!exe_file)
+    goto out;
+  path = d_path(&(exe_file->f_path), buf, buflen);
+  if (IS_ERR(path) || (path[0] == '\0'))
     path = NULL;
 
-  mmput(mm);
   fput(exe_file);
-
+out:
+  mmput(mm);
   return path;
 }
 
