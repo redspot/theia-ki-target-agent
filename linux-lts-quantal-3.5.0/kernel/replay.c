@@ -9075,6 +9075,8 @@ void packahgv_process(struct task_struct *tsk)
     rcu_read_unlock();
 
     fpathbuf = (char *)vmalloc(PATH_MAX);
+    if (!fpathbuf)
+      goto no_fpath;
     fpath    = get_task_fullpath(tsk, fpathbuf, PATH_MAX);
     if (!fpath)   /* sometimes we can't obtain fullpath */
     {
@@ -9083,6 +9085,8 @@ void packahgv_process(struct task_struct *tsk)
     }
     else
       fpath_b64 = base64_encode(fpath, strnlen(fpath,PATH_MAX-1), NULL);
+    vfree(fpathbuf);
+no_fpath:
 
     if (!fpath_b64) 
       fpath_b64 = "";
@@ -9127,7 +9131,6 @@ void packahgv_process(struct task_struct *tsk)
     }
     else
       theia_file_write(buf, size);
-    vfree(fpathbuf);
     if (fpath_b64_alloced)
       vfree(fpath_b64);
     vfree(buf);
