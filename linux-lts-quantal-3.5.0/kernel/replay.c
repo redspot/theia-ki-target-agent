@@ -5597,12 +5597,12 @@ record_signal_delivery(int signr, siginfo_t *info, struct k_sigaction *ka)
     put_user(need_fake_calls, &phead->need_fake_calls);
     MPRINT("Pid %d record_signal inserts fake syscall - ignore_flag now %d, need_fake_calls now %d\n", current->pid, ignore_flag, need_fake_calls);
   }
-  else if (!sig_fatal(current, signr) && sysnum != psr->sysnum && sysnum != 0 /* restarted syscall */)
+  else if (!sig_fatal(current, signr) && sysnum != psr->sysnum && sysnum != 219 /* restarted syscall */)
   {
     TPRINT("record_signal_delivery: this should have been handled!!!\n");
     return -1;
   }
-  if (sig_fatal(current, signr) && sysnum != psr->sysnum && sysnum != 0 /* restarted syscall */)
+  if (sig_fatal(current, signr) && sysnum != psr->sysnum && sysnum != 219 /* restarted syscall */)
   {
     struct pthread_log_head __user *phead = (struct pthread_log_head __user *) prt->rp_user_log_addr;
     // Sweet! There is always guaranteed to be allocated space for a record - also, we do not need to write out a full log since we are always the last record
