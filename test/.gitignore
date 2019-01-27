@@ -14,6 +14,7 @@ replay_pause
 reset_ndx
 resume
 theia_replay
+theia_emergency_disable
 *.output
 *.out
 replay_headers/**
