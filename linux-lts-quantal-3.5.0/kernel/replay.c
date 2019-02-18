@@ -11874,6 +11874,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
         ret = sys_access(followed_path, 0/*F_OK*/);
         if (ret < 0)  //if linker is not there, bail out
         {
+          pr_debug("theia_start_execve: sys_access() returned %d for %s\n", ret, followed_path);
           pr_warn_ratelimited("theia linker \"%s\", from symlink \"%s\", not found\n",
                               followed_path, theia_linker);
           theia_recording_toggle = 0;
