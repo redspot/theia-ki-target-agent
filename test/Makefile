@@ -13,7 +13,7 @@ endif
 CC := gcc
 
 CFLAGS := -Wall -Werror -g
-CFLAGS += -fPIC
+#CFLAGS += -fPIC
 LDFLAGS := -Wall -Werror -g -Wl,-dynamic-linker=/lib64/ld-linux-x86-64.so.2 -Wl,-rpath=""
 
 #LDLIBS := libutil.a
@@ -23,7 +23,9 @@ KERNEL_CONFIG := replay_headers/include/linux/replay_configs.h
 DEPS_DIR := .deps
 
 TARGETS=theia_toggle parseklog parseulog parsemlog launcher resume theia_replay parseckpt \
-	getstats filemap replay_pause reset_ndx
+	getstats filemap replay_pause reset_ndx theia_emergency_disable
+#list of targets to be make setuid upon install
+SETUID=theia_emergency_disable
 
 # For automatic .h dependency tracking... may not work perfectly for launcher as
 #    the include path changes for it
@@ -45,13 +47,14 @@ $(KERNEL_CONFIG):
 
 # Build dependencies + any extra flags
 launcher: libutil.a
-launcher: CFLAGS += --static -fPIC -I../../eglibc-2.15/prefix/include -L../../eglibc-2.15/prefix/lib 
+launcher: CFLAGS += -fPIC -I../../eglibc-2.15/prefix/include -L../../eglibc-2.15/prefix/lib
+launcher: LDFLAGS += --static
 
 resume: libutil.a
-resume: CFLAGS += --static
+resume: LDFLAGS += --static
 
 theia_replay: libutil.a
-theia_replay: CFLAGS += --static
+theia_replay: LDFLAGS += --static
 
 getstats: libutil.a
 
@@ -71,6 +74,8 @@ reset_ndx: libutil.a
 
 theia_toggle: libutil.a
 
+theia_emergency_disable: LDFLAGS += --static
+
 clean:
 	rm -f *.a *.o $(TARGETS)
 
@@ -87,7 +92,8 @@ nuke: clean
 	rm -rf .deps .dep_dirs_made
 
 patchelf: $(TARGETS)
-	@echo $^ | xargs -n1 $(PATCHELF) --set-rpath "" 
+	@echo $^ | xargs -n1 $(PATCHELF) --set-rpath "" 2>/dev/null || true
 
 install: $(TARGETS)
 	echo $^ | xargs -n1 | xargs -I% install -Dv % /usr/local/bin/%
+	echo $(SETUID) | xargs -n1 | xargs -I% chmod +s /usr/local/bin/%

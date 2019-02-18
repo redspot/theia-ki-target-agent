@@ -167,12 +167,12 @@ replay_checkpoint_to_disk (char* filename, char* execname, char* buf, int buflen
 	__u64 rg_id;
 	struct timespec time;
 
-	MPRINT ("pid %d enters replay_checkpoint_to_disk: filename %s\n", current->pid, filename);
+	pr_debug_ratelimited("pid %d enters replay_checkpoint_to_disk: filename %s\n", current->pid, filename);
 
 	set_fs(KERNEL_DS);
 	fd = sys_open (filename, O_WRONLY|O_CREAT|O_TRUNC, 0644);
 	if (fd < 0) {
-		printk ("replay_checkpoint_to_disk: open of %s returns %d\n", filename, fd);
+		pr_err_ratelimited("replay_checkpoint_to_disk: open of %s returns %d\n", filename, fd);
 		rc = fd;
 		goto exit;
 	}
@@ -182,26 +182,26 @@ replay_checkpoint_to_disk (char* filename, char* execname, char* buf, int buflen
 	pid = current->pid;
 	copyed = vfs_write (file, (char *) &pid, sizeof(pid), &pos);
 	if (copyed != sizeof(pid)) {
-		printk ("replay_checkpoint_to_disk: tried to write pid, got rc %d\n", copyed);
+		pr_err_ratelimited("replay_checkpoint_to_disk: tried to write pid, got rc %d\n", copyed);
 		rc = copyed;
 		goto exit;
 	}
 
 	// Next, write out the record group identifier
 	get_record_group_id(&rg_id);
-	MPRINT ("Pid %d get record group id %llu\n", current->pid, rg_id);
+	// MPRINT ("Pid %d get record group id %llu\n", current->pid, rg_id);
 	copyed = vfs_write (file, (char *) &rg_id, sizeof(rg_id), &pos);
 	if (copyed != sizeof(rg_id)) {
-		printk ("replay_checkpoint_to_disk: tried to write rg_id, got rc %d\n", copyed);
+		pr_err_ratelimited("replay_checkpoint_to_disk: tried to write rg_id, got rc %d\n", copyed);
 		rc = copyed;
 		goto exit;
 	}
 
 	// Next, record the parent group identifier
-	MPRINT ("Pid %d parent record group id %llu\n", current->pid, parent_rg_id);
+	// MPRINT ("Pid %d parent record group id %llu\n", current->pid, parent_rg_id);
 	copyed = vfs_write (file, (char *) &parent_rg_id, sizeof(rg_id), &pos);
 	if (copyed != sizeof(parent_rg_id)) {
-		printk ("replay_checkpoint_to_disk: tried to write parent_rg_id, got %d\n", copyed);
+		pr_err_ratelimited("replay_checkpoint_to_disk: tried to write parent_rg_id, got %d\n", copyed);
 		rc = copyed;
 		goto exit;
 	}
@@ -210,13 +210,13 @@ replay_checkpoint_to_disk (char* filename, char* execname, char* buf, int buflen
 	len = strlen_user(execname);
 	copyed = vfs_write (file, (char *) &len, sizeof(len), &pos);
 	if (copyed != sizeof(len)) {
-		printk ("replay_checkpoint_to_disk: tried to write exec name len, got rc %d\n", copyed);
+		pr_err_ratelimited("replay_checkpoint_to_disk: tried to write exec name len, got rc %d\n", copyed);
 		rc = copyed;
 		goto exit;
 	}
 	copyed = vfs_write (file, execname, len, &pos);
 	if (copyed != len) {
-		printk ("replay_checkpoint_to_disk: tried to write exec name, got rc %d\n", copyed);
+		pr_err_ratelimited("replay_checkpoint_to_disk: tried to write exec name, got rc %d\n", copyed);
 		rc = copyed;
 		goto exit;
 	}
@@ -224,7 +224,7 @@ replay_checkpoint_to_disk (char* filename, char* execname, char* buf, int buflen
 	// Next, write out rlimit information
 	copyed = vfs_write (file, (char *) &current->signal->rlim, sizeof(struct rlimit)*RLIM_NLIMITS, &pos);
 	if (copyed != sizeof(struct rlimit)*RLIM_NLIMITS) {
-		printk ("replay_checkpoint_to_disk: tried to write rlimits, got rc %d\n", buflen);
+		pr_err_ratelimited("replay_checkpoint_to_disk: tried to write rlimits, got rc %d\n", buflen);
 		rc = -EFAULT;
 		goto exit;
 	}
@@ -232,7 +232,7 @@ replay_checkpoint_to_disk (char* filename, char* execname, char* buf, int buflen
 	// Next, copy the signal handlers
 	copyed = vfs_write (file, (char *) &current->sighand->action, sizeof(struct k_sigaction) * _NSIG, &pos);
 	if (copyed != sizeof(struct k_sigaction)*_NSIG) {
-		printk ("replay_checkpoint_to_disk: tried to write sighands, got rc %d\n", copyed);
+		pr_err_ratelimited("replay_checkpoint_to_disk: tried to write sighands, got rc %d\n", copyed);
 		rc = -EFAULT;
 		goto exit;
 	}
@@ -240,7 +240,7 @@ replay_checkpoint_to_disk (char* filename, char* execname, char* buf, int buflen
 	// Next, write out arguments to exec
 	copyed = vfs_write (file, buf, buflen, &pos);
 	if (copyed != buflen) {
-		printk ("replay_checkpoint_to_disk: tried to write arguments, got rc %d\n", buflen);
+		pr_err_ratelimited("replay_checkpoint_to_disk: tried to write arguments, got rc %d\n", buflen);
 		rc = -EFAULT;
 		goto exit;
 	}
