@@ -3,7 +3,6 @@
 #include <string.h>
 #include <errno.h>
 
-inline
 void check_fd(FILE* fd, const char* path)
 {
   if (fd == NULL)
@@ -13,7 +12,6 @@ void check_fd(FILE* fd, const char* path)
   }
 }
 
-inline
 void toggle_flag(const char* path, int f)
 {
   FILE* fd;
