@@ -1,0 +1,5 @@
+# vim:syntax=apparmor
+  @{THEIA_LIB}/lib/**                r,
+  @{THEIA_LIB}/lib/ld{,32,64}-*.so   mrix,
+  @{THEIA_LIB}/lib/lib*.so*          mr,
+  /dev/spec0                     rw,

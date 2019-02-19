@@ -1,6 +1,7 @@
 obj-m := spec.o
 
 spec-y := devspec.o
+CFLAGS_devspec.o += -g3
 
 ifndef KVERSION
 KVERSION := $(shell uname -r)
