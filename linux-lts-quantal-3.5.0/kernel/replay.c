@@ -11795,9 +11795,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
 {
   // white list according to the filename
   int ret;
-  int fd;
   long rc = 0;
-  const char *devfile = "/dev/spec0";
   struct path linker_path;
   int save_mmap = 1;
   struct module *spec_mod;
@@ -11821,21 +11819,6 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
 
   if (spec_mod)
     pr_debug("%s: spec module found by name\n", __FUNCTION__);
-
-  ret = sys_access(devfile, 0/*F_OK*/);
-  if (ret < 0)  //for ensure the inert_spec.sh is done before record starts.
-  {
-    TPRINT("%s not accessible yet. ret %d\n", devfile, ret);
-    theia_recording_toggle = 0;
-    goto out_norm;
-  }
-  fd = sys_open(devfile, O_RDWR, 0777 /*mode should be ignored anyway*/);
-  if (fd < 0)
-  {
-    TPRINT("%s not open yet. fd %d\n", devfile, fd);
-    theia_recording_toggle = 0;
-    goto out_norm;
-  }
 
 /*white-list of recording*/
   if( (strstr(current->comm, "deja-dup") != NULL) ||
@@ -11886,7 +11869,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
 
     BUG_ON(IS_ERR_OR_NULL(theia_linker));
     set_fs(old_fs);
-    rc = fork_replay_theia(NULL /*logdir*/, filename, __argv, __envp, theia_linker, save_mmap, fd, -1 /*pipe_fd*/);
+    rc = fork_replay_theia(NULL /*logdir*/, filename, __argv, __envp, theia_linker, save_mmap, -1, -1 /*pipe_fd*/);
 
     TPRINT("fork_replay_theia returns. %s, comm(%s)\n", filename, current->comm);
     goto out;
