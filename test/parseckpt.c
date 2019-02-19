@@ -87,7 +87,7 @@ int main (int argc, char* argv[])
     // Next, read the sighands
     copyed = read(fd, (char *) &sighands, sizeof(struct k_sigaction) * _NSIGS);
     if (copyed != (64 * 20)) {
-        printf ("parseckpt: tried to read sighands, got %ld", copyed);
+        printf ("parseckpt: tried to read sighands, got %ld\n", copyed);
         return -1;
     }
 
