@@ -38,7 +38,7 @@ cp ${DIR}/apparmor.abstractions.theia /etc/apparmor.d/abstractions/theia
 if ! grep -q '#include.*theia' /etc/apparmor.d/abstractions/base
 then
     echo '#include <abstractions/theia>' >>/etc/apparmor.d/abstractions/base
-    service apparmor reload
+    service apparmor reload || true
 fi
 
 }
