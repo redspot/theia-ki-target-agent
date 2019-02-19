@@ -10,7 +10,7 @@ KERNEL_DIR := /lib/modules/$(KVERSION)/build
 endif
 
 clean:
-	$(MAKE) -C $(KERNEL_DIR) CROSS_COMPILE=$(CROSS_COMPILE) SUBDIRS=`pwd` clean
+	$(MAKE) -C $(KERNEL_DIR) CROSS_COMPILE=$(CROSS_COMPILE) M=$(shell pwd) clean
 
 all:
-	$(MAKE) -C $(KERNEL_DIR) CROSS_COMPILE=$(CROSS_COMPILE) SUBDIRS=`pwd` modules
+	$(MAKE) -C $(KERNEL_DIR) CROSS_COMPILE=$(CROSS_COMPILE) M=$(shell pwd) modules

@@ -9,6 +9,7 @@ if [ -f $ARTIFACT ]; then
 else
     echo could not find \"$ARTIFACT\". module symbols will not match.
 fi
+export CROSS_COMPILE=${DIR}/../linux-lts-quantal-3.5.0/debian.master/bin/
 /usr/bin/sudo -E /usr/sbin/dkms build -m patchguard -v $PVERSION -k 3.5.0-99-generic
 /usr/bin/sudo -E /usr/sbin/dkms mkdeb -m patchguard -v $PVERSION -k 3.5.0-99-generic
 /bin/cp /var/lib/dkms/patchguard/$PVERSION/deb/*.deb .
