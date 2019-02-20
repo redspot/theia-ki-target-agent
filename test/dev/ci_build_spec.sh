@@ -1,10 +1,12 @@
 #!/bin/bash
 set -e
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-if [ x"${GO_PIPELINE_COUNTER}" == x ]; then
-    echo GO_PIPELINE_COUNTER not set. maybe this isnt running from GoCD?
-    exit 1
-fi
+spec_src=${DIR}/devspec.c
+#pre_setup.sh changes MODULE_VERSION() in src from
+#X.Y-kernelver-0000 to X.Y-kernelver-${GO_PIPELINE_COUNTER}
+#then it replaces the 0000 in PACKAGE_VERSION="0000" from dkms.conf
+#with the full version number
+SPEC_VERSION=$(grep ^MODULE_VERSION ${spec_src} | cut -d\" -f2)
 
 cd ${DIR}/../../linux-lts-quantal-3.5.0
 cp ${DIR}/Makefile.kernel_ci Makefile
@@ -40,5 +42,7 @@ PKG_FILE="${PKG_PREFIX}/${PKG_NAME}_${LATEST_HEADERS_VERSION}_amd64.deb"
 # create empty, just in case
 touch "${OUT}/Module.symvers"
 
-/usr/bin/sudo -E /usr/sbin/dkms build -m spec -v 1.0-$GO_PIPELINE_COUNTER -k 3.5.0-99-generic
-/usr/bin/sudo -E /usr/sbin/dkms mkdeb -m spec -v 1.0-$GO_PIPELINE_COUNTER -k 3.5.0-99-generic
+/usr/bin/sudo -E /usr/sbin/dkms build -m spec -v ${SPEC_VERSION} -k 3.5.0-99-generic
+/usr/bin/sudo -E /usr/sbin/dkms mkdeb -m spec -v ${SPEC_VERSION} -k 3.5.0-99-generic
+find ${DIR}/../.. -user root -print0 | xargs -0 sudo chown go:go
+/bin/cp /var/lib/dkms/spec/${SPEC_VERSION}/deb/*.deb .
