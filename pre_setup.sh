@@ -24,10 +24,15 @@ else
 fi
 
 spec_unpriv() {
-    # SPEC_VER is independent from the code base
-    export SPEC_VER="1.0-${GO_PIPELINE_COUNTER}"
+    spec_src=${DIR}/test/dev/devspec.c
+    # SPEC_VER is not independent from code base
+    # e.g. MODULE_VERSION("1.6-3.5.0-99-generic-0000") gets pipeline counter
+    # AND devs (us) can bump 1.6 up for compat reasons.
+    sed -i -e "/^MODULE_VERSION/ s/0000/${GO_PIPELINE_COUNTER}/" $spec_src
+    export SPEC_VER=$(grep ^MODULE_VERSION ${spec_src} | cut -d\" -f2)
+
     export SPEC_PATH="/usr/src/spec-${SPEC_VER}"
-    sed -i -e "/^PACKAGE_VERSION/ s/0000/${GO_PIPELINE_COUNTER}/" ${DIR}/test/dev/dkms.conf
+    sed -i -e "/^PACKAGE_VERSION/ s/0000/${SPEC_VER}/" ${DIR}/test/dev/dkms.conf
 }
 spec_priv() {
     # if symlink, then delete and replace. we have 2 gocd agents, so paths can change
@@ -49,7 +54,6 @@ pg_unpriv() {
     # PG_VER is not independent from code base
     # e.g. MODULE_VERSION("1.1-0000") gets pipeline counter
     # AND devs (us) can bump 1.1 up for compat reasons.
-    # really, spec mod should be the same way
     sed -i -e "/^MODULE_VERSION/ s/0000/${GO_PIPELINE_COUNTER}/" $patchguard_src
     export PG_VER=$(grep ^MODULE_VERSION ${patchguard_src} | cut -d\" -f2)
     [ x"$PG_VER" != x ]
