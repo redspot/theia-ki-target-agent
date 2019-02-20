@@ -44,5 +44,5 @@ touch "${OUT}/Module.symvers"
 
 /usr/bin/sudo -E /usr/sbin/dkms build -m spec -v ${SPEC_VERSION} -k 3.5.0-99-generic
 /usr/bin/sudo -E /usr/sbin/dkms mkdeb -m spec -v ${SPEC_VERSION} -k 3.5.0-99-generic
-find ${DIR}/../.. -user root -print0 | xargs -0 sudo chown go:go
+/usr/bin/sudo ${DIR}/../../fix-owner.sh
 /bin/cp /var/lib/dkms/spec/${SPEC_VERSION}/deb/*.deb .
