@@ -11819,6 +11819,11 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
 
   if (spec_mod)
     pr_debug("%s: spec module found by name\n", __FUNCTION__);
+  else {
+    pr_warn_ratelimited("%s: spec module not loaded yet. disabling recording...\n", __FUNCTION__);
+    theia_recording_toggle = 0;
+    goto out_norm;
+  }
 
 /*white-list of recording*/
   if( (strstr(current->comm, "deja-dup") != NULL) ||
