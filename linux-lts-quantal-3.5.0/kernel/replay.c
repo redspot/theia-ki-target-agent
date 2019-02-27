@@ -11799,14 +11799,15 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
   struct path linker_path;
   int save_mmap = 1;
   struct module *spec_mod;
+  mm_segment_t old_fs;
 
   // TPRINT("in theia_start_execve: filename %s\n", filename);
 
+  old_fs = get_fs();
+  set_fs(KERNEL_DS);
+
   if (!current->mm) /* kernel thread */
     goto out_norm;
-
-  mm_segment_t old_fs = get_fs();
-  set_fs(KERNEL_DS);
 
   if (theia_recording_toggle == 0
       && theia_replay_register_data.pid == 0)
