@@ -11802,8 +11802,10 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
 
   // TPRINT("in theia_start_execve: filename %s\n", filename);
 
-  mm_segment_t old_fs = get_fs();
+  if (!current->mm) /* kernel thread */
+    goto out_norm;
 
+  mm_segment_t old_fs = get_fs();
   set_fs(KERNEL_DS);
 
   if (theia_recording_toggle == 0
