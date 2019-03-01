@@ -21279,9 +21279,8 @@ record_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
     if (vma && rc >= vma->vm_start && vma->vm_file)
     {
       recbuf = ARGSKMALLOC(sizeof(struct mmap_pgoff_retvals), GFP_KERNEL);
-      add_file_to_cache(vma->vm_file, &recbuf->dev, &recbuf->ino, &recbuf->mtime);
-      //      TPRINT("record_mmap_pgoff: rc: %lx, vm_file->fdentry->d_iname: %s, prot: %lu.\n", rc, vma->vm_file->f_dentry->d_iname, prot);
-      //      sprintf(vm_file_path, "%s", vma->vm_file->f_dentry->d_iname);
+      if (recbuf)
+        add_file_to_cache(vma->vm_file, &recbuf->dev, &recbuf->ino, &recbuf->mtime);
 
 #ifdef THEIA_TRACK_SHM_OPEN
       path = d_path(&(vma->vm_file->f_path), vm_file_path, PATH_MAX);
