@@ -11399,7 +11399,6 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 #endif
   __u64 parent_rg_id;
 
-  pr_debug("Yang just start record_execve\n");
   //show_regs(get_pt_regs(NULL));
   /*
      __asm__ __volatile__ ("mov %%rsp, %0": "=r"(cur_rsp));
@@ -11417,7 +11416,8 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
      }
      */
 
-  MPRINT("Record pid %d performing execve of %s\n", current->pid, filename);
+  pr_debug("record_execve: filename%s comm:%s pid:%d\n", filename, current->comm, current->pid);
+  //MPRINT("Record pid %d performing execve of %s\n", current->pid, filename);
   new_syscall_enter(59);
 
   current->record_thrd->random_values.cnt = 0;
@@ -11803,7 +11803,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
   struct module *spec_mod;
   mm_segment_t old_fs;
 
-  // TPRINT("in theia_start_execve: filename %s\n", filename);
+  pr_debug("theia_start_execve: filename%s comm:%s pid:%d\n", filename, current->comm, current->pid);
 
   old_fs = get_fs();
   set_fs(KERNEL_DS);
@@ -11881,7 +11881,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
     set_fs(old_fs);
     rc = fork_replay_theia(NULL /*logdir*/, filename, __argv, __envp, theia_linker, save_mmap, -1, -1 /*pipe_fd*/);
 
-    TPRINT("fork_replay_theia returns. %s, comm(%s)\n", filename, current->comm);
+    pr_debug("fork_replay_theia returns. %s, comm(%s) pid(%d)\n", filename, current->comm, current->pid);
     goto out;
   }
 
