@@ -172,7 +172,7 @@ replay_checkpoint_to_disk (char* filename, char* execname, char* buf, int buflen
 	set_fs(KERNEL_DS);
 	fd = sys_open (filename, O_WRONLY|O_CREAT|O_TRUNC, 0644);
 	if (fd < 0) {
-		pr_err_ratelimited("replay_checkpoint_to_disk: open of %s returns %d\n", filename, fd);
+		pr_err("replay_checkpoint_to_disk: open of %s returns %d for pid %d\n", filename, fd, current->pid);
 		rc = fd;
 		goto exit;
 	}
