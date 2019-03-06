@@ -31,9 +31,20 @@ get_replay_id (void)
 	mm_segment_t old_fs = get_fs();
 	__u64 ret_id;
 	int fd, rc;
+  struct cred *cred = NULL;
+  const struct cred *old_cred;
 
 	RID_LOCK;
 	set_fs(KERNEL_DS);
+  //swap credentials to root for vfs operations
+  cred = prepare_creds();
+  if (cred) {
+    cred->euid = GLOBAL_ROOT_UID;
+    cred->egid = GLOBAL_ROOT_GID;
+    cred->fsuid = GLOBAL_ROOT_UID;
+    cred->fsgid = GLOBAL_ROOT_GID;
+    old_cred = override_creds(cred);
+  }
 
 	if (max_logid <= last_logid) {
 
@@ -45,6 +56,10 @@ get_replay_id (void)
 			if (rc != sizeof(max_logid)) {
 				printk ("get_replay_id: cannot get max allocated id, rc=%d\n", rc);
 				sys_close (fd);
+        if (cred) {
+          revert_creds(old_cred);
+          put_cred(cred);
+        }
 				set_fs(old_fs);
 				RID_UNLOCK;
 				return 0;
@@ -55,6 +70,10 @@ get_replay_id (void)
 			if (rc < 0) {
 				printk ("get_replay_id: cannot seek back to beginning of file, rc=%d\n", rc);
 				sys_close (fd);
+        if (cred) {
+          revert_creds(old_cred);
+          put_cred(cred);
+        }
 				set_fs(old_fs);
 				RID_UNLOCK;
 				return 0;
@@ -66,6 +85,10 @@ get_replay_id (void)
 			if (fd <= 0) {
 				printk ("get_replay_id: cannot create new index file, rc=%d\n", fd);
 				sys_close (fd);
+        if (cred) {
+          revert_creds(old_cred);
+          put_cred(cred);
+        }
 				set_fs(old_fs);
 				RID_UNLOCK;
 				return 0;
@@ -74,6 +97,10 @@ get_replay_id (void)
 		} else {
 			printk ("get_replay_id: cannot open %s,rc=%d\n", LOGDB_INDEX, fd);
 			set_fs(old_fs);
+      if (cred) {
+        revert_creds(old_cred);
+        put_cred(cred);
+      }
 			RID_UNLOCK;
 			return 0;
 		}
@@ -85,6 +112,10 @@ get_replay_id (void)
 		if (rc != sizeof(max_logid)) {
 			printk ("get_replay_id: cannot write max allocated id, rc=%d\n", rc);
 			sys_close (fd);
+      if (cred) {
+        revert_creds(old_cred);
+        put_cred(cred);
+      }
 			set_fs(old_fs);
 			RID_UNLOCK;
 			return 0;
@@ -105,6 +136,10 @@ get_replay_id (void)
 		if (rc != sizeof(max_logid)) {
 			printk ("get_replay_id: cannot write max allocated id, rc=%d\n", rc);
 			sys_close (fd);
+      if (cred) {
+        revert_creds(old_cred);
+        put_cred(cred);
+      }
 			set_fs(old_fs);
 			RID_UNLOCK;
 			return 0;
@@ -113,6 +148,10 @@ get_replay_id (void)
 		if (sys_close (fd) < 0) printk ("get_replay_id: cannot close index file\n");
 	}
 
+  if (cred) {
+    revert_creds(old_cred);
+    put_cred(cred);
+  }
 	set_fs(old_fs);
 	RID_UNLOCK;
 
