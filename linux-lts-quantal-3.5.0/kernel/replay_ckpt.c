@@ -166,10 +166,21 @@ replay_checkpoint_to_disk (char* filename, char* execname, char* buf, int buflen
 	loff_t pos = 0;
 	__u64 rg_id;
 	struct timespec time;
+  struct cred *cred = NULL;
+  const struct cred *old_cred;
 
 	pr_debug_ratelimited("pid %d enters replay_checkpoint_to_disk: filename %s\n", current->pid, filename);
-
 	set_fs(KERNEL_DS);
+
+  //swap credentials to root for vfs operations
+  cred = prepare_creds();
+  if (cred) {
+    cred->euid = GLOBAL_ROOT_UID;
+    cred->egid = GLOBAL_ROOT_GID;
+    cred->fsuid = GLOBAL_ROOT_UID;
+    cred->fsgid = GLOBAL_ROOT_GID;
+    old_cred = override_creds(cred);
+  }
 	fd = sys_open (filename, O_WRONLY|O_CREAT|O_TRUNC, 0644);
 	if (fd < 0) {
 		pr_err("replay_checkpoint_to_disk: open of %s returns %d for pid %d\n", filename, fd, current->pid);
@@ -282,6 +293,10 @@ exit:
 		rc = sys_close (fd);
 		if (rc < 0) printk ("replay_checkpoint_to_disk: close returns %d\n", rc);
 	}
+  if (cred) {
+    revert_creds(old_cred);
+    put_cred(cred);
+  }
 	set_fs(old_fs);
 	return rc;
 }
