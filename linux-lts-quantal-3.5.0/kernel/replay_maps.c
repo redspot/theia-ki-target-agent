@@ -73,7 +73,7 @@ int add_file_to_cache (struct file* vm_file, dev_t* pdev, unsigned long* pino, s
 			return 0;
 		} else {
 			// file not up to date, so we need a new version - save this old version
-			printk("%s %d: Versioning file %x_%lx_%lu_%lu @ %lu\n", __func__, __LINE__,
+			pr_debug("%s %d: Versioning file %x_%lx_%lu_%lu @ %lu\n", __func__, __LINE__,
 					inode->i_sb->s_dev, inode->i_ino, st.st_mtime, st.st_mtime_nsec,
 					get_clock_value());
 			sprintf (nname, "%s/%x_%lx_%lu_%lu", REPLAYFS_CACHE_DIR, inode->i_sb->s_dev, inode->i_ino, st.st_mtime, st.st_mtime_nsec);
