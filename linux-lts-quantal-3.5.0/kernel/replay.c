@@ -4753,6 +4753,7 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
 {
   mm_segment_t old_fs;
   struct record_group *prg;
+  struct record_thread *prt;
   long retval;
   char ckpt[MAX_LOGDIR_STRLEN + 10];
   char *argbuf;
@@ -4781,8 +4782,8 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
   prg = new_record_group(NULL);
   if (prg == NULL) return -ENOMEM;
 
-  current->record_thrd = new_record_thread(prg, current->pid, NULL);
-  if (current->record_thrd == NULL)
+  prt = new_record_thread(prg, current->pid, NULL);
+  if (prt == NULL)
   {
     destroy_record_group(prg);
     return -ENOMEM;
@@ -4792,7 +4793,7 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
   // allocate a slab for retparams
   slab = VMALLOC(argsalloc_size);
   if (slab == NULL) return -ENOMEM;
-  if (add_argsalloc_node(current->record_thrd, slab, argsalloc_size))
+  if (add_argsalloc_node(prt, slab, argsalloc_size))
   {
     VFREE(slab);
     destroy_record_group(prg);
@@ -4804,7 +4805,7 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
 #ifdef LOG_COMPRESS_1
   slab = VMALLOC(argsalloc_size);
   if (slab == NULL) return -ENOMEM;
-  if (add_clog_node(current->record_thrd, slab, argsalloc_size))
+  if (add_clog_node(prt, slab, argsalloc_size))
   {
     VFREE(slab);
     destroy_record_group(prg);
@@ -4819,12 +4820,12 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
 #endif
 
   current->replay_thrd = NULL;
-  MPRINT("in fork_replay_theia: Record-Pid %d, tsk %p, prp %p\n", current->pid, current, current->record_thrd);
+  MPRINT("in fork_replay_theia: Record-Pid %d, tsk %p, prt %p\n", current->pid, current, prt);
 
   BUG_ON(IS_ERR_OR_NULL(linker));
   if (linker)
   {
-    strncpy_safe(current->record_thrd->rp_group->rg_linker, linker, MAX_LOGDIR_STRLEN);
+    strncpy_safe(prt->rp_group->rg_linker, linker, MAX_LOGDIR_STRLEN);
     MPRINT("Set linker for record process to %s\n", linker);
   }
 
@@ -4861,20 +4862,6 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
     return -EFAULT;
   }
 
-#ifdef TIME_TRICK
-  retval = replay_checkpoint_to_disk(ckpt, filename, argbuf, argbuflen, 0, &tv, &tp);
-  init_det_time(&prg->rg_det_time, &tv, &tp);
-#else
-  // Save reduced-size checkpoint with info needed for exec
-  retval = replay_checkpoint_to_disk(ckpt, (char *)filename, argbuf, argbuflen, 0);
-#endif
-  DPRINT("replay_checkpoint_to_disk returns %ld\n", retval);
-  if (retval)
-  {
-    TPRINT("replay_checkpoint_to_disk returns %ld\n", retval);
-    return retval;
-  }
-
   // Hack to support multiple glibcs - record and LD_LIBRARY_PATH info
   prg->rg_libpath = get_libpath(env);
   if (prg->rg_libpath == NULL)
@@ -4887,6 +4874,23 @@ int fork_replay_theia(char __user *logdir, const char *filename, const char __us
     //    return -EINVAL;
   }
 
+#ifdef TIME_TRICK
+  retval = replay_checkpoint_to_disk(ckpt, filename, argbuf, argbuflen, 0, &tv, &tp);
+  init_det_time(&prg->rg_det_time, &tv, &tp);
+#else
+  // Save reduced-size checkpoint with info needed for exec
+  retval = replay_checkpoint_to_disk(ckpt, (char *)filename, argbuf, argbuflen, 0);
+#endif
+  DPRINT("replay_checkpoint_to_disk returns %ld\n", retval);
+  if (retval)
+  {
+    pr_err("replay_checkpoint_to_disk returns %ld\n", retval);
+    destroy_record_group(prg);
+    current->record_thrd = NULL;
+    return retval;
+  }
+
+  current->record_thrd = prt;
   retval = record_execve(filename, args, env, get_pt_regs(NULL));
   if (retval) TPRINT("fork_replay_execve: execve returns %ld\n", retval);
   return retval;
