@@ -36,6 +36,29 @@ static inline const char* theia_get_replay_logdb_path(void) {return replayfs_log
 static inline const char* theia_get_replay_logdb_ndx_path(void) {return replayfs_index_path;}
 static inline const char* theia_get_replay_cache_path(void) {return replayfs_cache_path;}
 
+// Macros to swap out the current uid with root for file operations
+#define THEIA_DECLARE_CREDS \
+  struct cred *cred = NULL;\
+  const struct cred *old_cred
+
+#define THEIA_SWAP_CREDS_TO_ROOT do {\
+  cred = prepare_creds();\
+  if (cred) {\
+    cred->euid = GLOBAL_ROOT_UID;\
+    cred->egid = GLOBAL_ROOT_GID;\
+    cred->fsuid = GLOBAL_ROOT_UID;\
+    cred->fsgid = GLOBAL_ROOT_GID;\
+    old_cred = override_creds(cred);\
+  }\
+  } while(0)
+
+#define THEIA_RESTORE_CREDS do {\
+  if (cred) {\
+    revert_creds(old_cred);\
+    put_cred(cred);\
+  }\
+  } while(0)
+
 /* Starts replay with a (possibly) multithreaded fork */
 int fork_replay (char __user * logdir, const char __user *const __user *args,
 		const char __user *const __user *env, char* linker, int save_mmap, int fd,
