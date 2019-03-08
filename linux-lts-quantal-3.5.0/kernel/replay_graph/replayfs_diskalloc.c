@@ -350,7 +350,10 @@ int glbl_diskalloc_init(void) {
 	int val;
   char* buf = NULL;
   char displaymap_default[] = "/data/replay_cache/replaymap.disk";
+  THEIA_DECLARE_CREDS;
 
+  //swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
 	/* Run the initialization once */
 	//debugk("%s %d: Initing!!!! (akslekdj)\n", __func__, __LINE__);
 
@@ -465,6 +468,7 @@ int glbl_diskalloc_init(void) {
 		}
 	}
 
+  THEIA_RESTORE_CREDS;
   if (buf) kfree(buf);
 	return ret;
 }
@@ -2145,6 +2149,9 @@ void replayfs_diskalloc_read_page_location(struct replayfs_diskalloc *alloc,
 	int nread;
 	mm_segment_t old_fs;
 	int fmode;
+  THEIA_DECLARE_CREDS;
+  //swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
 
 	pos = page;
 
@@ -2187,6 +2194,7 @@ void replayfs_diskalloc_read_page_location(struct replayfs_diskalloc *alloc,
 	}
 
 	BUG_ON(nread != PAGE_SIZE);
+  THEIA_RESTORE_CREDS;
 }
 
 void replayfs_diskalloc_write_page_location(struct replayfs_diskalloc *alloc,
@@ -2201,6 +2209,9 @@ void replayfs_diskalloc_write_page_location(struct replayfs_diskalloc *alloc,
 	char path[200];
 	char *real_path;
 	*/
+  THEIA_DECLARE_CREDS;
+  //swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
 
 	filp = alloc->filp;
 	fmode = alloc->filp->f_mode;
@@ -2246,6 +2257,7 @@ void replayfs_diskalloc_write_page_location(struct replayfs_diskalloc *alloc,
 	alloc->filp->f_mode = fmode;
 
 	set_fs(old_fs);
+  THEIA_RESTORE_CREDS;
 }
 
 void replayfs_diskalloc_put_page(struct replayfs_diskalloc *alloc,

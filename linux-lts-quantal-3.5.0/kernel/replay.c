@@ -5863,11 +5863,12 @@ write_user_log(struct record_thread *prect)
   //64port
   struct stat st;
   char filename[MAX_LOGDIR_STRLEN + 20];
-  struct file *file;
-  int fd;
+  struct file *file = NULL;
+  int fd = -1;
   mm_segment_t old_fs;
   long to_write, written;
   long rc = 0;
+  THEIA_DECLARE_CREDS;
 
   DPRINT("Pid %d: write_user_log %p\n", current->pid, phead);
   if (phead == 0) return 0; // Nothing to do
@@ -5893,6 +5894,8 @@ write_user_log(struct record_thread *prect)
     return -EINVAL;
   }
 
+  //swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
   old_fs = get_fs();
   set_fs(KERNEL_DS);
 
@@ -5906,7 +5909,7 @@ write_user_log(struct record_thread *prect)
     if (rc < 0)
     {
       TPRINT("Pid %d - write_log_data, can't append stat of file %s failed\n", current->pid, filename);
-      return -EINVAL;
+      goto out;
     }
     fd = sys_open(filename, O_RDWR | O_APPEND | O_LARGEFILE, 0777);
   }
@@ -5930,36 +5933,33 @@ write_user_log(struct record_thread *prect)
   if (fd < 0)
   {
     TPRINT("Cannot open log file %s, rc =%d\n", filename, fd);
-    return -EINVAL;
+    rc = fd;
+    goto out;
   }
 
   file = fget(fd);
   if (file == NULL)
   {
     TPRINT("write_user_log: invalid file\n");
-    return -EINVAL;
+    rc = -EINVAL;
+    goto out;
   }
 
   // Before each user log segment, we write the number of bytes in the segment
   written = vfs_write(file, (char *) &to_write, sizeof(int), &prect->rp_read_ulog_pos);
-  set_fs(old_fs);
 
   if (written != sizeof(int))
   {
     TPRINT("write_user_log: tried to write %lu, got rc %ld\n", sizeof(int), written);
-    rc = -EINVAL;
+    rc = written;
   }
 
   written = vfs_write(file, start, to_write, &prect->rp_read_ulog_pos);
   if (written != to_write)
   {
     TPRINT("write_user_log1: tried to write %ld, got rc %ld\n", to_write, written);
-    rc = -EINVAL;
+    rc = written;
   }
-
-  fput(file);
-  DPRINT("Pid %d closing %s\n", current->pid, filename);
-  sys_close(fd);
 
   // We reset the next pointer to reflect the records that were written
   // In some circumstances such as failed execs, this will prevent dup. writes
@@ -5971,11 +5971,18 @@ write_user_log(struct record_thread *prect)
   if (copy_to_user(&phead->next, &next, sizeof(u_long)))
   {
     TPRINT("Unable to put log head next\n");
-    return -EINVAL;
+    rc = -EINVAL;
+    goto out;
   }
 
   DPRINT("Pid %d: log current address is at %lx\n", current->pid, next);
 
+out:
+  if (file) fput(file);
+  DPRINT("Pid %d closing %s\n", current->pid, filename);
+  sys_close(fd);
+  set_fs(old_fs);
+  THEIA_RESTORE_CREDS;
   return rc;
 }
 
@@ -5993,9 +6000,9 @@ read_user_log(struct record_thread *prect)
   int fd;
   mm_segment_t old_fs;
   long copyed, rc = 0;
-
   // the number of entries in this segment
   int num_bytes;
+  THEIA_DECLARE_CREDS;
 
   DPRINT("Pid %d: read_user_log %p\n", current->pid, phead);
   if (phead == 0) return -EINVAL; // Nothing to do
@@ -6003,6 +6010,8 @@ read_user_log(struct record_thread *prect)
   start = (char __user *) phead + sizeof(struct pthread_log_head);
   DPRINT("Log start is at %p\n", start);
 
+  //swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
   snprintf(filename, MAX_LOGDIR_STRLEN+20, "%s/ulog.id.%d", prect->rp_group->rg_logdir, prect->rp_record_pid);
   old_fs = get_fs();
   set_fs(KERNEL_DS);
@@ -6013,6 +6022,7 @@ read_user_log(struct record_thread *prect)
   {
     TPRINT("Stat of file %s failed\n", filename);
     set_fs(old_fs);
+    THEIA_RESTORE_CREDS;
     return rc;
   }
   fd = sys_open(filename, O_RDONLY | O_LARGEFILE, 0644);
@@ -6020,6 +6030,7 @@ read_user_log(struct record_thread *prect)
   if (fd < 0)
   {
     TPRINT("Cannot open log file %s, rc =%d\n", filename, fd);
+    THEIA_RESTORE_CREDS;
     return fd;
   }
 
@@ -6027,6 +6038,7 @@ read_user_log(struct record_thread *prect)
   if (file == NULL)
   {
     TPRINT("read_user_log: invalid file\n");
+    THEIA_RESTORE_CREDS;
     return -EINVAL;
   }
 
@@ -6058,7 +6070,7 @@ read_user_log(struct record_thread *prect)
 close_out:
   fput(file);
   sys_close(fd);
-
+  THEIA_RESTORE_CREDS;
   return rc;
 }
 
@@ -6074,11 +6086,12 @@ write_user_extra_log(struct record_thread *prect)
   //64port
   struct stat st;
   char filename[MAX_LOGDIR_STRLEN + 20];
-  struct file *file;
-  int fd;
+  struct file *file = NULL;
+  int fd = -1;
   mm_segment_t old_fs;
   long to_write, written;
   long rc = 0;
+  THEIA_DECLARE_CREDS;
 
   DPRINT("Pid %d: write_user_extra_log %p\n", current->pid, phead);
   if (phead == 0) return 0; // Nothing to do
@@ -6103,6 +6116,8 @@ write_user_extra_log(struct record_thread *prect)
     TPRINT("write_user_extra_log: rg_logdir is too long\n");
     return -EINVAL;
   }
+  //swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
 
   old_fs = get_fs();
   set_fs(KERNEL_DS);
@@ -6117,7 +6132,7 @@ write_user_extra_log(struct record_thread *prect)
     if (rc < 0)
     {
       TPRINT("Pid %d - write_extra_log_data, can't append stat of file %s failed\n", current->pid, filename);
-      return -EINVAL;
+      goto out;
     }
     fd = sys_open(filename, O_RDWR | O_APPEND | O_LARGEFILE, 0777);
   }
@@ -6141,36 +6156,33 @@ write_user_extra_log(struct record_thread *prect)
   if (fd < 0)
   {
     TPRINT("Cannot open exta log file %s, rc =%d\n", filename, fd);
-    return -EINVAL;
+    rc = fd;
+    goto out;
   }
 
   file = fget(fd);
   if (file == NULL)
   {
     TPRINT("write_extra_user_log: invalid file\n");
-    return -EINVAL;
+    rc = -EINVAL;
+    goto out;
   }
 
   // Before each user log segment, we write the number of bytes in the segment
   written = vfs_write(file, (char *) &to_write, sizeof(int), &prect->rp_read_elog_pos);
-  set_fs(old_fs);
 
   if (written != sizeof(int))
   {
     TPRINT("write_user_log: tried to write %d, got rc %ld\n", sizeof(int), written);
-    rc = -EINVAL;
+    rc = written;
   }
 
   written = vfs_write(file, start, to_write, &prect->rp_read_elog_pos);
   if (written != to_write)
   {
     TPRINT("write_extra_user_log1: tried to write %ld, got rc %ld\n", to_write, written);
-    rc = -EINVAL;
+    rc = written;
   }
-
-  fput(file);
-  DPRINT("Pid %d closing %s\n", current->pid, filename);
-  sys_close(fd);
 
   // We reset the next pointer to reflect the records that were written
   // In some circumstances such as failed execs, this will prevent dup. writes
@@ -6179,11 +6191,18 @@ write_user_extra_log(struct record_thread *prect)
   if (copy_to_user(phead, &head, sizeof(struct pthread_extra_log_head)))
   {
     TPRINT("Unable to put extra log head\n");
-    return -EINVAL;
+    rc = -EINVAL;
+    goto out;
   }
 
   DPRINT("Pid %d: log extra current address is at %p\n", current->pid, head.next);
 
+out:
+  if (file) fput(file);
+  DPRINT("Pid %d closing %s\n", current->pid, filename);
+  sys_close(fd);
+  set_fs(old_fs);
+  THEIA_RESTORE_CREDS;
   return rc;
 }
 
@@ -6197,11 +6216,11 @@ read_user_extra_log(struct record_thread *prect)
   //64port
   struct stat st;
   char filename[MAX_LOGDIR_STRLEN + 20];
-  struct file *file;
+  struct file *file = NULL;
   int fd;
   mm_segment_t old_fs;
   long copyed, rc = 0;
-
+  THEIA_DECLARE_CREDS;
   // the number of entries in this segment
   int num_bytes;
 
@@ -6217,6 +6236,9 @@ read_user_extra_log(struct record_thread *prect)
     return -EINVAL;
   }
 
+  //swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
+
   old_fs = get_fs();
   set_fs(KERNEL_DS);
   //rc = sys_stat64(filename, &st);
@@ -6225,22 +6247,23 @@ read_user_extra_log(struct record_thread *prect)
   if (rc < 0)
   {
     TPRINT("Stat of file %s failed\n", filename);
-    set_fs(old_fs);
-    return rc;
+    goto close_out;
   }
   fd = sys_open(filename, O_RDONLY | O_LARGEFILE, 0644);
   set_fs(old_fs);
   if (fd < 0)
   {
     TPRINT("Cannot open extra log file %s, rc =%d\n", filename, fd);
-    return fd;
+    rc = fd;
+    goto close_out;
   }
 
   file = fget(fd);
   if (file == NULL)
   {
     TPRINT("read_user_extra_log: invalid file\n");
-    return -EINVAL;
+    rc = -EINVAL;
+    goto close_out;
   }
 
   // read how many entries that are in this segment
@@ -6268,9 +6291,10 @@ read_user_extra_log(struct record_thread *prect)
   }
 
 close_out:
-  fput(file);
+  if (file) fput(file);
   sys_close(fd);
-
+  set_fs(old_fs);
+  THEIA_RESTORE_CREDS;
   return rc;
 }
 #endif
@@ -25139,25 +25163,15 @@ done:
 //this can only be called from user context
 //call this right before recording is turned on
 void ensure_replayfs_paths(void) {
-  struct cred *cred = NULL;
-  const struct cred *old_cred;
+  THEIA_DECLARE_CREDS;
 
-  cred = prepare_creds();
-  if (cred) {
-    cred->euid = GLOBAL_ROOT_UID;
-    cred->egid = GLOBAL_ROOT_GID;
-    cred->fsuid = GLOBAL_ROOT_UID;
-    cred->fsgid = GLOBAL_ROOT_GID;
-    old_cred = override_creds(cred);
-  }
+  //swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
 
   ensure_path(__FUNCTION__, "logdb", LOGDB_DIR);
   ensure_path(__FUNCTION__, "cache", REPLAYFS_CACHE_DIR);
 
-  if (cred) {
-    revert_creds(old_cred);
-    put_cred(cred);
-  }
+  THEIA_RESTORE_CREDS;
 }
 EXPORT_SYMBOL(ensure_replayfs_paths);
 

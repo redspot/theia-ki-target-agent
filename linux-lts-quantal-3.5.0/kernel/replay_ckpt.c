@@ -166,21 +166,13 @@ replay_checkpoint_to_disk (char* filename, char* execname, char* buf, int buflen
 	loff_t pos = 0;
 	__u64 rg_id;
 	struct timespec time;
-  struct cred *cred = NULL;
-  const struct cred *old_cred;
+  THEIA_DECLARE_CREDS;
 
 	pr_debug_ratelimited("pid %d enters replay_checkpoint_to_disk: filename %s\n", current->pid, filename);
 	set_fs(KERNEL_DS);
 
   //swap credentials to root for vfs operations
-  cred = prepare_creds();
-  if (cred) {
-    cred->euid = GLOBAL_ROOT_UID;
-    cred->egid = GLOBAL_ROOT_GID;
-    cred->fsuid = GLOBAL_ROOT_UID;
-    cred->fsgid = GLOBAL_ROOT_GID;
-    old_cred = override_creds(cred);
-  }
+  THEIA_SWAP_CREDS_TO_ROOT;
 	fd = sys_open (filename, O_WRONLY|O_CREAT|O_TRUNC, 0644);
 	if (fd < 0) {
 		pr_err("replay_checkpoint_to_disk: open of %s returns %d for pid %d\n", filename, fd, current->pid);
@@ -293,10 +285,7 @@ exit:
 		rc = sys_close (fd);
 		if (rc < 0) printk ("replay_checkpoint_to_disk: close returns %d\n", rc);
 	}
-  if (cred) {
-    revert_creds(old_cred);
-    put_cred(cred);
-  }
+  THEIA_RESTORE_CREDS;
 	set_fs(old_fs);
 	return rc;
 }
@@ -316,9 +305,12 @@ long replay_resume_from_disk (char* filename, char** execname, char*** argsp, ch
 	char** args;
 	char** env;
 	struct timespec time;
+  THEIA_DECLARE_CREDS;
 
 	MPRINT ("pid %d enters replay_resume_from_disk: filename %s\n", current->pid, filename);
 
+  //swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
 	set_fs(KERNEL_DS);
 	fd = sys_open (filename, O_RDONLY, 0);
 	if (fd < 0) {
@@ -510,6 +502,7 @@ exit:
 	}
 	if (file) fput(file);
 	set_fs(old_fs);
+  THEIA_RESTORE_CREDS;
 	if (rc < 0) return rc;
 	return record_pid;
 }
