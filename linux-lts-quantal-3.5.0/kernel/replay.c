@@ -3123,7 +3123,7 @@ new_record_thread(struct record_group *prg, u_long recpid, struct record_cache_f
   // mcc: current in-memory log segment; the log can be bigger than what we hold in memory,
   // so we just flush it out to disk when this log segment is full and reset the rp_in_ptr
   pr_info("%s: rp_log before kmalloc() = %p, pid=%d\n", __FUNCTION__, prp->rp_log, current->pid);
-  prp->rp_log = VMALLOC(sizeof(struct syscall_result) * syslog_recs);
+  prp->rp_log = KMALLOC(sizeof(struct syscall_result) * syslog_recs, GFP_KERNEL);
   pr_info("%s: rp_log after kmalloc() = %p, pid=%d\n", __FUNCTION__, prp->rp_log, current->pid);
   if (prp->rp_log == NULL)
   {
@@ -3296,7 +3296,7 @@ __destroy_record_thread(struct record_thread *prp)
 
   DPRINT(" destroy_record_thread freeing log %p: start\n", prp->rp_log);
   argsfreeall(prp);
-  VFREE(prp->rp_log);
+  KFREE(prp->rp_log);
   DPRINT("       destroy_record_thread freeing log %p: end\n", prp->rp_log);
 
   while (prp->rp_signals)
