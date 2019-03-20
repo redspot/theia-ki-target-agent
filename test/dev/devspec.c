@@ -218,7 +218,11 @@ __ATTR(theia_ui_toggle, 0600, flag_show, flag_store);
 static struct kobj_attribute active_path_attribute =
 __ATTR(theia_active_path, 0600, flag_show, flag_store);
 static struct kobj_attribute track_getpid_attribute =
-__ATTR(theia_track_getpid, 0600, flag_show, flag_store);
+{
+  .attr = {.name = "track_getpid", .mode = 0600},
+  .show = flag_show,
+  .store = flag_store,
+};
 
 static ssize_t ulong_show(struct kobject *kobj, struct kobj_attribute *attr,
     char *buf)
