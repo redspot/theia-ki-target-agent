@@ -182,6 +182,8 @@ unsigned int theia_getpid_counter = 0;
 EXPORT_SYMBOL(theia_getpid_counter);
 bool theia_track_getpid = 0;
 EXPORT_SYMBOL(theia_track_getpid);
+bool theia_replay_stdout = 0;
+EXPORT_SYMBOL(theia_replay_stdout);
 
 
 //#define APP_DIR   "theia_logs"
@@ -10292,6 +10294,8 @@ replay_write(unsigned int fd, const char __user *buf, size_t count)
   }
 #endif
 
+  if (theia_replay_stdout && (fd == 1 || fd == 2))
+    sys_write(fd, buf, count);
   return rc;
 }
 
