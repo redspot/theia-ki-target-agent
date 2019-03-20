@@ -3122,9 +3122,9 @@ new_record_thread(struct record_group *prg, u_long recpid, struct record_cache_f
   // Recording log inits
   // mcc: current in-memory log segment; the log can be bigger than what we hold in memory,
   // so we just flush it out to disk when this log segment is full and reset the rp_in_ptr
-  pr_info("%s: rp_log before kmalloc() = %p, pid=%d\n", __FUNCTION__, prp->rp_log, current->pid);
+  pr_debug("%s: rp_log before kmalloc() = %p, pid=%d\n", __FUNCTION__, prp->rp_log, current->pid);
   prp->rp_log = KMALLOC(sizeof(struct syscall_result) * syslog_recs, GFP_KERNEL);
-  pr_info("%s: rp_log after kmalloc() = %p, pid=%d\n", __FUNCTION__, prp->rp_log, current->pid);
+  pr_debug("%s: rp_log after kmalloc() = %p, pid=%d\n", __FUNCTION__, prp->rp_log, current->pid);
   if (prp->rp_log == NULL)
   {
     KFREE(prp);
@@ -5577,7 +5577,7 @@ record_signal_delivery(int signr, siginfo_t *info, struct k_sigaction *ka)
   int ignore_flag, need_fake_calls = 1;
   int sysnum = syscall_get_nr(current, get_pt_regs(NULL));
 
-  pr_info("%s: prt->rp_log = %p, prt->rp_in_ptr = %lu, pid = %d\n", __FUNCTION__, prt->rp_log, prt->rp_in_ptr, current->pid);
+  pr_debug("%s: prt->rp_log = %p, prt->rp_in_ptr = %lu, pid = %d\n", __FUNCTION__, prt->rp_log, prt->rp_in_ptr, current->pid);
   if (prt->rp_ignore_flag_addr)
   {
     get_user(ignore_flag, prt->rp_ignore_flag_addr);
