@@ -178,6 +178,11 @@ EXPORT_SYMBOL(theia_active_path);
 //stored as seconds
 unsigned long theia_active_path_timeout = 120;
 EXPORT_SYMBOL(theia_active_path_timeout);
+unsigned int theia_getpid_counter = 0;
+EXPORT_SYMBOL(theia_getpid_counter);
+bool theia_track_getpid = 0;
+EXPORT_SYMBOL(theia_track_getpid);
+
 
 //#define APP_DIR   "theia_logs"
 struct rchan *theia_chan = NULL;
@@ -12408,7 +12413,16 @@ THEIA_SHIM3(chown, 92, char __user *, filename, uid_t, user, gid_t, group);
 THEIA_SHIM3(lchown, 94, char __user *, filename, uid_t, user, gid_t, group);
 THEIA_SHIM3(fchown, 93, unsigned int, fd, uid_t, user, gid_t, group);
 
-SIMPLE_SHIM0(getpid, 39);
+//SIMPLE_SHIM0(getpid, 39);
+inline void theia_getpid_ahgx(long rc, int sysnum)
+{
+  if (theia_track_getpid) {
+    theia_getpid_counter++;
+    theia_dump_str("", rc, sysnum);
+  }
+}
+THEIA_SHIM0(getpid, 39);
+
 
 //Yang
 struct mount_ahgv
