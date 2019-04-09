@@ -37,17 +37,17 @@ static int
 __attribute__ ((noinline))
 do_futex_timed_wait (struct new_sem *isem, struct timespec *rt)
 {
-  int err, oldtype = __pthread_enable_asynccancel ();
+  int err, oldtype = __internal_pthread_enable_asynccancel ();
 
   err = lll_futex_timed_wait (&isem->value, 0, rt,
 			      isem->private ^ FUTEX_PRIVATE_FLAG);
 
-  __pthread_disable_asynccancel (oldtype);
+  __internal_pthread_disable_asynccancel (oldtype);
   return err;
 }
 
 int
-sem_timedwait (sem_t *sem, const struct timespec *abstime)
+internal_sem_timedwait (sem_t *sem, const struct timespec *abstime)
 {
   struct new_sem *isem = (struct new_sem *) sem;
   int err;
