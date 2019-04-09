@@ -22,4 +22,6 @@
 
 #define __pthread_enable_asynccancel __libc_enable_asynccancel
 #define __pthread_disable_asynccancel __libc_disable_asynccancel
+#define __internal_pthread_enable_asynccancel __internal_libc_enable_asynccancel
+#define __internal_pthread_disable_asynccancel __internal_libc_disable_asynccancel
 #include <nptl/cancellation.c>

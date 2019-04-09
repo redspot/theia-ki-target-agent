@@ -18083,6 +18083,8 @@ long shim_sigreturn(struct pt_regs *regs)
   return dummy_rt_sigreturn(regs);
 }
 
+void theia_clone_ahg(long new_pid);
+
 static long
 record_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_regs *regs, unsigned long stack_size, int __user *parent_tidptr, int __user *child_tidptr)
 {
@@ -18135,6 +18137,7 @@ record_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_reg
 
   rc = do_fork(clone_flags, stack_start, regs, stack_size, parent_tidptr, child_tidptr);
   MPRINT("Pid %d records clone with flags %lx fork %d returning %ld\n", current->pid, clone_flags, (clone_flags & CLONE_VM) ? 0 : 1, rc);
+  theia_clone_ahg(rc); //now we only need the new pid
 
   rg_lock(prg);
   new_syscall_done(56, rc);
