@@ -178,6 +178,13 @@ EXPORT_SYMBOL(theia_active_path);
 //stored as seconds
 unsigned long theia_active_path_timeout = 120;
 EXPORT_SYMBOL(theia_active_path_timeout);
+unsigned int theia_getpid_counter = 0;
+EXPORT_SYMBOL(theia_getpid_counter);
+bool theia_track_getpid = 0;
+EXPORT_SYMBOL(theia_track_getpid);
+bool theia_replay_stdout = 0;
+EXPORT_SYMBOL(theia_replay_stdout);
+
 
 //#define APP_DIR   "theia_logs"
 struct rchan *theia_chan = NULL;
@@ -3122,9 +3129,9 @@ new_record_thread(struct record_group *prg, u_long recpid, struct record_cache_f
   // Recording log inits
   // mcc: current in-memory log segment; the log can be bigger than what we hold in memory,
   // so we just flush it out to disk when this log segment is full and reset the rp_in_ptr
-  pr_info("%s: rp_log before kmalloc() = %p, pid=%d\n", __FUNCTION__, prp->rp_log, current->pid);
+  pr_debug("%s: rp_log before kmalloc() = %p, pid=%d\n", __FUNCTION__, prp->rp_log, current->pid);
   prp->rp_log = KMALLOC(sizeof(struct syscall_result) * syslog_recs, GFP_KERNEL);
-  pr_info("%s: rp_log after kmalloc() = %p, pid=%d\n", __FUNCTION__, prp->rp_log, current->pid);
+  pr_debug("%s: rp_log after kmalloc() = %p, pid=%d\n", __FUNCTION__, prp->rp_log, current->pid);
   if (prp->rp_log == NULL)
   {
     KFREE(prp);
@@ -5577,7 +5584,7 @@ record_signal_delivery(int signr, siginfo_t *info, struct k_sigaction *ka)
   int ignore_flag, need_fake_calls = 1;
   int sysnum = syscall_get_nr(current, get_pt_regs(NULL));
 
-  pr_info("%s: prt->rp_log = %p, prt->rp_in_ptr = %lu, pid = %d\n", __FUNCTION__, prt->rp_log, prt->rp_in_ptr, current->pid);
+  pr_debug("%s: prt->rp_log = %p, prt->rp_in_ptr = %lu, pid = %d\n", __FUNCTION__, prt->rp_log, prt->rp_in_ptr, current->pid);
   if (prt->rp_ignore_flag_addr)
   {
     get_user(ignore_flag, prt->rp_ignore_flag_addr);
@@ -10287,6 +10294,8 @@ replay_write(unsigned int fd, const char __user *buf, size_t count)
   }
 #endif
 
+  if (theia_replay_stdout && (fd == 1 || fd == 2))
+    sys_write(fd, buf, count);
   return rc;
 }
 
@@ -12408,7 +12417,16 @@ THEIA_SHIM3(chown, 92, char __user *, filename, uid_t, user, gid_t, group);
 THEIA_SHIM3(lchown, 94, char __user *, filename, uid_t, user, gid_t, group);
 THEIA_SHIM3(fchown, 93, unsigned int, fd, uid_t, user, gid_t, group);
 
-SIMPLE_SHIM0(getpid, 39);
+//SIMPLE_SHIM0(getpid, 39);
+inline void theia_getpid_ahgx(long rc, int sysnum)
+{
+  if (theia_track_getpid) {
+    theia_getpid_counter++;
+    theia_dump_str("", rc, sysnum);
+  }
+}
+THEIA_SHIM0(getpid, 39);
+
 
 //Yang
 struct mount_ahgv
@@ -18065,6 +18083,8 @@ long shim_sigreturn(struct pt_regs *regs)
   return dummy_rt_sigreturn(regs);
 }
 
+void theia_clone_ahg(long new_pid);
+
 static long
 record_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_regs *regs, unsigned long stack_size, int __user *parent_tidptr, int __user *child_tidptr)
 {
@@ -18117,6 +18137,7 @@ record_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_reg
 
   rc = do_fork(clone_flags, stack_start, regs, stack_size, parent_tidptr, child_tidptr);
   MPRINT("Pid %d records clone with flags %lx fork %d returning %ld\n", current->pid, clone_flags, (clone_flags & CLONE_VM) ? 0 : 1, rc);
+  theia_clone_ahg(rc); //now we only need the new pid
 
   rg_lock(prg);
   new_syscall_done(56, rc);
