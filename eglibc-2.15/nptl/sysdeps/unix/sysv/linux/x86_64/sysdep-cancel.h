@@ -44,23 +44,13 @@
     ret;								      \
   .size __##syscall_name##_nocancel,.-__##syscall_name##_nocancel;	      \
   L(pseudo_cancel):							      \
-    /* THEIA: workaround for *_nocancel */                                    \
-    DO_CALL (syscall_name, args);					      \
-    cmpq $-4095, %rax;							      \
-    jae SYSCALL_ERROR_LABEL;						      \
-  L(pseudo_end):
-
-/* THEIA: use this code when we solve the compat issue of asynccancel
-  L(pseudo_cancel):							      \
     pushq %rdi; cfi_adjust_cfa_offset (8); cfi_rel_offset (%rdi, 0);	      \
     pushq %rsi; cfi_adjust_cfa_offset (8); cfi_rel_offset (%rsi, 0);	      \
     pushq %rdx; cfi_adjust_cfa_offset (8); cfi_rel_offset (%rdx, 0);	      \
     pushq %r10; cfi_adjust_cfa_offset (8); cfi_rel_offset (%r10, 0);	      \
     pushq %r8; cfi_adjust_cfa_offset (8); cfi_rel_offset (%r8, 0);	      \
     pushq %r9; cfi_adjust_cfa_offset (8); cfi_rel_offset (%r9, 0);	      \
-    subq $8, %rsp; cfi_adjust_cfa_offset (8);                                 \
     CENABLE                                                                   \
-    addq $8,%rsp; cfi_adjust_cfa_offset (-8);                                 \
     popq %r9; cfi_adjust_cfa_offset (-8); cfi_restore (%r9);		      \
     popq %r8; cfi_adjust_cfa_offset (-8); cfi_restore (%r8);		      \
     popq %r10; cfi_adjust_cfa_offset (-8); cfi_restore (%r10);		      \
@@ -71,14 +61,21 @@
     movq %rax, (%rsp);                                                        \
     DO_CALL (syscall_name, args);					      \
     movq (%rsp), %rdi;                                                        \
-    movq %rax, %rdx;                                                          \
+    movq %rax, (%rsp);                                                        \
     CDISABLE                                                                  \
-    movq %rdx, %rax;                                                          \
+    movq (%rsp), %rax;                                                        \
     addq $8,%rsp; cfi_adjust_cfa_offset (-8);                                 \
     cmpq $-4095, %rax;							      \
     jae SYSCALL_ERROR_LABEL;						      \
   L(pseudo_end):
-*/
+
+// Sangho's version
+//  L(pseudo_cancel):							      \
+//    /* THEIA: workaround for *_nocancel */                                    \
+//    DO_CALL (syscall_name, args);					      \
+//    cmpq $-4095, %rax;							      \
+//    jae SYSCALL_ERROR_LABEL;						      \
+//  L(pseudo_end):
 
 # ifdef IS_IN_libpthread
 #  define CENABLE	call __pthread_enable_asynccancel;

@@ -1481,72 +1481,80 @@ void save_to_cache_file(char* buf, size_t buf_len, unsigned long start) {
 	loff_t pos = 0;
 	int written = 0;
 	char filename[50];
+  THEIA_DECLARE_CREDS;
 
-	sprintf (filename, "/data/replay_cache/shr_cache_%lld_%lu", current->rg_id, current->rg_shm_count);
+	sprintf (filename, "%s/shr_cache_%lld_%lu", REPLAYFS_CACHE_DIR, current->rg_id, current->rg_shm_count);
 
 	++(current->rg_shm_count);
 
+  //swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
 	mm_segment_t old_fs = get_fs();
 	set_fs(KERNEL_DS);
-	set_fs(get_ds());
 
 	fd = sys_open(filename, O_RDWR|O_CREAT|O_TRUNC|O_LARGEFILE, 0777);
-	printk("shr_cache filename: %s, fd %d\n", filename, fd);
+	pr_debug("shr_cache filename: %s, fd %d\n", filename, fd);
 	file = fget(fd);
 	if (file == NULL) {
-		printk ("write_shr_cache: invalid file, fd: %d\n", fd);
-		return;
+		pr_err("write_shr_cache: invalid file, fd: %d\n", fd);
+    goto out;
 	}
 	printk("2 shr_cache filename: %s, fd %d\n", filename, fd);
 	//written = vfs_write(file, buf, PAGE_SIZE, &pos);
 	pos = vfs_write(file, &start, sizeof(unsigned long), &pos);
 	written = vfs_write(file, buf, buf_len, &pos);
 
-	set_fs(old_fs);
-//	if(written != PAGE_SIZE) {
 	if(written != buf_len) {
-		printk ("write_shr_cache: tried to write %d, got %ld\n", PAGE_SIZE, written);
-		return;
+		pr_err("write_shr_cache: tried to write %d, got %ld\n", PAGE_SIZE, written);
+		fd = written;
+    goto out;
 	}
-	fput(file);
 	sys_close(fd);
-//	filp_close(file, NULL);
+  fd = 0;
 	
-	return 0;
+out:
+	if (file) fput(file);
+	set_fs(old_fs);
+  THEIA_RESTORE_CREDS;
+	return fd;
 }
 
 void load_from_cache_file(char* buf) {
-	int fd;
+	int fd, rc = 0;
 	struct file* file;
 	loff_t pos = 0;
 	int read = 0;
 	char filename[50];
-
 	mm_segment_t old_fs = get_fs();
+  THEIA_DECLARE_CREDS;
+  //swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
 	set_fs(KERNEL_DS);
-	set_fs(get_ds());
 
-	sprintf (filename, "/data/replay_cache/shr_cache_%lld_%lu", current->rg_id, current->rg_shm_count);
+	sprintf (filename, "%s/shr_cache_%lld_%lu", REPLAYFS_CACHE_DIR, current->rg_id, current->rg_shm_count);
 	++(current->rg_shm_count);
 
 	fd = sys_open(filename, O_RDWR, 0);
 	file = fget(fd);
 	if (file == NULL) {
-		printk ("read_shr_cache: invalid file\n");
-		return;
+		pr_err("read_shr_cache: invalid file\n");
+    rc = -1;
+    goto out;
 	}
 
 	read = vfs_read(file, buf, PAGE_SIZE, &pos);
-	set_fs(old_fs);
 
 	if(read != PAGE_SIZE) {
-		printk ("read_shr_cache: tried to read %d, got %ld\n", PAGE_SIZE, read);
-		return;
+		pr_err("read_shr_cache: tried to read %d, got %ld\n", PAGE_SIZE, read);
+    rc = -1;
+    goto out;
 	}
+out:
 	fput(file);
 	sys_close(fd);
-	
-	return 0;
+	set_fs(old_fs);
+  THEIA_RESTORE_CREDS;
+	return rc;
 }
 
 int

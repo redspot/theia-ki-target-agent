@@ -30,52 +30,45 @@ get_replay_id (void)
 {
 	mm_segment_t old_fs = get_fs();
 	__u64 ret_id;
-	int fd, rc;
+	int fd = -1, rc;
+  THEIA_DECLARE_CREDS;
 
 	RID_LOCK;
 	set_fs(KERNEL_DS);
+  //swap credentials to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
 
 	if (max_logid <= last_logid) {
 
 		// First, get maximum log id that was saved persitently to disk
 		fd = sys_open (LOGDB_INDEX, O_RDWR, 0);
 		if (fd >= 0) {
-
 			rc = sys_read (fd, (char *) &max_logid, sizeof(max_logid));
 			if (rc != sizeof(max_logid)) {
-				printk ("get_replay_id: cannot get max allocated id, rc=%d\n", rc);
-				sys_close (fd);
-				set_fs(old_fs);
-				RID_UNLOCK;
-				return 0;
+				pr_err("get_replay_id: cannot get max allocated id, rc=%d\n", rc);
+        ret_id = 0;
+        goto out;
 			}
 			last_logid = max_logid;
 
 			rc = sys_lseek (fd, 0, SEEK_SET);
 			if (rc < 0) {
-				printk ("get_replay_id: cannot seek back to beginning of file, rc=%d\n", rc);
-				sys_close (fd);
-				set_fs(old_fs);
-				RID_UNLOCK;
-				return 0;
+				pr_err("get_replay_id: cannot seek back to beginning of file, rc=%d\n", rc);
+        ret_id = 0;
+        goto out;
 			}
 				
 		} else if (fd == -ENOENT) {
-
 			fd = sys_open (LOGDB_INDEX, O_RDWR | O_CREAT | O_EXCL, 0666);
 			if (fd <= 0) {
-				printk ("get_replay_id: cannot create new index file, rc=%d\n", fd);
-				sys_close (fd);
-				set_fs(old_fs);
-				RID_UNLOCK;
-				return 0;
+				pr_err("get_replay_id: cannot create new index file, rc=%d\n", fd);
+        ret_id = 0;
+        goto out;
 			}
-
 		} else {
-			printk ("get_replay_id: cannot open %s,rc=%d\n", LOGDB_INDEX, fd);
-			set_fs(old_fs);
-			RID_UNLOCK;
-			return 0;
+			pr_err("get_replay_id: cannot open %s,rc=%d\n", LOGDB_INDEX, fd);
+      ret_id = 0;
+      goto out;
 		}
 
 		// Need to allocate some more ids
@@ -83,14 +76,11 @@ get_replay_id (void)
 
 		rc = sys_write (fd, (char *) &max_logid, sizeof(max_logid));
 		if (rc != sizeof(max_logid)) {
-			printk ("get_replay_id: cannot write max allocated id, rc=%d\n", rc);
-			sys_close (fd);
-			set_fs(old_fs);
-			RID_UNLOCK;
-			return 0;
+			pr_err("get_replay_id: cannot write max allocated id, rc=%d\n", rc);
+      ret_id = 0;
+      goto out;
 		}
-		if (sys_fsync (fd) < 0) printk ("get_replay_id: cannot sync index file\n");
-		if (sys_close (fd) < 0) printk ("get_replay_id: cannot close index file\n");
+		if (sys_fsync (fd) < 0) pr_err("get_replay_id: cannot sync index file\n");
 	}
 
 	ret_id = ++last_logid;
@@ -103,16 +93,16 @@ get_replay_id (void)
 
 		rc = sys_write (fd, (char *) &max_logid, sizeof(max_logid));
 		if (rc != sizeof(max_logid)) {
-			printk ("get_replay_id: cannot write max allocated id, rc=%d\n", rc);
-			sys_close (fd);
-			set_fs(old_fs);
-			RID_UNLOCK;
-			return 0;
+			pr_err("get_replay_id: cannot write max allocated id, rc=%d\n", rc);
+      ret_id = 0;
+      goto out;
 		}
-		if (sys_fsync (fd) < 0) printk ("get_replay_id: cannot sync index file\n");
-		if (sys_close (fd) < 0) printk ("get_replay_id: cannot close index file\n");
+		if (sys_fsync (fd) < 0) pr_err("get_replay_id: cannot sync index file\n");
 	}
 
+out:
+  sys_close(fd);
+  THEIA_RESTORE_CREDS;
 	set_fs(old_fs);
 	RID_UNLOCK;
 
@@ -131,40 +121,43 @@ make_logdir_for_replay_id (__u64 id, char* buf)
 	mm_segment_t old_fs = get_fs();
 	int rc;
 	int fd;
+  THEIA_DECLARE_CREDS;
 
 	if (id == 0) return -1;
+	set_fs(KERNEL_DS);
+
+  //swap credentials to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
 
 	get_logdir_for_replay_id (id, buf);
-
-	set_fs(KERNEL_DS);
 	rc = sys_mkdir (buf, 0777);
   if (rc == -EEXIST) {
-    pr_debug("get_logdir_for_replayid: directory %s already exists\n", buf);
+    pr_debug("make_logdir_for_replay_id: directory %s already exists\n", buf);
     goto out;
   }
 	if (rc < 0) {
-		pr_warn("get_logdir_for_replayid: cannot create directory %s, rc=%d\n", buf, rc);
+		pr_warn("make_logdir_for_replay_id: cannot create directory %s, rc=%d\n", buf, rc);
 		goto out;
 	}
 	fd = sys_open(buf, O_DIRECTORY, 0777);
 	if (rc < 0) {
-		pr_warn( "get_logdir_for_replayid: cannot open directory %s, rc=%d\n", buf, rc);
+		pr_warn( "make_logdir_for_replay_id: cannot open directory %s, rc=%d\n", buf, rc);
 		goto out;
 	}
 	rc = sys_fchmod(fd, 0777);
 	if (rc < 0) {
-		pr_warn("get_logdir_for_replayid: cannot fchmod directory %s, rc=%d\n", buf, rc);
+		pr_warn("make_logdir_for_replay_id: cannot fchmod directory %s, rc=%d\n", buf, rc);
 		goto out;
 	}
 	rc = sys_close(fd);
 	if (rc < 0) {
-		pr_warn("get_logdir_for_replayid: cannot close directory %s, rc=%d\n", buf, rc);
+		pr_warn("make_logdir_for_replay_id: cannot close directory %s, rc=%d\n", buf, rc);
 		goto out;
 	}
 
-	set_fs(old_fs);
-
 out:
+  THEIA_RESTORE_CREDS;
+	set_fs(old_fs);
 	return rc;
 }
 

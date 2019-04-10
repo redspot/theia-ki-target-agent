@@ -37,7 +37,7 @@ int add_file_to_cache (struct file* vm_file, dev_t* pdev, unsigned long* pino, s
 	//struct stat64 st;
 //64port
 	struct stat st;
-	int fd, rc, copyed;
+	int fd, rc, copyed, ret = 0;
 	mm_segment_t old_fs;
 	loff_t ipos = 0, opos = 0;
 	char* buffer;
@@ -45,6 +45,9 @@ int add_file_to_cache (struct file* vm_file, dev_t* pdev, unsigned long* pino, s
 	struct inode* inode = vm_file->f_dentry->d_inode;
 	struct kstat stat;
 	int mode;
+  THEIA_DECLARE_CREDS;
+  //swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
 
 	*pino = inode->i_ino;
 	*pdev = inode->i_sb->s_dev;
@@ -69,11 +72,11 @@ int add_file_to_cache (struct file* vm_file, dev_t* pdev, unsigned long* pino, s
 			DPRINT ("File is already in the cache and up to date - so done\n");
 			pmtime->tv_sec = st.st_mtime;
 			pmtime->tv_nsec = st.st_mtime_nsec;
-			set_fs(old_fs);
-			return 0;
+      ret = 0;
+      goto out;
 		} else {
 			// file not up to date, so we need a new version - save this old version
-			printk("%s %d: Versioning file %x_%lx_%lu_%lu @ %lu\n", __func__, __LINE__,
+			pr_debug("%s %d: Versioning file %x_%lx_%lu_%lu @ %lu\n", __func__, __LINE__,
 					inode->i_sb->s_dev, inode->i_ino, st.st_mtime, st.st_mtime_nsec,
 					get_clock_value());
 			sprintf (nname, "%s/%x_%lx_%lu_%lu", REPLAYFS_CACHE_DIR, inode->i_sb->s_dev, inode->i_ino, st.st_mtime, st.st_mtime_nsec);
@@ -87,8 +90,8 @@ int add_file_to_cache (struct file* vm_file, dev_t* pdev, unsigned long* pino, s
 	rc = vfs_getattr(vm_file->f_path.mnt, vm_file->f_path.dentry, &stat);
 	if (rc) {
 		DPRINT ("add_file_to_cache: cannot stat file, rc=%d\n", rc);
-		set_fs(old_fs);
-		return -1;
+    ret = -1;
+    goto out;
 	}
 	mode = 0755;
 	if (stat.mode&S_ISUID) mode |= S_ISUID;
@@ -100,8 +103,8 @@ int add_file_to_cache (struct file* vm_file, dev_t* pdev, unsigned long* pino, s
 	fd = sys_open (tname, O_CREAT|O_TRUNC|O_WRONLY, mode);
 	if (fd < 0) {
 		DPRINT ("add_file_to_cache: cannot create cache file %s, rc=%d\n", cname, fd);
-		set_fs(old_fs);
-		return -1;
+    ret = -1;
+    goto out;
 	}
 	ofile = fget(fd);
 	buffer = kmalloc (COPY_CHUNK, GFP_KERNEL);
@@ -109,8 +112,8 @@ int add_file_to_cache (struct file* vm_file, dev_t* pdev, unsigned long* pino, s
 		printk ("add_file_to_cache: cannot allocate copy buffer\n");
 		sys_close (fd);
 		fput (ofile);
-		set_fs(old_fs);
-		return -ENOMEM;
+		ret = -ENOMEM;
+    goto out;
 	}
  
 	do {
@@ -124,8 +127,8 @@ int add_file_to_cache (struct file* vm_file, dev_t* pdev, unsigned long* pino, s
 				sys_close (fd);
 				rc = sys_unlink (cname);
 				if (rc < 0) printk ("add_file_to_cache: cannot delete cache file on error\n");
-				set_fs(old_fs);
-				return -EIO;
+        ret = -EIO;
+        goto out;
 			}
 		}
 	} while (copyed > 0);
@@ -147,9 +150,11 @@ int add_file_to_cache (struct file* vm_file, dev_t* pdev, unsigned long* pino, s
 	kfree(buffer);
 	fput(ofile);
 	if (sys_close (fd) < 0) printk ("add_file_to_cache: sys_close failed?\n");
+  ret = 0;
+out:
 	set_fs(old_fs);
-
-	return 0;
+  THEIA_RESTORE_CREDS;
+	return ret;
 }
 
 int get_cache_file_name (char* cname, dev_t dev, u_long ino, struct timespec mtime, char *cache_dir)
@@ -241,6 +246,9 @@ int open_mmap_cache_file (dev_t dev, u_long ino, struct timespec mtime, int is_w
 	loff_t ipos = 0, opos = 0;
 	static u_long counter = 0;
 	char* buffer;
+  THEIA_DECLARE_CREDS;
+  //swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
 
         // check if most recent cache file is still valid
 	sprintf (cname, "%sreplay_cache/%x_%lx", cache_dir, dev, ino);
@@ -252,9 +260,9 @@ int open_mmap_cache_file (dev_t dev, u_long ino, struct timespec mtime, int is_w
 //64port
 	rc = sys_newstat (cname, &st);
 	if (rc < 0) {
-		printk ("open_cache_file: cannot stat cache file, rc=%d\n", rc);
-		set_fs(old_fs);
-		return -ENOENT;
+		pr_err("open_cache_file: cannot stat cache file, rc=%d\n", rc);
+		fd = -ENOENT;
+    goto out;
 	}
 
 	DPRINT ("cache time: %lu.%u\n", st.st_mtime, st.st_mtime_nsec);
@@ -268,7 +276,7 @@ int open_mmap_cache_file (dev_t dev, u_long ino, struct timespec mtime, int is_w
 		sprintf (cname, "%sreplay_cache/%x_%lx_%lu_%lu", cache_dir, dev, ino, mtime.tv_sec, mtime.tv_nsec);
 		fd = sys_open (cname, O_RDONLY, 0);
 	}
-	if (fd < 0) printk ("open_cache_file: cannot open cache file %s, rc=%d\n", cname, fd);
+	if (fd < 0) pr_err("open_cache_file: cannot open cache file %s, rc=%d\n", cname, fd);
 
 	if (is_write) {
 		// For writeable mmaps, we need to create a copy just for this replay
@@ -277,13 +285,14 @@ int open_mmap_cache_file (dev_t dev, u_long ino, struct timespec mtime, int is_w
 		if (tfd < 0) {
 			printk ("open_cache_file: cannot create temp file %s, rc=%d\n", tname, tfd);
 			sys_close (fd);
-			set_fs(old_fs);
-			return tfd;
+			fd = tfd;
+      goto out;
 		}
 		buffer = kmalloc (COPY_CHUNK, GFP_KERNEL);
 		if (buffer == NULL) {
-			printk ("add_file_to_cache: cannot allocate copy buffer\n");	
-		return -ENOMEM;
+			pr_err("add_file_to_cache: cannot allocate copy buffer\n");	
+      fd = -ENOMEM;
+      goto out;
 		}
 		cfile = fget(fd);
 		tfile = fget(tfd);
@@ -298,8 +307,8 @@ int open_mmap_cache_file (dev_t dev, u_long ino, struct timespec mtime, int is_w
 					kfree (buffer);
 					sys_close (tfd);
 					sys_close (fd);
-					set_fs(old_fs);
-					return -EIO;
+					fd = -EIO;
+          goto out;
 				}
 			}
 		} while (copyed > 0);
@@ -311,7 +320,8 @@ int open_mmap_cache_file (dev_t dev, u_long ino, struct timespec mtime, int is_w
 		fd = tfd;
 	}
 	 
+out:
 	set_fs(old_fs);
-
+  THEIA_RESTORE_CREDS;
 	return fd;
 }

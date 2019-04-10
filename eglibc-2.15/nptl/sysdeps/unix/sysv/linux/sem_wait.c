@@ -44,16 +44,16 @@ static int
 __attribute__ ((noinline))
 do_futex_wait (struct new_sem *isem)
 {
-  int err, oldtype = __pthread_enable_asynccancel ();
+  int err, oldtype = __internal_pthread_enable_asynccancel ();
 
   err = lll_futex_wait (&isem->value, 0, isem->private ^ FUTEX_PRIVATE_FLAG);
 
-  __pthread_disable_asynccancel (oldtype);
+  __internal_pthread_disable_asynccancel (oldtype);
   return err;
 }
 
 int
-__new_sem_wait (sem_t *sem)
+__new_internal_sem_wait (sem_t *sem)
 {
   struct new_sem *isem = (struct new_sem *) sem;
   int err;
@@ -88,13 +88,13 @@ __new_sem_wait (sem_t *sem)
 
   return err;
 }
-versioned_symbol (libpthread, __new_sem_wait, sem_wait, GLIBC_2_1);
+//versioned_symbol (libpthread, __new_internal_sem_wait, sem_wait, GLIBC_2_1);
 
 
 #if SHLIB_COMPAT (libpthread, GLIBC_2_0, GLIBC_2_1)
 int
 attribute_compat_text_section
-__old_sem_wait (sem_t *sem)
+__old_internal_sem_wait (sem_t *sem)
 {
   int *futex = (int *) sem;
   int err;
@@ -105,13 +105,13 @@ __old_sem_wait (sem_t *sem)
 	return 0;
 
       /* Enable asynchronous cancellation.  Required by the standard.  */
-      int oldtype = __pthread_enable_asynccancel ();
+      int oldtype = __internal_pthread_enable_asynccancel ();
 
       /* Always assume the semaphore is shared.  */
       err = lll_futex_wait (futex, 0, LLL_SHARED);
 
       /* Disable asynchronous cancellation.  */
-      __pthread_disable_asynccancel (oldtype);
+      __internal_pthread_disable_asynccancel (oldtype);
     }
   while (err == 0 || err == -EWOULDBLOCK);
 
@@ -119,5 +119,5 @@ __old_sem_wait (sem_t *sem)
   return -1;
 }
 
-compat_symbol (libpthread, __old_sem_wait, sem_wait, GLIBC_2_0);
+//compat_symbol (libpthread, __old_internal_sem_wait, sem_wait, GLIBC_2_0);
 #endif

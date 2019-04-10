@@ -153,7 +153,7 @@ __internal_pthread_cond_wait (cond, mutex) // REPLAY
       lll_futex_wait (&cond->__data.__futex, futex_val, pshared);
 
       /* Disable asynchronous cancellation.  */
-      __intenral_pthread_disable_asynccancel (cbuffer.oldtype);
+      __internal_pthread_disable_asynccancel (cbuffer.oldtype);
 
       /* We are going to look at shared data again, so get the lock.  */
       lll_lock (cond->__data.__lock, pshared);

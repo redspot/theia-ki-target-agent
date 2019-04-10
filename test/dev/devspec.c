@@ -42,6 +42,9 @@ extern size_t theia_dirent_prefix_len;
 extern struct rchan *theia_chan;
 extern int theia_secure_flag;
 extern void ensure_replayfs_paths(void);
+extern unsigned int theia_getpid_counter;
+extern bool theia_track_getpid;
+extern bool theia_replay_stdout;
 
 static int majorNumber;
 static struct class*  charClass  = NULL;
@@ -153,6 +156,10 @@ static ssize_t flag_show(struct kobject *kobj, struct kobj_attribute *attr,
     flag = theia_active_path;
   else if (strcmp(attr->attr.name, "theia_ui_toggle")==0)
     flag=theia_ui_toggle;
+  else if (strcmp(attr->attr.name, "track_getpid")==0)
+    flag=theia_track_getpid;
+  else if (strcmp(attr->attr.name, "replay_stdout")==0)
+    flag=theia_replay_stdout;
   else
     return -EINVAL;
   return sprintf(buf, "%d\n", flag);
@@ -174,9 +181,12 @@ static ssize_t flag_store(struct kobject *kobj, struct kobj_attribute *attr,
     }
     if(theia_logging_toggle == 0 && flag == 1) {
       packahgv_reboot();
+      if (theia_track_getpid) theia_getpid_counter = 0;
     }
     if (theia_logging_toggle == 1 && flag == 0 && theia_secure_flag == 1)
       return -EINVAL;
+    if (theia_logging_toggle == 1 && flag == 0 && theia_track_getpid)
+      pr_info("theia_getpid_counter = %u\n", theia_getpid_counter);
     theia_logging_toggle = flag;
   } else if (strcmp(attr->attr.name, "theia_recording_toggle") == 0) {
     if (num_online_cpus() > 1) {
@@ -195,6 +205,10 @@ static ssize_t flag_store(struct kobject *kobj, struct kobj_attribute *attr,
     theia_ui_toggle=flag;
   } else if (strcmp(attr->attr.name, "theia_active_path") == 0) {
     theia_active_path = flag;
+  } else if (strcmp(attr->attr.name, "track_getpid") == 0) {
+    theia_track_getpid = flag;
+  } else if (strcmp(attr->attr.name, "replay_stdout") == 0) {
+    theia_replay_stdout = flag;
   } else
     return -EINVAL;
   pr_info("%s set to %d\n", attr->attr.name, flag);
@@ -208,6 +222,18 @@ static struct kobj_attribute ui_toggle_attribute =
 __ATTR(theia_ui_toggle, 0600, flag_show, flag_store);
 static struct kobj_attribute active_path_attribute =
 __ATTR(theia_active_path, 0600, flag_show, flag_store);
+static struct kobj_attribute track_getpid_attribute =
+{
+  .attr = {.name = "track_getpid", .mode = 0600},
+  .show = flag_show,
+  .store = flag_store,
+};
+static struct kobj_attribute replay_stdout_attribute =
+{
+  .attr = {.name = "replay_stdout", .mode = 0600},
+  .show = flag_show,
+  .store = flag_store,
+};
 
 static ssize_t ulong_show(struct kobject *kobj, struct kobj_attribute *attr,
     char *buf)
@@ -250,6 +276,8 @@ static struct attribute *theia_attrs[] = {
   &active_path_timeout_attribute.attr,
   &proc_whitelist_attribute.attr,
   &dirent_prefix_attribute.attr,
+  &track_getpid_attribute.attr,
+  &replay_stdout_attribute.attr,
   NULL,	/* need to NULL terminate the list of attributes */
 };
 static struct attribute_group theia_attr_group = {
