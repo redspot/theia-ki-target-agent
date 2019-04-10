@@ -11416,7 +11416,8 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
      }
      */
 
-  pr_debug("record_execve: filename%s comm:%s pid:%d\n", filename, current->comm, current->pid);
+  //pr_debug("record_execve: filename%s comm:%s pid:%d\n", filename, current->comm, current->pid);
+  printk("record_execve: filename%s comm:%s pid:%d\n", filename, current->comm, current->pid);
   //MPRINT("Record pid %d performing execve of %s\n", current->pid, filename);
   new_syscall_enter(59);
 
@@ -11803,7 +11804,8 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
   struct module *spec_mod;
   mm_segment_t old_fs;
 
-  pr_debug("theia_start_execve: filename%s comm:%s pid:%d\n", filename, current->comm, current->pid);
+  //pr_debug("theia_start_execve: filename%s comm:%s pid:%d\n", filename, current->comm, current->pid);
+  printk("theia_start_execve: filename%s comm:%s pid:%d\n", filename, current->comm, current->pid);
 
   old_fs = get_fs();
   set_fs(KERNEL_DS);
@@ -11831,15 +11833,27 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
   }
 
 /*white-list of recording*/
-  if( (strstr(current->comm, "deja-dup") != NULL) ||
+  if( 
+      (strstr(current->comm, "deja-dup") != NULL) ||
       (strstr(current->comm, "git") != NULL) || 
       (strstr(current->comm, "apt") != NULL) || 
       (strstr(current->comm, "stat") != NULL) || 
       (strstr(current->comm, "dkpg") != NULL) || 
-      (strstr(current->comm, "firefox") != NULL) || 
+ //     (strstr(current->comm, "firefox") != NULL) || 
       (strstr(current->comm, "soffice") != NULL) || 
       (strstr(current->comm, "xfce4") != NULL) || 
-      (strstr(current->comm, "gnome") != NULL) ) {
+      (strstr(current->comm, "gnome") != NULL) 
+      ||
+      (strstr(filename, "deja-dup") != NULL) ||
+      (strstr(filename, "git") != NULL) || 
+      (strstr(filename, "apt") != NULL) || 
+      (strstr(filename, "stat") != NULL) || 
+      (strstr(filename, "dkpg") != NULL) || 
+//      (strstr(filename, "firefox") != NULL) || 
+      (strstr(filename, "soffice") != NULL) || 
+      (strstr(filename, "xfce4") != NULL) || 
+      (strstr(filename, "gnome") != NULL) 
+    ) {
     TPRINT("[Record-blacklist] %s is skipped.\n", current->comm);
     goto out_norm;
   }
