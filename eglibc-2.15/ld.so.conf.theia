@@ -1,0 +1,14 @@
+/usr/lib/x86_64-linux-gnu/libfakeroot
+# libc default configuration
+/usr/local/lib
+# Multiarch support
+/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu/mesa-egl
+/usr/lib/x86_64-linux-gnu/mesa
+# Legacy biarch compatibility support
+/lib32
+/usr/lib32
+# Legacy biarch compatibility support
+/libx32
+/usr/libx32
