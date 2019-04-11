@@ -5532,6 +5532,15 @@ int get_record_ignore_flag(void)
   return ignore_flag;
 }
 
+static inline int is_sync_signal(int signr) {
+  return signr == SIGILL || signr == SIGFPE || signr == SIGSEGV ||
+    signr == SIGBUS || signr == SIGTRAP;
+}
+
+static inline int has_custom_handler(struct k_sigaction *ka) {
+  return ka->sa.sa_handler != SIG_IGN && ka->sa.sa_handler != SIG_DFL;
+}
+
 // This is called with interrupts disabled so there is little we can do
 // If signal is to be deferred, we do that since we can use atomic allocation.
 // mcc: Called with current->sighand->siglock held and local interrupts disabled
@@ -5561,7 +5570,9 @@ check_signal_delivery(int signr, siginfo_t *info, struct k_sigaction *ka, int ig
   {
     return 0;
   }
-  else if (!sig_fatal(current, signr) && sysnum != psr->sysnum && sysnum != 0 /* restarted syscall */)
+  else if (!sig_fatal(current, signr) && sysnum != psr->sysnum && sysnum != 0 /* restarted syscall */
+      // We don't ignore the signal if we have a custom signal handler for a syncrhonous sync signal 
+      && !(has_custom_handler(ka) && is_sync_signal(signr)))
   {
     // This is an unrecorded system call or a trap.  Since we cannot guarantee that the signal will not delivered
     // at this same place on replay, delay the delivery until we reach such a safe place.  Signals that immediately
@@ -5594,8 +5605,8 @@ record_signal_delivery(int signr, siginfo_t *info, struct k_sigaction *ka)
     ignore_flag = 0;
   }
 
-  MPRINT("Pid %d recording signal delivery signr %d fatal %d - clock is currently %d ignore flag %d sysnum %d psr->sysnum %d handler %p\n",
-         current->pid, signr, sig_fatal(current, signr), atomic_read(prt->rp_precord_clock), ignore_flag, sysnum, psr->sysnum, ka->sa.sa_handler);
+  MPRINT("Pid %d recording signal delivery signr %d fatal %d, sa_handler %p - clock is currently %d ignore flag %d sysnum %d psr->sysnum %d handler %p\n",
+         current->pid, signr, sig_fatal(current, signr), current->sighand->action[signr-1].sa.sa_handler, atomic_read(prt->rp_precord_clock), ignore_flag, sysnum, psr->sysnum, ka->sa.sa_handler);
 
   // Note that a negative sysnum means we entered kernel via trap, interrupt, etc.  It is not safe to deliver a signal here, even in the ignore region because
   // We might be in a user-level critical section where we are adding to the log.  Instead, defer and deliver later if possible.
@@ -5614,7 +5625,9 @@ record_signal_delivery(int signr, siginfo_t *info, struct k_sigaction *ka)
     put_user(need_fake_calls, &phead->need_fake_calls);
     MPRINT("Pid %d record_signal inserts fake syscall - ignore_flag now %d, need_fake_calls now %d\n", current->pid, ignore_flag, need_fake_calls);
   }
-  else if (!sig_fatal(current, signr) && sysnum != psr->sysnum && sysnum != 219 /* restarted syscall */)
+  else if (!sig_fatal(current, signr) && sysnum != psr->sysnum && sysnum != 219 /* restarted syscall */
+      // We don't ignore the signal if we have a custom signal handler for a syncrhonous sync signal 
+      && !(has_custom_handler(ka) && is_sync_signal(signr)))
   {
     TPRINT("record_signal_delivery: this should have been handled!!!\n");
     return -1;
@@ -5673,41 +5686,45 @@ record_signal_delivery(int signr, siginfo_t *info, struct k_sigaction *ka)
     }
   }
 
-  MPRINT("Pid %d: recording and delivering signal\n", current->pid);
+  if (has_custom_handler(ka) && is_sync_signal(signr)) {
+    pr_debug("%s: pid=%d: ignoring sync signal with custom handler\n", __FUNCTION__, current->pid);
+  } else {
+    MPRINT("Pid %d: recording and delivering signal\n", current->pid);
 
-  psignal = ARGSKMALLOC(sizeof(struct repsignal), GFP_KERNEL);
-  if (psignal == NULL)
-  {
-    TPRINT("Cannot allocate replay signal\n");
-    return 0;  // Replay broken - but might as well let recording proceed
-  }
-  psignal->signr = signr;
-  memcpy(&psignal->info, info, sizeof(siginfo_t));
-  memcpy(&psignal->ka, ka, sizeof(struct k_sigaction));
-  psignal->blocked = current->blocked;
-  psignal->real_blocked = current->real_blocked;
-  psignal->next = NULL;
+    psignal = ARGSKMALLOC(sizeof(struct repsignal), GFP_KERNEL);
+    if (psignal == NULL)
+    {
+      TPRINT("Cannot allocate replay signal\n");
+      return 0;  // Replay broken - but might as well let recording proceed
+    }
+    psignal->signr = signr;
+    memcpy(&psignal->info, info, sizeof(siginfo_t));
+    memcpy(&psignal->ka, ka, sizeof(struct k_sigaction));
+    psignal->blocked = current->blocked;
+    psignal->real_blocked = current->real_blocked;
+    psignal->next = NULL;
 
-  // Add signal to last record in log - will be delivered after syscall on replay
-  if ((psr->flags & SR_HAS_SIGNAL) == 0)
-  {
-    psr->flags |= SR_HAS_SIGNAL;
-  }
-  else
-  {
-    prt->rp_last_signal->next = psignal;
-  }
-  prt->rp_last_signal = psignal;
+    // Add signal to last record in log - will be delivered after syscall on replay
+    if ((psr->flags & SR_HAS_SIGNAL) == 0)
+    {
+      psr->flags |= SR_HAS_SIGNAL;
+    }
+    else
+    {
+      prt->rp_last_signal->next = psignal;
+    }
+    prt->rp_last_signal = psignal;
 
-  if (ka->sa.sa_handler > SIG_IGN)
-  {
-    // Also save context from before signal
-    pcontext = KMALLOC(sizeof(struct repsignal_context), GFP_ATOMIC);
-    pcontext->ignore_flag = ignore_flag;
-    pcontext->next = prt->rp_repsignal_context_stack;
-    prt->rp_repsignal_context_stack = pcontext;
-    // If we were in an ignore region, that is no longer the case
-    if (prt->rp_ignore_flag_addr) put_user(0, prt->rp_ignore_flag_addr);
+    if (ka->sa.sa_handler > SIG_IGN)
+    {
+      // Also save context from before signal
+      pcontext = KMALLOC(sizeof(struct repsignal_context), GFP_ATOMIC);
+      pcontext->ignore_flag = ignore_flag;
+      pcontext->next = prt->rp_repsignal_context_stack;
+      prt->rp_repsignal_context_stack = pcontext;
+      // If we were in an ignore region, that is no longer the case
+      if (prt->rp_ignore_flag_addr) put_user(0, prt->rp_ignore_flag_addr);
+    }
   }
 
   return 0;
@@ -11456,8 +11473,7 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
      }
      */
 
-  //pr_debug("record_execve: filename%s comm:%s pid:%d\n", filename, current->comm, current->pid);
-  printk("record_execve: filename%s comm:%s pid:%d\n", filename, current->comm, current->pid);
+  pr_debug("record_execve: filename:%s comm:%s pid:%d\n", filename, current->comm, current->pid);
   //MPRINT("Record pid %d performing execve of %s\n", current->pid, filename);
   new_syscall_enter(59);
 
@@ -11844,8 +11860,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
   struct module *spec_mod;
   mm_segment_t old_fs;
 
-  //pr_debug("theia_start_execve: filename%s comm:%s pid:%d\n", filename, current->comm, current->pid);
-  printk("theia_start_execve: filename%s comm:%s pid:%d\n", filename, current->comm, current->pid);
+  pr_debug("theia_start_execve: filename:%s comm:%s pid:%d\n", filename, current->comm, current->pid);
 
   old_fs = get_fs();
   set_fs(KERNEL_DS);
