@@ -5,3 +5,5 @@ if [ ! -L /usr/local/eglibc/locale ]; then
     ln -s /usr/lib/locale locale
     popd
 fi
+cp ld.so.conf.theia /usr/local/eglibc/etc/ld.so.conf
+rm -f /usr/local/eglibc/etc/ld.so.cache
