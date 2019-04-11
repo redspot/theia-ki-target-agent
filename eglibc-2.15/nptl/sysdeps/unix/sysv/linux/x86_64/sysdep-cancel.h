@@ -44,38 +44,57 @@
     ret;								      \
   .size __##syscall_name##_nocancel,.-__##syscall_name##_nocancel;	      \
   L(pseudo_cancel):							      \
+\
     pushq %rdi; cfi_adjust_cfa_offset (8); cfi_rel_offset (%rdi, 0);	      \
     pushq %rsi; cfi_adjust_cfa_offset (8); cfi_rel_offset (%rsi, 0);	      \
     pushq %rdx; cfi_adjust_cfa_offset (8); cfi_rel_offset (%rdx, 0);	      \
     pushq %r10; cfi_adjust_cfa_offset (8); cfi_rel_offset (%r10, 0);	      \
     pushq %r8; cfi_adjust_cfa_offset (8); cfi_rel_offset (%r8, 0);	      \
     pushq %r9; cfi_adjust_cfa_offset (8); cfi_rel_offset (%r9, 0);	      \
+\
     CENABLE                                                                   \
+\
     popq %r9; cfi_adjust_cfa_offset (-8); cfi_restore (%r9);		      \
     popq %r8; cfi_adjust_cfa_offset (-8); cfi_restore (%r8);		      \
     popq %r10; cfi_adjust_cfa_offset (-8); cfi_restore (%r10);		      \
     popq %rdx; cfi_adjust_cfa_offset (-8); cfi_restore (%rdx);		      \
     popq %rsi; cfi_adjust_cfa_offset (-8); cfi_restore (%rsi);		      \
     popq %rdi; cfi_adjust_cfa_offset (-8); cfi_restore (%rdi);		      \
+\
     subq $8, %rsp; cfi_adjust_cfa_offset (8);                                 \
     movq %rax, (%rsp);                                                        \
     DO_CALL (syscall_name, args);					      \
     movq (%rsp), %rdi;                                                        \
-    movq %rax, (%rsp);                                                        \
+    movq %rax, %rdx;                                                          \
+\
+    pushq %rdi; cfi_adjust_cfa_offset (8); cfi_rel_offset (%rdi, 0);	      \
+    pushq %rsi; cfi_adjust_cfa_offset (8); cfi_rel_offset (%rsi, 0);	      \
+    pushq %rdx; cfi_adjust_cfa_offset (8); cfi_rel_offset (%rdx, 0);	      \
+    pushq %r10; cfi_adjust_cfa_offset (8); cfi_rel_offset (%r10, 0);	      \
+    pushq %r8; cfi_adjust_cfa_offset (8); cfi_rel_offset (%r8, 0);	      \
+    pushq %r9; cfi_adjust_cfa_offset (8); cfi_rel_offset (%r9, 0);	      \
+\
     CDISABLE                                                                  \
-    movq (%rsp), %rax;                                                        \
+\
+    popq %r9; cfi_adjust_cfa_offset (-8); cfi_restore (%r9);		      \
+    popq %r8; cfi_adjust_cfa_offset (-8); cfi_restore (%r8);		      \
+    popq %r10; cfi_adjust_cfa_offset (-8); cfi_restore (%r10);		      \
+    popq %rdx; cfi_adjust_cfa_offset (-8); cfi_restore (%rdx);		      \
+    popq %rsi; cfi_adjust_cfa_offset (-8); cfi_restore (%rsi);		      \
+    popq %rdi; cfi_adjust_cfa_offset (-8); cfi_restore (%rdi);		      \
+\
+    movq %rdx, %rax;                                                          \
     addq $8,%rsp; cfi_adjust_cfa_offset (-8);                                 \
     cmpq $-4095, %rax;							      \
     jae SYSCALL_ERROR_LABEL;						      \
   L(pseudo_end):
 
-// Sangho's version
-//  L(pseudo_cancel):							      \
-//    /* THEIA: workaround for *_nocancel */                                    \
-//    DO_CALL (syscall_name, args);					      \
-//    cmpq $-4095, %rax;							      \
-//    jae SYSCALL_ERROR_LABEL;						      \
-//  L(pseudo_end):
+/*  L(pseudo_cancel):							      \
+    DO_CALL (syscall_name, args);					      \
+    cmpq $-4095, %rax;							      \
+    jae SYSCALL_ERROR_LABEL;						      \
+  L(pseudo_end):
+*/
 
 # ifdef IS_IN_libpthread
 #  define CENABLE	call __pthread_enable_asynccancel;
