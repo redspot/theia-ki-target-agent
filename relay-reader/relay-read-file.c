@@ -59,11 +59,6 @@ void *memrchr(const void *s, int c, size_t n);
 char *app_dirname = "/debug/theia_logs";
 /* base name of per-cpu relay files (e.g. /debug/cpu0, cpu1, ...) */
 char *percpu_basename = "cpu";
-/* base name of per-cpu output files (e.g. ./cpu0, cpu1, ...) */
-char *percpu_out_basename = "cpu";
-// toggle file
-//char* togglefile = "/home/yang/theia-on.conf";
-char* control_file = "/tmp/theia-control.conf";
 
 // EOF tag.
 char* eof_tag = "startahg|end_of_file|endahg\n";
@@ -77,16 +72,19 @@ char hostname[20];
 int portno = 10000; 
 
 /* maximum number of CPUs we can handle - change if more */
-#define NR_CPUS 256
+#define NR_CPUS 1
 static size_t READ_BUF_LEN = 256 * 1024;
 static size_t ROTATE_SIZE = LONG_MAX;
 
 /* internal variables */
 static unsigned int ncpus;
+static volatile int stop_threads = 0;
+//the third argument to poll() is the timeout in milliseconds
+//poll() will return early if there is IO to perform
+#define RELAYFS_TIMEOUT 1000
 
 /* per-cpu internal variables */
 static int relay_file[NR_CPUS];
-static int out_file[NR_CPUS];
 static pthread_t reader[NR_CPUS];
 
 static int open_app_files(void);
@@ -150,6 +148,8 @@ int main(int argc, char **argv)
 	pthread_sigmask(SIG_BLOCK, &signals, NULL);
 
 	ncpus = sysconf(_SC_NPROCESSORS_ONLN);
+	if (ncpus > NR_CPUS)
+		ncpus = NR_CPUS;
 
 	pid_t pid = getpgrp();
 	printf("relay-read-file starting: pid=%d\n", pid);
@@ -162,11 +162,13 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	while (sigwait(&signals, &signal) == 0) {
-    printf("relay-read-file exiting\n");
-    kill_percpu_threads(ncpus);
-    close_app_files();
-  }
+  sigwait(&signals, &signal);
+  stop_threads = 1;
+  printf("relay-read-file cancelling children\n");
+  kill_percpu_threads(ncpus);
+  printf("relay-read-file child threads are dead\n");
+  close_app_files();
+  printf("relay-read-file exiting\n");
   return 0;
 }
 
@@ -208,10 +210,14 @@ static void *reader_thread(void *data)
   sprintf(filename, "/data/ahg.dump.%u.%d", dump_id, dump_cnt);
 	hostfd = open(filename, O_RDWR|O_CREAT|O_APPEND, 0777);
 
+  pollfd.fd = relay_file[cpu];
+  pollfd.events = POLLIN;
 	do {
-		pollfd.fd = relay_file[cpu];
-		pollfd.events = POLLIN;
-		rc = poll(&pollfd, 1, 1);
+    //the third argument to poll() is the timeout in milliseconds
+    //poll() will return early if there is IO to perform
+		rc = poll(&pollfd, 1, RELAYFS_TIMEOUT);
+		if (stop_threads)
+			break;
 		if (rc < 0) {
 			if (errno != EINTR) {
 				printf("poll error: %s\n",strerror(errno));
@@ -289,6 +295,7 @@ static int kill_percpu_threads(int n)
 			killed++;
 		else
 			fprintf(stderr, "WARNING: couldn't kill per-cpu thread %d, err = %d\n", i, err);
+		pthread_join(reader[i], NULL);
 	}
 
 	if (killed != n)
@@ -303,7 +310,6 @@ static int kill_percpu_threads(int n)
 static void close_cpu_files(int cpu)
 {
 	close(relay_file[cpu]);
-	close(out_file[cpu]);
 }
 
 static void close_app_files(void)
@@ -317,8 +323,7 @@ static void close_app_files(void)
 /**
  *	open_files - open and mmap buffer and open output file
  */
-static int open_cpu_files(int cpu, const char *dirname, const char *basename,
-		const char *out_basename)
+static int open_cpu_files(int cpu, const char *dirname, const char *basename)
 {
 	char tmp[4096];
 
@@ -326,14 +331,6 @@ static int open_cpu_files(int cpu, const char *dirname, const char *basename,
 	relay_file[cpu] = open(tmp, O_RDONLY | O_NONBLOCK);
 	if (relay_file[cpu] < 0) {
 		printf("Couldn't open relay file %s: errcode = %s\n",
-				tmp, strerror(errno));
-		return -1;
-	}
-
-	sprintf(tmp, "%s%d", out_basename, cpu);
-	if((out_file[cpu] = open(tmp, O_CREAT | O_RDWR | O_TRUNC, S_IRUSR |
-					S_IWUSR | S_IRGRP | S_IROTH)) < 0) {
-		printf("Couldn't open output file %s: errcode = %s\n",
 				tmp, strerror(errno));
 		return -1;
 	}
@@ -346,8 +343,7 @@ static int open_app_files(void)
 	int i;
 
 	for (i = 0; i < ncpus; i++) {
-		if (open_cpu_files(i, app_dirname, percpu_basename,
-					percpu_out_basename) < 0)
+		if (open_cpu_files(i, app_dirname, percpu_basename) < 0)
 			return -1;
 	}
 
