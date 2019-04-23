@@ -508,9 +508,9 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
   umode_t mode;
   int err;
   char ip[16] = {'\0'};
-  int port;
+  u_long port;
   char local_ip[16] = {'\0'};
-  int local_port;
+  u_long local_port;
   char sun_path[UNIX_PATH_MAX];
   char local_sun_path[UNIX_PATH_MAX];
   sa_family_t sa_family; /* not used */
@@ -580,7 +580,7 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
               vfree(local_sun_path_b64);
           }
           else {
-            rc = snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%lx/%lx|%s|%d", sun_path_b64, dev, ino, local_ip, local_port);
+            rc = snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%lx/%lx|%s|%lu", sun_path_b64, dev, ino, local_ip, local_port);
             if (rc < 0) {
               uuid_str[0] = '\0';
               pr_err("file2uuid: uuid_str overflow\n");
@@ -604,7 +604,7 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
             local_sun_path_b64 = base64_encode(local_sun_path, strnlen(local_sun_path, UNIX_PATH_MAX-1), NULL);
             if (!local_sun_path_b64) 
               local_sun_path_b64 = "";
-            rc = snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%lx/%lx", ip, port, local_sun_path_b64, ldev, lino);
+            rc = snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%lu|%s|%lx/%lx", ip, port, local_sun_path_b64, ldev, lino);
             if (rc < 0) {
               uuid_str[0] = '\0';
               pr_err("file2uuid: uuid_str overflow\n");
@@ -613,7 +613,7 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
               vfree(local_sun_path_b64);
           }
           else {
-            rc = snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%d|%s|%d", ip, port, local_ip, local_port);
+            rc = snprintf(uuid_str, THEIA_UUID_LEN, "S|%s|%lu|%s|%lu", ip, port, local_ip, local_port);
             if (rc < 0) {
               uuid_str[0] = '\0';
               pr_err("file2uuid: uuid_str overflow\n");
@@ -8425,6 +8425,7 @@ int track_usually_pt2pt_read(void *key, int size, struct file *filp)
   struct replayfs_filemap map;
 
   is_cached = ARGSKMALLOC(sizeof(u_int), GFP_KERNEL);
+  BUG_ON(is_cached == NULL);
 
   *is_cached = READ_IS_PIPE;
 
@@ -8539,6 +8540,7 @@ int track_usually_pt2pt_read(void *key, int size, struct file *filp)
                (entry->num_elms * sizeof(struct replayfs_filemap_value));
 
     args = ARGSKMALLOC(cpy_size, GFP_KERNEL);
+    BUG_ON(args == NULL);
 
     memcpy(args, entry, cpy_size);
 
@@ -9158,9 +9160,11 @@ no_fpath:
 
     if (valid_cmdline) {
       args_b64 = base64_encode(args, strlen(args), NULL);
+      if (!args_b64) goto no_args_b64;
       args_b64_allocated = true;
     }
     else {
+no_args_b64:
       args_b64 = fpath_b64;
     }
 
@@ -14639,7 +14643,7 @@ void packahgv_accept(struct accept_ahgv *sys_args)
 bool addr2uuid(struct socket *sock, struct sockaddr *dest_addr, char *uuid_str) {
   struct sockaddr_in* in_sockaddr;
   unsigned char* cc;
-  u_long port, local_port;
+  u_long port = 0, local_port = 0;
 	char ip[16] = {'\0'};
 	char local_ip[16] = {'\0'};
   
@@ -17804,7 +17808,7 @@ record_semctl(int semid, int semnum, int cmd, union semun arg)
         return -ENOMEM;
       }
       *((u_long *) pretval) = sizeof(int) + len;
-      *((int *) pretval + sizeof(u_long)) = SEMCTL;
+      *((int *) (pretval + sizeof(u_long)) ) = SEMCTL;
       if (copy_from_user(pretval + sizeof(u_long) + sizeof(int), arg.buf, len))
       {
         ARGSKFREE(pretval, sizeof(u_long) + sizeof(int) + len);
@@ -17993,7 +17997,7 @@ record_msgctl(int msqid, int cmd, struct msqid_ds __user *buf)
         return -ENOMEM;
       }
       *((u_long *) pretval) = sizeof(int) + len;
-      *((int *) pretval + sizeof(u_long)) = MSGCTL;
+      *((int *) (pretval + sizeof(u_long)) ) = MSGCTL;
       if (copy_from_user(pretval + sizeof(u_long) + sizeof(int), buf, len))
       {
         ARGSKFREE(pretval, sizeof(u_long) + sizeof(int) + len);
@@ -18264,7 +18268,7 @@ replay_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_reg
   pid_t pid;
   ds_list_iter_t *iter;
   struct record_thread *prt;
-  struct syscall_result *psr;
+  struct syscall_result *psr = NULL;
 
   prg = current->replay_thrd->rp_group;
 
@@ -18424,7 +18428,7 @@ replay_clone(unsigned long clone_flags, unsigned long stack_start, struct pt_reg
     }
   }
 
-  if (current->replay_thrd->app_syscall_addr == 0)
+  if (!is_pin_attached() && current->replay_thrd->app_syscall_addr == 0)
   {
     get_next_syscall_exit(current->replay_thrd, prg, psr);
   }
@@ -18988,6 +18992,7 @@ long theia_hide_dirent(unsigned int fd, struct linux_dirent __user *dirent, long
   long ret =  orig_ret;
   int err;
   unsigned long off = 0;
+  unsigned long u_ret = 0;
   struct linux_dirent *dir, *kdirent, *prev = NULL;
 
   struct file *file = NULL;
@@ -19007,13 +19012,15 @@ long theia_hide_dirent(unsigned int fd, struct linux_dirent __user *dirent, long
   if (kdirent == NULL)
     return ret;
 
+  //sanitize user input
+  if (!access_ok(VERIFY_READ, dirent, sizeof(struct linux_dirent)))
+    goto out;
   err = copy_from_user(kdirent, dirent, ret);
   if (err)
     goto out;
 
   //convert dir fd to dir path, then store in front of fullpath
-  if (fd >= 0)
-    file = fget_light(fd, &fput_needed);
+  file = fget_light(fd, &fput_needed);
   if (file)
   {
     dpathbuf = kmem_cache_alloc(theia_buffers, GFP_KERNEL);
@@ -19030,7 +19037,9 @@ long theia_hide_dirent(unsigned int fd, struct linux_dirent __user *dirent, long
     kmem_cache_free(theia_buffers, dpathbuf);
   }
 
-  while (fullpath && off < ret)
+  u_ret = (unsigned long)ret;
+
+  while (fullpath && off < u_ret)
   {
     dir = (void *)kdirent + off;
     strncpy_safe(fullpath + dirpath_offset, dir->d_name, THEIA_KMEM_SIZE-1-dirpath_offset);
@@ -19039,23 +19048,25 @@ long theia_hide_dirent(unsigned int fd, struct linux_dirent __user *dirent, long
       pr_debug("dropping dirent: dir->d_name: %s, fullpath: %s\n", dir->d_name, fullpath);
       if (dir == kdirent)
       {
-        ret -= dir->d_reclen;
-        memmove(dir, (void *)dir + dir->d_reclen, ret);
+        u_ret -= dir->d_reclen;
+        memmove(dir, (void *)dir + dir->d_reclen, u_ret);
         continue;
       }
-      prev->d_reclen += dir->d_reclen;
+      if (prev)
+        prev->d_reclen += dir->d_reclen;
     }
     else
       prev = dir;
     off += dir->d_reclen;
   }
-  err = copy_to_user(dirent, kdirent, ret);
-  if (err)
-    goto out;
+  err = copy_to_user(dirent, kdirent, u_ret);
 out:
   if (fullpath)
     kmem_cache_free(theia_buffers, fullpath);
   kfree(kdirent);
+  //since u_ret started as a copy of (long)ret and
+  //we only subtract from u_ret, u_ret cannot be > LONG_MAX
+  ret = (long)u_ret;
   return ret;
 }
 
@@ -20402,8 +20413,6 @@ void theia_pread64_ahgx(unsigned int fd, const char __user *ubuf, size_t count, 
   char uuid_str[THEIA_UUID_LEN + 1];
   char *buf;
   int ret = 0;
-
-  if (fd < 0) return; /* TODO */
 
   if (fd2uuid(fd, uuid_str) == false)
     return; /* TODO: report openat errors? */
