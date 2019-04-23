@@ -698,10 +698,12 @@ static u_long getretparams_getgroups(struct klogfile *klog,
 	return sizeof(u_short) * res->retval;
 }
 
+#if 0
 static u_long getretparams_getgroups32(struct klogfile *klog,
 		struct klog_result *res) {
 	return sizeof(gid_t) * res->retval;
 }
+#endif
 
 static u_long getretparams_io_getevents(struct klogfile *klog,
 		struct klog_result *res) {
@@ -1061,247 +1063,247 @@ static u_long getretparams_pread64 (struct klogfile *log, struct klog_result *re
 #define DEFRULE_FCN(sysnr, fcn) _DEFRULE(sysnr, 0, fcn)
 
 #define ADDRULE(sysnr, log) log->parse_rules[sysnr]=&exception_##sysnr
-DEFRULE_FCN(3, getretparams_read);
-DEFRULE_FCN(4, getretparams_write);
-DEFRULE(5, sizeof(struct open_retvals));
-DEFRULE(7, sizeof(int));
-DEFRULE(11, sizeof(struct execve_retvals));
-DEFRULE(13, sizeof(time_t));
-DEFRULE(18, sizeof(struct __old_kernel_stat));
-DEFRULE(28, sizeof(struct __old_kernel_stat));
-DEFRULE(42, 2*sizeof(int));
-DEFRULE(43, sizeof(struct tms));
-DEFRULE_FCN(54, varsize);
-DEFRULE_FCN(55, varsize);
-DEFRULE(59, sizeof(struct oldold_utsname));
-DEFRULE(62, sizeof(struct sigaction));
-DEFRULE(67, sizeof(struct sigaction));
-DEFRULE(73, sizeof(sigset_t));
-DEFRULE(76, sizeof(struct rlimit));
-DEFRULE(77, sizeof(struct rusage));
-DEFRULE(78, sizeof(struct gettimeofday_retvals));
-DEFRULE_FCN(80, getretparams_getgroups);
-DEFRULE(84, sizeof(struct __old_kernel_stat));
-DEFRULE_FCN(85, getretparams_retval);
-DEFRULE(86, sizeof(struct mmap_pgoff_retvals));
-DEFRULE(89, 266); /* sizeof old_linux_dirent??? */
-DEFRULE(99, sizeof(struct statfs));
-DEFRULE(100, sizeof(struct statfs));
-DEFRULE_FCN(102, getretparams_socketcall);
-DEFRULE_FCN(103, getretparams_retval);
-DEFRULE(104, sizeof(struct itimerval));
-DEFRULE(105, sizeof(struct itimerval));
-DEFRULE(106, sizeof(struct stat));
-DEFRULE(107, sizeof(struct stat));
-DEFRULE(108, sizeof(struct stat));
-DEFRULE(109, sizeof(struct old_utsname));
-DEFRULE(114, sizeof(struct wait4_retvals));
-DEFRULE(116, sizeof(struct sysinfo));
-DEFRULE_FCN(117, varsize);
-DEFRULE(122, sizeof(struct new_utsname));
-DEFRULE(124, sizeof(struct timex));
-DEFRULE(126, sizeof(unsigned long)); // old_sigset_t - def in asm/signal.h but cannot include
-DEFRULE_FCN(131, varsize);
-DEFRULE(134, sizeof(long));
-DEFRULE_FCN(135, varsize);
-DEFRULE(140, sizeof(loff_t));
-DEFRULE_FCN(141, getretparams_retval);
-DEFRULE_FCN(142, varsize);
-DEFRULE_FCN(145, getretparams_retval);
-DEFRULE_FCN(149, varsize);
-DEFRULE(155, sizeof(struct sched_param));
-DEFRULE(161, sizeof(struct timespec));
-DEFRULE(162, sizeof(struct timespec));
-DEFRULE(165, sizeof(u_short)*3);
-DEFRULE_FCN(168, varsize);
-DEFRULE(171, sizeof(u_short)*3);
-DEFRULE_FCN(172, varsize);
-DEFRULE(174, 20); /* sizeof(struct sigaction)*/
-DEFRULE_FCN(175, varsize);
-DEFRULE_FCN(176, varsize);
-DEFRULE(177, sizeof(siginfo_t));
-DEFRULE_FCN(180, getretparams_pread64);
-DEFRULE_FCN(183, getretparams_retval);
-DEFRULE_FCN(184, varsize);
-DEFRULE(185, sizeof(struct __user_cap_header_struct));
-DEFRULE(187, sizeof(off_t));
-DEFRULE(191, sizeof(struct rlimit));
-DEFRULE(192, sizeof(struct mmap_pgoff_retvals));
-DEFRULE(195, sizeof(struct stat64));
-DEFRULE(196, sizeof(struct stat64));
-DEFRULE(197, sizeof(struct stat64));
-DEFRULE_FCN(205, getretparams_getgroups32);
-DEFRULE(209, sizeof(uid_t)*3);
-DEFRULE(211, sizeof(gid_t)*3);
-DEFRULE_FCN(218, varsize);
-DEFRULE_FCN(220, getretparams_retval);
-DEFRULE_FCN(221, varsize);
-DEFRULE_FCN(229, getretparams_retval);
-DEFRULE_FCN(230, getretparams_retval);
-DEFRULE_FCN(231, getretparams_retval);
-DEFRULE_FCN(232, getretparams_retval);
-DEFRULE_FCN(233, getretparams_retval);
-DEFRULE_FCN(234, getretparams_retval);
-DEFRULE(239, sizeof(struct sendfile64_retvals));
-DEFRULE_FCN(242, varsize);
-DEFRULE(245, sizeof(u_long));
-DEFRULE_FCN(247, getretparams_io_getevents);
-DEFRULE(249, 32);/* struct ioevent */
-DEFRULE_FCN(253, getretparams_retval);
-DEFRULE_FCN(256, getretparams_epoll_wait);
-DEFRULE(259, sizeof(timer_t));
-DEFRULE(260, sizeof(struct itimerspec));
-DEFRULE(261, sizeof(struct itimerspec));
-DEFRULE(265, sizeof(struct timespec));
-DEFRULE(266, sizeof(struct timespec));
-DEFRULE(267, sizeof(struct timespec));
-DEFRULE(268, 84); /* statfs 64 */
-DEFRULE(269, 84); /* statfs 64 */
-DEFRULE_FCN(275, varsize);
-DEFRULE_FCN(280, getretparams_retval);
-DEFRULE(282, sizeof(struct mq_attr));
-DEFRULE(284, sizeof(struct waitid_retvals));
-DEFRULE_FCN(288, varsize);
-DEFRULE(300, sizeof(struct stat64));
-DEFRULE_FCN(305, getretparams_retval);
-DEFRULE(308, sizeof(struct pselect6_retvals));
-DEFRULE_FCN(309, varsize);
-DEFRULE(312, sizeof(struct get_robust_list_retvals));
-DEFRULE(313, sizeof(struct splice_retvals));
-DEFRULE_FCN(317, varsize);
-DEFRULE(318, sizeof(unsigned)*2);
-DEFRULE_FCN(319, getretparams_epoll_wait);
-DEFRULE(325, sizeof(struct itimerspec));
-DEFRULE(326, sizeof(struct itimerspec));
-DEFRULE(331, 2*sizeof(int));
-DEFRULE_FCN(333, getretparams_retval);
-DEFRULE_FCN(337, varsize);
-DEFRULE(340, sizeof(struct rlimit64));
-DEFRULE(341, sizeof(struct name_to_handle_at_retvals));
-DEFRULE(343, sizeof(struct timex));
+DEFRULE_FCN(0, getretparams_read); //read
+DEFRULE_FCN(1, getretparams_write);//write
+DEFRULE(2, sizeof(struct open_retvals));//open
+DEFRULE(529, sizeof(int));//waitpid
+DEFRULE(59, sizeof(struct execve_retvals));//execve
+DEFRULE(201, sizeof(time_t));//time
+//DEFRULE(18, sizeof(struct __old_kernel_stat));//oldstat
+//DEFRULE(28, sizeof(struct __old_kernel_stat));//oldfstat
+DEFRULE(22, 2*sizeof(int));//pipe
+DEFRULE(100, sizeof(struct tms));//times
+DEFRULE_FCN(16, varsize);//ioctl
+DEFRULE_FCN(72, varsize);//fcntl
+//DEFRULE(59, sizeof(struct oldold_utsname));//oldoldunmae
+DEFRULE(136, sizeof(struct sigaction));//ustat
+//DEFRULE(13, sizeof(struct sigaction));//sigaction
+//DEFRULE(127, sizeof(sigset_t));//sigpending
+DEFRULE(97, sizeof(struct rlimit));//getrlimit
+DEFRULE(98, sizeof(struct rusage));//getrusage
+DEFRULE(96, sizeof(struct gettimeofday_retvals));//gettimeofday
+DEFRULE_FCN(115, getretparams_getgroups);//getgroups
+//DEFRULE(84, sizeof(struct __old_kernel_stat));//oldlstat
+DEFRULE_FCN(89, getretparams_retval);//readlink
+DEFRULE(134, sizeof(struct mmap_pgoff_retvals));//uselib
+//DEFRULE(89, 266); /* sizeof old_linux_dirent??? */ //readdir
+DEFRULE(137, sizeof(struct statfs));//statfs
+DEFRULE(138, sizeof(struct statfs));//fstatfs
+//DEFRULE_FCN(102, getretparams_socketcall);//socketcall
+DEFRULE_FCN(41, getretparams_socketcall);//socket
+DEFRULE_FCN(42, getretparams_socketcall);//connect
+DEFRULE_FCN(43, getretparams_socketcall);//accept
+DEFRULE_FCN(44, getretparams_socketcall);//sendto
+DEFRULE_FCN(45, getretparams_socketcall);//recvfrom
+DEFRULE_FCN(46, getretparams_socketcall);//sendmsg
+DEFRULE_FCN(47, getretparams_socketcall);//recvmsg
+DEFRULE_FCN(51, getretparams_socketcall);//getsockname
+DEFRULE_FCN(52, getretparams_socketcall);//getpeername
+
+DEFRULE_FCN(103, getretparams_retval);//syslog
+DEFRULE(38, sizeof(struct itimerval));//setitimer
+DEFRULE(36, sizeof(struct itimerval));//getitimer
+DEFRULE(4, sizeof(struct stat));//stat
+DEFRULE(6, sizeof(struct stat));//lstat
+DEFRULE(5, sizeof(struct stat));//fstat
+//DEFRULE(109, sizeof(struct old_utsname));//olduname
+DEFRULE(61, sizeof(struct wait4_retvals));//wait4
+DEFRULE(99, sizeof(struct sysinfo));//sysinfo
+//DEFRULE_FCN(117, varsize);//ipc
+DEFRULE(63, sizeof(struct new_utsname));//uname
+DEFRULE(159, sizeof(struct timex));//adjtimex
+//DEFRULE(14, sizeof(unsigned long)); // old_sigset_t - def in asm/signal.h but cannot include //sigprocmask
+DEFRULE_FCN(179, varsize);//quotactl
+//DEFRULE(134, sizeof(long));//bdflush
+DEFRULE_FCN(139, varsize);//sysfs
+//DEFRULE(140, sizeof(loff_t));//_llseek
+DEFRULE_FCN(78, getretparams_retval);//getdents
+//DEFRULE_FCN(142, varsize);//_newselect
+DEFRULE_FCN(19, getretparams_retval);//readv
+DEFRULE_FCN(156, varsize);//_sysctl
+DEFRULE(143, sizeof(struct sched_param));//sched_getparam
+DEFRULE(148, sizeof(struct timespec));//sched_rr_get_interval
+DEFRULE(35, sizeof(struct timespec));//nanosleep
+DEFRULE(118, sizeof(u_short)*3);//getresuid
+DEFRULE_FCN(7, varsize);//poll
+DEFRULE(120, sizeof(u_short)*3);//getresgid
+DEFRULE_FCN(157, varsize);//prctl
+DEFRULE(13, 20); /* sizeof(struct sigaction)*///rt_sigaction
+
+DEFRULE_FCN(14, varsize);//rt_sigprocmask
+DEFRULE_FCN(127, varsize);//rt_sigpending
+DEFRULE(128, sizeof(siginfo_t));//rt_sigtimedwait
+DEFRULE_FCN(17, getretparams_pread64);//pread64
+DEFRULE_FCN(79, getretparams_retval);//getcwd
+DEFRULE_FCN(125, varsize);//capget
+DEFRULE(126, sizeof(struct __user_cap_header_struct));//capset
+DEFRULE(40, sizeof(off_t));//sendfile
+//DEFRULE(191, sizeof(struct rlimit));//ugetrlimit
+DEFRULE(9, sizeof(struct mmap_pgoff_retvals));//mmap
+//DEFRULE(195, sizeof(struct stat64));//stat64
+//DEFRULE(196, sizeof(struct stat64));//lstat64
+//DEFRULE(197, sizeof(struct stat64));//fstat64
+//DEFRULE_FCN(205, getretparams_getgroups32);//getgroups32
+//DEFRULE(209, sizeof(uid_t)*3);//getresuid32
+//DEFRULE(211, sizeof(gid_t)*3);//getresgid32
+DEFRULE_FCN(27, varsize);//mincore
+DEFRULE_FCN(217, getretparams_retval);//getdents64
+//DEFRULE_FCN(221, varsize);//fcntl64
+DEFRULE_FCN(191, getretparams_retval);//getxattr
+DEFRULE_FCN(192, getretparams_retval);//lgetxattr
+DEFRULE_FCN(193, getretparams_retval);//fgetxattr
+DEFRULE_FCN(194, getretparams_retval);//listxattr
+DEFRULE_FCN(195, getretparams_retval);//llistxattr
+DEFRULE_FCN(196, getretparams_retval);//flistxattr
+//DEFRULE(239, sizeof(struct sendfile64_retvals));//sendfile64
+DEFRULE_FCN(204, varsize);//sched_getaffinity
+DEFRULE(206, sizeof(u_long));//io_setup
+DEFRULE_FCN(208, getretparams_io_getevents);//io_getevents
+DEFRULE(210, 32);/* struct ioevent *///io_cancel
+DEFRULE_FCN(212, getretparams_retval);//lookup_dcookie
+DEFRULE_FCN(232, getretparams_epoll_wait);//epoll_wait
+DEFRULE(222, sizeof(timer_t));//timer_create
+DEFRULE(223, sizeof(struct itimerspec));//timer_settime
+DEFRULE(224, sizeof(struct itimerspec));//timer_gettime
+DEFRULE(228, sizeof(struct timespec));//clock_gettime
+DEFRULE(229, sizeof(struct timespec));//clock_getres
+DEFRULE(230, sizeof(struct timespec));//clock_nanosleep
+DEFRULE(268, 84); /* statfs 64 *///statfs64
+DEFRULE(269, 84); /* statfs 64 *///fstatfs64
+DEFRULE_FCN(239, varsize);//get_mempolicy
+DEFRULE_FCN(243, getretparams_retval);//mq_timedreceive
+DEFRULE(245, sizeof(struct mq_attr));//mq_getsetattr
+DEFRULE(247, sizeof(struct waitid_retvals));//waitid
+DEFRULE_FCN(250, varsize);//keyctl
+DEFRULE(262, sizeof(struct stat));//fstatat64
+DEFRULE_FCN(267, getretparams_retval);//readlinkat
+DEFRULE(270, sizeof(struct pselect6_retvals));//pselect6
+DEFRULE_FCN(271, varsize);//ppoll
+DEFRULE(274, sizeof(struct get_robust_list_retvals));//get_robust_list
+DEFRULE(275, sizeof(struct splice_retvals));//splice
+DEFRULE_FCN(279, varsize);//move_pages
+DEFRULE(309, sizeof(unsigned)*2);//getcpu
+DEFRULE_FCN(281, getretparams_epoll_wait);//epoll_pwait
+DEFRULE(286, sizeof(struct itimerspec));//timerfd_settime
+DEFRULE(287, sizeof(struct itimerspec));//timerfd_gettime
+DEFRULE(293, 2*sizeof(int));//pipe2
+DEFRULE_FCN(295, getretparams_retval);//preadv
+DEFRULE_FCN(299, varsize);//recvmmsg
+DEFRULE(302, sizeof(struct rlimit64));//prlimit64
+DEFRULE(303, sizeof(struct name_to_handle_at_retvals));//name_to_handle_at
+DEFRULE(305, sizeof(struct timex));//clock_adjtime
 /*}}}*/
 
 /* Adding rules to the excepiton list */
 /*{{{*/
 static void add_default_parse_rule_exceptions(struct klogfile *log) {
-	ADDRULE(3, log);
-	ADDRULE(4, log);
-	ADDRULE(5, log);
-	ADDRULE(7, log);
-	ADDRULE(11, log);
-	ADDRULE(13, log);
-	ADDRULE(18, log);
-	ADDRULE(28, log);
-	ADDRULE(42, log);
-	ADDRULE(43, log);
-	ADDRULE(54, log);
-	ADDRULE(55, log);
+
+	ADDRULE(0,  log); 
+	ADDRULE(1,  log); 
+	ADDRULE(2,  log); 
+	ADDRULE(529,log); 
 	ADDRULE(59, log);
-	ADDRULE(62, log);
-	ADDRULE(67, log);
-	ADDRULE(73, log);
-	ADDRULE(76, log);
-	ADDRULE(77, log);
-	ADDRULE(78, log);
-	ADDRULE(80, log);
-	ADDRULE(84, log);
-	ADDRULE(85, log);
-	ADDRULE(86, log);
+	ADDRULE(201,log); 
+	ADDRULE(22, log);
+	ADDRULE(100,log); 
+	ADDRULE(16, log);
+	ADDRULE(72, log);
+	ADDRULE(136,log); 
+	ADDRULE(97, log);
+	ADDRULE(98, log);
+	ADDRULE(96, log);
+	ADDRULE(115,log); 
 	ADDRULE(89, log);
+	ADDRULE(134,log); 
+	ADDRULE(137,log); 
+	ADDRULE(138,log); 
+	ADDRULE(103,log); 
+	ADDRULE(38, log);
+	ADDRULE(36, log);
+	ADDRULE(4,  log);
+	ADDRULE(6,  log);
+	ADDRULE(5,  log);
+	ADDRULE(61, log);
 	ADDRULE(99, log);
-	ADDRULE(100, log);
-	ADDRULE(102, log);
-	ADDRULE(103, log);
-	ADDRULE(104, log);
-	ADDRULE(105, log);
-	ADDRULE(106, log);
-	ADDRULE(107, log);
-	ADDRULE(108, log);
-	ADDRULE(109, log);
-	ADDRULE(114, log);
-	ADDRULE(116, log);
-	ADDRULE(117, log);
-	ADDRULE(122, log);
-	ADDRULE(124, log);
+	ADDRULE(63, log);
+	ADDRULE(159,log);
+	ADDRULE(14, log);
+	ADDRULE(179,log); 
+	ADDRULE(139,log); 
+	ADDRULE(78, log);
+	ADDRULE(19, log);
+	ADDRULE(156, log); 
+	ADDRULE(143, log); 
+	ADDRULE(148, log); 
+	ADDRULE(35,  log);
+	ADDRULE(118, log); 
+	ADDRULE(7,  log);
+	ADDRULE(120, log); 
+	ADDRULE(157, log); 
+	ADDRULE(13,  log);
+	ADDRULE(14,  log);
+	ADDRULE(127, log);
+	ADDRULE(128, log);
+	ADDRULE(17,  log);
+	ADDRULE(79,  log);
+	ADDRULE(125, log);
 	ADDRULE(126, log);
-	ADDRULE(131, log);
-	ADDRULE(134, log);
-	ADDRULE(135, log);
-	ADDRULE(140, log);
-	ADDRULE(141, log);
-	ADDRULE(142, log);
-	ADDRULE(145, log);
-	ADDRULE(149, log);
-	ADDRULE(155, log);
-	ADDRULE(161, log);
-	ADDRULE(162, log);
-	ADDRULE(165, log);
-	ADDRULE(168, log);
-	ADDRULE(171, log);
-	ADDRULE(172, log);
-	ADDRULE(174, log);
-	ADDRULE(175, log);
-	ADDRULE(176, log);
-	ADDRULE(177, log);
-	ADDRULE(180, log);
-	ADDRULE(183, log);
-	ADDRULE(184, log);
-	ADDRULE(185, log);
-	ADDRULE(187, log);
+	ADDRULE(40,  log);
+	ADDRULE(9,   log);
+	ADDRULE(27,  log);
+	ADDRULE(217, log);
 	ADDRULE(191, log);
 	ADDRULE(192, log);
+	ADDRULE(193, log);
+	ADDRULE(194, log);
 	ADDRULE(195, log);
 	ADDRULE(196, log);
-	ADDRULE(197, log);
-	ADDRULE(205, log);
-	ADDRULE(209, log);
-	ADDRULE(211, log);
-	ADDRULE(218, log);
-	ADDRULE(220, log);
-	ADDRULE(221, log);
+	ADDRULE(204, log);
+	ADDRULE(206, log);
+	ADDRULE(208, log);
+	ADDRULE(210, log);
+	ADDRULE(212, log);
+	ADDRULE(232, log);
+	ADDRULE(222, log);
+	ADDRULE(223, log);
+	ADDRULE(224, log);
+	ADDRULE(228, log);
 	ADDRULE(229, log);
 	ADDRULE(230, log);
-	ADDRULE(231, log);
-	ADDRULE(232, log);
-	ADDRULE(233, log);
-	ADDRULE(234, log);
-	ADDRULE(239, log);
-	ADDRULE(242, log);
-	ADDRULE(245, log);
-	ADDRULE(247, log);
-	ADDRULE(249, log);
-	ADDRULE(253, log);
-	ADDRULE(256, log);
-	ADDRULE(259, log);
-	ADDRULE(260, log);
-	ADDRULE(261, log);
-	ADDRULE(265, log);
-	ADDRULE(266, log);
-	ADDRULE(267, log);
 	ADDRULE(268, log);
 	ADDRULE(269, log);
+	ADDRULE(239, log);
+	ADDRULE(243, log);
+	ADDRULE(245, log);
+	ADDRULE(247, log);
+	ADDRULE(250, log);
+	ADDRULE(262, log);
+	ADDRULE(267, log);
+	ADDRULE(270, log);
+	ADDRULE(271, log);
+	ADDRULE(274, log);
 	ADDRULE(275, log);
-	ADDRULE(280, log);
-	ADDRULE(282, log);
-	ADDRULE(284, log);
-	ADDRULE(288, log);
-	ADDRULE(300, log);
-	ADDRULE(305, log);
-	ADDRULE(308, log);
+	ADDRULE(279, log);
 	ADDRULE(309, log);
-	ADDRULE(312, log);
-	ADDRULE(313, log);
-	ADDRULE(317, log);
-	ADDRULE(318, log);
-	ADDRULE(319, log);
-	ADDRULE(325, log);
-	ADDRULE(326, log);
-	ADDRULE(331, log);
-	ADDRULE(333, log);
-	ADDRULE(337, log);
-	ADDRULE(340, log);
-	ADDRULE(341, log);
-	ADDRULE(343, log);
+	ADDRULE(281, log);
+	ADDRULE(286, log);
+	ADDRULE(287, log);
+	ADDRULE(293, log);
+	ADDRULE(295, log);
+	ADDRULE(299, log);
+	ADDRULE(302, log);
+	ADDRULE(303, log);
+	ADDRULE(305, log);
+
+	ADDRULE(41, log); 
+	ADDRULE(42, log); 
+	ADDRULE(43, log); 
+	ADDRULE(44, log); 
+	ADDRULE(45, log); 
+	ADDRULE(46, log); 
+	ADDRULE(47, log); 
+	ADDRULE(51, log); 
+	ADDRULE(52, log); 
 }
 /*}}}*/
 
@@ -1310,356 +1312,321 @@ static void add_default_parse_rule_exceptions(struct klogfile *log) {
 static __attribute__((const)) char *syscall_name(int nr) {
 	char *ret;
 
+
 	switch(nr) {
-		case 0: ret = "restart_syscall"; break;
-		case 1: ret = "exit"; break;
-		case 2: ret = "fork"; break;
-		case 3: ret = "read"; break;
-		case 4: ret = "write"; break;
-		case 5: ret = "open"; break;
-		case 6: ret = "close"; break;
-		case 7: ret = "waitpid"; break;
-		case 8: ret = "creat"; break;
-		case 9: ret = "link"; break;
-		case 10: ret = "unlink"; break;
-		case 11: ret = "execve"; break;
-		case 12: ret = "chdir"; break;
-		case 13: ret = "time"; break;
-		case 14: ret = "mknod"; break;
-		case 15: ret = "chmod"; break;
-		case 16: ret = "lchown"; break;
-		case 17: ret = "break"; break;
-		case 18: ret = "oldstat"; break;
-		case 19: ret = "lseek"; break;
-		case 20: ret = "getpid"; break;
-		case 21: ret = "mount"; break;
-		case 22: ret = "umount"; break;
-		case 23: ret = "setuid"; break;
-		case 24: ret = "getuid"; break;
-		case 25: ret = "stime"; break;
-		case 26: ret = "ptrace"; break;
-		case 27: ret = "alarm"; break;
-		case 28: ret = "oldfstat"; break;
-		case 29: ret = "pause"; break;
-		case 30: ret = "utime"; break;
-		case 31: ret = "stty"; break;
-		case 32: ret = "gtty"; break;
-		case 33: ret = "access"; break;
-		case 34: ret = "nice"; break;
-		case 35: ret = "ftime"; break;
-		case 36: ret = "sync"; break;
-		case 37: ret = "kill"; break;
-		case 38: ret = "rename"; break;
-		case 39: ret = "mkdir"; break;
-		case 40: ret = "rmdir"; break;
-		case 41: ret = "dup"; break;
-		case 42: ret = "pipe"; break;
-		case 43: ret = "times"; break;
-		case 44: ret = "prof"; break;
-		case 45: ret = "brk"; break;
-		case 46: ret = "setgid"; break;
-		case 47: ret = "getgid"; break;
-		case 48: ret = "signal"; break;
-		case 49: ret = "geteuid"; break;
-		case 50: ret = "getegid"; break;
-		case 51: ret = "acct"; break;
-		case 52: ret = "umount2"; break;
-		case 53: ret = "lock"; break;
-		case 54: ret = "ioctl"; break;
-		case 55: ret = "fcntl"; break;
-		case 56: ret = "mpx"; break;
-		case 57: ret = "setpgid"; break;
-		case 58: ret = "ulimit"; break;
-		case 59: ret = "oldolduname"; break;
-		case 60: ret = "umask"; break;
-		case 61: ret = "chroot"; break;
-		case 62: ret = "ustat"; break;
-		case 63: ret = "dup2"; break;
-		case 64: ret = "getppid"; break;
-		case 65: ret = "getpgrp"; break;
-		case 66: ret = "setsid"; break;
-		case 67: ret = "sigaction"; break;
-		case 68: ret = "sgetmask"; break;
-		case 69: ret = "ssetmask"; break;
-		case 70: ret = "setreuid"; break;
-		case 71: ret = "setregid"; break;
-		case 72: ret = "sigsuspend"; break;
-		case 73: ret = "sigpending"; break;
-		case 74: ret = "sethostname"; break;
-		case 75: ret = "setrlimit"; break;
-		case 76: ret = "getrlimit"; break;
-		case 77: ret = "getrusage"; break;
-		case 78: ret = "gettimeofday"; break;
-		case 79: ret = "settimeofday"; break;
-		case 80: ret = "getgroups"; break;
-		case 81: ret = "setgroups"; break;
-		case 82: ret = "select"; break;
-		case 83: ret = "symlink"; break;
-		case 84: ret = "oldlstat"; break;
-		case 85: ret = "readlink"; break;
-		case 86: ret = "uselib"; break;
-		case 87: ret = "swapon"; break;
-		case 88: ret = "reboot"; break;
-		case 89: ret = "readdir"; break;
-		case 90: ret = "mmap"; break;
-		case 91: ret = "munmap"; break;
-		case 92: ret = "truncate"; break;
-		case 93: ret = "ftruncate"; break;
-		case 94: ret = "fchmod"; break;
-		case 95: ret = "fchown"; break;
-		case 96: ret = "getpriority"; break;
-		case 97: ret = "setpriority"; break;
-		case 98: ret = "profil"; break;
-		case 99: ret = "statfs"; break;
-		case 100: ret = "fstatfs"; break;
-		case 101: ret = "ioperm"; break;
-		case 102: ret = "socketcall"; break;
+		case 0: ret = "read"; break;
+		case 1: ret = "write"; break;
+		case 2: ret = "open"; break;
+		case 3: ret = "close"; break;
+		case 4: ret = "stat"; break;
+		case 5: ret = "fstat"; break;
+		case 6: ret = "lstat"; break;
+		case 7: ret = "poll"; break;
+		case 8: ret = "lseek"; break;
+		case 9: ret = "mmap"; break;
+		case 10: ret = "mprotect"; break;
+		case 11: ret = "munmap"; break;
+		case 12: ret = "brk"; break;
+		case 13: ret = "rt_sigaction"; break;
+		case 14: ret = "rt_sigprocmask"; break;
+		case 15: ret = "rt_sigreturn"; break;
+		case 16: ret = "ioctl"; break;
+		case 17: ret = "pread64"; break;
+		case 18: ret = "pwrite64"; break;
+		case 19: ret = "readv"; break;
+		case 20: ret = "writev"; break;
+		case 21: ret = "access"; break;
+		case 22: ret = "pipe"; break;
+		case 23: ret = "select"; break;
+		case 24: ret = "sched_yield"; break;
+		case 25: ret = "mremap"; break;
+		case 26: ret = "msync"; break;
+		case 27: ret = "mincore"; break;
+		case 28: ret = "madvise"; break;
+		case 29: ret = "shmget"; break;
+		case 30: ret = "shmat"; break;
+		case 31: ret = "shmctl"; break;
+		case 32: ret = "dup"; break;
+		case 33: ret = "dup2"; break;
+		case 34: ret = "pause"; break;
+		case 35: ret = "nanosleep"; break;
+		case 36: ret = "getitimer"; break;
+		case 37: ret = "alarm"; break;
+		case 38: ret = "setitimer"; break;
+		case 39: ret = "getpid"; break;
+		case 40: ret = "sendfile"; break;
+		case 41: ret = "socket"; break;
+		case 42: ret = "connect"; break;
+		case 43: ret = "accept"; break;
+		case 44: ret = "sendto"; break;
+		case 45: ret = "recvfrom"; break;
+		case 46: ret = "sendmsg"; break;
+		case 47: ret = "recvmsg"; break;
+		case 48: ret = "shutdown"; break;
+		case 49: ret = "bind"; break;
+		case 50: ret = "listen"; break;
+		case 51: ret = "getsockname"; break;
+		case 52: ret = "getpeername"; break;
+		case 53: ret = "socketpair"; break;
+		case 54: ret = "setsockopt"; break;
+		case 55: ret = "getsockopt"; break;
+		case 56: ret = "clone"; break;
+		case 57: ret = "fork"; break;
+		case 58: ret = "vfork"; break;
+		case 59: ret = "execve"; break;
+		case 60: ret = "exit"; break;
+		case 61: ret = "wait4"; break;
+		case 62: ret = "kill"; break;
+		case 63: ret = "uname"; break;
+		case 64: ret = "semget"; break;
+		case 65: ret = "semop"; break;
+		case 66: ret = "semctl"; break;
+		case 67: ret = "shmdt"; break;
+		case 68: ret = "msgget"; break;
+		case 69: ret = "msgsnd"; break;
+		case 70: ret = "msgrcv"; break;
+		case 71: ret = "msgctl"; break;
+		case 72: ret = "fcntl"; break;
+		case 73: ret = "flock"; break;
+		case 74: ret = "fsync"; break;
+		case 75: ret = "fdatasync"; break;
+		case 76: ret = "truncate"; break;
+		case 77: ret = "ftruncate"; break;
+		case 78: ret = "getdents"; break;
+		case 79: ret = "getcwd"; break;
+		case 80: ret = "chdir"; break;
+		case 81: ret = "fchdir"; break;
+		case 82: ret = "rename"; break;
+		case 83: ret = "mkdir"; break;
+		case 84: ret = "rmdir"; break;
+		case 85: ret = "creat"; break;
+		case 86: ret = "link"; break;
+		case 87: ret = "unlink"; break;
+		case 88: ret = "symlink"; break;
+		case 89: ret = "readlink"; break;
+		case 90: ret = "chmod"; break;
+		case 91: ret = "fchmod"; break;
+		case 92: ret = "chown"; break;
+		case 93: ret = "fchown"; break;
+		case 94: ret = "lchown"; break;
+		case 95: ret = "umask"; break;
+		case 96: ret = "gettimeofday"; break;
+		case 97: ret = "getrlimit"; break;
+		case 98: ret = "getrusage"; break;
+		case 99: ret = "sysinfo"; break;
+		case 100: ret = "times"; break;
+		case 101: ret = "ptrace"; break;
+		case 102: ret = "getuid"; break;
 		case 103: ret = "syslog"; break;
-		case 104: ret = "setitimer"; break;
-		case 105: ret = "getitimer"; break;
-		case 106: ret = "stat"; break;
-		case 107: ret = "lstat"; break;
-		case 108: ret = "fstat"; break;
-		case 109: ret = "olduname"; break;
-		case 110: ret = "iopl"; break;
-		case 111: ret = "vhangup"; break;
-		case 112: ret = "idle"; break;
-		case 113: ret = "vm86old"; break;
-		case 114: ret = "wait4"; break;
-		case 115: ret = "swapoff"; break;
-		case 116: ret = "sysinfo"; break;
-		case 117: ret = "ipc"; break;
-		case 118: ret = "fsync"; break;
-		case 119: ret = "sigreturn"; break;
-		case 120: ret = "clone"; break;
-		case 121: ret = "setdomainname"; break;
-		case 122: ret = "uname"; break;
-		case 123: ret = "modify_ldt"; break;
-		case 124: ret = "adjtimex"; break;
-		case 125: ret = "mprotect"; break;
-		case 126: ret = "sigprocmask"; break;
-		case 127: ret = "create_module"; break;
-		case 128: ret = "init_module"; break;
-		case 129: ret = "delete_module"; break;
-		case 130: ret = "get_kernel_syms"; break;
-		case 131: ret = "quotactl"; break;
-		case 132: ret = "getpgid"; break;
-		case 133: ret = "fchdir"; break;
-		case 134: ret = "bdflush"; break;
-		case 135: ret = "sysfs"; break;
-		case 136: ret = "personality"; break;
-		case 137: ret = "afs_syscall"; break;
-		case 138: ret = "setfsuid"; break;
-		case 139: ret = "setfsgid"; break;
-		case 140: ret = "_llseek"; break;
-		case 141: ret = "getdents"; break;
-		case 142: ret = "_newselect"; break;
-		case 143: ret = "flock"; break;
-		case 144: ret = "msync"; break;
-		case 145: ret = "readv"; break;
-		case 146: ret = "writev"; break;
-		case 147: ret = "getsid"; break;
-		case 148: ret = "fdatasync"; break;
-		case 149: ret = "_sysctl"; break;
-		case 150: ret = "mlock"; break;
-		case 151: ret = "munlock"; break;
-		case 152: ret = "mlockall"; break;
-		case 153: ret = "munlockall"; break;
-		case 154: ret = "sched_setparam"; break;
-		case 155: ret = "sched_getparam"; break;
-		case 156: ret = "sched_setscheduler"; break;
-		case 157: ret = "sched_getscheduler"; break;
-		case 158: ret = "sched_yield"; break;
-		case 159: ret = "sched_get_priority_max"; break;
-		case 160: ret = "sched_get_priority_min"; break;
-		case 161: ret = "sched_rr_get_interval"; break;
-		case 162: ret = "nanosleep"; break;
-		case 163: ret = "mremap"; break;
-		case 164: ret = "setresuid"; break;
-		case 165: ret = "getresuid"; break;
-		case 166: ret = "vm86"; break;
-		case 167: ret = "query_module"; break;
-		case 168: ret = "poll"; break;
-		case 169: ret = "nfsservctl"; break;
-		case 170: ret = "setresgid"; break;
-		case 171: ret = "getresgid"; break;
-		case 172: ret = "prctl"; break;
-		case 173: ret = "rt_sigreturn"; break;
-		case 174: ret = "rt_sigaction"; break;
-		case 175: ret = "rt_sigprocmask"; break;
-		case 176: ret = "rt_sigpending"; break;
-		case 177: ret = "rt_sigtimedwait"; break;
-		case 178: ret = "rt_sigqueueinfo"; break;
-		case 179: ret = "rt_sigsuspend"; break;
-		case 180: ret = "pread64"; break;
-		case 181: ret = "pwrite64"; break;
-		case 182: ret = "chown"; break;
-		case 183: ret = "getcwd"; break;
-		case 184: ret = "capget"; break;
-		case 185: ret = "capset"; break;
-		case 186: ret = "sigaltstack"; break;
-		case 187: ret = "sendfile"; break;
-		case 188: ret = "getpmsg"; break;
-		case 189: ret = "putpmsg"; break;
-		case 190: ret = "vfork"; break;
-		case 191: ret = "ugetrlimit"; break;
-		case 192: ret = "mmap2"; break;
-		case 193: ret = "truncate64"; break;
-		case 194: ret = "ftruncate64"; break;
-		case 195: ret = "stat64"; break;
-		case 196: ret = "lstat64"; break;
-		case 197: ret = "fstat64"; break;
-		case 198: ret = "lchown32"; break;
-		case 199: ret = "getuid32"; break;
-		case 200: ret = "getgid32"; break;
-		case 201: ret = "geteuid32"; break;
-		case 202: ret = "getegid32"; break;
-		case 203: ret = "setreuid32"; break;
-		case 204: ret = "setregid32"; break;
-		case 205: ret = "getgroups32"; break;
-		case 206: ret = "setgroups32"; break;
-		case 207: ret = "fchown32"; break;
-		case 208: ret = "setresuid32"; break;
-		case 209: ret = "getresuid32"; break;
-		case 210: ret = "setresgid32"; break;
-		case 211: ret = "getresgid32"; break;
-		case 212: ret = "chown32"; break;
-		case 213: ret = "setuid32"; break;
-		case 214: ret = "setgid32"; break;
-		case 215: ret = "setfsuid32"; break;
-		case 216: ret = "setfsgid32"; break;
-		case 217: ret = "pivot_root"; break;
-		case 218: ret = "mincore"; break;
-		case 219: ret = "madvise"; break;
-		//case 219: ret = "madvise1"; break;
-		case 220: ret = "getdents64"; break;
-		case 221: ret = "fcntl64"; break;
-/* 223 is unused */
-		case 224: ret = "gettid"; break;
-		case 225: ret = "readahead"; break;
-		case 226: ret = "setxattr"; break;
-		case 227: ret = "lsetxattr"; break;
-		case 228: ret = "fsetxattr"; break;
-		case 229: ret = "getxattr"; break;
-		case 230: ret = "lgetxattr"; break;
-		case 231: ret = "fgetxattr"; break;
-		case 232: ret = "listxattr"; break;
-		case 233: ret = "llistxattr"; break;
-		case 234: ret = "flistxattr"; break;
-		case 235: ret = "removexattr"; break;
-		case 236: ret = "lremovexattr"; break;
-		case 237: ret = "fremovexattr"; break;
-		case 238: ret = "tkill"; break;
-		case 239: ret = "sendfile64"; break;
-		case 240: ret = "futex"; break;
-		case 241: ret = "sched_setaffinity"; break;
-		case 242: ret = "sched_getaffinity"; break;
-		case 243: ret = "set_thread_area"; break;
-		case 244: ret = "get_thread_area"; break;
-		case 245: ret = "io_setup"; break;
-		case 246: ret = "io_destroy"; break;
-		case 247: ret = "io_getevents"; break;
-		case 248: ret = "io_submit"; break;
-		case 249: ret = "io_cancel"; break;
-		case 250: ret = "fadvise64"; break;
-/* 251 is available for reuse (was briefly sys_set_zone_reclaim) */
-		case 252: ret = "exit_group"; break;
-		case 253: ret = "lookup_dcookie"; break;
-		case 254: ret = "epoll_create"; break;
-		case 255: ret = "epoll_ctl"; break;
-		case 256: ret = "epoll_wait"; break;
-		case 257: ret = "remap_file_pages"; break;
-		case 258: ret = "set_tid_address"; break;
-		case 259: ret = "timer_create"; break;
-		case 260: ret = "timer_settime"; break;
-		case 261: ret = "timer_gettime"; break;
-		case 262: ret = "timer_getoverrun"; break;
-		case 263: ret = "timer_delete"; break;
-		case 264: ret = "clock_settime"; break;
-		case 265: ret = "clock_gettime"; break;
-		case 266: ret = "clock_getres"; break;
-		case 267: ret = "clock_nanosleep"; break;
-		case 268: ret = "statfs64"; break;
-		case 269: ret = "fstatfs64"; break;
-		case 270: ret = "tgkill"; break;
-		case 271: ret = "utimes"; break;
-		case 272: ret = "fadvise64_64"; break;
-		case 273: ret = "vserver"; break;
-		case 274: ret = "mbind"; break;
-		case 275: ret = "get_mempolicy"; break;
-		case 276: ret = "set_mempolicy"; break;
-		case 277: ret = "mq_open"; break;
-		case 278: ret = "mq_unlink"; break;
-		case 279: ret = "mq_timedsend"; break;
-		case 280: ret = "mq_timedreceive"; break;
-		case 281: ret = "mq_notify"; break;
-		case 282: ret = "mq_getsetattr"; break;
-		case 283: ret = "kexec_load"; break;
-		case 284: ret = "waitid"; break;
-/* #define __NR_sys_setaltroot	285 */
-		case 286: ret = "add_key"; break;
-		case 287: ret = "request_key"; break;
-		case 288: ret = "keyctl"; break;
-		case 289: ret = "ioprio_set"; break;
-		case 290: ret = "ioprio_get"; break;
-		case 291: ret = "inotify_init"; break;
-		case 292: ret = "inotify_add_watch"; break;
-		case 293: ret = "inotify_rm_watch"; break;
-		case 294: ret = "migrate_pages"; break;
-		case 295: ret = "openat"; break;
-		case 296: ret = "mkdirat"; break;
-		case 297: ret = "mknodat"; break;
-		case 298: ret = "fchownat"; break;
-		case 299: ret = "futimesat"; break;
-		case 300: ret = "fstatat64"; break;
-		case 301: ret = "unlinkat"; break;
-		case 302: ret = "renameat"; break;
-		case 303: ret = "linkat"; break;
-		case 304: ret = "symlinkat"; break;
-		case 305: ret = "readlinkat"; break;
-		case 306: ret = "fchmodat"; break;
-		case 307: ret = "faccessat"; break;
-		case 308: ret = "pselect6"; break;
-		case 309: ret = "ppoll"; break;
-		case 310: ret = "unshare"; break;
-		case 311: ret = "set_robust_list"; break;
-		case 312: ret = "get_robust_list"; break;
-		case 313: ret = "splice"; break;
-		case 314: ret = "sync_file_range"; break;
-		case 315: ret = "tee"; break;
-		case 316: ret = "vmsplice"; break;
-		case 317: ret = "move_pages"; break;
-		case 318: ret = "getcpu"; break;
-		case 319: ret = "epoll_pwait"; break;
-		case 320: ret = "utimensat"; break;
-		case 321: ret = "signalfd"; break;
-		case 322: ret = "timerfd_create"; break;
-		case 323: ret = "eventfd"; break;
-		case 324: ret = "fallocate"; break;
-		case 325: ret = "timerfd_settime"; break;
-		case 326: ret = "timerfd_gettime"; break;
-		case 327: ret = "signalfd4"; break;
-		case 328: ret = "eventfd2"; break;
-		case 329: ret = "epoll_create1"; break;
-		case 330: ret = "dup3"; break;
-		case 331: ret = "pipe2"; break;
-		case 332: ret = "inotify_init1"; break;
-		case 333: ret = "preadv"; break;
-		case 334: ret = "pwritev"; break;
-		case 335: ret = "rt_tgsigqueueinfo"; break;
-		case 336: ret = "perf_event_open"; break;
-		case 337: ret = "recvmmsg"; break;
-		case 338: ret = "fanotify_init"; break;
-		case 339: ret = "fanotify_mark"; break;
-		case 340: ret = "prlimit64"; break;
-		case 341: ret = "name_to_handle_at"; break;
-		case 342: ret = "open_by_handle_at"; break;
-		case 343: ret = "clock_adjtime"; break;
-		case 344: ret = "syncfs"; break;
-		case 345: ret = "sendmmsg"; break;
-		case 346: ret = "setns"; break;
-		case 347: ret = "process_vm_readv"; break;
-		case 348: ret = "process_vm_writev"; break;
+		case 104: ret = "getgid"; break;
+		case 105: ret = "setuid"; break;
+		case 106: ret = "setgid"; break;
+		case 107: ret = "geteuid"; break;
+		case 108: ret = "getegid"; break;
+		case 109: ret = "setpgid"; break;
+		case 110: ret = "getppid"; break;
+		case 111: ret = "getpgrp"; break;
+		case 112: ret = "setsid"; break;
+		case 113: ret = "setreuid"; break;
+		case 114: ret = "setregid"; break;
+		case 115: ret = "getgroups"; break;
+		case 116: ret = "setgroups"; break;
+		case 117: ret = "setresuid"; break;
+		case 118: ret = "getresuid"; break;
+		case 119: ret = "setresgid"; break;
+		case 120: ret = "getresgid"; break;
+		case 121: ret = "getpgid"; break;
+		case 122: ret = "setfsuid"; break;
+		case 123: ret = "setfsgid"; break;
+		case 124: ret = "getsid"; break;
+		case 125: ret = "capget"; break;
+		case 126: ret = "capset"; break;
+		case 127: ret = "rt_sigpending"; break;
+		case 128: ret = "rt_sigtimedwait"; break;
+		case 129: ret = "rt_sigqueueinfo"; break;
+		case 130: ret = "rt_sigsuspend"; break;
+		case 131: ret = "sigaltstack"; break;
+		case 132: ret = "utime"; break;
+		case 133: ret = "mknod"; break;
+		case 134: ret = "uselib"; break;
+		case 135: ret = "personality"; break;
+		case 136: ret = "ustat"; break;
+		case 137: ret = "statfs"; break;
+		case 138: ret = "fstatfs"; break;
+		case 139: ret = "sysfs"; break;
+		case 140: ret = "getpriority"; break;
+		case 141: ret = "setpriority"; break;
+		case 142: ret = "sched_setparam"; break;
+		case 143: ret = "sched_getparam"; break;
+		case 144: ret = "sched_setscheduler"; break;
+		case 145: ret = "sched_getscheduler"; break;
+		case 146: ret = "sched_get_priority_max"; break;
+		case 147: ret = "sched_get_priority_min"; break;
+		case 148: ret = "sched_rr_get_interval"; break;
+		case 149: ret = "mlock"; break;
+		case 150: ret = "munlock"; break;
+		case 151: ret = "mlockall"; break;
+		case 152: ret = "munlockall"; break;
+		case 153: ret = "vhangup"; break;
+		case 154: ret = "modify_ldt"; break;
+		case 155: ret = "pivot_root"; break;
+		case 156: ret = "_sysctl"; break;
+		case 157: ret = "prctl"; break;
+		case 158: ret = "arch_prctl"; break;
+		case 159: ret = "adjtimex"; break;
+		case 160: ret = "setrlimit"; break;
+		case 161: ret = "chroot"; break;
+		case 162: ret = "sync"; break;
+		case 163: ret = "acct"; break;
+		case 164: ret = "settimeofday"; break;
+		case 165: ret = "mount"; break;
+		case 166: ret = "umount2"; break;
+		case 167: ret = "swapon"; break;
+		case 168: ret = "swapoff"; break;
+		case 169: ret = "reboot"; break;
+		case 170: ret = "sethostname"; break;
+		case 171: ret = "setdomainname"; break;
+		case 172: ret = "iopl"; break;
+		case 173: ret = "ioperm"; break;
+		case 174: ret = "create_module"; break;
+		case 175: ret = "init_module"; break;
+		case 176: ret = "delete_module"; break;
+		case 177: ret = "get_kernel_syms"; break;
+		case 178: ret = "query_module"; break;
+		case 179: ret = "quotactl"; break;
+		case 180: ret = "nfsservctl"; break;
+		case 181: ret = "getpmsg"; break;
+		case 182: ret = "putpmsg"; break;
+		case 183: ret = "afs_syscall"; break;
+		case 184: ret = "tuxcall"; break;
+		case 185: ret = "security"; break;
+		case 186: ret = "gettid"; break;
+		case 187: ret = "readahead"; break;
+		case 188: ret = "setxattr"; break;
+		case 189: ret = "lsetxattr"; break;
+		case 190: ret = "fsetxattr"; break;
+		case 191: ret = "getxattr"; break;
+		case 192: ret = "lgetxattr"; break;
+		case 193: ret = "fgetxattr"; break;
+		case 194: ret = "listxattr"; break;
+		case 195: ret = "llistxattr"; break;
+		case 196: ret = "flistxattr"; break;
+		case 197: ret = "removexattr"; break;
+		case 198: ret = "lremovexattr"; break;
+		case 199: ret = "fremovexattr"; break;
+		case 200: ret = "tkill"; break;
+		case 201: ret = "time"; break;
+		case 202: ret = "futex"; break;
+		case 203: ret = "sched_setaffinity"; break;
+		case 204: ret = "sched_getaffinity"; break;
+		case 205: ret = "set_thread_area"; break;
+		case 206: ret = "io_setup"; break;
+		case 207: ret = "io_destroy"; break;
+		case 208: ret = "io_getevents"; break;
+		case 209: ret = "io_submit"; break;
+		case 210: ret = "io_cancel"; break;
+		case 211: ret = "get_thread_area"; break;
+		case 212: ret = "lookup_dcookie"; break;
+		case 213: ret = "epoll_create"; break;
+		case 214: ret = "epoll_ctl_old"; break;
+		case 215: ret = "epoll_wait_old"; break;
+		case 216: ret = "remap_file_pages"; break;
+		case 217: ret = "getdents64"; break;
+		case 218: ret = "set_tid_address"; break;
+		case 219: ret = "restart_syscall"; break;
+		case 220: ret = "semtimedop"; break;
+		case 221: ret = "fadvise64"; break;
+		case 222: ret = "timer_create"; break;
+		case 223: ret = "timer_settime"; break;
+		case 224: ret = "timer_gettime"; break;
+		case 225: ret = "timer_getoverrun"; break;
+		case 226: ret = "timer_delete"; break;
+		case 227: ret = "clock_settime"; break;
+		case 228: ret = "clock_gettime"; break;
+		case 229: ret = "clock_getres"; break;
+		case 230: ret = "clock_nanosleep"; break;
+		case 231: ret = "exit_group"; break;
+		case 232: ret = "epoll_wait"; break;
+		case 233: ret = "epoll_ctl"; break;
+		case 234: ret = "tgkill"; break;
+		case 235: ret = "utimes"; break;
+		case 236: ret = "vserver"; break;
+		case 237: ret = "mbind"; break;
+		case 238: ret = "set_mempolicy"; break;
+		case 239: ret = "get_mempolicy"; break;
+		case 240: ret = "mq_open"; break;
+		case 241: ret = "mq_unlink"; break;
+		case 242: ret = "mq_timedsend"; break;
+		case 243: ret = "mq_timedreceive"; break;
+		case 244: ret = "mq_notify"; break;
+		case 245: ret = "mq_getsetattr"; break;
+		case 246: ret = "kexec_load"; break;
+		case 247: ret = "waitid"; break;
+		case 248: ret = "add_key"; break;
+		case 249: ret = "request_key"; break;
+		case 250: ret = "keyctl"; break;
+		case 251: ret = "ioprio_set"; break;
+		case 252: ret = "ioprio_get"; break;
+		case 253: ret = "inotify_init"; break;
+		case 254: ret = "inotify_add_watch"; break;
+		case 255: ret = "inotify_rm_watch"; break;
+		case 256: ret = "migrate_pages"; break;
+		case 257: ret = "openat"; break;
+		case 258: ret = "mkdirat"; break;
+		case 259: ret = "mknodat"; break;
+		case 260: ret = "fchownat"; break;
+		case 261: ret = "futimesat"; break;
+		case 262: ret = "newfstatat"; break;
+		case 263: ret = "unlinkat"; break;
+		case 264: ret = "renameat"; break;
+		case 265: ret = "linkat"; break;
+		case 266: ret = "symlinkat"; break;
+		case 267: ret = "readlinkat"; break;
+		case 268: ret = "fchmodat"; break;
+		case 269: ret = "faccessat"; break;
+		case 270: ret = "pselect6"; break;
+		case 271: ret = "ppoll"; break;
+		case 272: ret = "unshare"; break;
+		case 273: ret = "set_robust_list"; break;
+		case 274: ret = "get_robust_list"; break;
+		case 275: ret = "splice"; break;
+		case 276: ret = "tee"; break;
+		case 277: ret = "sync_file_range"; break;
+		case 278: ret = "vmsplice"; break;
+		case 279: ret = "move_pages"; break;
+		case 280: ret = "utimensat"; break;
+		case 281: ret = "epoll_pwait"; break;
+		case 282: ret = "signalfd"; break;
+		case 283: ret = "timerfd_create"; break;
+		case 284: ret = "eventfd"; break;
+		case 285: ret = "fallocate"; break;
+		case 286: ret = "timerfd_settime"; break;
+		case 287: ret = "timerfd_gettime"; break;
+		case 288: ret = "accept4"; break;
+		case 289: ret = "signalfd4"; break;
+		case 290: ret = "eventfd2"; break;
+		case 291: ret = "epoll_create1"; break;
+		case 292: ret = "dup3"; break;
+		case 293: ret = "pipe2"; break;
+		case 294: ret = "inotify_init1"; break;
+		case 295: ret = "preadv"; break;
+		case 296: ret = "pwritev"; break;
+		case 297: ret = "rt_tgsigqueueinfo"; break;
+		case 298: ret = "perf_event_open"; break;
+		case 299: ret = "recvmmsg"; break;
+		case 300: ret = "fanotify_init"; break;
+		case 301: ret = "fanotify_mark"; break;
+		case 302: ret = "prlimit64"; break;
+		case 303: ret = "name_to_handle_at"; break;
+		case 304: ret = "open_by_handle_at"; break;
+		case 305: ret = "clock_adjtime"; break;
+		case 306: ret = "syncfs"; break;
+		case 307: ret = "sendmmsg"; break;
+		case 308: ret = "setns"; break;
+		case 309: ret = "getcpu"; break;
+		case 310: ret = "process_vm_readv"; break;
+		case 311: ret = "process_vm_writev"; break;
+		case 312: ret = "kcmp"; break;
 		default: ret = "unknown";
 	}
 
