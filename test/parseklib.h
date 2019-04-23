@@ -100,7 +100,7 @@ struct repsignal {
 #define SR_HAS_NONZERO_RETVAL   0x10
 #define SR_HAS_AHGPARAMS        0x80
 
-#define REPLAY_MAX_RANDOM_VALUES 10
+#define REPLAY_MAX_RANDOM_VALUES 100
 struct rvalues {
 	int cnt;
 	long val[REPLAY_MAX_RANDOM_VALUES];
@@ -155,7 +155,7 @@ struct execve_retvals {
 		struct {
 			struct rvalues     rvalues;
 			struct exec_values evalues;
-			u_long             dev;
+			dev_t							dev;
 			u_long             ino;
 			struct timespec    mtime;
 		} same_group;

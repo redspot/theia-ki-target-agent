@@ -151,7 +151,36 @@ static int read_psr_chunk(struct klogfile *log) {
 	debugf("Reading count\n");
 	/* Now get how many records there are here */
 	rc = read(log->fd, &count, sizeof(count));
-  fprintf(stderr, "the count is %d\n", count);
+  fprintf(stderr, "the count is %d\n", count); 
+#if 0
+  fprintf(stderr, "uchar size %lu\n", sizeof(u_char)); 
+  fprintf(stderr, "rvalues size %lu\n", sizeof(struct rvalues)); 
+  fprintf(stderr, "exec_values size %lu\n", sizeof(struct exec_values)); 
+  fprintf(stderr, "timespec size %lu\n", sizeof(struct timespec)); 
+  fprintf(stderr, "execve_retvals size %lu\n", sizeof(struct execve_retvals)); 
+  fprintf(stderr, "ulong size %lu, int size %lu\n", sizeof(u_long), sizeof(int)); 
+  fprintf(stderr, "open_retvals size %lu\n", sizeof(struct open_retvals)); 
+  fprintf(stderr, "gettimeofday_retvals size %lu\n", sizeof(struct gettimeofday_retvals)); 
+  fprintf(stderr, "pselect6_retvals size %lu\n", sizeof(struct pselect6_retvals)); 
+  fprintf(stderr, "generic_socket_retvals size %lu\n", sizeof(struct generic_socket_retvals)); 
+  fprintf(stderr, "accept_retvals size %lu\n", sizeof(struct accept_retvals)); 
+  fprintf(stderr, "exec_values size %lu\n", sizeof(struct exec_values)); 
+  fprintf(stderr, "exec_values size %lu\n", sizeof(struct exec_values)); 
+  fprintf(stderr, "socketpair_retvals size %lu\n", sizeof(struct socketpair_retvals)); 
+  fprintf(stderr, "recvfrom_retvals size %lu\n", sizeof(struct recvfrom_retvals)); 
+  fprintf(stderr, "getxattr_retvals size %lu\n", sizeof(struct getxattr_retvals)); 
+  fprintf(stderr, "sendfile64_retvals size %lu\n", sizeof(struct sendfile64_retvals)); 
+  fprintf(stderr, "recvmsg_retvals size %lu\n", sizeof(struct recvmsg_retvals)); 
+  fprintf(stderr, "getsockopt_retvals size %lu\n", sizeof(struct getsockopt_retvals)); 
+  fprintf(stderr, "ipc_retvals size %lu\n", sizeof(struct ipc_retvals)); 
+  fprintf(stderr, "sem_retvals size %lu\n", sizeof(struct sem_retvals)); 
+  fprintf(stderr, "shmat_retvals size %lu\n", sizeof(struct shmat_retvals)); 
+  fprintf(stderr, "mmap_pgoff_retvals size %lu\n", sizeof(struct mmap_pgoff_retvals)); 
+  fprintf(stderr, "replayfs_filemap_entry size %lu\n", sizeof(struct replayfs_filemap_entry)); 
+  fprintf(stderr, "replayfs_filemap_value size %lu\n", sizeof(struct replayfs_filemap_value)); 
+  fprintf(stderr, "struct sigaction size %lu\n", sizeof(struct sigaction)); 
+#endif
+
 
 	if (rc == 0) { // should have reached the end of the log(s) here
 		/* We're at the end, return success, we just didn't read anything */
@@ -226,13 +255,13 @@ static int read_psr_chunk(struct klogfile *log) {
 			apsr->printfcn = log->default_printfcn;
 		}
 
-		debugf("Parsing psr %d with flags 0x%x\n", i, apsr->psr.flags);
+		debugf("Parsing psr %d (sys %s,%d) with flags 0x%x\n", i, syscall_name(apsr->psr.sysnum), apsr->psr.sysnum, apsr->psr.flags);
 
 		apsr->start_clock = log->expected_clock;
 		if ((apsr->psr.flags & SR_HAS_START_CLOCK_SKIP) != 0) {
 			u_long clock;
 			rc = read (log->fd, &clock, sizeof(u_long));
-			debugf("Reading startclock,%lx, %ld\n",clock,lseek(log->fd, 0, SEEK_CUR));
+			debugf("	Reading startclock skip,%lx, %ld\n",clock,lseek(log->fd, 0, SEEK_CUR));
 			if (rc != sizeof(u_long)) {
 				fprintf(stderr, "cannot read start clock value\n");
 				return rc;
@@ -246,7 +275,7 @@ static int read_psr_chunk(struct klogfile *log) {
 			apsr->retval = 0;
 		} else {
 			rc = read(log->fd, &apsr->retval, sizeof(long));
-			debugf("Reading retval,%lx,%ld\n",apsr->retval,lseek(log->fd, 0, SEEK_CUR));
+			debugf("	Reading retval,%lx,%ld\n",apsr->retval,lseek(log->fd, 0, SEEK_CUR));
 			if (rc != sizeof(long)) {
 				fprintf(stderr, "cannot read return value\n");
 				return -1;
@@ -257,7 +286,7 @@ static int read_psr_chunk(struct klogfile *log) {
 		if ((apsr->psr.flags & SR_HAS_STOP_CLOCK_SKIP) != 0) {
 			u_long clock;
 			rc = read (log->fd, &clock, sizeof(u_long));
-			debugf("Reading stopclock,%lx,%ld\n",clock,lseek(log->fd, 0, SEEK_CUR));
+			debugf("	Reading stopclock skip,%lx,%ld\n",clock,lseek(log->fd, 0, SEEK_CUR));
 			if (rc != sizeof(u_long)) {
 				fprintf(stderr, "cannot read start clock value\n");
 				return rc;
@@ -267,9 +296,11 @@ static int read_psr_chunk(struct klogfile *log) {
 		}
 		log->expected_clock = apsr->stop_clock + 1;
 
+		debugf("	start_clock %lu stop_clock %lu\n", apsr->start_clock, apsr->stop_clock);
+
 		apsr->retparams_size = getretparamsize(log, apsr);
 		assert(apsr->retparams_size >= 0);
-		debugf("Got retparams_size %d\n", apsr->retparams_size);
+		debugf("	Got retparams_size %d\n", apsr->retparams_size);
 		if (apsr->retparams_size > 0) {
 			long rc;
 			apsr->retparams = malloc(apsr->retparams_size);
@@ -277,7 +308,7 @@ static int read_psr_chunk(struct klogfile *log) {
 			assert(apsr->retparams);
 
 			rc = lseek(log->fd, 0, SEEK_CUR);
-			debugf("Reading retparams (%d) from %ld\n", apsr->retparams_size, rc);
+			debugf("	Reading retparams (%d) from %ld\n", apsr->retparams_size, rc);
 			bytes_read = 0;
 			do {
 				rc = read(log->fd, apsr->retparams+bytes_read, apsr->retparams_size-bytes_read);
@@ -310,7 +341,7 @@ static int read_psr_chunk(struct klogfile *log) {
 				}
 				apsr->signal->next = n;
 
-				debugf("Reading signal\n");
+				debugf("	Reading signal\n");
 				rc = read(log->fd, &apsr->signal->raw, 172);
 				if (rc != 172) {
 					fprintf (stderr, "read of signal returns %ld, errno = %d\n", rc, errno);
@@ -644,6 +675,7 @@ static u_long getretparams_read(struct klogfile *log,
 			rc = read(log->fd, &entry, sizeof(struct replayfs_filemap_entry));
 			lseek(log->fd, orig_pos, SEEK_SET);
 
+//fprintf(stderr, "111111\n");
 			if (rc != sizeof(struct replayfs_filemap_entry)) {
 				fprintf(stderr, "cannot read entry\n");
 				return -1;
@@ -659,6 +691,7 @@ static u_long getretparams_read(struct klogfile *log,
 			off_t orig_pos;
 			struct replayfs_filemap_entry entry;
 
+fprintf(stderr, "111112\n");
 			orig_pos = lseek(log->fd, 0, SEEK_CUR);
 			rc = read(log->fd, &entry, sizeof(struct replayfs_filemap_entry));
 			lseek(log->fd, orig_pos, SEEK_SET);
@@ -1067,7 +1100,8 @@ DEFRULE_FCN(0, getretparams_read); //read
 DEFRULE_FCN(1, getretparams_write);//write
 DEFRULE(2, sizeof(struct open_retvals));//open
 DEFRULE(529, sizeof(int));//waitpid
-DEFRULE(59, sizeof(struct execve_retvals));//execve
+//DEFRULE(59, sizeof(struct execve_retvals));//execve
+DEFRULE(59, 864);//execve
 DEFRULE(201, sizeof(time_t));//time
 //DEFRULE(18, sizeof(struct __old_kernel_stat));//oldstat
 //DEFRULE(28, sizeof(struct __old_kernel_stat));//oldfstat
@@ -1128,7 +1162,7 @@ DEFRULE(118, sizeof(u_short)*3);//getresuid
 DEFRULE_FCN(7, varsize);//poll
 DEFRULE(120, sizeof(u_short)*3);//getresgid
 DEFRULE_FCN(157, varsize);//prctl
-DEFRULE(13, 20); /* sizeof(struct sigaction)*///rt_sigaction
+DEFRULE(13, 32); /* sizeof(struct sigaction)*///rt_sigaction
 
 DEFRULE_FCN(14, varsize);//rt_sigprocmask
 DEFRULE_FCN(127, varsize);//rt_sigpending

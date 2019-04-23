@@ -132,6 +132,7 @@ static void print_read_graph(FILE *out, struct klog_result *res) {
 	}
 }
 
+#if 0
 static void print_socketcall(FILE *out, struct klog_result *res) {
 	struct syscall_result *psr = &res->psr;
 
@@ -142,6 +143,7 @@ static void print_socketcall(FILE *out, struct klog_result *res) {
 		fprintf(out, "         Socketcall is %d\n", call);
 	}
 }
+#endif
 
 static void print_rt_sigaction(FILE *out, struct klog_result *res) {
 	struct syscall_result *psr = &res->psr;
@@ -154,6 +156,7 @@ static void print_rt_sigaction(FILE *out, struct klog_result *res) {
 	}
 }
 
+#if 0
 static void print_getcwd(FILE *out, struct klog_result *res) {
 
 	parseklog_default_print(out, res);
@@ -164,7 +167,9 @@ static void print_getcwd(FILE *out, struct klog_result *res) {
 		fprintf(out, "         path is %s\n", ((char *)res->retparams)+sizeof(int));
 	}
 }
+#endif
 
+#if 0
 static void print_clock_gettime(FILE *out, struct klog_result *res) {
 	struct syscall_result *psr = &res->psr;
 
@@ -175,6 +180,7 @@ static void print_clock_gettime(FILE *out, struct klog_result *res) {
 		fprintf(out, "clock_gettime tv_sec:%ld, tv_nsec:%ld\n", time->tv_sec, time->tv_nsec);
 	}
 }
+#endif
 
 static void print_mmap(FILE *out, struct klog_result *res) {
 	struct syscall_result *psr = &res->psr;
@@ -277,6 +283,7 @@ static void print_read(FILE *out, struct klog_result *res) {
 	}
 }
 
+#if 0
 static void print_waitpid(FILE *out, struct klog_result *res) {
 	struct syscall_result *psr = &res->psr;
 	int *buf = res->retparams;
@@ -286,6 +293,7 @@ static void print_waitpid(FILE *out, struct klog_result *res) {
 		fprintf(out, "         Status is %d\n", *buf);
 	}
 }
+#endif
 
 static void print_pipe(FILE *out, struct klog_result *res) {
 	struct syscall_result *psr = &res->psr;
@@ -310,6 +318,7 @@ static void print_gettimeofday(FILE *out, struct klog_result *res) {
 	}
 }
 
+#if 0
 static void print_stat(FILE *out, struct klog_result *res) {
 	struct syscall_result *psr = &res->psr;
 	parseklog_default_print(out, res);
@@ -322,6 +331,7 @@ static void print_stat(FILE *out, struct klog_result *res) {
 			pst->st_size, pst->st_blksize, pst->st_blocks, pst->st_ino);
 	}
 }
+#endif
 
 static void print_execve(FILE *out, struct klog_result *res) {
 	struct syscall_result *psr = &res->psr;
@@ -404,22 +414,22 @@ int main(int argc, char **argv) {
 	}
 
 	if (type == BASE) {
-		parseklog_set_printfcn(log, print_read, 3);
-		parseklog_set_printfcn(log, print_write, 4);
-		parseklog_set_printfcn(log, print_open, 5);
-		parseklog_set_printfcn(log, print_waitpid, 7);
-		parseklog_set_printfcn(log, print_execve, 11);
-		parseklog_set_printfcn(log, print_pipe, 42);
-		parseklog_set_printfcn(log, print_gettimeofday, 78);
-		parseklog_set_printfcn(log, print_socketcall, 102);
-		parseklog_set_printfcn(log, print_write, 146);
-		parseklog_set_printfcn(log, print_rt_sigaction, 174);
-		parseklog_set_printfcn(log, print_getcwd, 182);
-		parseklog_set_printfcn(log, print_mmap, 192);
-		parseklog_set_printfcn(log, print_stat, 195);
-		parseklog_set_printfcn(log, print_stat, 196);
-		parseklog_set_printfcn(log, print_stat, 197);
-		parseklog_set_printfcn(log, print_clock_gettime, 265);
+		parseklog_set_printfcn(log, print_read, 0);
+		parseklog_set_printfcn(log, print_write, 1);
+		parseklog_set_printfcn(log, print_open, 2);
+//		parseklog_set_printfcn(log, print_waitpid, 7);
+		parseklog_set_printfcn(log, print_execve, 59);
+		parseklog_set_printfcn(log, print_pipe, 22);
+		parseklog_set_printfcn(log, print_gettimeofday, 96);
+//		parseklog_set_printfcn(log, print_socketcall, 102);
+//		parseklog_set_printfcn(log, print_write, 146);
+		parseklog_set_printfcn(log, print_rt_sigaction, 13);
+//		parseklog_set_printfcn(log, print_getcwd, 182);
+		parseklog_set_printfcn(log, print_mmap, 9);
+//		parseklog_set_printfcn(log, print_stat, 195);
+//		parseklog_set_printfcn(log, print_stat, 196);
+//		parseklog_set_printfcn(log, print_stat, 197);
+//		parseklog_set_printfcn(log, print_clock_gettime, 265);
 	} else if (type == GRAPH) {
 		parseklog_set_default_printfcn(log, empty_printfcn);
 		parseklog_set_signalprint(log, empty_printfcn);
