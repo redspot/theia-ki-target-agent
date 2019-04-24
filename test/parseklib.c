@@ -261,7 +261,7 @@ static int read_psr_chunk(struct klogfile *log) {
 		if ((apsr->psr.flags & SR_HAS_START_CLOCK_SKIP) != 0) {
 			u_long clock;
 			rc = read (log->fd, &clock, sizeof(u_long));
-			debugf("	Reading startclock skip,%lx, %ld\n",clock,lseek(log->fd, 0, SEEK_CUR));
+			debugf("	Reading startclock skip,%lx, %lx\n",clock,lseek(log->fd, 0, SEEK_CUR));
 			if (rc != sizeof(u_long)) {
 				fprintf(stderr, "cannot read start clock value\n");
 				return rc;
@@ -271,11 +271,26 @@ static int read_psr_chunk(struct klogfile *log) {
 		}
 		log->expected_clock = apsr->start_clock + 1;
 
+		if((apsr->psr.flags & SR_HAS_RECORD_UUID) != 0) {
+			char rec_uuid[THEIA_UUID_LEN+1];
+			int cnt = 0;
+			char one_char;
+			while(cnt < THEIA_UUID_LEN+1) {
+				rc = read(log->fd, &one_char, 1);
+				rec_uuid[cnt] = one_char;
+				if(one_char == '\0')
+					break;
+				cnt++;
+			}
+			debugf("	Reading RECORD_UUID %s, lseek pos: %lx\n", rec_uuid, lseek(log->fd, 0, SEEK_CUR));
+		}
+
+
 		if ((apsr->psr.flags & SR_HAS_NONZERO_RETVAL) == 0) {
 			apsr->retval = 0;
 		} else {
 			rc = read(log->fd, &apsr->retval, sizeof(long));
-			debugf("	Reading retval,%lx,%ld\n",apsr->retval,lseek(log->fd, 0, SEEK_CUR));
+			debugf("	Reading retval,%lx,%lx\n",apsr->retval,lseek(log->fd, 0, SEEK_CUR));
 			if (rc != sizeof(long)) {
 				fprintf(stderr, "cannot read return value\n");
 				return -1;
@@ -286,7 +301,7 @@ static int read_psr_chunk(struct klogfile *log) {
 		if ((apsr->psr.flags & SR_HAS_STOP_CLOCK_SKIP) != 0) {
 			u_long clock;
 			rc = read (log->fd, &clock, sizeof(u_long));
-			debugf("	Reading stopclock skip,%lx,%ld\n",clock,lseek(log->fd, 0, SEEK_CUR));
+			debugf("	Reading stopclock skip,%lx,%lx\n",clock,lseek(log->fd, 0, SEEK_CUR));
 			if (rc != sizeof(u_long)) {
 				fprintf(stderr, "cannot read start clock value\n");
 				return rc;
@@ -308,7 +323,7 @@ static int read_psr_chunk(struct klogfile *log) {
 			assert(apsr->retparams);
 
 			rc = lseek(log->fd, 0, SEEK_CUR);
-			debugf("	Reading retparams (%d) from %ld\n", apsr->retparams_size, rc);
+			debugf("	Reading retparams (%d) from %lx\n", apsr->retparams_size, rc);
 			bytes_read = 0;
 			do {
 				rc = read(log->fd, apsr->retparams+bytes_read, apsr->retparams_size-bytes_read);

@@ -1588,7 +1588,7 @@ struct repsignal_context
 #define SR_HAS_SPECIAL_FIRST  0x20
 #define SR_HAS_SPECIAL_SECOND 0x40
 //#define SR_HAS_SPECIAL_THIRD  0x80
-#define SR_HAS_AHGPARAMS  0x80
+#define SR_HAS_RECORD_UUID 0x80
 
 // This structure records the result of a system call
 struct syscall_result
@@ -5459,8 +5459,6 @@ _new_syscall_exit(long sysnum, void *retparams, void *ahgparams)
 
   psr = &prt->rp_log[prt->rp_in_ptr];
   psr->flags = retparams ? (psr->flags | SR_HAS_RETPARAMS) : psr->flags;
-  //Yang
-  psr->flags = ahgparams ? (psr->flags | SR_HAS_AHGPARAMS) : psr->flags;
 #ifdef USE_HPC
   psr->hpc_end = rdtsc();
 #endif
@@ -9415,6 +9413,7 @@ record_read(unsigned int fd, char __user *buf, size_t count)
   //Yang: for rec_uuid
 #ifdef RECORD_UUID
   char *puuid = NULL;
+	struct syscall_result *psr;
 #endif
   struct files_struct *files;
   struct fdtable *fdt;
@@ -9491,7 +9490,8 @@ record_read(unsigned int fd, char __user *buf, size_t count)
   }
   strncpy_safe((char *)puuid, rec_uuid_str, strlen(rec_uuid_str));
   DPRINT("rec_uuid_str is %s, rc %ld, is_cache %d,clock %d\n", rec_uuid_str, rc, is_cache_file, atomic_read(current->record_thrd->rp_precord_clock));
-  DPRINT("copied to pretval is (%s)\n", (char *)puuid);
+	psr = &current->record_thrd->rp_log[current->record_thrd->rp_in_ptr];
+	psr->flags |= SR_HAS_RECORD_UUID; 
 //pretval should not be updated because the RETPARAM flag is not used for rec_uuid
 #endif
 
@@ -10188,6 +10188,7 @@ record_write(unsigned int fd, const char __user *buf, size_t count)
   //Yang: for embedding uuid
 #ifdef RECORD_UUID
   char *puuid = NULL;
+	struct syscall_result *psr;
 #endif
   ssize_t size;
   char kbuf[180];
@@ -10248,6 +10249,8 @@ record_write(unsigned int fd, const char __user *buf, size_t count)
   strncpy_safe((char *)puuid, rec_uuid_str, strlen(rec_uuid_str));
   TPRINT("write: rec_uuid_str is %s,clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
   TPRINT("write: copied to pretval is (%s)\n", (char *)puuid);
+	psr = &current->record_thrd->rp_log[current->record_thrd->rp_in_ptr];
+	psr->flags |= SR_HAS_RECORD_UUID; 
 #endif
 
   DPRINT("Pid %d records write returning %zd\n", current->pid, size);
@@ -15969,6 +15972,7 @@ record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct 
   struct socket *sock;
 #ifdef RECORD_UUID
   char *puuid;
+	struct syscall_result *psr;
 #endif
   struct generic_socket_retvals *pretvals = NULL;
 #ifdef TIME_TRICK
@@ -16010,6 +16014,8 @@ record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct 
   strncpy_safe((char *)puuid, rec_uuid_str, strlen(rec_uuid_str));
   pr_debug("sendto: rec_uuid_str is %s,clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
   pr_debug("sendto: copied to pretval is (%s)\n", (char *)puuid);
+	psr = &current->record_thrd->rp_log[current->record_thrd->rp_in_ptr];
+	psr->flags |= SR_HAS_RECORD_UUID; 
 #endif
 
   new_syscall_done(44, rc);
@@ -16088,6 +16094,7 @@ record_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, stru
   long rc = 0;
 #ifdef RECORD_UUID
   char *puuid;
+	struct syscall_result *psr;
 #endif
   struct recvfrom_retvals *pretvals = NULL;
 #ifdef TIME_TRICK
@@ -16113,6 +16120,8 @@ record_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, stru
   strncpy_safe((char *)puuid, rec_uuid_str, strlen(rec_uuid_str));
   pr_debug("recvfrom: rec_uuid_str is %s, clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
   pr_debug("recvfrom: copied to pretval is (%s)\n", (char *)puuid);
+	psr = &current->record_thrd->rp_log[current->record_thrd->rp_in_ptr];
+	psr->flags |= SR_HAS_RECORD_UUID; 
 #endif
 
   new_syscall_done(45, rc);
@@ -16199,6 +16208,7 @@ record_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags)
   long rc = 0;
 #ifdef RECORD_UUID
   char *puuid;
+	struct syscall_result *psr;
 #endif
   struct generic_socket_retvals *pretvals = NULL;
 #ifdef TIME_TRICK
@@ -16224,6 +16234,8 @@ record_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags)
   strncpy_safe((char *)puuid, rec_uuid_str, strlen(rec_uuid_str));
   pr_debug("sendmsg: rec_uuid_str is %s, clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
   pr_debug("sendmsg: copied to pretval is (%s)\n", (char *)puuid);
+	psr = &current->record_thrd->rp_log[current->record_thrd->rp_in_ptr];
+	psr->flags |= SR_HAS_RECORD_UUID; 
 #endif
 
   new_syscall_done(46, rc);
@@ -16247,6 +16259,7 @@ record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
   long rc = 0;
 #ifdef RECORD_UUID
   char *puuid;
+	struct syscall_result *psr;
 #endif
   struct recvmsg_retvals *pretvals = NULL;
   struct msghdr __user *pmsghdr;
@@ -16276,6 +16289,8 @@ record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
   strncpy_safe((char *)puuid, rec_uuid_str, strlen(rec_uuid_str));
   pr_debug("recvmsg: rec_uuid_str is %s, clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
   pr_debug("recvmsg: copied to pretval is (%s)\n", (char *)puuid);
+	psr = &current->record_thrd->rp_log[current->record_thrd->rp_in_ptr];
+	psr->flags |= SR_HAS_RECORD_UUID; 
 #endif
 
 #ifdef TIME_TRICK
