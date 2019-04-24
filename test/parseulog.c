@@ -10,7 +10,7 @@ int main (int argc, char* argv[])
 {
     int fd, rc;
     struct stat st;
-    int bytes_read = 0;
+    u_long bytes_read = 0;
 #ifndef USE_DEBUG_LOG
     u_long total_clock = 0;
     int new_errno;
@@ -65,7 +65,8 @@ int main (int argc, char* argv[])
 #else
 	    u_long entry;
 	    long i;
-	    int skip, retval, fake_calls;
+			u_long skip;
+	    int retval, fake_calls;
 
             rc = read (fd, &entry, sizeof(u_long));
             if (rc != sizeof(u_long)) {
@@ -80,12 +81,12 @@ int main (int argc, char* argv[])
 		printf ("clock %lu fake calls 0 retval 0\n", total_clock-1);
 	    }
 	    if (entry&SKIPPED_CLOCK_FLAG) {
-		rc = read (fd, &skip, sizeof(int));
-		if (rc != sizeof(int)) {
+		rc = read (fd, &skip, sizeof(u_long));
+		if (rc != sizeof(u_long)) {
 		    perror ("read skip value\n");
 		    return rc;
 		}
-		printf ("     skip %d records\n", skip);
+		printf ("     skip %lu records\n", skip);
 		count += rc;
 		bytes_read += rc;
 		total_clock += skip + 1;
