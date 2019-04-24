@@ -75,6 +75,7 @@ struct replayfs_filemap_entry {
 #endif
 
 #define CACHE_MASK 1
+#define THEIA_UUID_LEN 256
 
 #ifdef TRACE_PIPE_READ_WRITE
 #  define IS_PIPE 2
@@ -98,7 +99,7 @@ struct repsignal {
 #define SR_HAS_START_CLOCK_SKIP 0x4
 #define SR_HAS_STOP_CLOCK_SKIP  0x8
 #define SR_HAS_NONZERO_RETVAL   0x10
-#define SR_HAS_AHGPARAMS        0x80
+#define SR_HAS_RECORD_UUID   		0x80
 
 #define REPLAY_MAX_RANDOM_VALUES 100
 struct rvalues {
@@ -379,6 +380,8 @@ static inline void parseklog_default_print(FILE *out, struct klog_result *res) {
 }
 
 int klog_print(FILE *out, struct klog_result *result);
+
+
 
 #endif
 
