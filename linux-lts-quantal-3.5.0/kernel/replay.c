@@ -106,6 +106,8 @@
 
 #include <linux/base64.h>
 
+#define RECORD_UUID
+
 /* copy up to max_len characters from source to target (a wrapper of strncpy).
    the size of target should be larger than max_len (at least by 1) */
 inline void strncpy_safe(char *target, const char *source, size_t max_len)
@@ -422,8 +424,10 @@ unsigned int replay_pause_tool = 0;
 #define ahg_new_syscall_exit(sysnum, retparam, ahgparam) _new_syscall_exit(sysnum, retparam, ahgparam)
 
 //Yang: inode etc for replay and pin
+#ifdef RECORD_UUID
 static char rec_uuid_str[THEIA_UUID_LEN + 1];
 static char repl_uuid_str[THEIA_UUID_LEN + 1] = "initial";
+#endif
 
 //ui globals
 static int uiDebug=1;
@@ -679,8 +683,10 @@ bool file2uuid(struct file *file, char *uuid_str, int fd)
       }
     }
     //Yang: we need these later:
+#ifdef RECORD_UUID
     if (uuid_str[0] != '\0')
       strncpy_safe(rec_uuid_str, uuid_str, THEIA_UUID_LEN);
+#endif
   }
   else
   {
@@ -4342,9 +4348,13 @@ EXPORT_SYMBOL(get_log_id);
 //Yang: get inode,dev,crtime for taint
 int get_inode_for_pin(u_long inode)
 {
+#ifdef RECORD_UUID
   TPRINT("received get_inode_for_pin request!!!!, inode %lx, repl_uuid_str is %s\n", inode, repl_uuid_str);
   copy_to_user((char *)inode, repl_uuid_str, strnlen(repl_uuid_str, THEIA_UUID_LEN));
   ((char *)inode)[strnlen(repl_uuid_str, THEIA_UUID_LEN)] = '\0';
+#else
+  TPRINT("received get_inode_for_pin request, but RECORD_UUID is not turned on, ignore.\n");
+#endif
   return 0;
 }
 EXPORT_SYMBOL(get_inode_for_pin);
@@ -6545,6 +6555,7 @@ get_next_syscall_enter(struct replay_thread *prt, struct replay_group *prg, int 
   if (ret_start_clock) *ret_start_clock = start_clock;
 #endif
 
+#ifdef RECORD_UUID
   //Yang: take out the ino, dev, etc
   if (syscall == 0 || syscall == 1 || syscall == 44 ||
       syscall == 45 || syscall == 46 || syscall == 47)
@@ -6553,6 +6564,7 @@ get_next_syscall_enter(struct replay_thread *prt, struct replay_group *prg, int 
     TPRINT("syscall %d, repl_uuid is %s, repl_uuid_str len is %lu, retparam len is %lu\n", syscall, repl_uuid_str, strlen(repl_uuid_str), strlen((char *)argshead(prect)));
     argsconsume(prect, strlen(repl_uuid_str) + 1);
   }
+#endif
 
 
   if (unlikely(psr->sysnum != syscall))
@@ -9401,7 +9413,9 @@ record_read(unsigned int fd, char __user *buf, size_t count)
   long rc;
   char *pretval = NULL;
   //Yang: for rec_uuid
+#ifdef RECORD_UUID
   char *puuid = NULL;
+#endif
   struct files_struct *files;
   struct fdtable *fdt;
   struct file *filp;
@@ -9467,6 +9481,7 @@ record_read(unsigned int fd, char __user *buf, size_t count)
     theia_read_ahg(fd, rc);
 
   //Yang: we get the inode
+#ifdef RECORD_UUID
   puuid = ARGSKMALLOC(strnlen(rec_uuid_str,THEIA_UUID_LEN) + 1, GFP_KERNEL);
   if (puuid == NULL)
   {
@@ -9477,6 +9492,8 @@ record_read(unsigned int fd, char __user *buf, size_t count)
   strncpy_safe((char *)puuid, rec_uuid_str, strlen(rec_uuid_str));
   DPRINT("rec_uuid_str is %s, rc %ld, is_cache %d,clock %d\n", rec_uuid_str, rc, is_cache_file, atomic_read(current->record_thrd->rp_precord_clock));
   DPRINT("copied to pretval is (%s)\n", (char *)puuid);
+//pretval should not be updated because the RETPARAM flag is not used for rec_uuid
+#endif
 
 #ifdef TIME_TRICK
   if (rc <= 0) shift_clock = 0;
@@ -9493,8 +9510,6 @@ record_read(unsigned int fd, char __user *buf, size_t count)
 #else
   new_syscall_done(0, rc);
 #endif
-
-  //pretval = pretval+strlen(rec_uuid_str)+1;
 
   if (rc > 0 && buf)
   {
@@ -9523,7 +9538,6 @@ record_read(unsigned int fd, char __user *buf, size_t count)
       // Since not all syscalls handled for cached reads, record the position
       DPRINT("Cached read of fd %u - record by reference\n", fd);
       pretval = ARGSKMALLOC(sizeof(u_int) + sizeof(loff_t), GFP_KERNEL);
-      //      pretval = ARGSKMALLOC (strlen(rec_uuid_str)+1+sizeof(u_int) + sizeof(loff_t), GFP_KERNEL);
       if (pretval == NULL)
       {
         TPRINT("record_read: can't allocate pos buffer\n");
@@ -10172,7 +10186,9 @@ record_write(unsigned int fd, const char __user *buf, size_t count)
 {
   char *pretparams = NULL;
   //Yang: for embedding uuid
+#ifdef RECORD_UUID
   char *puuid = NULL;
+#endif
   ssize_t size;
   char kbuf[180];
   struct file *filp;
@@ -10222,6 +10238,7 @@ record_write(unsigned int fd, const char __user *buf, size_t count)
     theia_write_ahg(fd, size, buf, count);
 
   //Yang: we get the inode
+#ifdef RECORD_UUID
   puuid = ARGSKMALLOC(strlen(rec_uuid_str) + 1, GFP_KERNEL);
   if (puuid == NULL)
   {
@@ -10231,6 +10248,7 @@ record_write(unsigned int fd, const char __user *buf, size_t count)
   strncpy_safe((char *)puuid, rec_uuid_str, strlen(rec_uuid_str));
   TPRINT("write: rec_uuid_str is %s,clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
   TPRINT("write: copied to pretval is (%s)\n", (char *)puuid);
+#endif
 
   DPRINT("Pid %d records write returning %zd\n", current->pid, size);
 #ifdef X_COMPRESS
@@ -11534,8 +11552,6 @@ record_execve(const char *filename, const char __user *const __user *__argv, con
 
   new_syscall_done(59, rc);
   TPRINT("Yang record_execve after new_syscall_done, ip: %lx, sp: %lx, r11: %lx, rc %ld\n", regs->ip, regs->sp, regs->r11, rc);
-  print_value(regs->sp, 128);
-  print_value(regs->sp + 128, 16);
   if (rc >= 0)
   {
     prt->rp_user_log_addr = 0; // User log address no longer valid since new address space entirely
@@ -15951,7 +15967,9 @@ record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct 
   long rc = 0;
   int err = 0;
   struct socket *sock;
+#ifdef RECORD_UUID
   char *puuid;
+#endif
   struct generic_socket_retvals *pretvals = NULL;
 #ifdef TIME_TRICK
   int shift_clock = 1;
@@ -15982,6 +16000,7 @@ record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct 
     theia_sendto_ahg(rc, fd, buff, len, flags, addr, addr_len);
 
   //Yang: we get the inode
+#ifdef RECORD_UUID
   puuid = ARGSKMALLOC(strlen(rec_uuid_str) + 1, GFP_KERNEL);
   if (puuid == NULL)
   {
@@ -15991,6 +16010,7 @@ record_sendto(int fd, void __user *buff, size_t len, unsigned int flags, struct 
   strncpy_safe((char *)puuid, rec_uuid_str, strlen(rec_uuid_str));
   pr_debug("sendto: rec_uuid_str is %s,clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
   pr_debug("sendto: copied to pretval is (%s)\n", (char *)puuid);
+#endif
 
   new_syscall_done(44, rc);
 
@@ -16066,7 +16086,9 @@ static asmlinkage long
 record_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, struct sockaddr __user *addr, int __user *addr_len)
 {
   long rc = 0;
+#ifdef RECORD_UUID
   char *puuid;
+#endif
   struct recvfrom_retvals *pretvals = NULL;
 #ifdef TIME_TRICK
   int shift_clock = 1;
@@ -16081,6 +16103,7 @@ record_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, stru
     theia_recvfrom_ahg(rc, fd, ubuf, size, flags, addr, addr_len);
 
   //Yang: we get the inode
+#ifdef RECORD_UUID
   puuid = ARGSKMALLOC(strlen(rec_uuid_str) + 1, GFP_KERNEL);
   if (puuid == NULL)
   {
@@ -16090,6 +16113,7 @@ record_recvfrom(int fd, void __user *ubuf, size_t size, unsigned int flags, stru
   strncpy_safe((char *)puuid, rec_uuid_str, strlen(rec_uuid_str));
   pr_debug("recvfrom: rec_uuid_str is %s, clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
   pr_debug("recvfrom: copied to pretval is (%s)\n", (char *)puuid);
+#endif
 
   new_syscall_done(45, rc);
 
@@ -16173,7 +16197,9 @@ static asmlinkage long
 record_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags)
 {
   long rc = 0;
+#ifdef RECORD_UUID
   char *puuid;
+#endif
   struct generic_socket_retvals *pretvals = NULL;
 #ifdef TIME_TRICK
   int shift_clock = 1;
@@ -16188,6 +16214,7 @@ record_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags)
     theia_sendmsg_ahg(rc, fd, msg, flags);
 
   //Yang: we get the inode
+#ifdef RECORD_UUID
   puuid = ARGSKMALLOC(strlen(rec_uuid_str) + 1, GFP_KERNEL);
   if (puuid == NULL)
   {
@@ -16197,6 +16224,7 @@ record_sendmsg(int fd, struct msghdr __user *msg, unsigned int flags)
   strncpy_safe((char *)puuid, rec_uuid_str, strlen(rec_uuid_str));
   pr_debug("sendmsg: rec_uuid_str is %s, clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
   pr_debug("sendmsg: copied to pretval is (%s)\n", (char *)puuid);
+#endif
 
   new_syscall_done(46, rc);
 
@@ -16217,7 +16245,9 @@ static asmlinkage long
 record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
 {
   long rc = 0;
+#ifdef RECORD_UUID
   char *puuid;
+#endif
   struct recvmsg_retvals *pretvals = NULL;
   struct msghdr __user *pmsghdr;
   char *pdata;
@@ -16236,6 +16266,7 @@ record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
     theia_recvmsg_ahg(rc, fd, msg, flags);
 
   //Yang: we get the inode
+#ifdef RECORD_UUID
   puuid = ARGSKMALLOC(strlen(rec_uuid_str) + 1, GFP_KERNEL);
   if (puuid == NULL)
   {
@@ -16245,6 +16276,7 @@ record_recvmsg(int fd, struct msghdr __user *msg, unsigned int flags)
   strncpy_safe((char *)puuid, rec_uuid_str, strlen(rec_uuid_str));
   pr_debug("recvmsg: rec_uuid_str is %s, clock %d\n", rec_uuid_str, atomic_read(current->record_thrd->rp_precord_clock));
   pr_debug("recvmsg: copied to pretval is (%s)\n", (char *)puuid);
+#endif
 
 #ifdef TIME_TRICK
   shift_clock = 0;
@@ -24332,7 +24364,7 @@ int read_log_data_internal(struct record_thread *prect, struct syscall_result *p
       goto error;
     }
     TPRINT("read in klog: len %lu\n", data_len);
-    print_mem(node->pos, data_len);
+    //print_mem(node->pos, data_len);
   }
 
   *syscall_count = count;
