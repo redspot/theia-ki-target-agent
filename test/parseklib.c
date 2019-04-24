@@ -79,7 +79,7 @@ static void default_signal_printfcn(FILE *out, struct klog_result *res) {
 	sig = &res->signal->sig;
 
 	while (sig) {
-		fprintf(out, "         !!-- Has signal %d --!!\n", sig->signr);
+		fprintf(out, "         !!-- Has signal %d --!!\n", *(int*)sig);
 		sig = sig->next;
 	}
 }
@@ -194,10 +194,9 @@ static int read_psr_chunk(struct klogfile *log) {
 	}
 
 	/* Read the records... eventually */
-	psrs = malloc(sizeof(struct syscall_result) * count);
+	psrs = calloc(count, sizeof(struct syscall_result));
 	if (!psrs) {
-		//fprintf(stderr, "Cound not malloc %d bytes\n", sizeof(struct syscall_result)*count);
-		fprintf(stderr, "Cound not malloc %lu bytes\n", sizeof(struct syscall_result)*count);
+		fprintf(stderr, "Cound not calloc %lu bytes\n", sizeof(struct syscall_result)*count);
 		goto out;
 	}
 
@@ -205,10 +204,9 @@ static int read_psr_chunk(struct klogfile *log) {
 		free_active_psrs(log);
 	}
 
-	log->active_psrs = malloc(sizeof(struct klog_result) * count);
+	log->active_psrs = calloc(count, sizeof(struct klog_result));
 	if (!log->active_psrs) {
-		//fprintf(stderr, "Could not malloc %d bytes\n", sizeof(struct klog_result) * count);
-		fprintf(stderr, "Could not malloc %lu bytes\n", sizeof(struct klog_result) * count);
+		fprintf(stderr, "Could not calloc %lu bytes\n", sizeof(struct klog_result) * count);
 		goto out_free;
 	}
 
@@ -318,7 +316,7 @@ static int read_psr_chunk(struct klogfile *log) {
 		debugf("	Got retparams_size %d\n", apsr->retparams_size);
 		if (apsr->retparams_size > 0) {
 			long rc;
-			apsr->retparams = malloc(apsr->retparams_size);
+			apsr->retparams = calloc(1,apsr->retparams_size);
 			/* FIXME: should fail nicely... */
 			assert(apsr->retparams);
 
@@ -345,7 +343,8 @@ static int read_psr_chunk(struct klogfile *log) {
 			struct klog_signal *n;
 			do {
 				n = apsr->signal;
-				apsr->signal = malloc(sizeof(struct klog_signal));
+				apsr->signal = calloc(1, sizeof(struct klog_signal));
+				memset(apsr->signal, 0x0, sizeof(struct klog_signal));
 				/* FIXME: exit cleanly */
 				assert(apsr->signal);
 
@@ -357,13 +356,13 @@ static int read_psr_chunk(struct klogfile *log) {
 				apsr->signal->next = n;
 
 				debugf("	Reading signal\n");
-				rc = read(log->fd, &apsr->signal->raw, 172);
-				if (rc != 172) {
+				rc = read(log->fd, &apsr->signal->raw, 192);
+				if (rc != 192) {
 					fprintf (stderr, "read of signal returns %ld, errno = %d\n", rc, errno);
 					goto out_free;
 				}
 				apsr->signal->sig.signr = *(int *)apsr->signal->raw;
-			} while (*(char **)(apsr->signal->raw+168));
+			} while (*(char **)(apsr->signal->raw+184));
 		} else {
 			apsr->signal = NULL;
 		}
@@ -382,7 +381,7 @@ static void add_default_parse_rule_exceptions(struct klogfile *log);
 struct klogfile *parseklog_open(const char *filename) {
 	struct klogfile *ret = NULL;
 
-	ret = malloc(sizeof(*ret));
+	ret = calloc(1, sizeof(*ret));
 	if (ret == NULL) {
 		goto out;
 	}
@@ -501,7 +500,7 @@ int parseklog_do_write_chunk(int count, struct klog_result *psrs, int destfd) {
 		if (apsr->flags & SR_HAS_SIGNAL) {
 			struct klog_signal *n = psrs[i].signal;
 			do {
-				data_size += 172;
+				data_size += 192;
 			} while (n->next);
 		}
 
@@ -560,7 +559,7 @@ int parseklog_do_write_chunk(int count, struct klog_result *psrs, int destfd) {
 		if (apsr->flags & SR_HAS_SIGNAL) {
 			struct klog_signal *n = res->signal;
 			do {
-				write(destfd, n->raw, 172);
+				write(destfd, n->raw, 192);
 			if (rc != sizeof(long)) {
 				fprintf(stderr, "Couldn't record raw signal\n");
 				return -1;
@@ -880,7 +879,7 @@ static u_long getretparams_socketcall(struct klogfile *log,
 
 					entry_size = sizeof(struct replayfs_filemap_entry) + entry.num_elms * sizeof(struct replayfs_filemap_value);
 					size += entry_size;
-					real_entry = malloc(entry_size);
+					real_entry = calloc(1, entry_size);
 					if (real_entry == NULL) {
 						fprintf(stderr, "Cannot alloc real_entry\n");
 						return -1;
@@ -950,7 +949,7 @@ static u_long getretparams_socketcall(struct klogfile *log,
 
 					entry_size = sizeof(struct replayfs_filemap_entry) + entry.num_elms * sizeof(struct replayfs_filemap_value);
 					size += entry_size;
-					real_entry = malloc(entry_size);
+					real_entry = calloc(1,entry_size);
 					if (real_entry == NULL) {
 						fprintf(stderr, "Cannot alloc real_entry\n");
 						return -1;
@@ -1159,7 +1158,7 @@ DEFRULE(5, sizeof(struct stat));//fstat
 DEFRULE(61, sizeof(struct wait4_retvals));//wait4
 DEFRULE(99, sizeof(struct sysinfo));//sysinfo
 //DEFRULE_FCN(117, varsize);//ipc
-DEFRULE(63, sizeof(struct new_utsname));//uname
+DEFRULE(63, sizeof(struct old_utsname));//uname
 DEFRULE(159, sizeof(struct timex));//adjtimex
 //DEFRULE(14, sizeof(unsigned long)); // old_sigset_t - def in asm/signal.h but cannot include //sigprocmask
 DEFRULE_FCN(179, varsize);//quotactl
