@@ -297,7 +297,7 @@ struct syscall_result {
 };
 
 struct klog_signal {
-	char raw[172];
+	char raw[192];
 	struct repsignal sig;
 	struct klog_signal *next;
 };
