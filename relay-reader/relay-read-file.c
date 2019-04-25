@@ -51,6 +51,16 @@
 #include <net/if.h>
 #include <arpa/inet.h>
 
+#ifndef __GNUC__
+  #error gcc compiler required
+#endif
+#if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8)
+  #define atomic_inc(val) __atomic_fetch_add(&val, 1, __ATOMIC_SEQ_CST)
+  #define atomic_dec(val) __atomic_fetch_sub(&val, 1, __ATOMIC_SEQ_CST)
+#else
+  #define atomic_inc(val) __sync_fetch_and_add(&val, 1)
+  #define atomic_dec(val) __sync_fetch_and_sub(&val, 1)
+#endif
 
 // I have no idea why string.h doesnt have this
 void *memrchr(const void *s, int c, size_t n);
@@ -59,6 +69,11 @@ void *memrchr(const void *s, int c, size_t n);
 char *app_dirname = "/debug/theia_logs";
 /* base name of per-cpu relay files (e.g. /debug/cpu0, cpu1, ...) */
 char *percpu_basename = "cpu";
+// dump directory
+const char dump_prefix[] = "/data";
+const char dump_file_template[] = "/ahg.dump.%u.%d";
+pthread_mutex_t output_fd_mtx = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t output_fd_cond = PTHREAD_COND_INITIALIZER;
 
 // EOF tag.
 char* eof_tag = "startahg|end_of_file|endahg\n";
@@ -79,19 +94,40 @@ static size_t ROTATE_SIZE = LONG_MAX;
 /* internal variables */
 static unsigned int ncpus;
 static volatile int stop_threads = 0;
+static volatile int reopen_dump = 0;
 //the third argument to poll() is the timeout in milliseconds
 //poll() will return early if there is IO to perform
 #define RELAYFS_TIMEOUT 1000
+uint8_t dump_id;
 
 /* per-cpu internal variables */
 static int relay_file[NR_CPUS];
 static pthread_t reader[NR_CPUS];
+// how many children are running
+static volatile unsigned int running_children = 0;
 
 static int open_app_files(void);
 static void close_app_files(void);
 static int kill_percpu_threads(int n);
 static int create_percpu_threads(void);
 ssize_t chk_write(int fd, const void *buf, size_t count);
+
+int open_dump(unsigned int counter) {
+  size_t len = 0;
+  int fd = -1;
+  char *dump_fn = malloc(PATH_MAX);
+  if (!dump_fn) return -1;
+  sprintf(dump_fn, "%s", dump_prefix);
+  len = strlen(dump_fn);
+  sprintf(dump_fn + len, dump_file_template, dump_id, counter);
+	fd = open(dump_fn, O_RDWR|O_CREAT|O_APPEND, 0644);
+  free(dump_fn);
+  return fd;
+}
+
+void close_dump(int fd) {
+  close(fd);
+}
 
 uint8_t get_ip_last_seg(char *full_ip) {
   const int magic_limit = 3;
@@ -145,6 +181,8 @@ int main(int argc, char **argv)
 #if defined(SIGQUIT)
 	sigaddset(&signals, SIGQUIT);
 #endif
+  // USR1 causes relay-reader to close/open the output dump file
+	sigaddset(&signals, SIGUSR1);
 	pthread_sigmask(SIG_BLOCK, &signals, NULL);
 
 	ncpus = sysconf(_SC_NPROCESSORS_ONLN);
@@ -154,6 +192,7 @@ int main(int argc, char **argv)
 	pid_t pid = getpgrp();
 	printf("relay-read-file starting: pid=%d\n", pid);
 
+  dump_id = get_last_ip_seg();
 	if (open_app_files())
 		return -1;
 
@@ -162,7 +201,25 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-  sigwait(&signals, &signal);
+  const struct timespec child_wait = {
+    .tv_sec = 5,
+    .tv_nsec = 0};
+  while (1) {
+    // check every child_wait to see if all the children
+    // have exited early
+    signal = sigtimedwait(&signals, NULL, &child_wait);
+    if (signal < 0) { // timeout or other signal
+      if (running_children < 1) break;
+      continue;
+    }
+    if (signal != SIGUSR1) break;
+    // signal threads to close/open output file
+    pthread_mutex_lock(&output_fd_mtx);
+    reopen_dump = ncpus;
+    while (reopen_dump > 0)
+      pthread_cond_wait(&output_fd_cond, &output_fd_mtx);
+    pthread_mutex_unlock(&output_fd_mtx);
+  } // after this, we cleanup and exit
   stop_threads = 1;
   printf("relay-read-file cancelling children\n");
   kill_percpu_threads(ncpus);
@@ -189,26 +246,33 @@ inline ssize_t chk_write(int fd, const void *buf, size_t count) {
   return n;
 }
 
+// this will get called if the thread calls pthread_exit()
+// or if the thread is cancelled.
+// pthread_cleanup_push(cleanup_child, NULL);
+static void cleanup_child(void *arg)
+{
+  atomic_dec(running_children);
+}
+
 /**
  *	reader_thread - per-cpu channel buffer reader
  */
 static void *reader_thread(void *data)
 {
 	int hostfd = -1;
-  char filename[50];
-  uint8_t dump_id = get_last_ip_seg();
-  int dump_cnt = 1;
+  unsigned int dump_cnt = 1;
 	char buf[READ_BUF_LEN + 1];
   char* newline;
 	int rc, cpu = (int)(long)data;
 	struct pollfd pollfd;
   size_t fsize, slen;
 
+  atomic_inc(running_children);
+  pthread_cleanup_push(cleanup_child, NULL);
   printf("reader thread starting for cpu %i\n", cpu);
 
 	// use a file
-  sprintf(filename, "/data/ahg.dump.%u.%d", dump_id, dump_cnt);
-	hostfd = open(filename, O_RDWR|O_CREAT|O_APPEND, 0777);
+	hostfd = open_dump(dump_cnt);
 
   pollfd.fd = relay_file[cpu];
   pollfd.events = POLLIN;
@@ -218,10 +282,18 @@ static void *reader_thread(void *data)
 		rc = poll(&pollfd, 1, RELAYFS_TIMEOUT);
 		if (stop_threads)
 			break;
+    if (reopen_dump > 0) {
+      pthread_mutex_lock(&output_fd_mtx);
+      close_dump(hostfd);
+      hostfd = open_dump(dump_cnt);
+      reopen_dump--;
+      pthread_cond_signal(&output_fd_cond);
+      pthread_mutex_unlock(&output_fd_mtx);
+    }
 		if (rc < 0) {
 			if (errno != EINTR) {
 				printf("poll error: %s\n",strerror(errno));
-				exit(1);
+        break;
 			}
 			printf("poll warning: %s\n",strerror(errno));
 		}
@@ -250,15 +322,15 @@ static void *reader_thread(void *data)
       slen = (newline - buf) + 1;
       chk_write(hostfd, buf, slen);
       chk_write(hostfd, eof_tag, strlen(eof_tag));
-      close(hostfd);
+      close_dump(hostfd);
       dump_cnt ++;
-      sprintf(filename, "/data/ahg.dump.%u.%d", dump_id,dump_cnt);
-      hostfd = open(filename, O_RDWR|O_CREAT|O_APPEND, 0777);
+      hostfd = open_dump(dump_cnt);
       chk_write(hostfd, newline + 1, rc - slen);
     }
 	} while (1);
   printf("reader thread exiting for cpu %i\n", cpu);
-  pthread_exit(NULL);
+  pthread_exit(NULL);  // calls cleanup_child()
+  pthread_cleanup_pop(NULL);  //needed to match pthread_cleanup_push()
   return NULL;
 }
 
