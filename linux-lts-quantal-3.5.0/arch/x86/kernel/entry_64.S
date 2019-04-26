@@ -447,6 +447,8 @@ ENTRY(ret_from_fork)
 
 	GET_THREAD_INFO(%rcx)
 
+	call ret_from_fork_replay		#64port. not sure should be here..
+
 	RESTORE_REST
 
 	testl $3, CS-ARGOFFSET(%rsp)		# from kernel_thread?
@@ -466,8 +468,6 @@ ENTRY(ret_from_fork_2)
 
 	LOCK ; btr $TIF_FORK_2,TI_flags(%r8)
 
-	call ret_from_fork_replay		#64port. not sure should be here..
-
 	pushq_cfi kernel_eflags(%rip)
 	popfq_cfi				# reset kernel eflags
 
@@ -476,6 +476,8 @@ ENTRY(ret_from_fork_2)
 	GET_THREAD_INFO(%rcx)
 
 	RESTORE_REST
+
+	call ret_from_fork_replay		#64port. not sure should be here..
 
 	testl $3, CS-ARGOFFSET(%rsp)		# from kernel_thread?
 	jz   retint_restore_args
