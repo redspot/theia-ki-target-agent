@@ -15,6 +15,8 @@
 //#define DPRINT pthread_log_debug
 #define DPRINT(x,...)
 
+
+
 // Globals for user-level replay
 int pthread_log_status = PTHREAD_LOG_NONE;
 unsigned long* ppthread_log_clock = 0;
@@ -412,37 +414,37 @@ pthread_log_replay (unsigned long type, unsigned long check)
 
     DPRINT ("Read record from log: clock %lu, retval %d, type %lu, check %lx\n", data->clock, data->retval, data->type, data->check);
 
-    if (data->type == 0) { // We've reached the end of the log - some other thread may be able to run, though
-	pthread_log_block (INT_MAX); 
-    }
-    while (data->type == FAKE_SYSCALLS) {
-	(head->next)++; // Increment to next log record
-	if (head->next == head->end) {
-	    DPRINT ("Log is full - need to reload\n");
-	    pthread_log_full ();
-	    head->next = (struct pthread_log_data *) ((char *) head + sizeof (struct pthread_log_head));
-	}
-	// Make the specified number of fake syscalls to sequence signals correctly
-	for (i = 0; i < data->retval; i++) {
-	    pthread_sysign ();
-	}
-	// New should be able to consider the next record (after ones handled by signhandler)
-	data = head->next;
-    }
+		if (data->type == 0) { // We've reached the end of the log - some other thread may be able to run, though
+			pthread_log_block (INT_MAX); 
+		}
+		while (data->type == FAKE_SYSCALLS) {
+			(head->next)++; // Increment to next log record
+			if (head->next == head->end) {
+				DPRINT ("Log is full - need to reload\n");
+				pthread_log_full ();
+				head->next = (struct pthread_log_data *) ((char *) head + sizeof (struct pthread_log_head));
+			}
+			// Make the specified number of fake syscalls to sequence signals correctly
+			for (i = 0; i < data->retval; i++) {
+				pthread_sysign ();
+			}
+			// New should be able to consider the next record (after ones handled by signhandler)
+			data = head->next;
+		}
 
-    if (data->check != check || data->type != type) {
-	pthread_log_debug ("Replay mismatch: log record %lu has type %lu check %x - but called with type %lu check %lx\n", data->clock, data->type, data->check, type, check);
+		if (data->check != check || data->type != type) {
+			pthread_log_debug ("Replay mismatch: log record %lu has type %lu check %x - but called with type %lu check %lx\n", data->clock, data->type, data->check, type, check);
 #ifdef USE_EXTRA_DEBUG_LOG
-	pthread_extra_log_mismatch ();
+			pthread_extra_log_mismatch ();
 #endif
 #if 0
-	pthread_log_debug ("Callee 0 is 0x%p\n", __builtin_return_address(0));
-	pthread_log_debug ("Callee 1 is 0x%p\n", __builtin_return_address(1));
-	pthread_log_debug ("Callee 2 is 0x%p\n", __builtin_return_address(2));
-	pthread_log_debug ("Callee 3 is 0x%p\n", __builtin_return_address(3));
+			pthread_log_debug ("Callee 0 is 0x%p\n", __builtin_return_address(0));
+			pthread_log_debug ("Callee 1 is 0x%p\n", __builtin_return_address(1));
+			pthread_log_debug ("Callee 2 is 0x%p\n", __builtin_return_address(2));
+			pthread_log_debug ("Callee 3 is 0x%p\n", __builtin_return_address(3));
 #endif
-	exit (0);
-    }
+			exit (0);
+		}
 
     while (*ppthread_log_clock < data->clock) {
 	pthread_log_block (data->clock); // Kernel will block us until we can run again
@@ -519,89 +521,90 @@ pthread_log_record (int retval, unsigned long type, unsigned long check, int is_
     }
 
     head->ignore_flag = is_entry;
-    DPRINT ("Added record to log: clock %lu retval %d type %lu check %lx errno %d\n", new_clock, retval, type, check, errno);
+    DPRINT ("Added record to log: clock %lu retval %d type %lu check %lx errno %d, ppthread_log_clock %p\n", new_clock, retval, type, check, errno, ppthread_log_clock);
 }
 
-int 
+	int 
 pthread_log_replay (unsigned long type, unsigned long check)
 {
-    struct pthread_log_head* head = THREAD_GETMEM (THREAD_SELF, log_head);
-    unsigned long* pentry;
-    unsigned long next_clock;
-    int num_fake_calls, i, retval;
+	struct pthread_log_head* head = THREAD_GETMEM (THREAD_SELF, log_head);
+	unsigned long* pentry;
+	unsigned long next_clock;
+	int num_fake_calls, i, retval;
 
-    if (head == NULL) return 0;
+	if (head == NULL) return 0;
 
-    if (head->num_expected_records > 1) {
-	head->expected_clock++;
+	if (head->num_expected_records > 1) {
+		head->expected_clock++;
+		(*ppthread_log_clock)++;
+		DPRINT ("Replay clock auto-incremented (1) to %d\n", *ppthread_log_clock);
+		head->num_expected_records--;
+		return 0;
+	} 
+
+	pentry = (unsigned long *) head->next;
+
+	if (head->num_expected_records == 0) {
+		// Only do these things on a *newly read* record
+		DPRINT ("Read entry from log: %lx\n", *pentry);
+
+		if (*pentry == 0) { // We've reached the end of the log - some other thread may be able to run, though
+			pthread_log_block (INT_MAX); 
+		}
+		head->num_expected_records = (*pentry & CLOCK_MASK);
+		if (head->num_expected_records) {
+			head->expected_clock++;
+			(*ppthread_log_clock)++;
+			DPRINT ("Replay clock auto-incremented (2) to %d\n", *ppthread_log_clock);
+			return 0;
+		}
+	}
+
+	head->next += sizeof(unsigned long); // Consume entry since all expected records are done
+	head->num_expected_records = 0;
+
+
+	next_clock = head->expected_clock;
+	if (*pentry & SKIPPED_CLOCK_FLAG) {
+		next_clock += *((unsigned long *)head->next);
+		head->next += sizeof(unsigned long);
+	}
+
+	if (*pentry & NONZERO_RETVAL_FLAG) {
+		retval = *((int *)head->next);
+		head->next += sizeof(int);
+	} else {
+		retval = 0;
+	}
+
+	if (*pentry & ERRNO_CHANGE_FLAG) {
+		errno = *((int *)head->next);
+		head->next += sizeof(int);
+	}
+
+	if (*pentry & FAKE_CALLS_FLAG) {
+		num_fake_calls = *((int *)head->next);
+		head->next += sizeof(int);
+
+		// Make the specified number of fake syscalls to sequence signals correctly
+		for (i = 0; i < num_fake_calls; i++) pthread_sysign ();
+	}
+
+	while (*ppthread_log_clock < next_clock) {
+		DPRINT ("waiting for clock %lu\n", next_clock);
+		pthread_log_block (next_clock); // Kernel will block us until we can run again
+	}
+	head->expected_clock = next_clock + 1;
 	(*ppthread_log_clock)++;
-	DPRINT ("Replay clock auto-incremented (1) to %d\n", *ppthread_log_clock);
-	head->num_expected_records--;
-	return 0;
-    } 
+	DPRINT ("Replay clock incremented to %d\n", *ppthread_log_clock);
 
-    pentry = (unsigned long *) head->next;
-    
-    if (head->num_expected_records == 0) {
-	// Only do these things on a *newly read* record
-	DPRINT ("Read entry from log: %lx\n", *pentry);
-
-	if (*pentry == 0) { // We've reached the end of the log - some other thread may be able to run, though
-	    pthread_log_block (INT_MAX); 
+	if (head->next >= head->end) {
+		DPRINT ("Log is full - need to reload\n");
+		pthread_log_full ();
+		head->next = ((char *) head + sizeof (struct pthread_log_head));
 	}
-	head->num_expected_records = (*pentry & CLOCK_MASK);
-	if (head->num_expected_records) {
-	    head->expected_clock++;
-	    (*ppthread_log_clock)++;
-	    DPRINT ("Replay clock auto-incremented (2) to %d\n", *ppthread_log_clock);
-	    return 0;
-	}
-    }
 
-    head->next += sizeof(unsigned long); // Consume entry since all expected records are done
-    head->num_expected_records = 0;
-
-    next_clock = head->expected_clock;
-    if (*pentry & SKIPPED_CLOCK_FLAG) {
-	next_clock += *((unsigned long *)head->next);
-	head->next += sizeof(unsigned long);
-    }
-
-    if (*pentry & NONZERO_RETVAL_FLAG) {
-	retval = *((int *)head->next);
-	head->next += sizeof(int);
-    } else {
-	retval = 0;
-    }
-
-    if (*pentry & ERRNO_CHANGE_FLAG) {
-	errno = *((int *)head->next);
-	head->next += sizeof(int);
-    }
-
-    if (*pentry & FAKE_CALLS_FLAG) {
-	num_fake_calls = *((int *)head->next);
-	head->next += sizeof(int);
-
-	// Make the specified number of fake syscalls to sequence signals correctly
-	for (i = 0; i < num_fake_calls; i++) pthread_sysign ();
-    }
-
-    while (*ppthread_log_clock < next_clock) {
-	DPRINT ("waiting for clock %lu\n", next_clock);
-	pthread_log_block (next_clock); // Kernel will block us until we can run again
-    }
-    head->expected_clock = next_clock + 1;
-    (*ppthread_log_clock)++;
-    DPRINT ("Replay clock incremented to %d\n", *ppthread_log_clock);
-    
-    if (head->next >= head->end) {
-	DPRINT ("Log is full - need to reload\n");
-	pthread_log_full ();
-	head->next = ((char *) head + sizeof (struct pthread_log_head));
-    }
-
-    return retval;
+	return retval;
 }
 #endif
 

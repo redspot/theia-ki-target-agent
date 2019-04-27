@@ -3806,7 +3806,7 @@ preallocate_memory(struct record_group *prg)
   iter = ds_list_iter_create(prg->rg_reserved_mem_list);
   while ((pmapping = ds_list_iter_next(iter)) != NULL)
   {
-    MPRINT("Considering pre-allocation from %lx to %lx\n", pmapping->m_begin, pmapping->m_end);
+    MPRINT("Pid %d, Considering pre-allocation from %lx to %lx\n", current->pid, pmapping->m_begin, pmapping->m_end);
 
     // Any conflicting VMAs?
     down_read(&current->mm->mmap_sem);
@@ -5312,6 +5312,16 @@ replay_ckpt_wakeup(int attach_pin, char *logdir, char *linker, int fd, int follo
     set_current_state(TASK_INTERRUPTIBLE);
     schedule();
   }
+	else  // Yang: memory needs to be preallocated for non-pin attached case also.
+	{
+    rc = read_mmap_log(precg);
+    if (rc)
+    {
+      TPRINT("replay_ckpt_wakeup: could not read memory log \n");
+      return rc;
+    }
+    preallocate_memory(precg);  // Actually do the prealloaction for this process
+	}
 
   if (fd >= 0)
   {
@@ -7387,7 +7397,7 @@ asmlinkage long sys_pthread_full(void)
   }
   else if (current->replay_thrd)
   {
-    DPRINT("Pid %d: Resetting user log\n", current->pid);
+    DPRINT("[%s]Pid %d: Resetting user log\n", __func__, current->pid);
     read_user_log(current->replay_thrd->rp_record_thread);
     return 0;
   }
@@ -11854,6 +11864,10 @@ replay_execve(const char *filename, const char __user *const __user *__argv, con
       preallocate_memory(prt->rp_record_thread->rp_group);  /* And preallocate memory again - our previous preallocs were just destroyed */
       create_used_address_list();
     }
+		else //Yang: we need to preallocated for non pin case also.
+		{
+      preallocate_memory(prt->rp_record_thread->rp_group);  
+		}
   }
   get_next_syscall_exit(prt, prg, psr);
 
@@ -13003,7 +13017,7 @@ record_brk(unsigned long brk)
         if (size)
         {
           MPRINT("Pid %d brk increased size by %lu, reserve %lx to %lx\n", 
-            current->pid, size, prt->rp_group->rg_prev_brk, rc);
+   	        current->pid, size, prt->rp_group->rg_prev_brk, rc);
           reserve_memory(prt->rp_group->rg_prev_brk, size);
           prt->rp_group->rg_prev_brk = rc;
         }
@@ -13027,6 +13041,7 @@ replay_brk(unsigned long brk)
   u_long old_brk;
   u_long retval;
   u_long rc;
+	struct mm_struct *mm = current->mm;
 
   prt = current->replay_thrd;
   if (is_pin_attached())
@@ -13041,13 +13056,13 @@ replay_brk(unsigned long brk)
     rc = get_next_syscall(12, NULL);
   }
 
-  if (is_pin_attached())
+	down_write(&mm->mmap_sem);
+	// since we actually do the brk we can just grab the old one
+	old_brk = PAGE_ALIGN(mm->brk);
+	up_write(&mm->mmap_sem);
+
+//  if (is_pin_attached()) //Yang: we also handle this for non pin case
   {
-    struct mm_struct *mm = current->mm;
-    down_write(&mm->mmap_sem);
-    // since we actually do the brk we can just grab the old one
-    old_brk = PAGE_ALIGN(mm->brk);
-    up_write(&mm->mmap_sem);
     MPRINT("Pid %d, old brk is %lx, will return brk %lx\n", current->pid, old_brk, rc);
     if (rc > old_brk)
     {
@@ -14064,7 +14079,7 @@ replay_munmap(unsigned long addr, size_t len)
     TPRINT("Replay munmap returns different value %lu than %lu\n", retval, rc);
     return syscall_mismatch();
   }
-  if (retval == 0 && is_pin_attached()) preallocate_after_munmap(addr, len);
+  if (retval == 0 /*&& is_pin_attached()*/) preallocate_after_munmap(addr, len);
 
   return rc;
 }
@@ -19881,7 +19896,7 @@ replay_mremap(unsigned long addr, unsigned long old_len, unsigned long new_len, 
   }
 
   // If we've moved the mmap or shrunk it, we have to preallocate that mmaping again
-  if (is_pin_attached() && rc != ((u_long) - 1))
+  if (/*is_pin_attached() &&*/ rc != ((u_long) - 1))
   {
     // move and no overlap between mappings
     if (!(rc >= addr && rc < addr + old_len))
@@ -21505,9 +21520,11 @@ replay_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
   struct replay_thread *prt = current->replay_thrd;
   struct syscall_result *psr;
   struct argsalloc_node *node;
+#ifdef THEIA_TRACK_SHM_OPEN
   char vm_file_path[DNAME_INLINE_LEN+1];
-  struct vm_area_struct *vma;
   struct mm_struct *mm;
+  struct vm_area_struct *vma;
+#endif
 
   if (is_pin_attached())
   {
@@ -21545,9 +21562,9 @@ replay_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
     TPRINT("replay_mmap_pgoff: fd is %d but there are no return values recorded\n", given_fd);
   }
 
+	//Yang: okay, MAP_FIXED is used to ensure the 'rc' is honored.
   retval = sys_mmap_pgoff(rc, len, prot, (flags | MAP_FIXED), given_fd, pgoff);
   node = list_first_entry(&(current->replay_thrd->rp_record_thread)->rp_argsalloc_list, struct argsalloc_node, list);
-  TPRINT("base addr: %p\n", node->pos);
   //print_mem(node->pos, 1024);
   DPRINT("Pid %d replays mmap_pgoff with address %lx len %lx input address %lx fd %d flags %lx prot %lx pgoff %lx returning %lx, flags & MAP_FIXED %lu\n", current->pid, addr, len, rc, given_fd, flags, prot, pgoff, retval, flags & MAP_FIXED);
 
@@ -21560,6 +21577,7 @@ replay_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
   if (recbuf && given_fd > 0 && !is_cache_file) sys_close(given_fd);
 
   //Yang
+#ifdef THEIA_TRACK_SHM_OPEN
   mm = current->mm;
   down_read(&mm->mmap_sem);
   vma = find_vma(mm, rc);
@@ -21583,8 +21601,8 @@ replay_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
   else
     TPRINT("vma is %p\n", vma);
   up_read(&mm->mmap_sem);
+#endif
 
-  TPRINT("base addr1: %p\n", node->pos);
   //print_mem(node->pos, 1024);
   /*
     if(given_fd == 5) { // only for this test
@@ -21602,7 +21620,6 @@ replay_mmap_pgoff(unsigned long addr, unsigned long len, unsigned long prot, uns
       reserve_memory(rc, len);
     }
   }
-  TPRINT("base addr2: %p\n", node->pos);
   //print_mem(node->pos, 1024);
 
   return rc;
