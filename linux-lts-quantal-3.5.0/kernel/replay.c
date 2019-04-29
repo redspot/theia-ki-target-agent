@@ -5367,6 +5367,7 @@ new_syscall_enter(long sysnum)
     prt->rp_in_ptr = 0;
   }
 
+	TPRINT("[%s] prt->rp_in_ptr %lu, %p, sysnum %ld\n", __func__, prt->rp_in_ptr, &prt->rp_log[prt->rp_in_ptr], sysnum);
   psr = &prt->rp_log[prt->rp_in_ptr];
   psr->sysnum = sysnum;
   new_clock = atomic_add_return(1, prt->rp_precord_clock);
@@ -5406,6 +5407,7 @@ new_syscall_enter(long sysnum)
 
 long new_syscall_enter_external(long sysnum)
 {
+	TPRINT("new_syscall_enter_external sysnum %ld\n", sysnum);
   return new_syscall_enter(sysnum);
 }
 
@@ -6570,10 +6572,12 @@ get_next_syscall_enter(struct replay_thread *prt, struct replay_group *prg, int 
   if (syscall == 0 || syscall == 1 || syscall == 44 ||
       syscall == 45 || syscall == 46 || syscall == 47)
   {
-    strncpy_safe(repl_uuid_str, (char *)argshead(prect), THEIA_UUID_LEN);
-    TPRINT("syscall %d, repl_uuid is %s, repl_uuid_str len is %lu, retparam len is %lu\n", syscall, repl_uuid_str, strlen(repl_uuid_str), strlen((char *)argshead(prect)));
-    argsconsume(prect, strlen(repl_uuid_str) + 1);
-  }
+		if (psr->flags & SR_HAS_RECORD_UUID) {
+			strncpy_safe(repl_uuid_str, (char *)argshead(prect), THEIA_UUID_LEN);
+			TPRINT("syscall %d, repl_uuid is %s, repl_uuid_str len is %lu, retparam len is %lu\n", syscall, repl_uuid_str, strlen(repl_uuid_str), strlen((char *)argshead(prect)));
+			argsconsume(prect, strlen(repl_uuid_str) + 1);
+		}
+	}
 #endif
 
 
@@ -10212,12 +10216,13 @@ record_write(unsigned int fd, const char __user *buf, size_t count)
 
   if (fd == 99999)    // Hack that assists in debugging user-level code
   {
+		TPRINT("[%s] fd 99999, fd %u\n", __func__, fd);
     new_syscall_enter(1);
     new_syscall_done(1, count);
     memset(kbuf, 0, sizeof(kbuf));
     if (copy_from_user(kbuf, buf, count < 179 ? count : 180)) 
       TPRINT("record_write: cannot copy kstring\n");
-    //    TPRINT ("Pid %d clock %d logged clock %ld records: %s", current->pid, atomic_read(current->record_thrd->rp_precord_clock)-1, current->record_thrd->rp_expected_clock-1, kbuf);
+    	TPRINT ("Pid %d clock %d logged clock %ld records: %s", current->pid, atomic_read(current->record_thrd->rp_precord_clock)-1, current->record_thrd->rp_expected_clock-1, kbuf);
     new_syscall_exit(1, NULL);
     return count;
   }
@@ -21714,6 +21719,8 @@ record_newstat(char __user *filename, struct stat __user *statbuf)
 {
   long rc;
   struct stat *pretval = NULL;
+
+	TPRINT("[%s] filename: %s\n", __func__, filename);
 
   new_syscall_enter(4);
   rc = sys_newstat(filename, statbuf);

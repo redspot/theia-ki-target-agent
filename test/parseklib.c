@@ -1145,6 +1145,7 @@ DEFRULE_FCN(44, getretparams_socketcall);//sendto
 DEFRULE_FCN(45, getretparams_socketcall);//recvfrom
 DEFRULE_FCN(46, getretparams_socketcall);//sendmsg
 DEFRULE_FCN(47, getretparams_socketcall);//recvmsg
+DEFRULE_FCN(49, getretparams_socketcall);//bind
 DEFRULE_FCN(51, getretparams_socketcall);//getsockname
 DEFRULE_FCN(52, getretparams_socketcall);//getpeername
 
@@ -1166,7 +1167,7 @@ DEFRULE_FCN(179, varsize);//quotactl
 DEFRULE_FCN(139, varsize);//sysfs
 //DEFRULE(140, sizeof(loff_t));//_llseek
 DEFRULE_FCN(78, getretparams_retval);//getdents
-//DEFRULE_FCN(142, varsize);//_newselect
+DEFRULE_FCN(23, varsize);//select
 DEFRULE_FCN(19, getretparams_retval);//readv
 DEFRULE_FCN(156, varsize);//_sysctl
 DEFRULE(143, sizeof(struct sched_param));//sched_getparam
@@ -1253,6 +1254,7 @@ static void add_default_parse_rule_exceptions(struct klogfile *log) {
 	ADDRULE(59, log);
 	ADDRULE(201,log); 
 	ADDRULE(22, log);
+	ADDRULE(23, log);
 	ADDRULE(100,log); 
 	ADDRULE(16, log);
 	ADDRULE(72, log);
@@ -1350,6 +1352,7 @@ static void add_default_parse_rule_exceptions(struct klogfile *log) {
 	ADDRULE(45, log); 
 	ADDRULE(46, log); 
 	ADDRULE(47, log); 
+	ADDRULE(49, log); 
 	ADDRULE(51, log); 
 	ADDRULE(52, log); 
 }
