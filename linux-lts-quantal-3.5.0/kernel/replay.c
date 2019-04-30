@@ -7069,8 +7069,9 @@ void save_exec_args(unsigned long argv, int argc, unsigned long envp, int envc)
    Pin holds a lock throughout to avoid a deadlock. */
 long check_clock_before_syscall(int syscall)
 {
-  struct replay_thread *prt = current->replay_thrd;
   int ignore_flag;
+  struct replay_thread *prt = current->replay_thrd;
+  if (prt == NULL) goto end;
 
   // This should block until it is time to execute the syscall.  We must save the returned values for use in the actual system call
   DPRINT("Pid %d pre-wait for syscall %d\n", current->pid, syscall);
@@ -7095,6 +7096,7 @@ long check_clock_before_syscall(int syscall)
     }
   }
 
+end:
   return 0;
 }
 EXPORT_SYMBOL(check_clock_before_syscall);
