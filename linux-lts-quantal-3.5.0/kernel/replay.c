@@ -11935,15 +11935,27 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
   }
 
 /*white-list of recording*/
-  if( (strstr(current->comm, "deja-dup") != NULL) ||
+  if( 
+      (strstr(current->comm, "deja-dup") != NULL) ||
       (strstr(current->comm, "git") != NULL) || 
       (strstr(current->comm, "apt") != NULL) || 
       (strstr(current->comm, "stat") != NULL) || 
       (strstr(current->comm, "dkpg") != NULL) || 
-      (strstr(current->comm, "firefox") != NULL) || 
+ //     (strstr(current->comm, "firefox") != NULL) || 
       (strstr(current->comm, "soffice") != NULL) || 
       (strstr(current->comm, "xfce4") != NULL) || 
-      (strstr(current->comm, "gnome") != NULL) ) {
+      (strstr(current->comm, "gnome") != NULL) 
+      ||
+      (strstr(filename, "deja-dup") != NULL) ||
+      (strstr(filename, "git") != NULL) || 
+      (strstr(filename, "apt") != NULL) || 
+      (strstr(filename, "stat") != NULL) || 
+      (strstr(filename, "dkpg") != NULL) || 
+//      (strstr(filename, "firefox") != NULL) || 
+      (strstr(filename, "soffice") != NULL) || 
+      (strstr(filename, "xfce4") != NULL) || 
+      (strstr(filename, "gnome") != NULL) 
+    ) {
     TPRINT("[Record-blacklist] %s is skipped.\n", current->comm);
     goto out_norm;
   }
@@ -16654,10 +16666,11 @@ static asmlinkage long
 record_getsockopt(int fd, int level, int optname, char __user *optval, int __user *optlen)
 {
   long rc = 0;
-  struct generic_socket_retvals *pretvals = NULL;
+  struct getsockopt_retvals *pretvals = NULL;
 #ifdef TIME_TRICK
   int shift_clock = 1;
 #endif
+	int _optlen;
 
   new_syscall_enter(55);
 
@@ -16665,19 +16678,37 @@ record_getsockopt(int fd, int level, int optname, char __user *optval, int __use
 
   new_syscall_done(55, rc);
 
+	if(rc >= 0)
+	{
+		if(optval) {
+			_optlen = *((int *) optlen);
+		}
+		else
+			_optlen = 0;
+		pretvals = ARGSKMALLOC(sizeof(struct getsockopt_retvals) + _optlen, GFP_KERNEL);
+    if (pretvals == NULL)
+    {
+      TPRINT("record_getsockopt: can't allocate buffer\n");
+      return -ENOMEM;
+    }
+    pretvals->optlen = _optlen;
+    if (_optlen)
+    {
+      if (copy_from_user(&pretvals->optval, (char *) optval, _optlen))
+      {
+        TPRINT("record_getsockopt: can't copy addr\n");
+        ARGSKFREE(pretvals, sizeof(struct getsockopt_retvals) + _optlen);
+        return -EFAULT;
+      }
+    }
+    pretvals->call = SYS_GETSOCKOPT;
+	}
+
   DPRINT("Pid %d records getsockopt returning %ld\n", current->pid, rc);
 
-  pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
-  if (pretvals == NULL)
-  {
-    TPRINT("record_socketcall(socket): can't allocate buffer\n");
-    return -ENOMEM;
-  }
-  pretvals->call = SYS_GETSOCKOPT;
   new_syscall_exit(55, pretvals);
   return rc;
 }
-
 
 static asmlinkage long
 replay_socket(int family, int type, int protocol)

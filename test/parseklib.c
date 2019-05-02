@@ -742,7 +742,7 @@ static u_long getretparams_write(struct klogfile *klog,
 
 static u_long getretparams_getgroups(struct klogfile *klog,
 		struct klog_result *res) {
-	return sizeof(u_short) * res->retval;
+	return sizeof(uint32_t) * res->retval;
 }
 
 #if 0
@@ -780,7 +780,6 @@ static u_long getretparams_socketcall(struct klogfile *log,
 	size += sizeof(int);
 
 	debugf("\tsocketcall %d\n", call);
-	assert(call > 0 && call <= 20);
 
 	// socketcall retvals specific
 	switch (call) {
@@ -1148,6 +1147,9 @@ DEFRULE_FCN(47, getretparams_socketcall);//recvmsg
 DEFRULE_FCN(49, getretparams_socketcall);//bind
 DEFRULE_FCN(51, getretparams_socketcall);//getsockname
 DEFRULE_FCN(52, getretparams_socketcall);//getpeername
+DEFRULE_FCN(53, getretparams_socketcall);//socketpair
+DEFRULE_FCN(54, getretparams_socketcall);//setsockopt
+DEFRULE_FCN(55, getretparams_socketcall);//getsockopt
 
 DEFRULE_FCN(103, getretparams_retval);//syslog
 DEFRULE(38, sizeof(struct itimerval));//setitimer
@@ -1173,9 +1175,9 @@ DEFRULE_FCN(156, varsize);//_sysctl
 DEFRULE(143, sizeof(struct sched_param));//sched_getparam
 DEFRULE(148, sizeof(struct timespec));//sched_rr_get_interval
 DEFRULE(35, sizeof(struct timespec));//nanosleep
-DEFRULE(118, sizeof(u_short)*3);//getresuid
+DEFRULE(118, sizeof(uint32_t)*3);//getresuid
 DEFRULE_FCN(7, varsize);//poll
-DEFRULE(120, sizeof(u_short)*3);//getresgid
+DEFRULE(120, sizeof(uint32_t)*3);//getresgid
 DEFRULE_FCN(157, varsize);//prctl
 DEFRULE(13, 32); /* sizeof(struct sigaction)*///rt_sigaction
 
@@ -1355,6 +1357,9 @@ static void add_default_parse_rule_exceptions(struct klogfile *log) {
 	ADDRULE(49, log); 
 	ADDRULE(51, log); 
 	ADDRULE(52, log); 
+	ADDRULE(53, log); 
+	ADDRULE(54, log); 
+	ADDRULE(55, log); 
 }
 /*}}}*/
 

@@ -12,8 +12,10 @@
 #include <shlib-compat.h>
 
 // Turns debugging on and off
-//#define DPRINT pthread_log_debug
-#define DPRINT(x,...)
+#define DPRINT pthread_log_debug
+//#define DPRINT(x,...)
+
+
 
 
 
@@ -537,7 +539,7 @@ pthread_log_replay (unsigned long type, unsigned long check)
 	if (head->num_expected_records > 1) {
 		head->expected_clock++;
 		(*ppthread_log_clock)++;
-		DPRINT ("Replay clock auto-incremented (1) to %d\n", *ppthread_log_clock);
+		DPRINT ("Replay clock auto-incremented (1) to %d, type %lu\n", *ppthread_log_clock, type);
 		head->num_expected_records--;
 		return 0;
 	} 
@@ -555,7 +557,7 @@ pthread_log_replay (unsigned long type, unsigned long check)
 		if (head->num_expected_records) {
 			head->expected_clock++;
 			(*ppthread_log_clock)++;
-			DPRINT ("Replay clock auto-incremented (2) to %d\n", *ppthread_log_clock);
+			DPRINT ("Replay clock auto-incremented (2) to %d, type %lu\n", *ppthread_log_clock, type);
 			return 0;
 		}
 	}
@@ -591,12 +593,12 @@ pthread_log_replay (unsigned long type, unsigned long check)
 	}
 
 	while (*ppthread_log_clock < next_clock) {
-		DPRINT ("waiting for clock %lu\n", next_clock);
+		DPRINT ("waiting for clock %lu, type %lu\n", next_clock, type);
 		pthread_log_block (next_clock); // Kernel will block us until we can run again
 	}
 	head->expected_clock = next_clock + 1;
 	(*ppthread_log_clock)++;
-	DPRINT ("Replay clock incremented to %d\n", *ppthread_log_clock);
+	DPRINT ("Replay clock incremented to %d, type %lu\n", *ppthread_log_clock, type);
 
 	if (head->next >= head->end) {
 		DPRINT ("Log is full - need to reload\n");
