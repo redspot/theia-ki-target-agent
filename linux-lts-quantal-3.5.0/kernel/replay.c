@@ -16664,10 +16664,11 @@ static asmlinkage long
 record_getsockopt(int fd, int level, int optname, char __user *optval, int __user *optlen)
 {
   long rc = 0;
-  struct generic_socket_retvals *pretvals = NULL;
+  struct getsockopt_retvals *pretvals = NULL;
 #ifdef TIME_TRICK
   int shift_clock = 1;
 #endif
+	int _optlen;
 
   new_syscall_enter(55);
 
@@ -16675,19 +16676,37 @@ record_getsockopt(int fd, int level, int optname, char __user *optval, int __use
 
   new_syscall_done(55, rc);
 
+	if(rc >= 0)
+	{
+		if(optval) {
+			_optlen = *((int *) optlen);
+		}
+		else
+			_optlen = 0;
+		pretvals = ARGSKMALLOC(sizeof(struct getsockopt_retvals) + _optlen, GFP_KERNEL);
+    if (pretvals == NULL)
+    {
+      TPRINT("record_getsockopt: can't allocate buffer\n");
+      return -ENOMEM;
+    }
+    pretvals->optlen = _optlen;
+    if (_optlen)
+    {
+      if (copy_from_user(&pretvals->optval, (char *) optval, _optlen))
+      {
+        TPRINT("record_getsockopt: can't copy addr\n");
+        ARGSKFREE(pretvals, sizeof(struct getsockopt_retvals) + _optlen);
+        return -EFAULT;
+      }
+    }
+    pretvals->call = SYS_GETSOCKOPT;
+	}
+
   DPRINT("Pid %d records getsockopt returning %ld\n", current->pid, rc);
 
-  pretvals = ARGSKMALLOC(sizeof(struct generic_socket_retvals), GFP_KERNEL);
-  if (pretvals == NULL)
-  {
-    TPRINT("record_socketcall(socket): can't allocate buffer\n");
-    return -ENOMEM;
-  }
-  pretvals->call = SYS_GETSOCKOPT;
   new_syscall_exit(55, pretvals);
   return rc;
 }
-
 
 static asmlinkage long
 replay_socket(int family, int type, int protocol)
