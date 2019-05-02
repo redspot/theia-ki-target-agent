@@ -24040,9 +24040,12 @@ struct file *init_log_write(struct record_thread *prect, loff_t *ppos, int *pfd)
   int rc;
   struct file *ret = NULL;
   int flags;
+  THEIA_DECLARE_CREDS;
 
   debug_flag = 0;
 
+  //swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
   rc = snprintf(filename, MAX_LOGDIR_STRLEN+20, "%s/klog.id.%d", prect->rp_group->rg_logdir, prect->rp_record_pid);
   if (rc < 0)
   {
@@ -24127,6 +24130,7 @@ struct file *init_log_write(struct record_thread *prect, loff_t *ppos, int *pfd)
 out:
   debug_flag = 0;
 
+  THEIA_RESTORE_CREDS;
   return ret;
 }
 
@@ -24134,7 +24138,7 @@ void term_log_write(struct file *file, int fd)
 {
   int rc;
 
-  fput(file);
+  if (file) fput(file);
 
   rc = sys_close(fd);
   if (rc < 0) TPRINT("term_log_write: file close failed with rc %d\n", rc);
@@ -24197,6 +24201,7 @@ static ssize_t write_log_data(struct file *file, loff_t *ppos, struct record_thr
   struct timeval tv1;
   struct timeval tv2;
 #endif
+  THEIA_DECLARE_CREDS;
 
   if (count <= 0) return 0;
 
@@ -24209,6 +24214,8 @@ static ssize_t write_log_data(struct file *file, loff_t *ppos, struct record_thr
     return 0;
   }
 
+  // swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
 #ifdef USE_HPC
   hpc1 = rdtsc();
   do_gettimeofday(&tv1);
@@ -24247,7 +24254,7 @@ static ssize_t write_log_data(struct file *file, loff_t *ppos, struct record_thr
   {
     TPRINT("write_log_data: tried to write record count, got rc %zd\n", copyed);
     KFREE(pvec);
-    return -EINVAL;
+    goto error;
   }
 
   MPRINT("Pid %d write_log_data count %d, size %lu\n", current->pid, count, sizeof(struct syscall_result)*count);
@@ -24257,7 +24264,7 @@ static ssize_t write_log_data(struct file *file, loff_t *ppos, struct record_thr
   {
     TPRINT("write_log_data: tried to write %lu, got rc %zd\n", sizeof(struct syscall_result)*count, copyed);
     KFREE(pvec);
-    return -EINVAL;
+    goto error;
   }
 
   /* Now write ancillary data - count of bytes goes first */
@@ -24272,7 +24279,7 @@ static ssize_t write_log_data(struct file *file, loff_t *ppos, struct record_thr
   {
     TPRINT("write_log_data: tried to write ancillary data length, got rc %zd, sizeof(count): %lu, sizeof(data_len): %lu\n", copyed, sizeof(count), sizeof(data_len));
     KFREE(pvec);
-    return -EINVAL;
+    goto error;
   }
   list_for_each_entry_reverse(node, &prect->rp_argsalloc_list, list)
   {
@@ -24290,7 +24297,11 @@ static ssize_t write_log_data(struct file *file, loff_t *ppos, struct record_thr
   DPRINT("Wrote %zd bytes to the file for sysnum %d\n", copyed, psr->sysnum);
   KFREE(pvec);
 
+  THEIA_RESTORE_CREDS;
   return copyed;
+error:
+  THEIA_RESTORE_CREDS;
+  return -EINVAL;
 }
 
 int read_log_data(struct record_thread *prect)
@@ -24306,8 +24317,8 @@ int read_log_data(struct record_thread *prect)
 int read_log_data_internal(struct record_thread *prect, struct syscall_result *psr, int logid, int *syscall_count, loff_t *pos)
 {
   char filename[MAX_LOGDIR_STRLEN + 20];
-  struct file *file;
-  int fd, rc, count;
+  struct file *file = NULL;
+  int fd = -1, rc, count, ret;
   mm_segment_t old_fs;
   u_long data_len;
   struct argsalloc_node *node;
@@ -24317,6 +24328,10 @@ int read_log_data_internal(struct record_thread *prect, struct syscall_result *p
   // for those calibration constants
   char dummy_buffer[2 * sizeof(unsigned long long) + 2 * sizeof(struct timeval)];
 #endif
+  THEIA_DECLARE_CREDS;
+  // swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
+
   old_fs = get_fs();
   set_fs(KERNEL_DS);
 
@@ -24325,7 +24340,7 @@ int read_log_data_internal(struct record_thread *prect, struct syscall_result *p
   if (rc < 0)
   {
     TPRINT("read_log_data: rg_logdir is too long\n");
-    return -EINVAL;
+    goto error;
   }
   MPRINT("Opening %s\n", filename);
   fd = sys_open(filename, O_RDONLY | O_LARGEFILE, 0644);
@@ -24333,7 +24348,7 @@ int read_log_data_internal(struct record_thread *prect, struct syscall_result *p
   if (fd < 0)
   {
     TPRINT("read_log_data: cannot open log file %s\n", filename);
-    return -EINVAL;
+    goto error;
   }
 
   file = fget(fd);
@@ -24341,7 +24356,7 @@ int read_log_data_internal(struct record_thread *prect, struct syscall_result *p
   if(!file)
   {
     TPRINT("read_log_data: cannot fget file %s\n", filename);
-    return -EINVAL;
+    goto error;
   }
 
 #ifdef USE_HPC
@@ -24413,27 +24428,27 @@ int read_log_data_internal(struct record_thread *prect, struct syscall_result *p
   }
 
   *syscall_count = count;
-  fput(file);
 
-  rc = sys_close(fd);
-  if (rc < 0) TPRINT("read_log_data: file close failed with rc %d\n", rc);
-  set_fs(old_fs);
-
-  return 0;
-
+  ret = 0;
+  goto out;
 error:
-  fput(file);
-  rc = sys_close(fd);
-  if (rc < 0) TPRINT("read_log_data: file close failed with rc %d\n", rc);
+  ret = -EINVAL;
+out:
+  if (file) fput(file);
+  if (fd > 0) {
+    rc = sys_close(fd);
+    if (rc < 0) TPRINT("read_log_data: file close failed with rc %d\n", rc);
+  }
   set_fs(old_fs);
-  return rc;
+  THEIA_RESTORE_CREDS;
+  return ret;
 }
 
 /* Write out the list of memory regions used in this record group */
 void write_mmap_log(struct record_group *prg)
 {
   char filename[MAX_LOGDIR_STRLEN + 20];
-  int fd = 0;
+  int fd = -1;
   loff_t pos = 0;
   struct file *file = NULL;
   mm_segment_t old_fs;
@@ -24444,6 +24459,8 @@ void write_mmap_log(struct record_group *prg)
   struct reserved_mapping *pmapping;
 
   int rc = 0;
+  THEIA_DECLARE_CREDS;
+
 
   MPRINT("Pid %d write_mmap_log start\n", current->pid);
 
@@ -24457,20 +24474,22 @@ void write_mmap_log(struct record_group *prg)
     return;
   }
   
+  // swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
   old_fs = get_fs();
   set_fs(KERNEL_DS);
   fd = sys_open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
   if (fd < 0)
   {
     TPRINT("Pid %d write_mmap_log: could not open file %s, %d\n", current->pid, filename, fd);
-    return;
+    goto out;
   }
   file = fget(fd);
 
   if (!file)
   {
     TPRINT("Pid %d write_mmap_log, could not open file %s\n", current->pid, filename);
-    return;
+    goto out;
   }
 
   memory_list = prg->rg_reserved_mem_list;
@@ -24488,6 +24507,8 @@ void write_mmap_log(struct record_group *prg)
   }
   ds_list_iter_destroy(iter);
 
+out:
+  THEIA_RESTORE_CREDS;
   term_log_write(file, fd);
   set_fs(old_fs);
 
@@ -24583,12 +24604,16 @@ struct file *init_clog_write(struct record_thread *prect, loff_t *ppos, int *pfd
   struct stat st;
   mm_segment_t old_fs;
   int rc;
+  THEIA_DECLARE_CREDS;
+  // swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
+
 
   rc = snprintf(filename, MAX_LOGDIR_STRLEN+20, "%s/klog.id.%d.clog", prect->rp_group->rg_logdir, prect->rp_record_pid);
   if (rc < 0)
   {
     TPRINT("init_clog_write: rg_logdir is too long\n");
-    return NULL;
+    goto error;
   }
 
   old_fs = get_fs();
@@ -24601,7 +24626,7 @@ struct file *init_clog_write(struct record_thread *prect, loff_t *ppos, int *pfd
     if (rc < 0)
     {
       TPRINT("Stat of file %s failed\n", filename);
-      return NULL;
+      goto error;
     }
     *ppos = st.st_size;
     *pfd = sys_open(filename, O_WRONLY | O_APPEND, 0644);
@@ -24615,17 +24640,21 @@ struct file *init_clog_write(struct record_thread *prect, loff_t *ppos, int *pfd
   if (*pfd < 0)
   {
     TPRINT("Cannot open clog file %s, rc = %d\n", filename, *pfd);
-    return NULL;
+    goto error;
   }
 
+  THEIA_RESTORE_CREDS;
   return (fget(*pfd));
+error:
+  THEIA_RESTORE_CREDS;
+  return NULL;
 }
 
 void term_clog_write(struct file *file, int fd)
 {
   int rc;
 
-  fput(file);
+  if (file) fput(file);
 
   rc = sys_close(fd);
   if (rc < 0) TPRINT("term_clog_write: file close failed with rc %d\n", rc);
@@ -24644,6 +24673,7 @@ static ssize_t write_clog_data(struct file *file, loff_t *ppos, struct record_th
   struct timeval tv1;
   struct timeval tv2;
 #endif
+  THEIA_DECLARE_CREDS;
 
   if (count <= 0) return 0;
 
@@ -24656,6 +24686,8 @@ static ssize_t write_clog_data(struct file *file, loff_t *ppos, struct record_th
     return 0;
   }
 
+  // swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
 #ifdef USE_HPC
   hpc1 = rdtsc();
   do_gettimeofday(&tv1);
@@ -24693,7 +24725,7 @@ static ssize_t write_clog_data(struct file *file, loff_t *ppos, struct record_th
   if (copyed != sizeof(count)) {
     TPRINT ("write_clog_data: tried to write record count, got rc %d\n", copyed);
     KFREE (pvec);
-    return -EINVAL;
+    goto error;
   }
 
   MPRINT ("Pid %d write_clog_data count %d, size %d\n", current->pid, count, sizeof(struct syscall_result)*count);
@@ -24702,7 +24734,7 @@ static ssize_t write_clog_data(struct file *file, loff_t *ppos, struct record_th
   if (copyed != sizeof(struct syscall_result)*count) {
     TPRINT ("write_clog_data: tried to write %d, got rc %d\n", sizeof(struct syscall_result)*count, copyed);
     KFREE (pvec);
-    return -EINVAL;
+    goto error;
   }*/
 
   /* Now write ancillary data - count of bytes goes first */
@@ -24717,7 +24749,7 @@ static ssize_t write_clog_data(struct file *file, loff_t *ppos, struct record_th
   {
     TPRINT("write_clog_data: tried to write ancillary data length, got rc %d\n", copyed);
     KFREE(pvec);
-    return -EINVAL;
+    goto error;
   }
 
   list_for_each_entry_reverse(node, &prect->rp_clog_list, list)
@@ -24737,8 +24769,11 @@ static ssize_t write_clog_data(struct file *file, loff_t *ppos, struct record_th
   DPRINT("Wrote %d bytes to the file for sysnum %d\n", copyed, psr->sysnum);
   KFREE(pvec);
 
+  THEIA_RESTORE_CREDS;
   return copyed;
-
+error:
+  THEIA_RESTORE_CREDS;
+  return -EINVAL;
 }
 
 int read_clog_data(struct record_thread *prect)
@@ -24757,7 +24792,7 @@ int read_clog_data(struct record_thread *prect)
 int read_clog_data_internal(struct record_thread *prect, struct syscall_result *psr, int logid, int *syscall_count, loff_t *pos)
 {
   char filename[MAX_LOGDIR_STRLEN + 20];
-  struct file *file;
+  struct file *file = NULL;
   int fd, rc, count;
   mm_segment_t old_fs;
   u_long data_len;
@@ -24768,6 +24803,9 @@ int read_clog_data_internal(struct record_thread *prect, struct syscall_result *
   // for those calibration constants
   char dummy_buffer[2 * sizeof(unsigned long long) + 2 * sizeof(struct timeval)];
 #endif
+  THEIA_DECLARE_CREDS;
+  // swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
   old_fs = get_fs();
   set_fs(KERNEL_DS);
 
@@ -24776,7 +24814,7 @@ int read_clog_data_internal(struct record_thread *prect, struct syscall_result *
   if (rc < 0)
   {
     TPRINT("read_clog_data: rg_logdir is too long\n");
-    return -EINVAL;
+    goto error;
   }
   MPRINT("Opening %s\n", filename);
   fd = sys_open(filename, O_RDONLY, 0644);
@@ -24784,7 +24822,7 @@ int read_clog_data_internal(struct record_thread *prect, struct syscall_result *
   if (fd < 0)
   {
     TPRINT("read_clog_data: cannot open log file %s\n", filename);
-    return -EINVAL;
+    goto error;
   }
 
   file = fget(fd);
@@ -24859,16 +24897,18 @@ int read_clog_data_internal(struct record_thread *prect, struct syscall_result *
   rc = sys_close(fd);
   if (rc < 0) TPRINT("read_clog_data: file close failed with rc %d\n", rc);
   set_fs(old_fs);
-
+  THEIA_RESTORE_CREDS;
   return 0;
 
 error:
-  fput(file);
-  rc = sys_close(fd);
-  if (rc < 0) TPRINT("read_clog_data: file close failed with rc %d\n", rc);
+  if (file) fput(file);
+  if (fd > 0) {
+    rc = sys_close(fd);
+    if (rc < 0) TPRINT("read_clog_data: file close failed with rc %d\n", rc);
+  }
   set_fs(old_fs);
-  return rc;
-
+  THEIA_RESTORE_CREDS;
+  return -EINVAL;
 }
 
 #endif
