@@ -186,7 +186,8 @@ bool theia_track_getpid = 0;
 EXPORT_SYMBOL(theia_track_getpid);
 bool theia_replay_stdout = 0;
 EXPORT_SYMBOL(theia_replay_stdout);
-
+struct path theia_pid1_root;
+EXPORT_SYMBOL(theia_pid1_root);
 
 //#define APP_DIR   "theia_logs"
 struct rchan *theia_chan = NULL;
@@ -845,6 +846,7 @@ static void theia_dump_ss(const char __user *str1, const char __user *str2, int 
     {
       get_fs_pwd(current->fs, &path);
       pcwd = d_path(&path, pbuf, THEIA_DPATH_LEN);
+      path_put(&path);
       if (IS_ERR(pcwd))
         pcwd = ".";
     }
@@ -906,6 +908,7 @@ static void theia_dump_sd(const char __user *str, int val, int rc, int sysnum)
     {
       get_fs_pwd(current->fs, &path);
       pcwd = d_path(&path, pbuf, THEIA_DPATH_LEN);
+      path_put(&path);
       if (IS_ERR(pcwd))
         pcwd = ".";
     }
@@ -952,6 +955,7 @@ static void theia_dump_sdd(const char __user *str, int val1, int val2, int rc, i
     {
       get_fs_pwd(current->fs, &path);
       pcwd = d_path(&path, pbuf, THEIA_DPATH_LEN);
+      path_put(&path);
       if (IS_ERR(pcwd))
         pcwd = ".";
     }
@@ -10462,6 +10466,7 @@ void packahgv_open(struct open_ahgv *sys_args)
       {
         get_fs_pwd(current->fs, &path);
         pcwd = d_path(&path, pbuf, THEIA_DPATH_LEN);
+        path_put(&path);
         if (IS_ERR(pcwd))
           pcwd = ".";
       }
@@ -10873,6 +10878,7 @@ void theia_fullpath_ahgx(char __user *pathname, long rc, int sysnum)
     {
       get_fs_pwd(current->fs, &path);
       pcwd = d_path(&path, pbuf, THEIA_DPATH_LEN);
+      path_put(&path);
       if (IS_ERR(pcwd))
         pcwd = ".";
     }
@@ -12449,6 +12455,7 @@ inline void theia_fchownat_ahgx(int dfd, char __user *filename, uid_t user,
     {
       get_fs_pwd(current->fs, &path);
       fpath = d_path(&path, pbuf, THEIA_DPATH_LEN);
+      path_put(&path);
       if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
         fpath = filename;
 
@@ -25433,6 +25440,9 @@ static int __init replay_init(void)
 
   // init temp buffers
   theia_buffers = kmem_cache_create("theia_buffers", THEIA_KMEM_SIZE, 0, 0, NULL);
+
+  // init our PID1 (struct path) root.dentry to NULL so that we know its not setup yet
+  theia_pid1_root.dentry = NULL;
 
   old_fs = get_fs();
   set_fs(KERNEL_DS);

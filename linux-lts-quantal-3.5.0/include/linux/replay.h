@@ -13,6 +13,7 @@
 
 #include <linux/signal.h>
 #include <linux/mm_types.h>
+#include <linux/fs_struct.h>
 
 #define REPLAYFS_BASE_PATH "/data"
 #define REPLAYFS_LOGDB_SUFFIX "/replay_logdb"
@@ -37,11 +38,27 @@ static inline const char* theia_get_replay_logdb_ndx_path(void) {return replayfs
 static inline const char* theia_get_replay_cache_path(void) {return replayfs_cache_path;}
 
 // Macros to swap out the current uid with root for file operations
+extern struct path theia_pid1_root;
 #define THEIA_DECLARE_CREDS \
-  struct cred *cred = NULL;\
-  const struct cred *old_cred
+  struct path cur_pid_root; /* save root to get around chroot */ \
+  const struct cred *uninitialized_var(old_cred);\
+  struct cred *cred = NULL
 
 #define THEIA_SWAP_CREDS_TO_ROOT do {\
+  /* check if global PID1 root is still not setup */ \
+  if (theia_pid1_root.dentry == NULL) {\
+    struct task_struct *tsk_pid1 = NULL;\
+    tsk_pid1 = pid_task(find_vpid(1), PIDTYPE_PID);\
+    if (tsk_pid1) get_fs_root(tsk_pid1->fs, &theia_pid1_root);\
+  }\
+  /* temporarily swap chroot to real root fs*/ \
+  if (theia_pid1_root.dentry != NULL) {\
+    get_fs_root(current->fs, &cur_pid_root);\
+    set_fs_root(current->fs, &theia_pid1_root);\
+  } else {\
+    cur_pid_root.dentry = NULL;\
+  }\
+  /* temporarily swap creds to root uid */ \
   cred = prepare_creds();\
   if (cred) {\
     cred->euid = GLOBAL_ROOT_UID;\
@@ -53,9 +70,15 @@ static inline const char* theia_get_replay_cache_path(void) {return replayfs_cac
   } while(0)
 
 #define THEIA_RESTORE_CREDS do {\
+  /* restore creds */ \
   if (cred) {\
     revert_creds(old_cred);\
     put_cred(cred);\
+  }\
+  /* restore chroot */ \
+  if (cur_pid_root.dentry != NULL) {\
+    set_fs_root(current->fs, &cur_pid_root);\
+    path_put(&cur_pid_root);\
   }\
   } while(0)
 
