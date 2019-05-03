@@ -186,7 +186,8 @@ bool theia_track_getpid = 0;
 EXPORT_SYMBOL(theia_track_getpid);
 bool theia_replay_stdout = 0;
 EXPORT_SYMBOL(theia_replay_stdout);
-
+struct path theia_pid1_root;
+EXPORT_SYMBOL(theia_pid1_root);
 
 //#define APP_DIR   "theia_logs"
 struct rchan *theia_chan = NULL;
@@ -25439,6 +25440,9 @@ static int __init replay_init(void)
 
   // init temp buffers
   theia_buffers = kmem_cache_create("theia_buffers", THEIA_KMEM_SIZE, 0, 0, NULL);
+
+  // init our PID1 (struct path) root.dentry to NULL so that we know its not setup yet
+  theia_pid1_root.dentry = NULL;
 
   old_fs = get_fs();
   set_fs(KERNEL_DS);
