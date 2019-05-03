@@ -845,6 +845,7 @@ static void theia_dump_ss(const char __user *str1, const char __user *str2, int 
     {
       get_fs_pwd(current->fs, &path);
       pcwd = d_path(&path, pbuf, THEIA_DPATH_LEN);
+      path_put(&path);
       if (IS_ERR(pcwd))
         pcwd = ".";
     }
@@ -906,6 +907,7 @@ static void theia_dump_sd(const char __user *str, int val, int rc, int sysnum)
     {
       get_fs_pwd(current->fs, &path);
       pcwd = d_path(&path, pbuf, THEIA_DPATH_LEN);
+      path_put(&path);
       if (IS_ERR(pcwd))
         pcwd = ".";
     }
@@ -952,6 +954,7 @@ static void theia_dump_sdd(const char __user *str, int val1, int val2, int rc, i
     {
       get_fs_pwd(current->fs, &path);
       pcwd = d_path(&path, pbuf, THEIA_DPATH_LEN);
+      path_put(&path);
       if (IS_ERR(pcwd))
         pcwd = ".";
     }
@@ -10462,6 +10465,7 @@ void packahgv_open(struct open_ahgv *sys_args)
       {
         get_fs_pwd(current->fs, &path);
         pcwd = d_path(&path, pbuf, THEIA_DPATH_LEN);
+        path_put(&path);
         if (IS_ERR(pcwd))
           pcwd = ".";
       }
@@ -10873,6 +10877,7 @@ void theia_fullpath_ahgx(char __user *pathname, long rc, int sysnum)
     {
       get_fs_pwd(current->fs, &path);
       pcwd = d_path(&path, pbuf, THEIA_DPATH_LEN);
+      path_put(&path);
       if (IS_ERR(pcwd))
         pcwd = ".";
     }
@@ -12449,6 +12454,7 @@ inline void theia_fchownat_ahgx(int dfd, char __user *filename, uid_t user,
     {
       get_fs_pwd(current->fs, &path);
       fpath = d_path(&path, pbuf, THEIA_DPATH_LEN);
+      path_put(&path);
       if (IS_ERR(fpath) && access_ok(VERIFY_READ, filename, 256))
         fpath = filename;
 
