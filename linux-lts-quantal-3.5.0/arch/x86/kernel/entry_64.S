@@ -447,12 +447,12 @@ ENTRY(ret_from_fork)
 
 	GET_THREAD_INFO(%rcx)
 
-	call ret_from_fork_replay		#64port. not sure should be here..
-
 	RESTORE_REST
 
 	testl $3, CS-ARGOFFSET(%rsp)		# from kernel_thread?
 	jz   retint_restore_args
+
+	call ret_from_fork_replay		#64port. not sure should be here..
 
 	testl $_TIF_IA32, TI_flags(%rcx)	# 32-bit compat task needs IRET
 	jnz  int_ret_from_sys_call
