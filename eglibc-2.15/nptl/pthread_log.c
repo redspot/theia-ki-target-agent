@@ -12,8 +12,8 @@
 #include <shlib-compat.h>
 
 // Turns debugging on and off
-#define DPRINT pthread_log_debug
-//#define DPRINT(x,...)
+//#define DPRINT pthread_log_debug
+#define DPRINT(x,...)
 
 
 
