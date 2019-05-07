@@ -81,6 +81,8 @@ get_replay_id (void)
       goto out;
 		}
 		if (sys_fsync (fd) < 0) pr_err("get_replay_id: cannot sync index file\n");
+    sys_close(fd);
+    fd = -1;
 	}
 
 	ret_id = ++last_logid;
