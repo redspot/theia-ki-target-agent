@@ -219,7 +219,7 @@ void check_page_allocated(struct replayfs_diskalloc *alloc, loff_t index) {
 			(1<<(index&shift)), used_page_map[word]);
 
 	/* K, now that we have the page, mark the offset as read */
-	BUG_ON((used_page_map[word] & (1 << (index & shift))) == 0);
+	WARN_ON((used_page_map[word] & (1 << (index & shift))) == 0);
 
 	replayfs_kunmap(page);
 	alloc_put_page_nocheck(alloc, page);
