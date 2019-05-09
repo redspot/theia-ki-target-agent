@@ -11949,7 +11949,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
       (strstr(current->comm, "dkpg") != NULL) || 
  //     (strstr(current->comm, "firefox") != NULL) || 
       (strstr(current->comm, "soffice") != NULL) || 
-      (strstr(current->comm, "xfce4") != NULL) || 
+      (strstr(current->comm, "xf") != NULL) || 
       (strstr(current->comm, "gnome") != NULL) 
       ||
       (strstr(filename, "deja-dup") != NULL) ||
@@ -11959,7 +11959,7 @@ int theia_start_execve(const char *filename, const char __user *const __user *__
       (strstr(filename, "dkpg") != NULL) || 
 //      (strstr(filename, "firefox") != NULL) || 
       (strstr(filename, "soffice") != NULL) || 
-      (strstr(filename, "xfce4") != NULL) || 
+      (strstr(filename, "xf") != NULL) || 
       (strstr(filename, "gnome") != NULL) 
     ) {
     TPRINT("[Record-blacklist] %s is skipped.\n", current->comm);
