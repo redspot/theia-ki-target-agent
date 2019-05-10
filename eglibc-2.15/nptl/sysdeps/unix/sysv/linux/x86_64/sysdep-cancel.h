@@ -48,6 +48,7 @@
     pushq %rdi; cfi_adjust_cfa_offset (8); cfi_rel_offset (%rdi, 0);	      \
     pushq %rsi; cfi_adjust_cfa_offset (8); cfi_rel_offset (%rsi, 0);	      \
     pushq %rdx; cfi_adjust_cfa_offset (8); cfi_rel_offset (%rdx, 0);	      \
+    pushq %rcx; cfi_adjust_cfa_offset (8); cfi_rel_offset (%rcx, 0);	      \
     pushq %r10; cfi_adjust_cfa_offset (8); cfi_rel_offset (%r10, 0);	      \
     pushq %r8; cfi_adjust_cfa_offset (8); cfi_rel_offset (%r8, 0);	      \
     pushq %r9; cfi_adjust_cfa_offset (8); cfi_rel_offset (%r9, 0);	      \
@@ -57,6 +58,7 @@
     popq %r9; cfi_adjust_cfa_offset (-8); cfi_restore (%r9);		      \
     popq %r8; cfi_adjust_cfa_offset (-8); cfi_restore (%r8);		      \
     popq %r10; cfi_adjust_cfa_offset (-8); cfi_restore (%r10);		      \
+    popq %rcx; cfi_adjust_cfa_offset (-8); cfi_restore (%rcx);		      \
     popq %rdx; cfi_adjust_cfa_offset (-8); cfi_restore (%rdx);		      \
     popq %rsi; cfi_adjust_cfa_offset (-8); cfi_restore (%rsi);		      \
     popq %rdi; cfi_adjust_cfa_offset (-8); cfi_restore (%rdi);		      \
@@ -70,6 +72,7 @@
     pushq %rdi; cfi_adjust_cfa_offset (8); cfi_rel_offset (%rdi, 0);	      \
     pushq %rsi; cfi_adjust_cfa_offset (8); cfi_rel_offset (%rsi, 0);	      \
     pushq %rdx; cfi_adjust_cfa_offset (8); cfi_rel_offset (%rdx, 0);	      \
+    pushq %rcx; cfi_adjust_cfa_offset (8); cfi_rel_offset (%rcx, 0);	      \
     pushq %r10; cfi_adjust_cfa_offset (8); cfi_rel_offset (%r10, 0);	      \
     pushq %r8; cfi_adjust_cfa_offset (8); cfi_rel_offset (%r8, 0);	      \
     pushq %r9; cfi_adjust_cfa_offset (8); cfi_rel_offset (%r9, 0);	      \
@@ -79,6 +82,7 @@
     popq %r9; cfi_adjust_cfa_offset (-8); cfi_restore (%r9);		      \
     popq %r8; cfi_adjust_cfa_offset (-8); cfi_restore (%r8);		      \
     popq %r10; cfi_adjust_cfa_offset (-8); cfi_restore (%r10);		      \
+    popq %rcx; cfi_adjust_cfa_offset (-8); cfi_restore (%rcx);		      \
     popq %rdx; cfi_adjust_cfa_offset (-8); cfi_restore (%rdx);		      \
     popq %rsi; cfi_adjust_cfa_offset (-8); cfi_restore (%rsi);		      \
     popq %rdi; cfi_adjust_cfa_offset (-8); cfi_restore (%rdi);		      \
