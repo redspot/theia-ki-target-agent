@@ -231,9 +231,9 @@ static struct kmem_cache *theia_buffers;
 #define THEIA_DPATH_LEN PAGE_SIZE
 #endif
 
+//this writes log messages to a relayfs ring buffer. there is no "file".
 void theia_file_write(char *buf, size_t size)
 {
-  unsigned long flags;
   void *reserved = NULL;
   DEFINE_WAIT(wait);
   int __ret = msecs_to_jiffies(theia_active_path_timeout * 1000);
@@ -242,48 +242,37 @@ void theia_file_write(char *buf, size_t size)
     pr_warn("theia_file_write() called with size 0\n");
     return;
   }
+  if (in_interrupt()) goto no_wait; //mutex*() and schedule*() only from user context
   mutex_lock(&relay_write_lock);
-  local_irq_save(flags);
-  if (theia_active_path)
-  {
+  if (!theia_active_path) goto unlock_first;
+  { /* else wrap/queue writers behind mutex and schedule if ring buffer is full */
     pr_debug_ratelimited("theia_file_write() in active path\n");
-    for (;;)
-    {
+    for (;;) {
       prepare_to_wait(theia_chan->private_data, &wait, TASK_UNINTERRUPTIBLE);
       reserved = relay_reserve(theia_chan, size);
-      if (reserved)
-      {
-        break;
-      }
-      else
-      {
-        pr_warn("deferring relay_write() for pid %d on cpu %d with seq %u\n",
-                current->pid, smp_processor_id(), current->no_syscalls);
-        local_irq_restore(flags);
-        __ret = schedule_timeout(__ret);
-        local_irq_save(flags);
-        if (!__ret)
-        {
-          pr_err("theia relay buffer is still unconsumed. disabling active_path.\n");
-          theia_active_path = 0;
-          break;
-        }
-        pr_warn("deferred relay_write() is continuing for pid %d on cpu %d with seq %u\n",
-                current->pid, smp_processor_id(), current->no_syscalls);
-      }
+      if (reserved) break;
+      pr_warn("deferring relay_write() for pid %d on cpu %d with seq %u\n",
+          current->pid, smp_processor_id(), current->no_syscalls);
+      __ret = schedule_timeout(__ret);
+      if (!__ret) break;
+      pr_warn("deferred relay_write() is continuing for pid %d on cpu %d with seq %u\n",
+          current->pid, smp_processor_id(), current->no_syscalls);
     }
     finish_wait(theia_chan->private_data, &wait);
-    //this is relay_write()
-    memcpy(reserved, buf, size);
-    local_irq_restore(flags);
   }
-  else
-  {
-    local_irq_restore(flags);
-    pr_debug_ratelimited("theia_file_write() in original path\n");
-    relay_write(theia_chan, buf, size);
+  if (!__ret || !reserved) {
+    pr_err("theia relay buffer is still unconsumed. disabling active_path.\n");
+    theia_active_path = 0;
+    goto unlock_first;
   }
+  memcpy(reserved, buf, size); //this is relay_write()
   mutex_unlock(&relay_write_lock);
+  return;
+unlock_first:
+  mutex_unlock(&relay_write_lock);
+no_wait: //write to ring buffer without blocking. if full, new messages are dropped
+  pr_debug_ratelimited("theia_file_write() in original path\n");
+  relay_write(theia_chan, buf, size);
 }
 
 bool theia_logging_toggle = 0;
