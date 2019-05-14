@@ -42,11 +42,22 @@ Then, you can install the modules separately, which usually needs to be done onc
 ## build and install custom ```eglibc```
 
 	cd ../eglibc-2.15
-	mkdir -p build
-	CFLAGS='-g3 -O2' ../configure --prefix=/usr/local/eglibc --enable-add-on --enable-kernel=3.2.0
-	make
+	mkdir -p build && cd build
+    ../configure \
+        --prefix=/usr/local/eglibc \
+        --disable-profile \
+        --enable-add-on \
+        --without-gd \
+        --without-selinux \
+        --without-cvs \
+        --enable-kernel=3.2.0 \
+        --target=x86_64-linux-gnu \
+        --host=x86_64-linux-gnu \
+        CFLAGS='-g3 -O2'
+	make  # or make -j8 # or -jnumber_of_cores
 	sudo make install
-	cat /etc/ld.so.conf.d/*.conf | sudo tee /usr/local/eglibc/etc/ld.so.conf
+    sudo cp ../ld.so.conf.theia /usr/local/eglibc/etc/ld.so.conf
+    sudo rm -f /usr/local/eglibc/etc/ld.so.cache
 	sudo /usr/local/eglibc/sbin/ldconfig
 
 ## build and install relay-reader

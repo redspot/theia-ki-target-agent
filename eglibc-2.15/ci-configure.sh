@@ -8,4 +8,5 @@
 --enable-kernel=3.2.0 \
 --target=x86_64-linux-gnu \
 --host=x86_64-linux-gnu \
+CFLAGS='-g3 -O2' \
 CC=gcc-4.7
