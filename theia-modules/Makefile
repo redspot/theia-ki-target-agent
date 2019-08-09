@@ -1,4 +1,5 @@
-KDIR ?= /lib/modules/$(shell uname -r)/build
+#KDIR ?= /lib/modules/$(shell uname -r)/build
+KDIR ?= ../linux-lts-quantal-3.5.0/theia_build/
 PWD := $(shell pwd)
 
 CFLAGS_theia_core.o = -DDEBUG
@@ -9,31 +10,33 @@ CFLAGS_theia_trace.o = -DDEBUG
 #core
 obj-m += theia_core.o
 #ftrace hooks
-obj-m += theia_hook.o
-theia_hook-objs := theia_syscalls.o
+obj-m += theia_hook_mod.o
+theia_hook_mod-objs := theia_hook.o theia_syscalls.o
 #tracepoint hooks
 obj-m += theia_trace.o
 
 clean-files := theia_syscalls.h
 
 default:
-	$(MAKE) -C $(KDIR) M=$(PWD) modules CC=$(CC)
+	$(MAKE) -C $(KDIR) M=$(PWD) modules CC=$(CC) 2>&1
 
 clean:
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
 
 $(obj)/theia_syscalls.o: $(src)/theia_syscalls.h
 
+syscalls_header: src=$(PWD)
+syscalls_header: $(src)/theia_syscalls.h
+
 $(src)/theia_syscalls.h: $(src)/theia_syscalls.h.pre
 	$(CC) -Wall -E -xc $< \
-		| sed -e $$'s/__NL__/\\\n/g' \
+		| sed -e 's/__NL__/\n/g' \
 		| sed -e 's/DEFINE/#define/g' \
 		| grep -v '^# ' \
 		> $@
 
 all: default
 
-wilson: KDIR := ../linux-lts-quantal-3.5.0/theia_build/
 wilson: CC := /home/linuxbrew/.linuxbrew/bin/gcc-4.9
 wilson:
 	$(MAKE) -C $(KDIR) M=$(PWD) modules CC=$(CC) 2>&1
