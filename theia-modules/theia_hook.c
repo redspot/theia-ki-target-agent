@@ -6,9 +6,12 @@
  *  wilson.martin@gtri.gatech.edu
  */
 
+#include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/kallsyms.h>
+#include <linux/ratelimit.h>
+#include <linux/types.h>
 
 #include "theia_hook.h"
 
@@ -22,14 +25,14 @@ MODULE_VERSION("0.1-THEIA-0000");
  * Import Theia symbols
  */
 extern struct module* get_theia_core_module(void);
-extern struct module* get_theia_syscalls_module(void);
 extern struct ftrace_hook theia_hooks[];
+extern const size_t nr_theia_hooks;
 
 /*
  * local state data
  */
 static struct module *theia_core_module = NULL;
-static struct module *theia_syscalls_module = NULL;
+static atomic_t all_hooks_enabled = ATOMIC_INIT(0);
 
 static int fh_resolve_hook_address(struct ftrace_hook *hook)
 {
@@ -54,12 +57,16 @@ static void notrace fh_ftrace_thunk(unsigned long ip, unsigned long parent_ip,
 {
 	struct ftrace_hook *hook = container_of(ops, struct ftrace_hook, ops);
 
+  if (!atomic_read(&all_hooks_enabled)) return;
+
+  pr_info_ratelimited("%s: ip=%p parent_ip=%p\n", __func__, (void*)ip, (void*)parent_ip);
+  pr_info_ratelimited("%s: hook->address=%p name=%s\n",
+      __func__, (void*)hook->address, hook->name);
 #if USE_FENTRY_OFFSET
 	regs->ip = (unsigned long) hook->function;
 #else
-  if (!within_module(parent_ip, THIS_MODULE)
-      && (theia_core_module ? !within_module(parent_ip, theia_core_module) : 1)
-      && (theia_syscalls_module ? !within_module(parent_ip, theia_syscalls_module) : 1)
+  if (!within_module_core(parent_ip, THIS_MODULE)
+      && (theia_core_module ? !within_module_core(parent_ip, theia_core_module) : 1)
      )
 		regs->ip = (unsigned long) hook->function;
 #endif
@@ -78,6 +85,7 @@ int fh_install_hook(struct ftrace_hook *hook)
 	err = fh_resolve_hook_address(hook);
 	if (err)
 		return err;
+  pr_info("%s: new hook: address=%p name=%s\n", __func__, (void*)hook->address, hook->name);
 
 	/*
 	 * We're going to modify %rip register so we'll need IPMODIFY flag
@@ -86,9 +94,13 @@ int fh_install_hook(struct ftrace_hook *hook)
 	 * We'll perform our own checks for trace function reentry.
 	 */
 	hook->ops.func = fh_ftrace_thunk;
-	hook->ops.flags = FTRACE_OPS_FL_SAVE_REGS
-	                | FTRACE_OPS_FL_RECURSION_SAFE
-	                | FTRACE_OPS_FL_IPMODIFY;
+	hook->ops.flags = 0;
+#if defined(FTRACE_OPS_FL_SAVE_REGS)
+	hook->ops.flags |= FTRACE_OPS_FL_SAVE_REGS | FTRACE_OPS_FL_RECURSION_SAFE;
+#endif
+#if defined(FTRACE_OPS_FL_IPMODIFY)
+	hook->ops.flags |= FTRACE_OPS_FL_IPMODIFY;
+#endif
 
 	err = ftrace_set_filter_ip(&hook->ops, hook->address, 0, 0);
 	if (err) {
@@ -168,34 +180,37 @@ void fh_remove_hooks(struct ftrace_hook *hooks, size_t count)
 		fh_remove_hook(&hooks[i]);
 }
 
-static int fh_init(void)
+static int __init fh_init(void)
 {
 	int err;
 
-	err = fh_install_hooks(theia_hooks, ARRAY_SIZE(theia_hooks));
+  atomic_set(&all_hooks_enabled, 0);
+	pr_info("module calling fh_install_hooks()\n");
+	err = fh_install_hooks(theia_hooks, nr_theia_hooks);
 	if (err)
 		return err;
+
+  /* lock our dependent modules into the kernel */
   theia_core_module = get_theia_core_module();
   if (theia_core_module)
     __module_get(theia_core_module);
-  theia_syscalls_module = get_theia_syscalls_module();
-  if (theia_syscalls_module)
-    __module_get(theia_syscalls_module);
 
-	pr_info("module loaded\n");
+	pr_info("theia_hook: module loaded\n");
+  atomic_set(&all_hooks_enabled, 1);
 
 	return 0;
 }
 module_init(fh_init);
 
-static void fh_exit(void)
+static void  __exit fh_exit(void)
 {
-	fh_remove_hooks(demo_hooks, ARRAY_SIZE(demo_hooks));
+  atomic_set(&all_hooks_enabled, 0);
+	fh_remove_hooks(theia_hooks, nr_theia_hooks);
+
+  /* unlock our dependent modules */
   if (theia_core_module)
     module_put(theia_core_module);
-  if (theia_syscalls_module)
-    module_put(theia_syscalls_module);
 
-	pr_info("module unloaded\n");
+	pr_info("theia_hook: module unloaded\n");
 }
 module_exit(fh_exit);
