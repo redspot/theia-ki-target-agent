@@ -23,3 +23,11 @@ fi
 
 #install kernel
 make -j$build_parallel O="${DIR}/${BUILD_DIR}" CC="$CC" install
+
+KVERSION=$(make -j$build_parallel O="${DIR}/${BUILD_DIR}" CC="$CC" kernelrelease)
+DEBUG_KERNEL=/usr/lib/debug/boot/vmlinux-${KVERSION}
+if [ -f ${DEBUG_KERNEL} ]; then
+    rm ${DEBUG_KERNEL}
+fi
+cp "${DIR}/${BUILD_DIR}/vmlinux" ${DEBUG_KERNEL}
+ls -lh ${DEBUG_KERNEL}

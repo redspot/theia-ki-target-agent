@@ -8,6 +8,9 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 set -e
 
 #run this script like "BUILD_DIR=other_dir ./install.sh" to override
+if [ -z "${BUILD_DIR}" ]; then
+  BUILD_DIR=theia_build
+fi
 
-BUILD_DIR="${BUILD_DIR}" ./install-modules.sh
-BUILD_DIR="${BUILD_DIR}" ./install-kernel.sh
+BUILD_DIR="${BUILD_DIR}" sudo ./install-modules.sh
+BUILD_DIR="${BUILD_DIR}" sudo ./install-kernel.sh
