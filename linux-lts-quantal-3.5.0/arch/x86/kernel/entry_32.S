@@ -1190,9 +1190,6 @@ END(mcount)
 
 #ifdef CONFIG_FUNCTION_GRAPH_TRACER
 ENTRY(ftrace_graph_caller)
-	cmpl $0, function_trace_stop
-	jne ftrace_stub
-
 	pushl %eax
 	pushl %ecx
 	pushl %edx
