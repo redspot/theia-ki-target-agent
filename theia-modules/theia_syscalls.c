@@ -2,6 +2,7 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/linkage.h>
+#include <linux/ratelimit.h>
 
 #include "theia_syscalls.h"
 #include "theia_hook.h"
@@ -21,36 +22,36 @@
 static asmlinkage long theia_hook_read(SC_PROTO_read)
 {
 	long ret;
-  pr_info("%s: called by pid %d\n", __func__, current->pid);
+  pr_debug_ratelimited("%s: called by pid %d\n", __func__, current->pid);
   ret = real_sys_read(SC_ARGS_read);
-  pr_info("%s: ret=%li for pid %d\n", __func__, ret, current->pid);
+  pr_debug_ratelimited("%s: ret=%li for pid %d\n", __func__, ret, current->pid);
   return ret;
 }
 
 static asmlinkage long theia_hook_write(SC_PROTO_write)
 {
 	long ret;
-  pr_info("%s: called by pid %d\n", __func__, current->pid);
+  pr_debug_ratelimited("%s: called by pid %d\n", __func__, current->pid);
   ret = real_sys_write(SC_ARGS_write);
-  pr_info("%s: ret=%li for pid %d\n", __func__, ret, current->pid);
+  pr_debug_ratelimited("%s: ret=%li for pid %d\n", __func__, ret, current->pid);
   return ret;
 }
 
 static asmlinkage long theia_hook_clone(SC_PROTO_clone)
 {
 	long ret;
-  pr_info("%s: called by pid %d\n", __func__, current->pid);
+  pr_debug_ratelimited("%s: called by pid %d\n", __func__, current->pid);
   ret = real_sys_clone(SC_ARGS_clone);
-  pr_info("%s: ret=%li for pid %d\n", __func__, ret, current->pid);
+  pr_debug_ratelimited("%s: ret=%li for pid %d\n", __func__, ret, current->pid);
   return ret;
 }
 
 static asmlinkage long theia_hook_execve(SC_PROTO_execve)
 {
 	long ret;
-  pr_info("%s: called by pid %d\n", __func__, current->pid);
+  pr_debug_ratelimited("%s: called by pid %d\n", __func__, current->pid);
   ret = real_sys_execve(SC_ARGS_execve);
-  pr_info("%s: ret=%li for pid %d\n", __func__, ret, current->pid);
+  pr_debug_ratelimited("%s: ret=%li for pid %d\n", __func__, ret, current->pid);
   return ret;
 }
 
