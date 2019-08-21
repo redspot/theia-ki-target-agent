@@ -35,8 +35,9 @@ static asmlinkage long theia_hook_##_name(SC_PROTO_##_name);
 SC_LTTNG_TRACEPOINT_EVENT(clone,
 	TP_PROTO(sc_exit(long ret,) unsigned long clone_flags, unsigned long newsp,
 		void __user *parent_tid,
-		void __user *child_tid),
-	TP_ARGS(sc_exit(ret,) clone_flags, newsp, parent_tid, child_tid),
+		void __user *child_tid,
+        struct pt_regs *regs),
+	TP_ARGS(sc_exit(ret,) clone_flags, newsp, parent_tid, child_tid, regs),
 	TP_FIELDS(
 		sc_exit(ctf_integer(long, ret, ret))
 		sc_in(ctf_integer_hex(unsigned long, clone_flags, clone_flags))
@@ -47,8 +48,8 @@ SC_LTTNG_TRACEPOINT_EVENT(clone,
 )
 
 SC_LTTNG_TRACEPOINT_EVENT(execve,
-	TP_PROTO(sc_exit(long ret,) const char *filename, char *const *argv, char *const *envp),
-	TP_ARGS(sc_exit(ret,) filename, argv, envp),
+	TP_PROTO(sc_exit(long ret,) const char *filename, char *const *argv, char *const *envp, struct pt_regs *regs),
+	TP_ARGS(sc_exit(ret,) filename, argv, envp, regs),
 	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret))
 		sc_in(ctf_user_string(filename, filename))
 		sc_in(ctf_integer_hex(char *const *, argv, argv))
