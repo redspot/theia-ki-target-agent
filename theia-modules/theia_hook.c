@@ -21,6 +21,8 @@ MODULE_AUTHOR("ilammy <a.lozovsky@gmail.com>, "
 MODULE_LICENSE("GPL");
 MODULE_VERSION("0.1-THEIA-0000");
 
+#define IS_NULL_OR_LT_PAGE(ptr) (!ptr || (unsigned long)ptr < PAGE_SIZE)
+
 /*
  * Import Theia symbols
  */
@@ -55,21 +57,29 @@ static int fh_resolve_hook_address(struct ftrace_hook *hook)
 static void notrace fh_ftrace_thunk(unsigned long ip, unsigned long parent_ip,
 		struct ftrace_ops *ops, struct pt_regs *regs)
 {
+  int within_self = 0;
+  int within_core = 0;
 	struct ftrace_hook *hook = container_of(ops, struct ftrace_hook, ops);
 
   if (!atomic_read(&all_hooks_enabled)) return;
+  BUG_ON(IS_NULL_OR_LT_PAGE(regs));
+  /* check for regs nullptr before checking regs->ip */
+  BUG_ON(IS_NULL_OR_LT_PAGE(regs->ip));
+  pr_debug_ratelimited("%s: ip=%p parent_ip=%p\n", __func__, (void*)ip, (void*)parent_ip);
+  pr_debug_ratelimited("%s: hook->address=%p name=%s hook->function=%p\n",
+      __func__, (void*)hook->address, hook->name, hook->function);
+  BUG_ON(IS_NULL_OR_LT_PAGE(hook->function));
 
-  pr_info_ratelimited("%s: ip=%p parent_ip=%p\n", __func__, (void*)ip, (void*)parent_ip);
-  pr_info_ratelimited("%s: hook->address=%p name=%s\n",
-      __func__, (void*)hook->address, hook->name);
 #if USE_FENTRY_OFFSET
 	regs->ip = (unsigned long) hook->function;
 #else
-  if (!within_module_core(parent_ip, THIS_MODULE)
-      && (theia_core_module ? !within_module_core(parent_ip, theia_core_module) : 1)
-     )
+  within_self = within_module_core(parent_ip, THIS_MODULE);
+  if (likely(theia_core_module))
+    within_core = within_module_core(parent_ip, theia_core_module);
+  if (!within_self && !within_core)
 		regs->ip = (unsigned long) hook->function;
 #endif
+  pr_debug_ratelimited("%s: USE_FENTRY_OFFSET=%d: regs=%p regs->ip=%p\n", __func__, USE_FENTRY_OFFSET, regs, (void*)regs->ip);
 }
 
 /**
@@ -85,7 +95,7 @@ int fh_install_hook(struct ftrace_hook *hook)
 	err = fh_resolve_hook_address(hook);
 	if (err)
 		return err;
-  pr_info("%s: new hook: address=%p name=%s\n", __func__, (void*)hook->address, hook->name);
+  pr_debug("%s: new hook: address=%p name=%s\n", __func__, (void*)hook->address, hook->name);
 
 	/*
 	 * We're going to modify %rip register so we'll need IPMODIFY flag
