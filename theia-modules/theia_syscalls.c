@@ -22,36 +22,44 @@
 static asmlinkage long theia_hook_read(SC_PROTO_read)
 {
 	long ret;
+  try_module_get(THIS_MODULE);
   pr_debug_ratelimited("%s: called by pid %d\n", __func__, current->pid);
   ret = real_sys_read(SC_ARGS_read);
   pr_debug_ratelimited("%s: ret=%li for pid %d\n", __func__, ret, current->pid);
+  module_put(THIS_MODULE);
   return ret;
 }
 
 static asmlinkage long theia_hook_write(SC_PROTO_write)
 {
 	long ret;
+  try_module_get(THIS_MODULE);
   pr_debug_ratelimited("%s: called by pid %d\n", __func__, current->pid);
   ret = real_sys_write(SC_ARGS_write);
   pr_debug_ratelimited("%s: ret=%li for pid %d\n", __func__, ret, current->pid);
+  module_put(THIS_MODULE);
   return ret;
 }
 
 static asmlinkage long theia_hook_clone(SC_PROTO_clone)
 {
 	long ret;
+  try_module_get(THIS_MODULE);
   pr_debug_ratelimited("%s: called by pid %d\n", __func__, current->pid);
   ret = real_sys_clone(SC_ARGS_clone);
   pr_debug_ratelimited("%s: ret=%li for pid %d\n", __func__, ret, current->pid);
+  module_put(THIS_MODULE);
   return ret;
 }
 
 static asmlinkage long theia_hook_execve(SC_PROTO_execve)
 {
 	long ret;
+  try_module_get(THIS_MODULE);
   pr_debug_ratelimited("%s: called by pid %d\n", __func__, current->pid);
   ret = real_sys_execve(SC_ARGS_execve);
   pr_debug_ratelimited("%s: ret=%li for pid %d\n", __func__, ret, current->pid);
+  module_put(THIS_MODULE);
   return ret;
 }
 
