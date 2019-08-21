@@ -6,6 +6,12 @@ MODULE_AUTHOR("wilson.martin@gtri.gatech.edu");
 MODULE_LICENSE("GPL");
 MODULE_VERSION("0.1-THEIA-0000");
 
+/*
+ * Global state for Theia subsystems
+ */
+static atomic_t all_hooks_enabled = ATOMIC_INIT(0);
+EXPORT_SYMBOL(all_hooks_enabled);
+
 struct module* get_theia_core_module(void)
 {
   return THIS_MODULE;

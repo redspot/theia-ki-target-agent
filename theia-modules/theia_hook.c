@@ -29,12 +29,12 @@ MODULE_VERSION("0.1-THEIA-0000");
 extern struct module* get_theia_core_module(void);
 extern struct ftrace_hook theia_hooks[];
 extern const size_t nr_theia_hooks;
+extern atomic_t all_hooks_enabled;
 
 /*
  * local state data
  */
 static struct module *theia_core_module = NULL;
-static atomic_t all_hooks_enabled = ATOMIC_INIT(0);
 
 static int fh_resolve_hook_address(struct ftrace_hook *hook)
 {
