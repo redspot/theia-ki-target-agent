@@ -111,10 +111,16 @@ int fh_install_hook(struct ftrace_hook *hook)
 	 */
 	hook->ops.func = fh_ftrace_thunk;
 	hook->ops.flags = 0;
-#if defined(FTRACE_OPS_FL_SAVE_REGS)
+/*
+ * FTRACE_OPS_FL_SAVE_REGS and FTRACE_OPS_FL_RECURSION_SAFE first appeared
+ * in kernel 3.7.0, however, we have backported the needed ftrace features
+ * to kernel 3.5.7.13-ddevec-replay that theia uses.
+ */
+//#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0))
 	hook->ops.flags |= FTRACE_OPS_FL_SAVE_REGS | FTRACE_OPS_FL_RECURSION_SAFE;
-#endif
-#if defined(FTRACE_OPS_FL_IPMODIFY)
+//#endif
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,19,0))
 	hook->ops.flags |= FTRACE_OPS_FL_IPMODIFY;
 #endif
 
