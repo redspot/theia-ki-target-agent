@@ -62,7 +62,13 @@ static void notrace fh_ftrace_thunk(unsigned long ip, unsigned long parent_ip,
 	struct ftrace_hook *hook = container_of(ops, struct ftrace_hook, ops);
 
   if (!atomic_read(&all_hooks_enabled)) return;
-  BUG_ON(IS_NULL_OR_LT_PAGE(regs));
+  if (IS_NULL_OR_LT_PAGE(regs))
+  {
+    pr_err_ratelimited("%s: regs is null. perhaps FTRACE_OPS_FL_SAVE_REGS flag was not set.\n", __func__);
+    pr_err_ratelimited("%s: all_hooks_enabled = 0\n", __func__);
+    atomic_set(&all_hooks_enabled, 0);
+    return;
+  }
   /* check for regs nullptr before checking regs->ip */
   BUG_ON(IS_NULL_OR_LT_PAGE(regs->ip));
   pr_debug_ratelimited("%s: ip=%p parent_ip=%p\n", __func__, (void*)ip, (void*)parent_ip);
