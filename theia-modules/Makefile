@@ -1,5 +1,5 @@
-#KDIR ?= /lib/modules/$(shell uname -r)/build
-KDIR ?= ../linux-lts-quantal-3.5.0/theia_build/
+KDIR ?= /lib/modules/$(shell uname -r)/build
+#KDIR ?= ../linux-lts-quantal-3.5.0/theia_build/
 PWD := $(shell pwd)
 
 CFLAGS_theia_core.o = -DDEBUG
@@ -37,6 +37,6 @@ $(src)/theia_syscalls.h: $(src)/theia_syscalls.h.pre
 
 all: default
 
-wilson: CC := /home/linuxbrew/.linuxbrew/bin/gcc-4.9
+wilson: CC := gcc-4.9
 wilson:
 	$(MAKE) -C $(KDIR) M=$(PWD) modules CC=$(CC) 2>&1
