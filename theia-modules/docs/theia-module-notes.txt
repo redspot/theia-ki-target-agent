@@ -1,0 +1,86 @@
+kobject flags:
+int logging
+int recording
+int syscall_hooking
+int tracepoint_hooking
+
+porting theia code:
+    replay.c
+        find all the shims and hooks
+        split into simple hooks and custom hooks
+    move all the global state to theia_core
+    start by copying replay.c and commenting out everything
+    then uncomment record_read() replay_read() and theia_sys_read()
+
+new code:
+    record_*
+    replay_*
+    theia_sys_*
+    helper functions
+    record-to-disk functions
+    read-from-disk functions
+    headers
+    Makefile's
+
+all sources ever added by omniplay:
+A	linux-lts-quantal-3.5.0/include/linux/c_cache.h
+A	linux-lts-quantal-3.5.0/include/linux/c_constants.h
+A	linux-lts-quantal-3.5.0/include/linux/c_status.h
+A	linux-lts-quantal-3.5.0/include/linux/clog.h
+A	linux-lts-quantal-3.5.0/include/linux/decodeBuffer.h
+A	linux-lts-quantal-3.5.0/include/linux/det_time.h
+A	linux-lts-quantal-3.5.0/include/linux/ds_list.h
+A	linux-lts-quantal-3.5.0/include/linux/encodebuffer.h
+A	linux-lts-quantal-3.5.0/include/linux/file_list.h
+A	linux-lts-quantal-3.5.0/include/linux/pthread_log.h
+A	linux-lts-quantal-3.5.0/include/linux/replay.h
+A	linux-lts-quantal-3.5.0/include/linux/replay_configs.h
+A	linux-lts-quantal-3.5.0/include/linux/replay_maps.h
+A	linux-lts-quantal-3.5.0/include/linux/values_cache.h
+A	linux-lts-quantal-3.5.0/include/linux/xcomp.h
+
+A	linux-lts-quantal-3.5.0/kernel/ds_list.c
+A	linux-lts-quantal-3.5.0/kernel/ds_list.private.h
+A	linux-lts-quantal-3.5.0/kernel/replay.c
+A	linux-lts-quantal-3.5.0/kernel/replay_ckpt.c
+A	linux-lts-quantal-3.5.0/kernel/replay_leader.c
+A	linux-lts-quantal-3.5.0/kernel/replay_logdb.c
+A	linux-lts-quantal-3.5.0/kernel/replay_maps.c
+A	linux-lts-quantal-3.5.0/kernel/replay_monitor.h
+A	linux-lts-quantal-3.5.0/kernel/replay_perf_event_wrapper.c
+A	linux-lts-quantal-3.5.0/kernel/replay_perf_event_wrapper.h
+
+A	linux-lts-quantal-3.5.0/kernel/replay_compress/Makefile
+A	linux-lts-quantal-3.5.0/kernel/replay_compress/X11/X.h
+A	linux-lts-quantal-3.5.0/kernel/replay_compress/X11/Xatom.h
+A	linux-lts-quantal-3.5.0/kernel/replay_compress/X11/Xmd.h
+A	linux-lts-quantal-3.5.0/kernel/replay_compress/X11/Xproto.h
+A	linux-lts-quantal-3.5.0/kernel/replay_compress/X11/Xprotostr.h
+A	linux-lts-quantal-3.5.0/kernel/replay_compress/c_cache.c
+A	linux-lts-quantal-3.5.0/kernel/replay_compress/c_constants.c
+A	linux-lts-quantal-3.5.0/kernel/replay_compress/c_status.c
+A	linux-lts-quantal-3.5.0/kernel/replay_compress/clog.c
+A	linux-lts-quantal-3.5.0/kernel/replay_compress/decodeBuffer.c
+A	linux-lts-quantal-3.5.0/kernel/replay_compress/det_time.c
+A	linux-lts-quantal-3.5.0/kernel/replay_compress/encodeBuffer.c
+A	linux-lts-quantal-3.5.0/kernel/replay_compress/file_list.c
+A	linux-lts-quantal-3.5.0/kernel/replay_compress/values_cache.c
+A	linux-lts-quantal-3.5.0/kernel/replay_compress/xcomp.c
+
+A	linux-lts-quantal-3.5.0/kernel/replay_graph/Makefile
+A	linux-lts-quantal-3.5.0/kernel/replay_graph/replay_data.c
+A	linux-lts-quantal-3.5.0/kernel/replay_graph/replay_data.h
+A	linux-lts-quantal-3.5.0/kernel/replay_graph/replayfs_btree.c
+A	linux-lts-quantal-3.5.0/kernel/replay_graph/replayfs_btree.h
+A	linux-lts-quantal-3.5.0/kernel/replay_graph/replayfs_btree128.c
+A	linux-lts-quantal-3.5.0/kernel/replay_graph/replayfs_btree128.h
+A	linux-lts-quantal-3.5.0/kernel/replay_graph/replayfs_diskalloc.c
+A	linux-lts-quantal-3.5.0/kernel/replay_graph/replayfs_diskalloc.h
+A	linux-lts-quantal-3.5.0/kernel/replay_graph/replayfs_filemap.c
+A	linux-lts-quantal-3.5.0/kernel/replay_graph/replayfs_filemap.h
+A	linux-lts-quantal-3.5.0/kernel/replay_graph/replayfs_kmap.c
+A	linux-lts-quantal-3.5.0/kernel/replay_graph/replayfs_kmap.h
+A	linux-lts-quantal-3.5.0/kernel/replay_graph/replayfs_perftimer.c
+A	linux-lts-quantal-3.5.0/kernel/replay_graph/replayfs_perftimer.h
+A	linux-lts-quantal-3.5.0/kernel/replay_graph/replayfs_syscall_cache.c
+A	linux-lts-quantal-3.5.0/kernel/replay_graph/replayfs_syscall_cache.h
