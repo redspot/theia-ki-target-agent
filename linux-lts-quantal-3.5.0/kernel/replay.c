@@ -9418,6 +9418,14 @@ void theia_read_ahg(unsigned int fd, long rc)
 }
 
 static asmlinkage long
+record_read_test(unsigned int fd, char __user *buf, size_t count)
+{
+  printk("test for record read\n");
+  return sys_read(fd, buf, count);
+}
+EXPORT_SYMBOL(record_read_test);
+
+static asmlinkage long
 record_read(unsigned int fd, char __user *buf, size_t count)
 {
   long rc;
@@ -9841,6 +9849,7 @@ record_read(unsigned int fd, char __user *buf, size_t count)
   perftimer_stop(read_in_timer);
   return rc;
 }
+EXPORT_SYMBOL(record_read);
 
 void print_mem(void *addr, int length);
 static asmlinkage long

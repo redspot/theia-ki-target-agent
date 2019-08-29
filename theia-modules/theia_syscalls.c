@@ -19,16 +19,42 @@
  * syscall hooks start here
  */
 
-static asmlinkage long theia_hook_read(SC_PROTO_read)
-{
+//static asmlinkage long theia_hook_read(SC_PROTO_read)
+//{
+//	long ret;
+//  try_module_get(THIS_MODULE);
+//  pr_debug_ratelimited("%s: called by pid %d\n", __func__, current->pid);
+//  ret = real_sys_read(SC_ARGS_read);
+//  pr_debug_ratelimited("%s: ret=%li for pid %d\n", __func__, ret, current->pid);
+//  module_put(THIS_MODULE);
+//  return ret;
+//}
+
+extern asmlinkage long record_read_test(SC_PROTO_read);
+
+static asmlinkage long theia_hook_read(SC_PROTO_read) {
 	long ret;
   try_module_get(THIS_MODULE);
   pr_debug_ratelimited("%s: called by pid %d\n", __func__, current->pid);
-  ret = real_sys_read(SC_ARGS_read);
-  pr_debug_ratelimited("%s: ret=%li for pid %d\n", __func__, ret, current->pid);
+  if(current->record_thrd) {
+    pr_debug_ratelimited("%s: before record_read pid %d\n", __func__, current->pid);
+    ret = record_read_test(SC_ARGS_read);
+  }
+  else
+    ret = real_sys_read(SC_ARGS_read);
   module_put(THIS_MODULE);
   return ret;
+
 }
+
+//static asmlinkage long theia_hook_record_read(SC_PROTO_read)
+//{
+//	long ret;
+//  try_module_get(THIS_MODULE);
+//  ret = real_record_read(SC_ARGS_read);
+//  module_put(THIS_MODULE);
+//  return ret;
+//}
 
 static asmlinkage long theia_hook_write(SC_PROTO_write)
 {
@@ -86,6 +112,7 @@ static asmlinkage long theia_hook_execve(SC_PROTO_execve)
 
 struct ftrace_hook theia_hooks[] = {
   HOOK("sys_read", theia_hook_read, &real_sys_read),
+//  HOOK("record_read", theia_hook_record_read, &real_record_read),
   HOOK("sys_write", theia_hook_write, &real_sys_write),
   HOOK("sys_clone", theia_hook_clone, &real_sys_clone),
   HOOK("sys_execve", theia_hook_execve, &real_sys_execve),
