@@ -31,6 +31,9 @@ extern struct ftrace_hook theia_hooks[];
 extern const size_t nr_theia_hooks;
 extern atomic_t all_hooks_enabled;
 
+long record_read_test(unsigned int fd, char __user *buf, size_t count);
+long record_read(unsigned int fd, char __user *buf, size_t count);
+
 /*
  * local state data
  */
@@ -54,11 +57,21 @@ static int fh_resolve_hook_address(struct ftrace_hook *hook)
 	return 0;
 }
 
+int within_record_routine(uint64_t parent_ip) {
+  uint64_t offset = 0xd00;
+  pr_debug_ratelimited("[%s] parent_ip=%p, record_read %p, offset %lx\n", __func__, (void*)parent_ip, (void*)record_read, offset);
+  if(parent_ip >= (uint64_t)record_read && parent_ip < (uint64_t)record_read+offset)
+    return 1;
+  return 0;
+}
+
 static void notrace fh_ftrace_thunk(unsigned long ip, unsigned long parent_ip,
 		struct ftrace_ops *ops, struct pt_regs *regs)
 {
   int within_self = 0;
   int within_core = 0;
+  int within_record = 0;
+
 	struct ftrace_hook *hook = container_of(ops, struct ftrace_hook, ops);
 
   if (!atomic_read(&all_hooks_enabled)) return;
@@ -80,10 +93,13 @@ static void notrace fh_ftrace_thunk(unsigned long ip, unsigned long parent_ip,
 	regs->ip = (unsigned long) hook->function;
 #else
   within_self = within_module_core(parent_ip, THIS_MODULE);
+  within_record = within_record_routine(parent_ip);
   if (likely(theia_core_module))
     within_core = within_module_core(parent_ip, theia_core_module);
-  if (!within_self && !within_core)
+  if (!within_self && !within_core && !within_record) {
 		regs->ip = (unsigned long) hook->function;
+    pr_debug_ratelimited("called from outside of module, pid %d, regs->ip %p\n", current->pid, (void*)regs->ip);
+  }
 #endif
   pr_debug_ratelimited("%s: USE_FENTRY_OFFSET=%d: regs=%p regs->ip=%p\n", __func__, USE_FENTRY_OFFSET, regs, (void*)regs->ip);
 }

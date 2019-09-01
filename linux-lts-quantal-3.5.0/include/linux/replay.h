@@ -195,4 +195,6 @@ long reset_replay_ndx(void);
 void write_shr_cache(char *buf, long len);
 
 void remove_process_from_tree(pid_t pid, int sec);
+
+long record_read_test(unsigned int fd, char __user *buf, size_t count);
 #endif

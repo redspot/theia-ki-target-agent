@@ -106,6 +106,8 @@
 
 #include <linux/base64.h>
 
+#include <linux/kallsyms.h>
+
 #define RECORD_UUID
 
 /* copy up to max_len characters from source to target (a wrapper of strncpy).
@@ -4209,6 +4211,7 @@ static void argsfreeall(struct record_thread *prect)
     KFREE(node);
   }
 }
+EXPORT_SYMBOL(argsfreeall);
 
 #ifdef LOG_COMPRESS_1
 static void compressfree(const void *ptr, size_t size, struct list_head *rp_list)
@@ -9417,15 +9420,15 @@ void theia_read_ahg(unsigned int fd, long rc)
 
 }
 
-static asmlinkage long
+long
 record_read_test(unsigned int fd, char __user *buf, size_t count)
 {
-  printk("test for record read\n");
   return sys_read(fd, buf, count);
 }
 EXPORT_SYMBOL(record_read_test);
 
-static asmlinkage long
+//static asmlinkage long
+long
 record_read(unsigned int fd, char __user *buf, size_t count)
 {
   long rc;
