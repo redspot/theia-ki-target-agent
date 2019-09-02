@@ -58,9 +58,12 @@ static int fh_resolve_hook_address(struct ftrace_hook *hook)
 }
 
 int within_record_routine(uint64_t parent_ip) {
-  uint64_t offset = 0xd00;
-  pr_debug_ratelimited("[%s] parent_ip=%p, record_read %p, offset %lx\n", __func__, (void*)parent_ip, (void*)record_read, offset);
-  if(parent_ip >= (uint64_t)record_read && parent_ip < (uint64_t)record_read+offset)
+  unsigned long symbolsize, symoffset; 
+  int ret = 0;
+  char modname[MODULE_NAME_LEN], name[KSYM_NAME_LEN];
+  ret = lookup_symbol_attrs((unsigned long)record_read, &symbolsize, &symoffset, modname, name);
+  pr_debug_ratelimited("[%s] parent_ip=%p, record_read %p, symsize %lx,  offset %lx, ret %d\n", __func__, (void*)parent_ip, (void*)record_read, symbolsize, symoffset, ret);
+  if(parent_ip >= (unsigned long)record_read && parent_ip < (unsigned long)record_read+symbolsize)
     return 1;
   return 0;
 }

@@ -340,6 +340,7 @@ int lookup_symbol_attrs(unsigned long addr, unsigned long *size,
 	/* See if it's in a module. */
 	return lookup_module_symbol_attrs(addr, size, offset, modname, name);
 }
+EXPORT_SYMBOL_GPL(lookup_symbol_attrs);
 
 /* Look up a kernel symbol and return it in a text buffer. */
 static int __sprint_symbol(char *buffer, unsigned long address,
