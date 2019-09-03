@@ -5,6 +5,8 @@
 #include <linux/ratelimit.h>
 #include <linux/replay.h>
 
+#include <linux/signal.h>
+#include <asm/siginfo.h>
 #include "theia_syscalls.h"
 #include "theia_hook.h"
 
@@ -31,6 +33,8 @@
 //  return ret;
 //}
 long record_read(unsigned int fd, char __user *buf, size_t count);
+int get_signal_to_deliver_replay(siginfo_t *info, struct k_sigaction *return_ka,
+			  struct pt_regs *regs, void *cookie);
 
 static asmlinkage long theia_hook_read(SC_PROTO_read) {
 	long ret;
@@ -43,6 +47,16 @@ static asmlinkage long theia_hook_read(SC_PROTO_read) {
   else {
     ret = real_sys_read(SC_ARGS_read);
   }
+  module_put(THIS_MODULE);
+  return ret;
+
+}
+
+int theia_hook_get_signal_to_deliver(SC_PROTO_get_signal_to_deliver) {
+	long ret;
+  try_module_get(THIS_MODULE);
+  pr_debug_ratelimited("%s: called by pid %d\n", __func__, current->pid);
+  ret = get_signal_to_deliver_replay(SC_ARGS_get_signal_to_deliver);
   module_put(THIS_MODULE);
   return ret;
 
@@ -117,6 +131,7 @@ struct ftrace_hook theia_hooks[] = {
   HOOK("sys_write", theia_hook_write, &real_sys_write),
   HOOK("sys_clone", theia_hook_clone, &real_sys_clone),
   HOOK("sys_execve", theia_hook_execve, &real_sys_execve),
+  HOOK("get_signal_to_deliver", theia_hook_get_signal_to_deliver, &real_get_signal_to_deliver),
 };
 
 const size_t nr_theia_hooks = ARRAY_SIZE(theia_hooks);
