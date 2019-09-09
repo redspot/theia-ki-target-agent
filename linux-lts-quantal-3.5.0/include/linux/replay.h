@@ -14,6 +14,7 @@
 #include <linux/signal.h>
 #include <linux/mm_types.h>
 #include <linux/fs_struct.h>
+#include <linux/sched.h>
 
 #define REPLAYFS_BASE_PATH "/data"
 #define REPLAYFS_LOGDB_SUFFIX "/replay_logdb"
@@ -130,6 +131,14 @@ void replay_vfork_handler (struct task_struct* tsk);
 /* Common helper functions */
 struct pt_regs* get_pt_regs(struct task_struct* tsk);
 char* get_path_helper (struct vm_area_struct* vma, char* path);
+static inline struct record_thread* get_record_thread(void)
+{
+    return current->record_thrd;
+}
+static inline struct replay_thread* get_replay_thread(void)
+{
+    return current->replay_thrd;
+}
 
 /* For synchronization points in kernel outside of replay.c */
 #define TID_WAKE_CALL 500
