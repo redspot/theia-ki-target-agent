@@ -14,6 +14,8 @@ MODULE_VERSION("0.1-THEIA-0000");
  */
 static atomic_t all_hooks_enabled = ATOMIC_INIT(0);
 EXPORT_SYMBOL(all_hooks_enabled);
+static atomic_t all_traces_enabled = ATOMIC_INIT(0);
+EXPORT_SYMBOL(all_traces_enabled);
 /* end of global state */
 
 #define __ENTRY(_name, _mode, _show, _store) \
