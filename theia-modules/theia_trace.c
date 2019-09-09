@@ -66,6 +66,9 @@ static void __exit theia_trace_exit(void)
 
 module_exit(theia_trace_exit);
 
-//MODULE_LICENSE("GPL");
-//MODULE_AUTHOR("Mathieu Desnoyers");
-//MODULE_DESCRIPTION("Tracepoint Probes Samples");
+MODULE_DESCRIPTION("Theia tracepoint hooks");
+MODULE_AUTHOR("wilson.martin@gtri.gatech.edu");
+// all of the kernel tracing exports use EXPORT_SYMBOL_GPL()
+// therefore, this module must use GPL license or it won't load
+MODULE_LICENSE("GPL");
+MODULE_VERSION("0.1-THEIA-0000");
