@@ -4,6 +4,9 @@
 #include <linux/kobject.h>
 #include <linux/sysfs.h>
 
+#include "core_pidmap.h"
+#include "core_filpmap.h"
+
 MODULE_DESCRIPTION("Theia core code and symbols");
 MODULE_AUTHOR("wilson.martin@gtri.gatech.edu");
 MODULE_LICENSE("GPL");
@@ -147,6 +150,8 @@ EXPORT_SYMBOL(get_theia_core_module);
 static int __init core_init(void)
 {
   int retval;
+
+  //setup sysfs
   theia_attrs_ptr = theia_attrs;
   theia_kobj = kobject_create_and_add("theia_mod", kernel_kobj);
   if (!theia_kobj)
@@ -155,6 +160,10 @@ static int __init core_init(void)
   if (retval)
     kobject_put(theia_kobj);  // decrement the ref count
 
+  //setup maps
+  pidmap_init();
+  filpmap_init();
+
   pr_info("theia_core loaded\n");
   return 0;
 }
@@ -162,6 +171,11 @@ module_init(core_init);
 
 static void __exit core_exit(void)
 {
+  //cleanup maps
+  pidmap_destroy();
+  filpmap_destroy();
+
+  //cleanup sysfs
   kobject_put(theia_kobj);
   pr_info("theia_core unloaded\n");
 }

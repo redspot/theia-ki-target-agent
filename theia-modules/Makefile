@@ -9,7 +9,8 @@ CFLAGS_theia_syscalls.o = -DDEBUG
 CFLAGS_theia_trace.o = -DDEBUG
 
 #core
-obj-m += theia_core.o
+obj-m += theia_core_mod.o
+theia_core_mod-objs := core_maps.o theia_core.o
 #ftrace hooks
 obj-m += theia_hook_mod.o
 theia_hook_mod-objs := theia_hook.o theia_syscalls.o
@@ -19,7 +20,7 @@ obj-m += theia_trace.o
 clean-files := theia_syscalls.h
 
 default:
-	$(MAKE) -C $(KDIR) M=$(PWD) modules CC=$(CC) 2>&1
+	$(MAKE) -C $(KDIR) M=$(PWD) modules CC="$(CC)" 2>&1
 
 clean:
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
