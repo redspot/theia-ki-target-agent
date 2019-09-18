@@ -13,8 +13,6 @@
 #include <linux/ratelimit.h>
 #include <linux/types.h>
 
-#include <linux/signal.h>
-#include <asm/siginfo.h>
 #include "theia_hook.h"
 
 MODULE_DESCRIPTION("Theia function hooks via ftrace");
@@ -35,8 +33,6 @@ extern atomic_t all_hooks_enabled;
 
 long record_read_test(unsigned int fd, char __user *buf, size_t count);
 long record_read(unsigned int fd, char __user *buf, size_t count);
-int get_signal_to_deliver_replay(siginfo_t *info, struct k_sigaction *return_ka,
-			  struct pt_regs *regs, void *cookie);
 
 /*
  * local state data
@@ -69,12 +65,6 @@ int within_record_routine(uint64_t parent_ip) {
   pr_debug_ratelimited("[%s] parent_ip=%p, record_read %p, symsize %lx,  offset %lx, ret %d\n", __func__, (void*)parent_ip, (void*)record_read, symbolsize, symoffset, ret);
   if(parent_ip >= (unsigned long)record_read && parent_ip < (unsigned long)record_read+symbolsize)
     return 1;
-
-  ret = lookup_symbol_attrs((unsigned long)get_signal_to_deliver_replay, &symbolsize, &symoffset, modname, name);
-  pr_debug_ratelimited("[%s] parent_ip=%p, get_signal_to_deliver_replay %p, symsize %lx,  offset %lx, ret %d\n", __func__, (void*)parent_ip, (void*)get_signal_to_deliver_replay, symbolsize, symoffset, ret);
-  if(parent_ip >= (unsigned long)get_signal_to_deliver_replay && parent_ip < (unsigned long)get_signal_to_deliver_replay+symbolsize)
-    return 1;
-
   return 0;
 }
 
