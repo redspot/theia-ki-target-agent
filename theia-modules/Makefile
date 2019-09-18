@@ -1,6 +1,5 @@
-#KDIR ?= /lib/modules/$(shell uname -r)/build
-KDIR ?= ../linux-lts-quantal-3.5.0/theia_build/
-KBUILD_EXTRA_SYMBOLS = ../linux-lts-quantal-3.5.0/theia_build/Module.symvers
+KDIR ?= /lib/modules/$(shell uname -r)/build
+#KDIR ?= ../linux-lts-quantal-3.5.0/theia_build/
 PWD := $(shell pwd)
 
 CFLAGS_theia_core.o = -DDEBUG

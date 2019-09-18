@@ -153,7 +153,7 @@ static int __init core_init(void)
 
   //setup sysfs
   theia_attrs_ptr = theia_attrs;
-  theia_kobj = kobject_create_and_add("theia_mod", kernel_kobj);
+  theia_kobj = kobject_create_and_add("theia", kernel_kobj);
   if (!theia_kobj)
     return -ENOMEM;
   retval = sysfs_create_group(theia_kobj, &theia_attr_group);
