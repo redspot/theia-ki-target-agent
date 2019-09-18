@@ -3,7 +3,6 @@
 #include <linux/uaccess.h>
 #include <linux/linkage.h>
 #include <linux/ratelimit.h>
-#include <linux/replay.h>
 
 #include "theia_syscalls.h"
 #include "theia_hook.h"
@@ -30,7 +29,8 @@
 //  module_put(THIS_MODULE);
 //  return ret;
 //}
-long record_read(unsigned int fd, char __user *buf, size_t count);
+
+extern asmlinkage long record_read_test(SC_PROTO_read);
 
 static asmlinkage long theia_hook_read(SC_PROTO_read) {
 	long ret;
@@ -38,11 +38,10 @@ static asmlinkage long theia_hook_read(SC_PROTO_read) {
   pr_debug_ratelimited("%s: called by pid %d\n", __func__, current->pid);
   if(current->record_thrd) {
     pr_debug_ratelimited("%s: before record_read pid %d\n", __func__, current->pid);
-    ret = record_read(SC_ARGS_read);
+    ret = record_read_test(SC_ARGS_read);
   }
-  else {
+  else
     ret = real_sys_read(SC_ARGS_read);
-  }
   module_put(THIS_MODULE);
   return ret;
 
