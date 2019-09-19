@@ -30,6 +30,7 @@ $(src)/theia_syscalls.h: $(src)/theia_syscalls.h.pre
 	$(CC) -Wall -E -xc $< \
 		| sed -e 's/__NL__/\n/g' \
 		| sed -e 's/DEFINE/#define/g' \
+		| sed -e 's/PRAGMA/#pragma/g' \
 		| grep -v '^# ' \
 		> $@
 
