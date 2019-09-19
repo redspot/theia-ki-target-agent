@@ -2,6 +2,13 @@ KDIR ?= /lib/modules/$(shell uname -r)/build
 #KDIR ?= ../linux-lts-quantal-3.5.0/theia_build/
 PWD := $(shell pwd)
 
+CC ?= gcc
+MY_CPP := $(CC) -E
+GCCVERSION := $(shell $(CC) -dumpversion)
+ifeq "$(shell expr $(GCCVERSION) \< 4.9)" "1"
+	MY_CPP = gcc-4.9 -E
+endif
+
 ccflags-y += -DDEBUG -I$(src)/include
 
 #core
@@ -15,7 +22,7 @@ obj-m += theia_trace.o
 
 clean-files := theia_syscalls.h
 
-default:
+default: syscalls_header
 	$(MAKE) -C $(KDIR) M=$(PWD) modules CC="$(CC)" 2>&1
 
 clean:
@@ -23,11 +30,11 @@ clean:
 
 $(obj)/theia_syscalls.o: $(src)/theia_syscalls.h
 
-syscalls_header: src=$(PWD)
+src ?= $(PWD)
 syscalls_header: $(src)/theia_syscalls.h
 
 $(src)/theia_syscalls.h: $(src)/theia_syscalls.h.pre
-	$(CC) -Wall -E -xc $< \
+	$(MY_CPP) -Wall -xc $< \
 		| sed -e 's/__NL__/\n/g' \
 		| sed -e 's/DEFINE/#define/g' \
 		| sed -e 's/PRAGMA/#pragma/g' \
@@ -37,5 +44,4 @@ $(src)/theia_syscalls.h: $(src)/theia_syscalls.h.pre
 all: default
 
 wilson: CC := gcc-4.9
-wilson:
-	$(MAKE) -C $(KDIR) M=$(PWD) modules CC=$(CC) 2>&1
+wilson: default
