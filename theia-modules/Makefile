@@ -2,10 +2,7 @@ KDIR ?= /lib/modules/$(shell uname -r)/build
 #KDIR ?= ../linux-lts-quantal-3.5.0/theia_build/
 PWD := $(shell pwd)
 
-CFLAGS_theia_core.o = -DDEBUG
-CFLAGS_theia_hook.o = -DDEBUG
-CFLAGS_theia_syscalls.o = -DDEBUG
-CFLAGS_theia_trace.o = -DDEBUG
+ccflags-y += -DDEBUG -I$(src)/include
 
 #core
 obj-m += theia_core_mod.o
