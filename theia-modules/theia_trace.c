@@ -1,10 +1,14 @@
 #include <linux/module.h>
 #include <linux/tracepoint.h>
 #include <linux/sched.h>
-#include <linux/replay.h>
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,2,0))
+  #include <linux/trace_events.h>
+#else
+  #include <linux/ftrace_event.h>
+#endif
 
-extern atomic_t all_traces_enabled;
-extern int trace_set_clr_event(const char *, const char *, int);
+#include <theia_core.h>
 
 //https://gist.github.com/HugoGuiroux/0894091275169750d22f#file-makefile
 //do this stuff ---^^^
