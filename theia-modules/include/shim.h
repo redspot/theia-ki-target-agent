@@ -358,8 +358,6 @@ out: \
 /*
  * begin CREATE_SHIMS macros
  */
-  record_##name(_FOR_EACH_PAIR(_TH_PROTO, __VA_ARGS__))       \
-    rc = real_sys_##name(_FOR_EACH_PAIR(_TH_ARG, __VA_ARGS__));        \
 #define SIMPLE_SHIM(name, sysnum, ...) \
   SIMPLE_RECORD(name, sysnum, ##__VA_ARGS__); \
   SIMPLE_REPLAY(name, sysnum, _FOR_EACH_PAIR(_TH_PROTO, __VA_ARGS__)); \
