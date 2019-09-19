@@ -4,8 +4,7 @@
 #include <linux/kobject.h>
 #include <linux/sysfs.h>
 
-#include "core_pidmap.h"
-#include "core_filpmap.h"
+#include <theia_core.h>
 
 MODULE_DESCRIPTION("Theia core code and symbols");
 MODULE_AUTHOR("wilson.martin@gtri.gatech.edu");
@@ -15,10 +14,13 @@ MODULE_VERSION("0.1-THEIA-0000");
 /*
  * Global state for Theia subsystems
  */
-static atomic_t all_hooks_enabled = ATOMIC_INIT(0);
+atomic_t all_hooks_enabled = ATOMIC_INIT(0);
 EXPORT_SYMBOL(all_hooks_enabled);
-static atomic_t all_traces_enabled = ATOMIC_INIT(0);
+atomic_t all_traces_enabled = ATOMIC_INIT(0);
 EXPORT_SYMBOL(all_traces_enabled);
+// If the replay clock is greater than this value, MPRINT out the syscalls made by pin
+unsigned long pin_debug_clock = LONG_MAX;
+EXPORT_SYMBOL(pin_debug_clock);
 /* end of global state */
 
 #define __ENTRY(_name, _mode, _show, _store) \
@@ -161,8 +163,8 @@ static int __init core_init(void)
     kobject_put(theia_kobj);  // decrement the ref count
 
   //setup maps
-  pidmap_init();
-  filpmap_init();
+  theia_pidmap_init();
+  theia_filpmap_init();
 
   pr_info("theia_core loaded\n");
   return 0;
@@ -172,8 +174,8 @@ module_init(core_init);
 static void __exit core_exit(void)
 {
   //cleanup maps
-  pidmap_destroy();
-  filpmap_destroy();
+  theia_pidmap_destroy();
+  theia_filpmap_destroy();
 
   //cleanup sysfs
   kobject_put(theia_kobj);
