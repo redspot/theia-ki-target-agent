@@ -68,8 +68,3 @@ SC_LTTNG_TRACEPOINT_EVENT(write,
 	TP_ARGS(sc_exit(ret,) fd, buf, count),
 	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, fd, fd)) sc_in(ctf_integer(const char *, buf, buf)) sc_in(ctf_integer(size_t, count, count)))
 )
-
-DEFINE SC_PROTO_get_signal_to_deliver siginfo_t *info, struct k_sigaction *return_ka, struct pt_regs *regs, void *cookie
-DEFINE SC_ARGS_get_signal_to_deliver info, return_ka, regs, cookie
-int (*real_get_signal_to_deliver)(SC_PROTO_get_signal_to_deliver);
-int theia_hook_get_signal_to_deliver(SC_PROTO_get_signal_to_deliver);
