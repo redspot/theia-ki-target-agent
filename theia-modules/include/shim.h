@@ -306,11 +306,14 @@
 #define SHIM_CALL_MAIN_IGNORE(number, F_RECORD, F_REPLAY, F_SYS, F_RECORD_IGNORED)  \
 { \
   long ret; \
-  int ignore_flag;            \
+  int ignore_flag = 0;            \
+  struct record_thread *rec_th; \
+  struct replay_thread *rep_th; \
   try_module_get(THIS_MODULE); \
-  if (current->record_thrd) {         \
-    if (current->record_thrd->rp_ignore_flag_addr) {  \
-      get_user (ignore_flag, current->record_thrd->rp_ignore_flag_addr); \
+  rec_th = get_record_thread(); \
+  if (rec_th) {         \
+    if (rec_th->rp_ignore_flag_addr) {  \
+      get_user (ignore_flag, rec_th->rp_ignore_flag_addr); \
       if (ignore_flag) {          \
         ret = F_RECORD_IGNORED;    \
         goto out; \
@@ -319,9 +322,11 @@
     ret = F_RECORD;          \
     goto out; \
   }               \
-  if (current->replay_thrd && test_app_syscall(number)) {   \
-    if (current->replay_thrd->rp_record_thread->rp_ignore_flag_addr) { \
-      get_user (ignore_flag, current->replay_thrd->rp_record_thread->rp_ignore_flag_addr); \
+  rep_th = get_replay_thread(); \
+  if (rep_th && test_app_syscall(number)) {   \
+    rec_th = rep_th->rp_record_thread; \
+    if (rec_th->rp_ignore_flag_addr) {  \
+      get_user (ignore_flag, rec_th->rp_ignore_flag_addr); \
       if (ignore_flag) { \
         TPRINT ("syscall %d ignored\n", number); \
         goto call_sys;       \
@@ -330,8 +335,8 @@
     ret = F_REPLAY;          \
     goto out; \
   }               \
-  else if (current->replay_thrd) {        \
-    if (*(current->replay_thrd->rp_preplay_clock) > pin_debug_clock) {  \
+  else if (rep_th) {        \
+    if (*(rep_th->rp_preplay_clock) > pin_debug_clock) {  \
       DPRINT("Pid %d, pin syscall %d\n", current->pid, number); \
     }             \
   }               \
