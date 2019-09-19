@@ -13,7 +13,17 @@
 #include <linux/ratelimit.h>
 #include <linux/types.h>
 
-#include "theia_hook.h"
+#include <theia_hook.h>
+
+//these should not be in a header file
+//also, do not include theia_syscalls.h
+extern struct ftrace_hook theia_hooks[];
+extern const size_t nr_theia_hooks;
+
+/*
+ * Import Theia symbols
+ */
+#include <theia_core.h>
 
 MODULE_DESCRIPTION("Theia function hooks via ftrace");
 MODULE_AUTHOR("ilammy <a.lozovsky@gmail.com>, "
@@ -24,17 +34,10 @@ MODULE_VERSION("0.1-THEIA-0000");
 #define IS_NULL_OR_LT_PAGE(ptr) (!ptr || (unsigned long)ptr < PAGE_SIZE)
 
 /*
- * Import Theia symbols
- */
-extern struct module* get_theia_core_module(void);
-extern struct ftrace_hook theia_hooks[];
-extern const size_t nr_theia_hooks;
-extern atomic_t all_hooks_enabled;
-
-/*
  * local state data
  */
 static struct module *theia_core_module = NULL;
+
 
 static int fh_resolve_hook_address(struct ftrace_hook *hook)
 {
