@@ -41,4 +41,4 @@ if [ -d "${DIR}/include/config" ]; then
 fi
 
 #build everything
-make -j$build_parallel O="${DIR}/${BUILD_DIR}" CC="$CC"
+make -j$build_parallel O="${DIR}/${BUILD_DIR}" CC="$CC" "$@"
