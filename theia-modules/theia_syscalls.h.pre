@@ -1,3 +1,4 @@
+DEFINE __THEIA_SYSCALLS__
 #include <linux/version.h>
 
 #if defined(CONFIG_X86_64) && (LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0))
@@ -28,15 +29,13 @@ gcc -Wall -E -xc theia_hook_test.h.pre \
 #define SC_LTTNG_TRACEPOINT_EVENT(_name, _proto, _args, _fields) \
 DEFINE SC_PROTO_##_name PTREGS_CHK_PROTO(_proto) __NL__\
 DEFINE SC_ARGS_##_name PTREGS_CHK_ARGS(_args) __NL__\
-static asmlinkage long (*real_sys_##_name)(SC_PROTO_##_name); __NL__\
-static asmlinkage long theia_hook_##_name(SC_PROTO_##_name);
+extern asmlinkage long (*real_sys_##_name)(SC_PROTO_##_name); __NL__\
+extern asmlinkage long theia_hook_##_name(SC_PROTO_##_name);
 
 /*
  * each declaration of theia_hook_##_name must be defined.
- * also, this header should only be included in theia_syscalls.c source.
- * if it is included anywhere else, the undefined static functions will generate
- * a compile error.
  */
+PRAGMA GCC diagnostic push
 PRAGMA GCC diagnostic error "-Wunused-function"
 
 SC_LTTNG_TRACEPOINT_EVENT(clone,
@@ -75,3 +74,4 @@ SC_LTTNG_TRACEPOINT_EVENT(write,
 	TP_ARGS(sc_exit(ret,) fd, buf, count),
 	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, fd, fd)) sc_in(ctf_integer(const char *, buf, buf)) sc_in(ctf_integer(size_t, count, count)))
 )
+PRAGMA GCC diagnostic pop

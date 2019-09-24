@@ -3,9 +3,10 @@
 #include <linux/uaccess.h>
 #include <linux/linkage.h>
 #include <linux/ratelimit.h>
+#include <linux/sched.h>
 
-#include "theia_syscalls.h"
-#include "theia_hook.h"
+#include <theia_hook.h>
+#include <theia_syscalls.h>
 
 /*
  * Tail call optimization can interfere with recursion detection based on
@@ -19,7 +20,8 @@
  * syscall hooks start here
  */
 
-static asmlinkage long theia_hook_read(SC_PROTO_read)
+asmlinkage long (*real_sys_read)(SC_PROTO_read);
+asmlinkage long theia_hook_read(SC_PROTO_read)
 {
 	long ret;
   try_module_get(THIS_MODULE);
@@ -30,7 +32,8 @@ static asmlinkage long theia_hook_read(SC_PROTO_read)
   return ret;
 }
 
-static asmlinkage long theia_hook_write(SC_PROTO_write)
+asmlinkage long (*real_sys_write)(SC_PROTO_write);
+asmlinkage long theia_hook_write(SC_PROTO_write)
 {
 	long ret;
   try_module_get(THIS_MODULE);
@@ -41,7 +44,8 @@ static asmlinkage long theia_hook_write(SC_PROTO_write)
   return ret;
 }
 
-static asmlinkage long theia_hook_clone(SC_PROTO_clone)
+asmlinkage long (*real_sys_clone)(SC_PROTO_clone);
+asmlinkage long theia_hook_clone(SC_PROTO_clone)
 {
 	long ret;
   try_module_get(THIS_MODULE);
@@ -52,7 +56,8 @@ static asmlinkage long theia_hook_clone(SC_PROTO_clone)
   return ret;
 }
 
-static asmlinkage long theia_hook_execve(SC_PROTO_execve)
+asmlinkage long (*real_sys_execve)(SC_PROTO_execve);
+asmlinkage long theia_hook_execve(SC_PROTO_execve)
 {
 	long ret;
   try_module_get(THIS_MODULE);
