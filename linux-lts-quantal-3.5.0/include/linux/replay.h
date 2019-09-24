@@ -176,7 +176,7 @@ long replay_resume_from_disk (char* filename, char** execname, char*** argsp, ch
 #endif
 
 /* Optional stats interface */
-#define REPLAY_STATS
+//#define REPLAY_STATS
 #ifdef REPLAY_STATS
 struct replay_stats {
 	atomic_t started;
@@ -185,7 +185,8 @@ struct replay_stats {
 };
 
 long get_replay_stats (struct replay_stats __user * ustats);
-
+#else
+#define get_replay_stats(...) -EINVAL
 #endif
 
 /* For tracking where the args are in Pin, only valid on replay */
