@@ -18,9 +18,6 @@ atomic_t all_hooks_enabled = ATOMIC_INIT(0);
 EXPORT_SYMBOL(all_hooks_enabled);
 atomic_t all_traces_enabled = ATOMIC_INIT(0);
 EXPORT_SYMBOL(all_traces_enabled);
-// If the replay clock is greater than this value, MPRINT out the syscalls made by pin
-unsigned long pin_debug_clock = LONG_MAX;
-EXPORT_SYMBOL(pin_debug_clock);
 /* end of global state */
 
 #define __ENTRY(_name, _mode, _show, _store) \

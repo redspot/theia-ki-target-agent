@@ -1544,11 +1544,13 @@ atomic_t vmalloc_cnt = ATOMIC_INIT(0);
 
 /* Variables configurable via /proc file system */
 unsigned int syslog_recs = 2000;
+EXPORT_SYMBOL(syslog_recs);
 unsigned int replay_debug = 1;
 unsigned int replay_min_debug = 1;
 unsigned long argsalloc_size = (512 * 1024);
 // If the replay clock is greater than this value, MPRINT out the syscalls made by pin
 unsigned long pin_debug_clock = LONG_MAX;
+EXPORT_SYMBOL(pin_debug_clock);
 
 /* struct definitions */
 struct replay_group;

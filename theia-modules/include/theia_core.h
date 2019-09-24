@@ -5,7 +5,6 @@
 #include <core_filpmap.h>
 
 //EXPORTs
-extern unsigned long pin_debug_clock;
 extern atomic_t all_hooks_enabled;
 extern atomic_t all_traces_enabled;
 extern struct module* get_theia_core_module(void);
