@@ -25247,6 +25247,7 @@ static struct ctl_table replay_ctl_root[] =
   },
   {0, },
 };
+struct ctl_table_header *replay_ctl_header;
 #endif
 
 //call in replay_init()
@@ -25407,7 +25408,7 @@ static int __init replay_init(void)
   strncpy_safe(theia_libpath, theia_libpath_default, MAX_LIBPATH_STRLEN);
   theia_libpath[MAX_LIBPATH_STRLEN] = '\0';
 #ifdef CONFIG_SYSCTL
-  register_sysctl_table(replay_ctl_root);
+  replay_ctl_header = register_sysctl_table(replay_ctl_root);
 #endif
 
   // setup defaults for proc and dirent hiding
