@@ -13,6 +13,7 @@
 // Maybe this should be expanded to all file data?
 
 #include <linux/syscalls.h>
+#include <linux/module.h>
 #include <linux/mm.h>
 #include <linux/file.h>
 #include <linux/fs.h>
@@ -233,6 +234,7 @@ int open_cache_file (dev_t dev, u_long ino, struct timespec mtime, int flags, ch
 
 	return fd;
 }
+EXPORT_SYMBOL(open_cache_file);
 
 int open_mmap_cache_file (dev_t dev, u_long ino, struct timespec mtime, int is_write, char *cache_dir)
 {

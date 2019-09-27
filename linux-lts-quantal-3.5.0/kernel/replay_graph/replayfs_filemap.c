@@ -374,11 +374,13 @@ out:
 
 	return ret;
 }
+EXPORT_SYMBOL(replayfs_filemap_init);
 
 void replayfs_filemap_destroy(struct replayfs_filemap *map) {
 	mutex_destroy(&map->lock);
 	replayfs_btree_destroy(&map->entries);
 }
+EXPORT_SYMBOL(replayfs_filemap_destroy);
 
 void replayfs_filemap_delete_key(struct replayfs_filemap *map,
 		struct replayfs_btree128_key *key) {
@@ -476,6 +478,7 @@ int replayfs_filemap_write(struct replayfs_filemap *map, loff_t unique_id,
 
 	return ret;
 }
+EXPORT_SYMBOL(replayfs_filemap_write);
 
 struct replayfs_filemap_entry *replayfs_filemap_read(struct replayfs_filemap *map,
 		loff_t offset, int size) {
@@ -643,4 +646,4 @@ out_unlock:
 	mutex_unlock(&map->lock);
 	goto out;
 }
-
+EXPORT_SYMBOL(replayfs_filemap_read);

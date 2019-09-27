@@ -1349,6 +1349,7 @@ extern const struct file_operations rdwr_pipefifo_fops;
 #define is_pipe(X) ((X)->f_op == &read_pipefifo_fops || (X)->f_op == &write_pipefifo_fops || (X)->f_op == &rdwr_pipefifo_fops)
 
 static atomic_t glbl_pipe_id = {1};
+EXPORT_SYMBOL(glbl_pipe_id);
 
 struct pipe_track
 {
@@ -1369,7 +1370,9 @@ struct pipe_track
 #define READ_IS_PIPE (1<<1)
 
 DEFINE_MUTEX(pipe_tree_mutex);
+EXPORT_SYMBOL(pipe_tree_mutex);
 static struct btree_head64 pipe_tree;
+EXPORT_SYMBOL(pipe_tree);
 
 void replay_free_pipe(void *pipe)
 {

@@ -9,6 +9,7 @@
 #include <linux/pagemap.h>
 #include <linux/slab.h>
 #include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/syscalls.h>
 #include <linux/swap.h>
 #include <linux/gfp.h>
@@ -123,7 +124,8 @@ static inline u64 crappy_pagecache_key(struct replayfs_diskalloc *alloc,
 
 atomic_t initd = {0};
 atomic_t init_done = {0};
-struct replayfs_diskalloc *replayfs_alloc;
+struct replayfs_diskalloc *replayfs_alloc = NULL;
+EXPORT_SYMBOL(replayfs_alloc);
 struct replayfs_btree128_head filemap_meta_tree;
 struct replayfs_syscall_cache syscache;
 static int crappy_pagecache_size;
