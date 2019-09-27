@@ -52,5 +52,8 @@ extern struct path theia_pid1_root;
 void serialize_init(void);
 void write_and_free_kernel_log(struct record_thread*);
 int read_log_data(struct record_thread*);
+struct file *init_log_write(struct record_thread*, loff_t*, int*);
+ssize_t write_log_data(struct file*, loff_t*, struct record_thread*, struct syscall_result*, int, bool);
+void term_log_write(struct file*, int);
 
 #endif

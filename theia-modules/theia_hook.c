@@ -15,6 +15,7 @@
 
 #include <theia_hook.h>
 #include <theia_syscalls.h>
+#include <replay.h>
 #include <serialize.h>
 
 /*

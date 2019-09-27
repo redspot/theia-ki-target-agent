@@ -161,3 +161,190 @@ int read_log_data(struct record_thread *prect)
   prect->rp_in_ptr = count;
   return rc;
 }
+
+void write_and_free_kernel_log(struct record_thread *prect)
+{
+  int fd = 0;
+  struct syscall_result *write_psr;
+  loff_t pos;
+  struct file *file = NULL;
+
+  mm_segment_t old_fs = get_fs();
+  set_fs(KERNEL_DS);
+  file = init_log_write(prect, &pos, &fd);
+  if (file)
+  {
+    write_psr = &prect->rp_log[0];
+    write_log_data(file, &pos, prect, write_psr, prect->rp_in_ptr, false);
+    term_log_write(file, fd);
+  }
+  set_fs(old_fs);
+
+  argsfreeall(prect);
+}
+
+struct file *init_log_write(struct record_thread *prect, loff_t *ppos, int *pfd)
+{
+  char filename[MAX_LOGDIR_STRLEN + 20];
+  //struct stat64 st;
+  //64port
+  struct stat st;
+  mm_segment_t old_fs;
+  int rc;
+  struct file *ret = NULL;
+  int flags;
+  THEIA_DECLARE_CREDS;
+
+  //swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
+  rc = snprintf(filename, MAX_LOGDIR_STRLEN+20, "%s/klog.id.%d", prect->rp_group->rg_logdir, prect->rp_record_pid);
+  if (rc < 0)
+  {
+    TPRINT("init_log_write: rg_logdir is too long\n");
+    ret = NULL;
+    goto out;
+  }
+
+  old_fs = get_fs();
+  set_fs(KERNEL_DS);
+  if (prect->rp_klog_opened)
+  {
+    //rc = sys_stat64(filename, &st);
+    //64port
+    rc = real_sys_newstat(filename, &st);
+    if (rc < 0)
+    {
+      TPRINT("Stat of file %s failed\n", filename);
+      ret = NULL;
+      goto out;
+    }
+    *ppos = st.st_size;
+    /*
+    TPRINT("%s %d: Attempting to re-open log %s\n", __func__, __LINE__,
+        filename);
+        */
+    flags = O_WRONLY | O_APPEND | O_LARGEFILE;
+    *pfd = real_sys_open(filename, flags, 0777);
+    MPRINT("Reopened log file %s, pos = %ld\n", filename, (long) *ppos);
+  }
+  else
+  {
+    flags = O_WRONLY | O_CREAT | O_TRUNC | O_LARGEFILE;
+    *pfd = real_sys_open(filename, flags, 0777);
+    //TPRINT("%s %d: Creating log %s\n", __func__, __LINE__, filename);
+    if (*pfd > 0)
+    {
+      rc = real_sys_fchmod(*pfd, 0777);
+      if (rc == -1)
+      {
+        TPRINT("Pid %d fchmod of klog %s failed\n", current->pid, filename);
+      }
+    }
+    MPRINT("Opened log file %s\n", filename);
+    *ppos = 0;
+    prect->rp_klog_opened = 1;
+  }
+  set_fs(old_fs);
+  if (*pfd < 0)
+  {
+    /*
+    dump_stack();
+    TPRINT ("%s %d: Cannot open log file %s, rc = %d flags = %d\n", __func__,
+        __LINE__, filename, *pfd, flags);
+        */
+    ret = NULL;
+    goto out;
+  }
+
+  ret = fget(*pfd);
+
+out:
+  THEIA_RESTORE_CREDS;
+  return ret;
+}
+
+void term_log_write(struct file *file, int fd)
+{
+  int rc;
+  if (file) fput(file);
+  rc = real_sys_close(fd);
+  if (rc < 0) TPRINT("term_log_write: file close failed with rc %d\n", rc);
+}
+
+ssize_t write_log_data(struct file *file, loff_t *ppos, struct record_thread *prect, 
+    struct syscall_result *psr, int count, bool isAhg)
+{
+  struct argsalloc_node *node;
+  ssize_t copyed = 0;
+  struct iovec *pvec; // Concurrent writes need their own vector
+  int kcnt = 0;
+  u_long data_len;
+  THEIA_DECLARE_CREDS;
+
+  if (count <= 0) return 0;
+  MPRINT("Pid %d, start write log data\n", current->pid);
+  pvec = KMALLOC(sizeof(struct iovec) * UIO_MAXIOV, GFP_KERNEL);
+  if (pvec == NULL)
+  {
+    TPRINT("Cannot allocate iovec for write_log_data\n");
+    return 0;
+  }
+
+  // swap creds to root for vfs operations
+  THEIA_SWAP_CREDS_TO_ROOT;
+
+  /* First write out syscall records in a bunch */
+  copyed = vfs_write(file, (char *) &count, sizeof(count), ppos);
+  if (copyed != sizeof(count))
+  {
+    TPRINT("write_log_data: tried to write record count, got rc %zd\n", copyed);
+    KFREE(pvec);
+    goto error;
+  }
+
+  MPRINT("Pid %d write_log_data count %d, size %lu\n", current->pid, count, sizeof(struct syscall_result)*count);
+
+  copyed = vfs_write(file, (char *) psr, sizeof(struct syscall_result) * count, ppos);
+  if (copyed != sizeof(struct syscall_result)*count)
+  {
+    TPRINT("write_log_data: tried to write %lu, got rc %zd\n", sizeof(struct syscall_result)*count, copyed);
+    KFREE(pvec);
+    goto error;
+  }
+
+  /* Now write ancillary data - count of bytes goes first */
+  data_len = 0;
+  list_for_each_entry_reverse(node, &prect->rp_argsalloc_list, list)
+  {
+    data_len += node->pos - node->head;
+  }
+  MPRINT("Ancillary data written is %lu\n", data_len);
+  copyed = vfs_write(file, (char *) &data_len, sizeof(data_len), ppos);
+  if (copyed != sizeof(data_len))
+  {
+    TPRINT("write_log_data: tried to write ancillary data length, got rc %zd, sizeof(count): %lu, sizeof(data_len): %lu\n", copyed, sizeof(count), sizeof(data_len));
+    KFREE(pvec);
+    goto error;
+  }
+  list_for_each_entry_reverse(node, &prect->rp_argsalloc_list, list)
+  {
+    MPRINT("Pid %d argssize write buffer slab size %li\n", current->pid, node->pos - node->head);
+    pvec[kcnt].iov_base = node->head;
+    pvec[kcnt].iov_len = node->pos - node->head;
+    if (++kcnt == UIO_MAXIOV)
+    {
+      copyed = vfs_writev(file, pvec, kcnt, ppos);
+      kcnt = 0;
+    }
+  }
+  vfs_writev(file, pvec, kcnt, ppos);  // Write any remaining data before exit
+
+  DPRINT("Wrote %zd bytes to the file for sysnum %d\n", copyed, psr->sysnum);
+  KFREE(pvec);
+
+  THEIA_RESTORE_CREDS;
+  return copyed;
+error:
+  THEIA_RESTORE_CREDS;
+  return -EINVAL;
+}

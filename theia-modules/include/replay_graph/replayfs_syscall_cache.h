@@ -15,8 +15,8 @@
  * Cache consists of btree, mapping index to data chunk.
  */
 
-#define is_replay() (current->replay_thrd)
-# define is_record() (current->record_thrd)
+#define is_replay() get_replay_thread()
+#define is_record() get_record_thread()
 
 #define SYSCACHE_MEMLEAK_CHECK
 

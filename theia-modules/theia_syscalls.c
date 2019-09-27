@@ -98,6 +98,8 @@ asmlinkage long theia_hook_exit_group(SC_PROTO_exit_group)
 ptr_sys_pread64 real_sys_pread64;
 ptr_sys_close real_sys_close;
 ptr_sys_open real_sys_open;
+ptr_sys_newstat real_sys_newstat;
+ptr_sys_fchmod real_sys_fchmod;
 
 //the kernel does not export signal_wake_up*()
 ptr_signal_wake_up_state real_signal_wake_up_state;
@@ -107,6 +109,8 @@ void init_extra_syscalls(void)
   GET_REAL_SYSCALL(pread64);
   GET_REAL_SYSCALL(close);
   GET_REAL_SYSCALL(open);
+  GET_REAL_SYSCALL(newstat);
+  GET_REAL_SYSCALL(fchmod);
   real_signal_wake_up_state = (ptr_signal_wake_up_state)kallsyms_lookup_name("signal_wake_up_state");
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3,6,0)) && !defined(THEIA_MODIFIED_KERNEL_SOURCES)
   sock_from_file = (sock_from_file_ptr)kallsyms_lookup_name("sock_from_file");
