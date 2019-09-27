@@ -156,15 +156,22 @@ static int __init core_init(void)
   if (!theia_kobj)
     return -ENOMEM;
   retval = sysfs_create_group(theia_kobj, &theia_attr_group);
-  if (retval)
-    kobject_put(theia_kobj);  // decrement the ref count
+  if (retval) goto free_kobj;
 
   //setup maps
   theia_pidmap_init();
   theia_filpmap_init();
 
+  //init done
   pr_info("theia_core loaded\n");
   return 0;
+#pragma GCC diagnostic ignored "-Wunused-label"
+free_maps:
+  theia_pidmap_destroy();
+  theia_filpmap_destroy();
+free_kobj:
+  kobject_put(theia_kobj);  // decrement the ref count
+  return -EINVAL;
 }
 module_init(core_init);
 
