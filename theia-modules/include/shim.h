@@ -111,20 +111,20 @@
  * 
  * Examples:
  *     //the prototypes need to be declared
- *     static long record_read(unsigned int fd, char __user *buf, size_t count);
- *     static long replay_read(unsigned int fd, char __user *buf, size_t count);
- *     static long theia_sys_read(unsigned int fd, char __user *buf, size_t count);
+ *     static long record_read(SC_PROTO_read);
+ *     static long replay_read(SC_PROTO_read);
+ *     static long theia_sys_read(SC_PROTO_read);
  *     //noinline is required since this must be a real function for ftrace to use
  *     //asmlinkage is only needed by something that will directly receive args intended
  *     //for a syscall from userspace
- *     noinline asmlinkage long shim_read(unsigned int fd, char __user *buf, size_t count)
- *     SHIM_CALL_MAIN(0, record_read(fd, buf, count), replay_read(fd, buf, count), theia_sys_read(fd, buf, count))
+ *     noinline asmlinkage long shim_read(SC_PROTO_read)
+ *     SHIM_CALL_MAIN(0, record_read(SC_ARGS_read), replay_read(SC_ARGS_read), theia_sys_read(SC_ARGS_read))
  * 
- *     RET1_SHIM(waitpid, 7, int, stat_addr, pid_t, pid, int __user *, stat_addr, int, options);
+ *     RET1_SHIM(waitpid, 7);
  * 
- *     //void theia_creat_ahgx(const char __user *pathname, int mode, long fd, int sysnum);
+ *     //void theia_creat_ahgx(SC_PROTO_creat);
  *     //the THEIA_SHIM macro will declare the prototype for theia_creat_ahgx()
- *     THEIA_SHIM(creat, 85, const char __user *, pathname, int, mode);
+ *     THEIA_SHIM(creat, 85);
  */
 
 /*
@@ -133,6 +133,10 @@
 
 #define _GET_NTH_ARG(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, N, ...) N
 #define _INNER_CONCAT(a, ...) a ## __VA_ARGS__
+#define CONCAT(a, ...) _INNER_CONCAT(a, __VA_ARGS__)
+#ifndef __stringify
+#define __stringify(s) #s
+#endif
 
 #define _0_PAIR(_macro, ...) _INNER_CONCAT(_macro, _0)()
 #define _1_PAIR(_macro, type, arg) _macro(type, arg)
@@ -158,76 +162,79 @@
 #define _TH_ARG(type, arg) arg
 #define _TH_ARG_0(...)
 
+#define GET_REAL_SYSCALL(name) CONCAT(real_sys_, name) = \
+  (CONCAT(ptr_sys_, name))kallsyms_lookup_name("sys_"__stringify(name))
+
 /*
  * begin RECORDING macros
  */
 
-#define SIMPLE_RECORD(name, sysnum, ...)    \
-  static long            \
-  record_##name(_FOR_EACH_PAIR(_TH_PROTO, __VA_ARGS__))       \
-  {               \
-    long rc;            \
-    new_syscall_enter (sysnum);       \
-    rc = real_sys_##name(_FOR_EACH_PAIR(_TH_ARG, __VA_ARGS__));        \
-    new_syscall_done (sysnum, rc);        \
-    new_syscall_exit (sysnum, NULL);      \
-    return rc;            \
+#define SIMPLE_RECORD(name, sysnum) \
+  static long \
+  record_##name(CONCAT(SC_PROTO_, name)) \
+  { \
+    long rc; \
+    new_syscall_enter(sysnum); \
+    rc = real_sys_##name(CONCAT(SC_ARGS_, name)); \
+    new_syscall_done(sysnum, rc); \
+    new_syscall_exit(sysnum, NULL); \
+    return rc; \
   }
 
-#define RET1_RECORD(name, sysnum, type, dest, ...)  \
-  static long            \
-  record_##name(_FOR_EACH_PAIR(_TH_PROTO, __VA_ARGS__))       \
-  {                 \
-    long rc;              \
-    type *pretval = NULL;           \
-                    \
-    new_syscall_enter (sysnum);         \
-    rc = real_sys_##name(_FOR_EACH_PAIR(_TH_ARG, __VA_ARGS__));        \
-    new_syscall_done (sysnum, rc);          \
-    if (rc >= 0 && dest) {            \
+#define RET1_RECORD(name, sysnum, type, dest) \
+  static long \
+  record_##name(CONCAT(SC_PROTO_, name)) \
+  { \
+    long rc; \
+    type *pretval = NULL; \
+ \
+    new_syscall_enter(sysnum); \
+    rc = real_sys_##name(CONCAT(SC_ARGS_, name)); \
+    new_syscall_done(sysnum, rc); \
+    if (rc >= 0 && dest) { \
             pretval = ARGSKMALLOC (sizeof(type), GFP_KERNEL); \
-      if (pretval == NULL) {          \
+      if (pretval == NULL) { \
         TPRINT ("record_##name: can't allocate buffer\n"); \
-        return -ENOMEM;         \
-      }             \
-      if (copy_from_user (pretval, dest, sizeof (type))) {  \
+        return -ENOMEM; \
+      } \
+      if (copy_from_user(pretval, dest, sizeof (type))) { \
         TPRINT ("record_##name: can't copy to buffer\n"); \
-        ARGSKFREE(pretval, sizeof(type));   \
-        pretval = NULL;         \
-        rc = -EFAULT;         \
-      }             \
-    }               \
-                    \
-    new_syscall_exit (sysnum, pretval);       \
-    return rc;              \
+        ARGSKFREE(pretval, sizeof(type)); \
+        pretval = NULL; \
+        rc = -EFAULT; \
+      } \
+    } \
+ \
+    new_syscall_exit(sysnum, pretval); \
+    return rc; \
   }
 
-#define RET1_COUNT_RECORD(name, sysnum, dest, ...) \
-  static long            \
-  record_##name(_FOR_EACH_PAIR(_TH_PROTO, __VA_ARGS__))       \
-  {                 \
-    long rc;              \
-    char *pretval = NULL;           \
-                    \
-    new_syscall_enter (sysnum);         \
-    rc = real_sys_##name(_FOR_EACH_PAIR(_TH_ARG, __VA_ARGS__));        \
-    new_syscall_done (sysnum, rc);          \
-    if (rc >= 0 && dest) {            \
-      pretval = ARGSKMALLOC (rc, GFP_KERNEL);     \
-      if (pretval == NULL) {          \
+#define RET1_COUNT_RECORD(name, sysnum, dest) \
+  static long \
+  record_##name(CONCAT(SC_PROTO_, name)) \
+  { \
+    long rc; \
+    char *pretval = NULL; \
+ \
+    new_syscall_enter(sysnum); \
+    rc = real_sys_##name(CONCAT(SC_ARGS_, name)); \
+    new_syscall_done(sysnum, rc); \
+    if (rc >= 0 && dest) { \
+      pretval = ARGSKMALLOC (rc, GFP_KERNEL); \
+      if (pretval == NULL) { \
         TPRINT ("record_##name: can't allocate buffer\n"); \
-        return -ENOMEM;         \
-      }             \
-      if (copy_from_user (pretval, dest, rc)) {   \
+        return -ENOMEM; \
+      } \
+      if (copy_from_user(pretval, dest, rc)) { \
         TPRINT ("record_##name: can't copy to buffer\n"); \
-        ARGSKFREE(pretval, rc);       \
-        pretval = NULL;         \
-        rc = -EFAULT;         \
-      }             \
-    }               \
-                    \
-    new_syscall_exit (sysnum, pretval);       \
-    return rc;              \
+        ARGSKFREE(pretval, rc); \
+        pretval = NULL; \
+        rc = -EFAULT; \
+      } \
+    } \
+ \
+    new_syscall_exit(sysnum, pretval); \
+    return rc; \
   }
 
 /*
@@ -238,43 +245,43 @@
  * begin REPLAYING macros
  */
 
-#define SIMPLE_REPLAY(name, sysnum, args...)    \
-  static long replay_##name (args)          \
-  {             \
-    return get_next_syscall (sysnum, NULL); \
+#define SIMPLE_REPLAY(name, sysnum) \
+  static long replay_##name(CONCAT(SC_PROTO_, name)) \
+  { \
+    return get_next_syscall(sysnum, NULL); \
   }
 
-#define RET1_REPLAYG(name, sysnum, dest, size, args...)     \
-  static long replay_##name (args)       \
-  {                 \
-    char *retparams = NULL;           \
-    long rc = get_next_syscall (sysnum, &retparams);  \
-                    \
-    if (retparams) {            \
-      if (copy_to_user (dest, retparams, size)) \
+#define RET1_REPLAYG(name, sysnum, dest, size) \
+  static long replay_##name(CONCAT(SC_PROTO_, name)) \
+  { \
+    char *retparams = NULL; \
+    long rc = get_next_syscall(sysnum, &retparams); \
+ \
+    if (retparams) { \
+      if (copy_to_user(dest, retparams, size)) \
         TPRINT ("replay_##name: pid %d cannot copy to user\n", current->pid); \
       TPRINT("argsconsume called at %d, size: %lu\n", __LINE__, size); \
-      argsconsume (current->replay_thrd->rp_record_thread, size); \
-    }               \
-    return rc;              \
-  }                 \
+      argsconsume(current->replay_thrd->rp_record_thread, size); \
+    } \
+    return rc; \
+  }
 
-#define RET1_REPLAY(name, sysnum, type, dest, args...) \
-  RET1_REPLAYG(name, sysnum, dest, sizeof(type), args)
+#define RET1_REPLAY(name, sysnum, type, dest) \
+  RET1_REPLAYG(name, sysnum, dest, sizeof(type))
 
-#define RET1_COUNT_REPLAY(name, sysnum, dest, args...)      \
-  static long replay_##name (args)       \
-  {                 \
-    char *retparams = NULL;           \
-    long rc = get_next_syscall (sysnum, &retparams);    \
-                    \
-    if (retparams) {            \
-      if (copy_to_user (dest, retparams, rc)) \
-        TPRINT ("replay_##name: pid %d cannot copy to user\n", current->pid); \
-      argsconsume (current->replay_thrd->rp_record_thread, rc); \
-    }               \
-    return rc;              \
-  }                 \
+#define RET1_COUNT_REPLAY(name, sysnum, dest) \
+  static long replay_##name(CONCAT(SC_PROTO_, name)) \
+  { \
+    char *retparams = NULL; \
+    long rc = get_next_syscall(sysnum, &retparams); \
+ \
+    if (retparams) { \
+      if (copy_to_user(dest, retparams, rc)) \
+        TPRINT("replay_##name: pid %d cannot copy to user\n", current->pid); \
+      argsconsume(current->replay_thrd->rp_record_thread, rc); \
+    } \
+    return rc; \
+  } \
 
 /*
  * end REPLAYING macros
@@ -284,14 +291,14 @@
  * begin LOGGING macros
  */
 
-#define THEIA_SIMPLE_SHIM(name, sysnum, ...)    \
-  static long theia_sys_##name(_FOR_EACH_PAIR(_TH_PROTO, __VA_ARGS__))       \
-  {               \
-    long rc;            \
-    rc = real_sys_##name(_FOR_EACH_PAIR(_TH_ARG, __VA_ARGS__));        \
+#define THEIA_SIMPLE_SHIM(name, sysnum) \
+  static long theia_sys_##name(CONCAT(SC_PROTO_, name)) \
+  { \
+    long rc; \
+    rc = real_sys_##name(CONCAT(SC_ARGS_, name)); \
     if (theia_logging_toggle) \
-      theia_##name##_ahgx(_FOR_EACH_PAIR(_TH_ARG, __VA_ARGS__), rc, sysnum);               \
-    return rc;            \
+      theia_##name##_ahgx(CONCAT(SC_ARGS_, name), rc, sysnum); \
+    return rc; \
   }
 
 /*
@@ -303,57 +310,57 @@
  */
 
 //special SHIM function for ignored syscalls; currently, only used for futex, gettimeofday and clock_gettime
-#define SHIM_CALL_MAIN_IGNORE(number, F_RECORD, F_REPLAY, F_SYS, F_RECORD_IGNORED)  \
+#define SHIM_CALL_MAIN_IGNORE(number, F_RECORD, F_REPLAY, F_SYS, F_RECORD_IGNORED) \
 { \
   long ret; \
-  int ignore_flag = 0;            \
+  int ignore_flag = 0; \
   struct record_thread *rec_th; \
   struct replay_thread *rep_th; \
   try_module_get(THIS_MODULE); \
   rec_th = get_record_thread(); \
-  if (rec_th) {         \
-    if (rec_th->rp_ignore_flag_addr) {  \
-      get_user (ignore_flag, rec_th->rp_ignore_flag_addr); \
-      if (ignore_flag) {          \
-        ret = F_RECORD_IGNORED;    \
+  if (rec_th) { \
+    if (rec_th->rp_ignore_flag_addr) { \
+      get_user(ignore_flag, rec_th->rp_ignore_flag_addr); \
+      if (ignore_flag) { \
+        ret = F_RECORD_IGNORED; \
         goto out; \
-      }             \
-    }             \
-    ret = F_RECORD;          \
+      } \
+    } \
+    ret = F_RECORD; \
     goto out; \
-  }               \
+  } \
   rep_th = get_replay_thread(); \
-  if (rep_th && test_app_syscall(number)) {   \
+  if (rep_th && test_app_syscall(number)) { \
     rec_th = rep_th->rp_record_thread; \
-    if (rec_th->rp_ignore_flag_addr) {  \
-      get_user (ignore_flag, rec_th->rp_ignore_flag_addr); \
+    if (rec_th->rp_ignore_flag_addr) { \
+      get_user(ignore_flag, rec_th->rp_ignore_flag_addr); \
       if (ignore_flag) { \
         TPRINT ("syscall %d ignored\n", number); \
-        goto call_sys;       \
-      }           \
-    }             \
-    ret = F_REPLAY;          \
+        goto call_sys; \
+      } \
+    } \
+    ret = F_REPLAY; \
     goto out; \
-  }               \
-  else if (rep_th) {        \
-    if (*(rep_th->rp_preplay_clock) > pin_debug_clock) {  \
+  } \
+  else if (rep_th) { \
+    if (*(rep_th->rp_preplay_clock) > pin_debug_clock) { \
       DPRINT("Pid %d, pin syscall %d\n", current->pid, number); \
-    }             \
-  }               \
+    } \
+  } \
 call_sys: \
   ret = F_SYS; \
 out: \
   module_put(THIS_MODULE); \
-  return ret;             \
+  return ret; \
 }
 
 #define SHIM_CALL_MAIN(number, F_RECORD, F_REPLAY, F_SYS) \
   SHIM_CALL_MAIN_IGNORE(number, F_RECORD, F_REPLAY, F_SYS, F_SYS)
 
-#define SHIM_CALL(name, number, args...)          \
+#define SHIM_CALL(name, number, args...) \
   SHIM_CALL_MAIN(number, record_##name(args), replay_##name(args), real_sys_##name(args))
 
-#define SHIM_CALL_IGNORE(name, number, args...)         \
+#define SHIM_CALL_IGNORE(name, number, args...) \
   SHIM_CALL_MAIN_IGNORE(number, record_##name(args), replay_##name(args), real_sys_##name(args), record_##name##_ignored(args))
 
 /*
@@ -363,35 +370,40 @@ out: \
 /*
  * begin CREATE_SHIMS macros
  */
-#define SIMPLE_SHIM(name, sysnum, ...) \
-  SIMPLE_RECORD(name, sysnum, ##__VA_ARGS__); \
-  SIMPLE_REPLAY(name, sysnum, _FOR_EACH_PAIR(_TH_PROTO, __VA_ARGS__)); \
-  long shim_##name (_FOR_EACH_PAIR(_TH_PROTO, __VA_ARGS__)) \
-  SHIM_CALL(name, sysnum, _FOR_EACH_PAIR(_TH_ARG, __VA_ARGS__));
 
-#define THEIA_SHIM(name, sysnum, ...) \
-  SIMPLE_RECORD(name, sysnum, ##__VA_ARGS__); \
-  SIMPLE_REPLAY(name, sysnum, _FOR_EACH_PAIR(_TH_PROTO, __VA_ARGS__)); \
-  void theia_##name##_ahgx(_FOR_EACH_PAIR(_TH_PROTO, __VA_ARGS__), long rc, int sysnum); \
-  THEIA_SIMPLE_SHIM(name, sysnum, ##__VA_ARGS__); \
-  long shim_##name (_FOR_EACH_PAIR(_TH_PROTO, __VA_ARGS__)) \
+#define SIMPLE_SHIM(name, sysnum) \
+  asmlinkage long (*real_sys_##name)(CONCAT(SC_PROTO_, name)); \
+  SIMPLE_RECORD(name, sysnum); \
+  SIMPLE_REPLAY(name, sysnum); \
+  long theia_hook_##name(CONCAT(SC_PROTO_, name)) \
+  SHIM_CALL(name, sysnum, CONCAT(SC_ARGS_, name))
+
+#define THEIA_SHIM(name, sysnum) \
+  asmlinkage long (*real_sys_##name)(CONCAT(SC_PROTO_, name)); \
+  SIMPLE_RECORD(name, sysnum); \
+  SIMPLE_REPLAY(name, sysnum); \
+  void theia_##name##_ahgx(CONCAT(SC_PROTO_, name), long rc, int sysnum); \
+  THEIA_SIMPLE_SHIM(name, sysnum); \
+  long theia_hook_##name(CONCAT(SC_PROTO_, name)) \
   SHIM_CALL_MAIN(sysnum, \
-    record_##name(_FOR_EACH_PAIR(_TH_ARG, __VA_ARGS__)), \
-    replay_##name(_FOR_EACH_PAIR(_TH_ARG, __VA_ARGS__)), \
-    theia_sys_##name(_FOR_EACH_PAIR(_TH_ARG, __VA_ARGS__)), \
+    record_##name(CONCAT(SC_ARGS_, name)), \
+    replay_##name(CONCAT(SC_ARGS_, name)), \
+    theia_sys_##name(CONCAT(SC_ARGS_, name)), \
   );
 
-#define RET1_SHIM(name, sysnum, type, dest, ...) \
-  RET1_RECORD(name, sysnum, type, dest, ##__VA_ARGS__); \
-  RET1_REPLAY(name, sysnum, type, dest, _FOR_EACH_PAIR(_TH_PROTO, __VA_ARGS__)); \
-  long shim_##name (_FOR_EACH_PAIR(_TH_PROTO, __VA_ARGS__)) \
-  SHIM_CALL(name, sysnum, _FOR_EACH_PAIR(_TH_ARG, __VA_ARGS__));
+#define RET1_SHIM(name, sysnum, type, dest) \
+  asmlinkage long (*real_sys_##name)(CONCAT(SC_PROTO_, name)); \
+  RET1_RECORD(name, sysnum, type, dest); \
+  RET1_REPLAY(name, sysnum, type, dest); \
+  long theia_hook_##name(CONCAT(SC_PROTO_, name)) \
+  SHIM_CALL(name, sysnum, CONCAT(SC_ARGS_, name))
 
-#define RET1_COUNT_SHIM(name, sysnum, dest, ...) \
-  RET1_COUNT_RECORD(name, sysnum, dest, ##__VA_ARGS__); \
-  RET1_COUNT_REPLAY(name, sysnum, dest, _FOR_EACH_PAIR(_TH_PROTO, __VA_ARGS__)); \
-  long shim_##name (_FOR_EACH_PAIR(_TH_PROTO, __VA_ARGS__)) \
-  SHIM_CALL(name, sysnum, _FOR_EACH_PAIR(_TH_ARG, __VA_ARGS__));
+#define RET1_COUNT_SHIM(name, sysnum, dest) \
+  asmlinkage long (*real_sys_##name)(CONCAT(SC_PROTO_, name)); \
+  RET1_COUNT_RECORD(name, sysnum, dest); \
+  RET1_COUNT_REPLAY(name, sysnum, dest); \
+  long theia_hook_##name(CONCAT(SC_PROTO_, name)) \
+  SHIM_CALL(name, sysnum, CONCAT(SC_ARGS_, name))
 
 /*
  * end CREATE_SHIMS macros
