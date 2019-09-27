@@ -5,8 +5,11 @@
 #include <linux/ratelimit.h>
 #include <linux/sched.h>
 
+#define __THEIA_SYSCALLS_C__
 #include <theia_hook.h>
 #include <theia_syscalls.h>
+#include <core_pidmap.h>
+#include <shim.h>
 
 /*
  * Tail call optimization can interfere with recursion detection based on
@@ -48,11 +51,9 @@ asmlinkage long (*real_sys_clone)(SC_PROTO_clone);
 asmlinkage long theia_hook_clone(SC_PROTO_clone)
 {
 	long ret;
-  try_module_get(THIS_MODULE);
   pr_debug_ratelimited("%s: called by pid %d\n", __func__, current->pid);
   ret = real_sys_clone(SC_ARGS_clone);
   pr_debug_ratelimited("%s: ret=%li for pid %d\n", __func__, ret, current->pid);
-  module_put(THIS_MODULE);
   return ret;
 }
 
@@ -60,11 +61,9 @@ asmlinkage long (*real_sys_execve)(SC_PROTO_execve);
 asmlinkage long theia_hook_execve(SC_PROTO_execve)
 {
 	long ret;
-  try_module_get(THIS_MODULE);
   pr_debug_ratelimited("%s: called by pid %d\n", __func__, current->pid);
   ret = real_sys_execve(SC_ARGS_execve);
   pr_debug_ratelimited("%s: ret=%li for pid %d\n", __func__, ret, current->pid);
-  module_put(THIS_MODULE);
   return ret;
 }
 

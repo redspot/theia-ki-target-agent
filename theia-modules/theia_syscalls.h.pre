@@ -1,3 +1,4 @@
+IFNDEF __THEIA_SYSCALLS__
 DEFINE __THEIA_SYSCALLS__
 #include <linux/version.h>
 
@@ -18,6 +19,12 @@ DEFINE __THEIA_SYSCALLS__
 #define TP_PROTO(...) __VA_ARGS__
 #define TP_ARGS(...) __VA_ARGS__
 
+IFDEF _THEIA_HOOK_H
+extern struct ftrace_hook theia_hooks[];
+extern const size_t nr_theia_hooks;
+void init_extra_syscalls(void);
+ENDIF
+
 /*
 gcc -Wall -E -xc theia_hook_test.h.pre \
 | sed -e $'s/__NL__/\\\n/g' \
@@ -29,7 +36,8 @@ gcc -Wall -E -xc theia_hook_test.h.pre \
 #define SC_LTTNG_TRACEPOINT_EVENT(_name, _proto, _args, _fields) \
 DEFINE SC_PROTO_##_name PTREGS_CHK_PROTO(_proto) __NL__\
 DEFINE SC_ARGS_##_name PTREGS_CHK_ARGS(_args) __NL__\
-extern asmlinkage long (*real_sys_##_name)(SC_PROTO_##_name); __NL__\
+typedef asmlinkage long (*ptr_sys_##_name)(SC_PROTO_##_name); __NL__\
+extern ptr_sys_##_name real_sys_##_name; __NL__\
 extern asmlinkage long theia_hook_##_name(SC_PROTO_##_name);
 
 /*
@@ -74,4 +82,36 @@ SC_LTTNG_TRACEPOINT_EVENT(write,
 	TP_ARGS(sc_exit(ret,) fd, buf, count),
 	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, fd, fd)) sc_in(ctf_integer(const char *, buf, buf)) sc_in(ctf_integer(size_t, count, count)))
 )
+
+SC_LTTNG_TRACEPOINT_EVENT(exit_group,
+    TP_PROTO(sc_exit(long ret,) int error_code),
+    TP_ARGS(sc_exit(ret,) error_code),
+    TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, error_code, error_code)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(exit,
+    TP_PROTO(sc_exit(long ret,) int error_code),
+    TP_ARGS(sc_exit(ret,) error_code),
+    TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, error_code, error_code)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(link,
+    TP_PROTO(sc_exit(long ret,) const char * oldname, const char * newname),
+    TP_ARGS(sc_exit(ret,) oldname, newname),
+    TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(oldname, oldname)) sc_in(ctf_user_string(newname, newname)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(pread64,
+    TP_PROTO(sc_exit(long ret,) unsigned int fd, char * buf, size_t count, loff_t pos),
+    TP_ARGS(sc_exit(ret,) fd, buf, count, pos),
+    TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, fd, fd)) sc_out(ctf_integer(char *, buf, buf)) sc_in(ctf_integer(size_t, count, count)) sc_in(ctf_integer(loff_t, pos, pos)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(close,
+    TP_PROTO(sc_exit(long ret,) unsigned int fd),
+    TP_ARGS(sc_exit(ret,) fd),
+    TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, fd, fd)))
+)
+
 PRAGMA GCC diagnostic pop
+ENDIF

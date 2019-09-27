@@ -9,7 +9,7 @@ ifeq "$(shell expr $(GCCVERSION) \< 4.9)" "1"
 	MY_CPP = gcc-4.9 -E
 endif
 
-ccflags-y += -DDEBUG -I$(src)/include
+ccflags-y += -DDEBUG -I$(src)/include -Werror
 
 #core
 obj-m += theia_core_mod.o
@@ -36,9 +36,13 @@ syscalls_header: $(src)/theia_syscalls.h
 $(src)/theia_syscalls.h: $(src)/theia_syscalls.h.pre
 	$(MY_CPP) -Wall -xc $< \
 		| sed -e 's/__NL__/\n/g' \
-		| sed -e 's/DEFINE/#define/g' \
-		| sed -e 's/PRAGMA/#pragma/g' \
+		| sed -e 's/^DEFINE/#define/g' \
+		| sed -e 's/^PRAGMA/#pragma/g' \
+		| sed -e 's/^IFNDEF/#ifndef/g' \
+		| sed -e 's/^IFDEF/#ifdef/g' \
+		| sed -e 's/^ENDIF/#endif/g' \
 		| grep -v '^# ' \
+		| grep -v '^$$' \
 		> $@
 
 all: default

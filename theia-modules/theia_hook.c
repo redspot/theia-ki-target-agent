@@ -14,11 +14,7 @@
 #include <linux/types.h>
 
 #include <theia_hook.h>
-
-//these should not be in a header file
-//also, do not include theia_syscalls.h
-extern struct ftrace_hook theia_hooks[];
-extern const size_t nr_theia_hooks;
+#include <theia_syscalls.h>
 
 /*
  * Import Theia symbols
@@ -119,10 +115,12 @@ int fh_install_hook(struct ftrace_hook *hook)
  * in kernel 3.7.0, however, we have backported the needed ftrace features
  * to kernel 3.5.7.13-ddevec-replay that theia uses.
  */
-//#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0))
-	hook->ops.flags |= FTRACE_OPS_FL_SAVE_REGS | FTRACE_OPS_FL_RECURSION_SAFE;
-//#endif
-
+#if defined(FTRACE_OPS_FL_SAVE_REGS) || (LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0))
+	hook->ops.flags |= FTRACE_OPS_FL_SAVE_REGS;
+#endif
+#if defined(FTRACE_OPS_FL_RECURSION_SAFE) || (LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0))
+	hook->ops.flags |= FTRACE_OPS_FL_RECURSION_SAFE;
+#endif
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,19,0))
 	hook->ops.flags |= FTRACE_OPS_FL_IPMODIFY;
 #endif
