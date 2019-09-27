@@ -4,6 +4,8 @@
 #include <linux/slab.h>
 #include <linux/sched.h>
 
+#include <replay_configs.h>
+
 /*
  * These entries are taken from the modifications that omniplay/THEIA
  * originally did to the task_struct.
@@ -49,15 +51,23 @@ static inline theia_task* get_current_theia_task(void)
 }
 static inline struct record_thread* get_record_thread(void)
 {
-    //theia_task *data = get_current_theia_task();
-    //if (data) return data->record_thrd;
+#if defined(THEIA_MODIFIED_KERNEL_SOURCE)
+    theia_task *data = get_current_theia_task();
+    if (data) return data->record_thrd;
+    return NULL;
+#else
     return current->record_thrd;
+#endif
 }
 static inline struct replay_thread* get_replay_thread(void)
 {
-    //theia_task *data = get_current_theia_task();
-    //if (data) return data->replay_thrd;
+#if defined(THEIA_MODIFIED_KERNEL_SOURCE)
+    theia_task *data = get_current_theia_task();
+    if (data) return data->replay_thrd;
+    return NULL;
+#else
     return current->replay_thrd;
+#endif
 }
 
 #endif
