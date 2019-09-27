@@ -84,3 +84,489 @@ A	linux-lts-quantal-3.5.0/kernel/replay_graph/replayfs_perftimer.c
 A	linux-lts-quantal-3.5.0/kernel/replay_graph/replayfs_perftimer.h
 A	linux-lts-quantal-3.5.0/kernel/replay_graph/replayfs_syscall_cache.c
 A	linux-lts-quantal-3.5.0/kernel/replay_graph/replayfs_syscall_cache.h
+
+
+trace_signal_generate(sig, &q->info, t, group, result);
+int sig, struct siginfo *info, struct task_struct *t, int group, int result
+/**
+ * signal_generate - called when a signal is generated
+ * @sig: signal number
+ * @info: pointer to struct siginfo
+ * @task: pointer to struct task_struct
+ * @group: shared or private
+ * @result: TRACE_SIGNAL_*
+ *
+ * Current process sends a 'sig' signal to 'task' process with
+ * 'info' siginfo. If 'info' is SEND_SIG_NOINFO or SEND_SIG_PRIV,
+ * 'info' is not a pointer and you can't access its field. Instead,
+ * SEND_SIG_NOINFO means that si_code is SI_USER, and SEND_SIG_PRIV
+ * means that si_code is SI_KERNEL.
+ */
+TRACE_EVENT(signal_generate,
+    TP_PROTO(int sig, struct siginfo *info, struct task_struct *task,
+            int group, int result),
+    TP_ARGS(sig, info, task, group, result),
+
+trace_signal_deliver(signr, info, ka);
+int signr, siginfo_t *info, struct k_sigaction *ka
+/**
+ * signal_deliver - called when a signal is delivered
+ * @sig: signal number
+ * @info: pointer to struct siginfo
+ * @ka: pointer to struct k_sigaction
+ *
+ * A 'sig' signal is delivered to current process with 'info' siginfo,
+ * and it will be handled by 'ka'. ka->sa.sa_handler can be SIG_IGN or
+ * SIG_DFL.
+ * Note that some signals reported by signal_generate tracepoint can be
+ * lost, ignored or modified (by debugger) before hitting this tracepoint.
+ * This means, this can show which signals are actually delivered, but
+ * matching generated signals and delivered signals may not be correct.
+ */
+TRACE_EVENT(signal_deliver,
+    TP_PROTO(int sig, struct siginfo *info, struct k_sigaction *ka),
+    TP_ARGS(sig, info, ka),
+
+static void probe_signal_deliver(int sig, struct siginfo *info, struct k_sigaction *ka)
+{
+    if (!atomic_read(&all_traces_enabled)) return;
+    pr_info("%s: signal %d delivered to pid %d\n", __func__, sig, current->pid);
+}
+
+
+extern atomic_t all_traces_enabled;
+if (!atomic_read(&all_traces_enabled)) return;
+
+a = 4pr^2
+v = (4/3)pr^3
+a = pr^2
+v = (1/3)pr^3
+
+move all of read() into theia-module
+the macro
+log read
+record read
+replay read
+
+
+all the theia syscall macros:
+#define TPRINT pr_debug
+#define DPRINT pr_debug
+#define MPRINT pr_debug
+5 main types:
+    create a record function
+    create a replay function
+    create a theia_sys_name
+        call sys_name
+        if logging, call theia_name_ahgx()
+    create a syscall shim, to be called by syscall table
+    create all the calls using the other macros
+
+RECORDING macros:
+    //call and record a syscall, but do not log it
+    SIMPLE_RECORD0(name, sysnum)
+      static long record_##name(void)
+      {
+        long rc;
+        new_syscall_enter(sysnum);
+        rc = sys_##name();
+        new_syscall_done(sysnum, rc);
+        new_syscall_exit(sysnum, NULL);
+        return rc;
+      }
+
+    //like SIMPLE_RECORD1 except that the syscall
+    //returns something to the user in dest,
+    //and its size is the sizeof(type)
+    //then we save that by passing it to new_syscall_exit
+    RET1_RECORD1(name, sysnum, type, dest, arg0type, arg0name)
+      static asmlinkage long record_##name (arg0type arg0name)
+      {
+        long rc;
+        type *pretval = NULL;
+      
+        new_syscall_enter (sysnum);
+        rc = sys_##name (arg0name);
+        new_syscall_done (sysnum, rc);
+        if (rc >= 0 && dest) {
+                pretval = ARGSKMALLOC (sizeof(type), GFP_KERNEL);
+          if (pretval == NULL) {
+            TPRINT ("record_##name: can't allocate buffer\n");
+            return -ENOMEM;
+          }
+          if (copy_from_user (pretval, dest, sizeof (type))) {
+            TPRINT ("record_##name: can't copy to buffer\n");
+            ARGSKFREE(pretval, sizeof(type));
+            pretval = NULL;
+            rc = -EFAULT;
+          }
+        }
+      
+        new_syscall_exit (sysnum, pretval);
+        return rc;
+      }
+
+    //like SIMPLE_RECORD1 except that the syscall
+    //returns something to the user in dest,
+    //and its size is the syscall return code
+    //then we save that by passing it to new_syscall_exit
+    RET1_COUNT_RECORD3(name, sysnum, dest, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name)
+    static asmlinkage long record_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name)
+    {
+      long rc;
+      char *pretval = NULL;
+
+      new_syscall_enter (sysnum);
+      rc = sys_##name (arg0name, arg1name, arg2name);
+      new_syscall_done (sysnum, rc);
+      if (rc >= 0 && dest) {
+        pretval = ARGSKMALLOC (rc, GFP_KERNEL);
+        if (pretval == NULL) {
+          TPRINT ("record_##name: can't allocate buffer\n");
+          return -ENOMEM;
+        }
+        if (copy_from_user (pretval, dest, rc)) {
+          TPRINT ("record_##name: can't copy to buffer\n");
+          ARGSKFREE(pretval, rc);
+          pretval = NULL;
+          rc = -EFAULT;
+        }
+      }
+
+      new_syscall_exit (sysnum, pretval);
+      return rc;
+    }
+
+REPLAYING macros:
+    //replay a syscall. the args are ignored, for some reason ...
+    SIMPLE_REPLAY(name, sysnum, args...)
+      static long replay_##name (args)
+      {
+        return get_next_syscall (sysnum, NULL);
+      }
+
+    //like simple replay, but copy something into dest.
+    //size is passed in
+    RET1_REPLAYG(name, sysnum, dest, size, args...)
+      static long replay_##name (args)
+      {
+        char *retparams = NULL;
+        long rc = get_next_syscall (sysnum, (char **) &retparams);
+      
+        if (retparams) {
+          if (copy_to_user (dest, retparams, size)) TPRINT ("replay_##name: pid %d cannot copy to user\n", current->pid);
+          TPRINT("argsconsume called at %d, size: %lu\n", __LINE__, size);
+          argsconsume (current->replay_thrd->rp_record_thread, size);
+        }
+      
+        return rc;
+      }
+
+    //like RET1_REPLAYG except the size is just sizeof(type)
+    //this is probably not needed
+    RET1_REPLAY(name, sysnum, type, dest, args...)
+        RET1_REPLAYG(name, sysnum, dest, sizeof(type), args)
+
+    //like simple replay, but copy something into dest.
+    //size is syscall return code
+    RET1_COUNT_REPLAY(name, sysnum, dest, args...)
+    static asmlinkage long replay_##name (args)
+    {
+      char *retparams = NULL;
+      long rc = get_next_syscall (sysnum, &retparams);
+
+      if (retparams) {
+        if (copy_to_user (dest, retparams, rc)) TPRINT ("replay_##name: pid %d cannot copy to user\n", current->pid);
+        argsconsume (current->replay_thrd->rp_record_thread, rc);
+      }
+
+      return rc;
+    }
+
+LOGGING macros:
+    //call and log a syscall, but do not record it
+    //theia_name_ahgx() needs to be defined.
+    THEIA_SIMPLE_SHIM0(name, sysnum)
+      static long theia_sys_##name (void)
+      {
+        long rc;
+        rc = sys_##name();
+        if (theia_logging_toggle) theia_##name##_ahgx(rc, sysnum);
+        return rc;
+      }
+
+SHIM macros:
+    //make a shim that is to be used in syscall table.
+    SHIM_CALL_MAIN(number, F_RECORD, F_REPLAY, F_SYS)
+        if recording
+            if ignore_flag return F_SYS
+            return F_RECORD
+        if replay return F_REPLAY
+        return F_SYS
+
+    //make a shim that is to be used in syscall table. use default names for record/replay/sys
+    SHIM_CALL(name, number, args...)
+        SHIM_CALL_MAIN(number, record_##name(args), replay_##name(args), sys_##name(args))
+
+    //make a shim that is to be used in syscall table. if ignore_flag return IGNORED version
+    SHIM_CALL_MAIN_IGNORE(number, F_RECORD, F_REPLAY, F_SYS, F_RECORD_IGNORED)
+        if recording
+            if ignore_flag return F_RECORD_IGNORED
+            return F_RECORD
+        if replay return F_REPLAY
+        return F_SYS
+
+    //make a shim that is to be used in syscall table. use default names for record/replay/sys
+    SHIM_CALL_IGNORE(name, number, args...)
+        SHIM_CALL_MAIN_IGNORE(number, record_##name(args), replay_##name(args), sys_##name(args), record_##name##_ignored(args))
+
+CREATE_SHIMS macros:
+    //make a shim for syscall.
+    //use simple record. use simple replay.
+    //no additional calls need to be defined.
+    //record_name() does not log
+    //shim_name() does not log
+    SIMPLE_SHIM0(name, sysnum)
+      SIMPLE_RECORD0(name, sysnum);
+      SIMPLE_REPLAY (name, sysnum, void);
+      asmlinkage long shim_##name (void) SHIM_CALL(name, sysnum);
+
+    //make a shim for syscall.
+    //use simple record. use simple replay.
+    //theia_name_ahgx() needs to be defined.
+    //record_name() does not log
+    //theia_sys_name() does log
+    //when recording, call is not logged
+    THEIA_SHIM0(name, sysnum)
+      SIMPLE_RECORD0(name, sysnum);
+      SIMPLE_REPLAY (name, sysnum, void);
+      THEIA_SIMPLE_SHIM0(name, sysnum);
+      asmlinkage long shim_##name (void)
+      SHIM_CALL_MAIN(sysnum, record_##name(), replay_##name(), theia_sys_##name());
+
+    //just like SIMPLE_SHIM1 except:
+    //    record_name() saves dest
+    //    replay_name() copies something to dest
+    //    size is defaulted to sizeof(type)
+    //no additional calls need to be defined.
+    //record_name() does not log
+    //shim_name() does not log
+    RET1_SHIM1(name, sysnum, type, dest, arg0type, arg0name)
+      RET1_RECORD1(name, sysnum, type, dest, arg0type, arg0name);
+      RET1_REPLAY (name, sysnum, type, dest, arg0type arg0name);
+      asmlinkage long shim_##name (arg0type arg0name)
+      SHIM_CALL(name, sysnum, arg0name);
+
+    //just like SIMPLE_SHIM1 except:
+    //    record_name() saves dest
+    //    replay_name() copies something to dest
+    //    size is syscall return code
+    //no additional calls need to be defined.
+    //record_name() does not log
+    //shim_name() does not log
+    RET1_COUNT_SHIM3(name, sysnum, dest, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name)
+      RET1_COUNT_RECORD3(name, sysnum, dest, arg0type, arg0name, arg1type, arg1name, arg2type, arg2name);
+      RET1_COUNT_REPLAY (name, sysnum, dest, arg0type arg0name, arg1type arg1name, arg2type arg2name);
+      asmlinkage long shim_##name (arg0type arg0name, arg1type arg1name, arg2type arg2name)
+      SHIM_CALL(name, sysnum, arg0name, arg1name, arg2name);
+
+    examples:
+    static long record_read(unsigned int fd, char __user *buf, size_t count);
+    static long replay_read(unsigned int fd, char __user *buf, size_t count);
+    static long theia_sys_read(unsigned int fd, char __user *buf, size_t count);
+    asmlinkage ssize_t shim_read(unsigned int fd, char __user *buf, size_t count)
+    SHIM_CALL_MAIN(0, record_read(fd, buf, count), replay_read(fd, buf, count), theia_sys_read(fd, buf, count))
+
+    RET1_SHIM3(waitpid, 7, int, stat_addr, pid_t, pid, int __user *, stat_addr, int, options);
+
+    inline void theia_creat_ahgx(const char __user *pathname, int mode, long fd, int sysnum)
+    THEIA_SHIM2(creat, 85, const char __user *, pathname, int, mode);
+
+sys_read() dependencies:
+    open_cache_file()
+        replay_maps.c
+    struct file
+        linux/fs.h
+        has member
+            void *replayfs_filemap
+        we need a hash table to store our replayfs_filemap per 'struct file'
+            create read mostly hashtable
+                12 bits = 4096 entries
+                theia-vm4, idle, had ~1800 open files
+                online examples suggest 5-8k
+            static inline __filp_key(struct file *filp) {
+                u64 key;
+                struct inode *inode = filp->f_dentry->d_inode;
+                key = ((u64)inode->i_sb->s_dev) << 32 | (u64)inode->i_ino;
+                return key;
+            }
+            value is struct filemap_data *
+    replayfs_filemap_read()
+        replayfs_filemap.c
+    DEFINE_MUTEX(pipe_tree_mutex);
+        replay.c
+    static struct btree_head64 pipe_tree;
+        replay.c
+    new_syscall_*
+        replay.c
+
+    do_filp_open
+        fs/namei.c
+        hook function
+            call orig
+            replayfs_file_opened(filp);
+
+code org:
+    shim.h
+        all the shim macro usage. have functions be declared but not defined.
+    replay.c
+        all the record_name/replay_name/etc definitions
+    util.c
+        all the helper functions called by record_replay.c
+    theia_core.c
+        add kobject for global theia state
+        create struct that contains our global state
+            then just export one struct
+        add task_struct map
+            8 bits, 256 buckets. vm4 @ idle has ~128 PIDs
+            primitives for current->record_thrd
+            add inline primitives to theia_core.h
+        add filemap_data map
+        get_replayfs_filemap(filp)
+            return filp->replayfs_filemap;
+    hashmap.c
+        generic hashmap code and template code
+        key will be u64
+        hashmap_template.h
+            include that fills in the template code
+            static struct HASHMAP_NAME_PREFIX ## _hashmap_bundle {
+               DEFINE_READ_MOSTLY_HASHTABLE(HASHMAP_NAME_PREFIX ## _hashmap, HASHMAP_BITS);
+               struct kmem_cache * HASHMAP_NAME_PREFIX ## _mempool;
+               DEFINE_MUTEX(HASHMAP_NAME_PREFIX ## _lock);
+            }
+        defines needs
+            HASHMAP_BITS
+            HASHMAP_NAME_PREFIX
+            HASHMAP_VALUE_TYPE
+            HASHMAP_ALLOCATOR_FLAGS
+    theia_task
+        get_theia_task(task)
+        record_thrd()
+            tdata = get_theia_task(current);
+            if (tdata) return tdata->record_thrd;
+            return NULL;
+    replay_configs.h
+        defines that affect/enable/disable code
+
+hook flow in theia_syscalls.c:
+    when not hooked, the orig syscall is called
+    when hooked, the orig syscall is not called at all
+    our ftrace handler, fh_ftrace_thunk, handles the hook redirect
+    if the parent IP is not in THIS_MODULE, then redirect
+    else exit the handler which falls back into the orig syscall
+
+    theia_hook_read() handles sys_read() and stores orig
+    in real_sys_read()
+
+    the hook functions called by fh_ftrace_thunk need "asmlinkage"
+    because their function args are from direct syscall. nothing else
+    needs "asmlinkage"
+
+    our shim, flow:
+        try_module_get
+        if recording call record_read()
+        if replaying call replay_read()
+        else call real_sys_read()
+        record_read() will call sys_read(),
+        which goes to handler,
+        which should fall thru to the real sys_read()
+        AS LONG AS record_read() is in THIS_MODULE
+
+    shim.h
+        has all the shim macros
+    theia_syscalls.c
+        uses the macros to fully define some shims
+        and partially define others
+            THEIA_SHIM() uses THEIA_SIMPLE_SHIM()
+            THEIA_SIMPLE_SHIM() needs theia_name_ahgx()
+            therefore, partial shims should declare funcs that they need
+    theia_hook.c, and maybe others
+        need a concrete function defined to act as the hook
+    replay.c
+        used to define:
+            record_name(),
+            replay_name(),
+            theia_sys_name(),
+            theia_name_ahgx(),
+    util.c
+        all other code needed other source files
+    util.h
+        declare all the helper functions
+        NOT declare any globals
+        NOT declare any flag-like #defines
+    replay_configs.h
+        defines that affect/enable/disable code
+        TRACE_READ_WRITE
+        CACHE_READS
+        LOG_COMPRESS
+    theia_core.h
+        declare global state variables, using extern
+    theia_core.c
+        define and init/destroy any global state variables
+        EXPORT the globals
+    move sock_from_file hook from theia_core to theia_syscalls
+
+//keys are struct file*
+//vals are struct filemap_data*
+struct btree_head64 filpmap;
+int rc = btree_init64(&filpmap);
+if (rc) pr_err("bad\n");
+btree_destroy64(&filpmap);
+u64 key = (u64)filp;
+struct filemap_data *map_entry = ...;
+rc = btree_insert64(&filpmap, key, (void*)mapdata, GFP_KERNEL);
+map_entry = btree_lookup(&filpmap, key);
+old_entry = btree_remove64(&filpmap, key);
+struct btree_head64 new_filpmap;
+btree_init64(&new_filpmap);
+btree_for_each_safe64(&filpmap, key, old_entry)
+    btree_insert64(&new_filpmap, key, old_entry);
+
+
+jestin:
+mpruett3-gtri:
+    *pubkey
+    *super
+    *theia-vm?
+    *repo
+        alias
+        conf/gitolite.conf
+        keydir/mpruett3-gtri.pub
+    how to build
+    how to deploy
+        kernel
+            [vm1]$ env CC=gcc-4.9 ./compile
+            [vm1]$ ./install.sh
+            #one time copy from vm4: copy-build-from-vm1.sh
+            [vm3]$ ./copy-build-from-vm1.sh
+            [vm3]$ sudo update-grub
+            #but the default kernel will probably be 3.5.0-99-generic
+            #and you want 3.5.7.13-ddevec-replay
+            #so use virsh console theia-vm3
+            [vm3]$ reboot
+            [vm3]$ uname -a
+            #check the build time
+        theia-modules
+            make wilson
+            see if theia_core_mod will load
+            dont load the others
+    how to test
+        theia-vm3 for replay
+    tour
+        syscall table
+        shims
+        replay.c
+        theia-modules
+    tasking
+        simple shims
+        LTS for unit tests?
