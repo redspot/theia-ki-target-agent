@@ -15,6 +15,7 @@
 
 #include <theia_hook.h>
 #include <theia_syscalls.h>
+#include <serialize.h>
 
 /*
  * Import Theia symbols
@@ -206,6 +207,9 @@ void fh_remove_hooks(struct ftrace_hook *hooks, size_t count)
 static int __init fh_init(void)
 {
 	int err;
+
+  init_extra_syscalls();
+  serialize_init();
 
   atomic_set(&all_hooks_enabled, 0);
 	pr_info("module calling fh_install_hooks()\n");

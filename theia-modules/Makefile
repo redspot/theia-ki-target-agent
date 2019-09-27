@@ -16,7 +16,7 @@ obj-m += theia_core_mod.o
 theia_core_mod-objs := core_maps.o theia_core.o
 #ftrace hooks
 obj-m += theia_hook_mod.o
-theia_hook_mod-objs := theia_hook.o theia_syscalls.o
+theia_hook_mod-objs := theia_hook.o theia_syscalls.o util.o serialize.o
 #tracepoint hooks
 obj-m += theia_trace.o
 

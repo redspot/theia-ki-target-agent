@@ -113,5 +113,11 @@ SC_LTTNG_TRACEPOINT_EVENT(close,
     TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, fd, fd)))
 )
 
+SC_LTTNG_TRACEPOINT_EVENT(open,
+    TP_PROTO(sc_exit(long ret,) const char * filename, int flags, umode_t mode),
+    TP_ARGS(sc_exit(ret,) filename, flags, mode),
+    TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(filename, filename)) sc_in(ctf_integer(int, flags, flags)) sc_in(ctf_integer(umode_t, mode, mode)))
+)
+
 PRAGMA GCC diagnostic pop
 ENDIF
