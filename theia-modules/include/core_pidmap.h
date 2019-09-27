@@ -36,7 +36,7 @@ typedef struct {
 #define HASHMAP_NAME_PREFIX theia_pidmap
 #define HASHMAP_VALUE_TYPE theia_task
 #define HASHMAP_ALLOCATOR_FLAGS GFP_KERNEL
-#include "hashmap/hashmap_type.h"
+#include <hashmap/hashmap_type.h>
 
 //theia_task map helpers
 static inline theia_task* get_theia_task(struct task_struct *task)
