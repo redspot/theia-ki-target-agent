@@ -267,7 +267,7 @@ static inline long cget_next_syscall_enter(struct replay_thread *prt, struct rep
 {
   struct syscall_result *psr;
   struct replay_thread *tmp;
-  struct record_thread *prect = get_record_thread();
+  struct record_thread *prect = prt->rp_record_thread;
   u_long start_clock;
   u_long *pclock;
   long retval = 0;
