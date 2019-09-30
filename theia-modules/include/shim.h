@@ -316,16 +316,19 @@
   int ignore_flag = 0; \
   struct record_thread *rec_th; \
   struct replay_thread *rep_th; \
+  pr_debug("%s: enter, pid=%d\n", __func__, current->pid); \
   try_module_get(THIS_MODULE); \
   rec_th = get_record_thread(); \
   if (rec_th) { \
     if (rec_th->rp_ignore_flag_addr) { \
       get_user(ignore_flag, rec_th->rp_ignore_flag_addr); \
       if (ignore_flag) { \
+        pr_debug("%s: call RECORD_IGNORED, pid=%d\n", __func__, current->pid); \
         ret = F_RECORD_IGNORED; \
         goto out; \
       } \
     } \
+    pr_debug("%s: call RECORD, pid=%d\n", __func__, current->pid); \
     ret = F_RECORD; \
     goto out; \
   } \
@@ -339,6 +342,7 @@
         goto call_sys; \
       } \
     } \
+    pr_debug("%s: call REPLAY, pid=%d\n", __func__, current->pid); \
     ret = F_REPLAY; \
     goto out; \
   } \
@@ -348,6 +352,7 @@
     } \
   } \
 call_sys: \
+  pr_debug("%s: call SYS, pid=%d\n", __func__, current->pid); \
   ret = F_SYS; \
 out: \
   module_put(THIS_MODULE); \
