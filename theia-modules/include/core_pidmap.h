@@ -51,7 +51,7 @@ static inline theia_task* get_current_theia_task(void)
 }
 static inline struct record_thread* get_record_thread(void)
 {
-#if !defined(THEIA_MODIFIED_KERNEL_SOURCE)
+#if !defined(THEIA_MODIFIED_KERNEL_SOURCES)
     theia_task *data = get_current_theia_task();
     if (data) return data->record_thrd;
     return NULL;
@@ -61,7 +61,7 @@ static inline struct record_thread* get_record_thread(void)
 }
 static inline struct replay_thread* get_replay_thread(void)
 {
-#if !defined(THEIA_MODIFIED_KERNEL_SOURCE)
+#if !defined(THEIA_MODIFIED_KERNEL_SOURCES)
     theia_task *data = get_current_theia_task();
     if (data) return data->replay_thrd;
     return NULL;
