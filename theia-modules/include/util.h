@@ -261,8 +261,8 @@ static inline long cnew_syscall_done(long sysnum, long retval, long prediction, 
   return 0;
 }
 
-#define get_next_syscall_enter(args...) cget_next_syscall_enter(args, 0, NULL)
-static inline long cget_next_syscall_enter(struct replay_thread *prt, struct replay_group *prg,
+#define get_next_syscall_enter(args...) __cget_next_syscall_enter(args, 0, NULL)
+static inline long __cget_next_syscall_enter(struct replay_thread *prt, struct replay_group *prg,
         int syscall, char **ppretparams, struct syscall_result **ppsr, long prediction, u_long *ret_start_clock)
 {
   struct syscall_result *psr;
@@ -471,7 +471,7 @@ static inline long cget_next_syscall_enter(struct replay_thread *prt, struct rep
   return retval;
 }
 
-static inline long get_next_syscall_exit(struct replay_thread *prt, struct replay_group *prg, struct syscall_result *psr)
+static inline long __get_next_syscall_exit(struct replay_thread *prt, struct replay_group *prg, struct syscall_result *psr)
 {
   struct record_thread *prect = prt->rp_record_thread;
   struct replay_thread *tmp;
@@ -573,8 +573,8 @@ static inline long get_next_syscall_exit(struct replay_thread *prt, struct repla
   return 0;
 }
 
-#define get_next_syscall(args...) cget_next_syscall(args, NULL, 0, NULL)
-static inline long cget_next_syscall(int syscall, char **ppretparams, u_char *flag, long prediction, u_long *start_clock)
+#define get_next_syscall(args...) __cget_next_syscall(args, NULL, 0, NULL)
+static inline long __cget_next_syscall(int syscall, char **ppretparams, u_char *flag, long prediction, u_long *start_clock)
 {
   struct replay_thread *prt = get_replay_thread();
   struct replay_group *prg = prt->rp_group;
@@ -582,7 +582,7 @@ static inline long cget_next_syscall(int syscall, char **ppretparams, u_char *fl
   long retval;
   long exit_retval;
 
-  retval = cget_next_syscall_enter(prt, prg, syscall, ppretparams, &psr, prediction, start_clock);
+  retval = __cget_next_syscall_enter(prt, prg, syscall, ppretparams, &psr, prediction, start_clock);
 
   // Needed to exit the threads in the correct order with Pin attached.
   // Essentially, return to Pin after Pin interrupts the syscall with a SIGTRAP.
@@ -594,7 +594,7 @@ static inline long cget_next_syscall(int syscall, char **ppretparams, u_char *fl
     return retval;
   }
 
-  exit_retval = get_next_syscall_exit(prt, prg, psr);
+  exit_retval = __get_next_syscall_exit(prt, prg, psr);
 
   // Reset Pin syscall address value to 0 at the end of the system call
   // This is required to differentiate between syscalls when
