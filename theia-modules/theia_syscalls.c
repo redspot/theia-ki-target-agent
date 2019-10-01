@@ -88,6 +88,7 @@ asmlinkage long theia_hook_exit_group(SC_PROTO_exit_group)
 }
 
 SIMPLE_SHIM(link, 86);
+SIMPLE_SHIM(sync, 162);
 
 /*
  * syscall hooks end here
@@ -148,6 +149,7 @@ struct ftrace_hook theia_hooks[] = {
   HOOK("sys_exit", theia_hook_exit, &real_sys_exit),
   HOOK("sys_exit_group", theia_hook_exit_group, &real_sys_exit_group),
   HOOK("sys_link", theia_hook_link, &real_sys_link),
+  HOOK("sys_sync", theia_hook_sync, &real_sys_sync),
 };
 
 const size_t nr_theia_hooks = ARRAY_SIZE(theia_hooks);
