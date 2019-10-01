@@ -131,5 +131,11 @@ SC_LTTNG_TRACEPOINT_EVENT(fchmod,
     TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, fd, fd)) sc_in(ctf_integer(umode_t, mode, mode)))
 )
 
+SC_LTTNG_TRACEPOINT_EVENT(sync,
+    TP_PROTO(sc_exit(long ret,) void),
+    TP_ARGS(sc_exit(ret)),
+    TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)))
+)
+
 PRAGMA GCC diagnostic pop
 ENDIF
