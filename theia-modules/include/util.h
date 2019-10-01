@@ -473,7 +473,7 @@ static inline long cget_next_syscall_enter(struct replay_thread *prt, struct rep
 
 static inline long get_next_syscall_exit(struct replay_thread *prt, struct replay_group *prg, struct syscall_result *psr)
 {
-  struct record_thread *prect = get_record_thread();
+  struct record_thread *prect = prt->rp_record_thread;
   struct replay_thread *tmp;
   int ret;
   u_long stop_clock;
