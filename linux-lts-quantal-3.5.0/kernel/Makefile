@@ -23,7 +23,7 @@ CFLAGS_REMOVE_irq_work.o = -pg
 endif
 
 #Theia stuff
-CFLAGS_replay.o := -Werror
+CFLAGS_replay.o := -Werror -Og -fno-inline
 
 obj-y += sched/
 obj-y += power/
