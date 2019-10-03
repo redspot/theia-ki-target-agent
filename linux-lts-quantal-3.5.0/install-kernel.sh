@@ -31,3 +31,7 @@ if [ -f ${DEBUG_KERNEL} ]; then
 fi
 cp "${DIR}/${BUILD_DIR}/vmlinux" ${DEBUG_KERNEL}
 ls -lh ${DEBUG_KERNEL}
+orig_user=$([ x"$SUDO_USER" != x ] && echo $SUDO_USER || id -un)
+orig_group=$([ x"$SUDO_GID" != x ] && (getent group $SUDO_GID | cut -d: -f1) ||
+    id -gn)
+sudo chown ${orig_user}:${orig_group} -R ${DIR}

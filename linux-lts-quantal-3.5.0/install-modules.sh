@@ -23,3 +23,7 @@ fi
 
 #install kernel modules
 make -j$build_parallel O="${DIR}/${BUILD_DIR}" CC="$CC" modules_install
+orig_user=$([ x"$SUDO_USER" != x ] && echo $SUDO_USER || id -un)
+orig_group=$([ x"$SUDO_GID" != x ] && (getent group $SUDO_GID | cut -d: -f1) ||
+    id -gn)
+sudo chown ${orig_user}:${orig_group} -R ${DIR}
