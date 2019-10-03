@@ -90,6 +90,18 @@ asmlinkage long theia_hook_exit_group(SC_PROTO_exit_group)
 SIMPLE_SHIM(link, 86);
 SIMPLE_SHIM(sync, 162);
 SIMPLE_SHIM(chdir, 80);
+SIMPLE_SHIM(pause, 34)
+SIMPLE_SHIM(vhangup, 153)
+SIMPLE_SHIM(munlockall, 152)
+SIMPLE_SHIM(getuid, 102)
+SIMPLE_SHIM(getgid, 104)
+SIMPLE_SHIM(geteuid, 107)
+SIMPLE_SHIM(getegid, 108)
+SIMPLE_SHIM(getppid, 110)
+SIMPLE_SHIM(getpgrp, 111)
+SIMPLE_SHIM(setsid, 112)
+SIMPLE_SHIM(gettid, 186)
+SIMPLE_SHIM(inotify_init, 253)
 
 /*
  * syscall hooks end here
@@ -152,6 +164,18 @@ struct ftrace_hook theia_hooks[] = {
   HOOK("sys_link", theia_hook_link, &real_sys_link),
   HOOK("sys_sync", theia_hook_sync, &real_sys_sync),
   HOOK("sys_chdir", theia_hook_chdir, &real_sys_chdir),
+  HOOK("sys_pause", theia_hook_pause, &real_sys_pause),
+  HOOK("sys_vhangup", theia_hook_vhangup, &real_sys_vhangup),
+  HOOK("sys_munlockall", theia_hook_munlockall, &real_sys_munlockall),
+  HOOK("sys_getuid", theia_hook_getuid, &real_sys_getuid),
+  HOOK("sys_getgid", theia_hook_getgid, &real_sys_getgid),
+  HOOK("sys_geteuid", theia_hook_geteuid, &real_sys_geteuid),
+  HOOK("sys_getegid", theia_hook_getegid, &real_sys_getegid),
+  HOOK("sys_getppid", theia_hook_getppid, &real_sys_getppid),
+  HOOK("sys_getpgrp", theia_hook_getpgrp, &real_sys_getpgrp),
+  HOOK("sys_setsid", theia_hook_setsid, &real_sys_setsid),
+  HOOK("sys_gettid", theia_hook_gettid, &real_sys_gettid),
+  HOOK("sys_inotify_init", theia_hook_inotify_init, &real_sys_inotify_init),
 };
 
 const size_t nr_theia_hooks = ARRAY_SIZE(theia_hooks);

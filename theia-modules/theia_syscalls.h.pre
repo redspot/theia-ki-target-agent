@@ -143,5 +143,77 @@ SC_LTTNG_TRACEPOINT_EVENT(chdir,
 	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(filename, filename)))
 )
 
+SC_LTTNG_TRACEPOINT_EVENT(pause,
+	TP_PROTO(sc_exit(long ret) void),
+	TP_ARGS(sc_exit(ret)),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(vhangup,
+	TP_PROTO(sc_exit(long ret) void),
+	TP_ARGS(sc_exit(ret)),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(munlockall,
+	TP_PROTO(sc_exit(long ret) void),
+	TP_ARGS(sc_exit(ret)),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(getuid,
+	TP_PROTO(sc_exit(long ret) void),
+	TP_ARGS(sc_exit(ret)),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(getgid,
+	TP_PROTO(sc_exit(long ret) void),
+	TP_ARGS(sc_exit(ret)),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(geteuid,
+	TP_PROTO(sc_exit(long ret) void),
+	TP_ARGS(sc_exit(ret)),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(getegid,
+	TP_PROTO(sc_exit(long ret) void),
+	TP_ARGS(sc_exit(ret)),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(getppid,
+	TP_PROTO(sc_exit(long ret) void),
+	TP_ARGS(sc_exit(ret)),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(getpgrp,
+	TP_PROTO(sc_exit(long ret) void),
+	TP_ARGS(sc_exit(ret)),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(setsid,
+	TP_PROTO(sc_exit(long ret) void),
+	TP_ARGS(sc_exit(ret)),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(gettid,
+	TP_PROTO(sc_exit(long ret) void),
+	TP_ARGS(sc_exit(ret)),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(inotify_init,
+	TP_PROTO(sc_exit(long ret) void),
+	TP_ARGS(sc_exit(ret)),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)))
+)
+
 PRAGMA GCC diagnostic pop
 ENDIF
