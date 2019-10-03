@@ -2,7 +2,7 @@
 #include <util.h>
 
 /* Simplified method to return pointer to next data to consume on replay */
-char *argshead(struct record_thread *prect)
+char *__argshead(struct record_thread *prect)
 {
   struct argsalloc_node *node;
   node = list_first_entry(&prect->rp_argsalloc_list, struct argsalloc_node, list);
@@ -15,7 +15,7 @@ char *argshead(struct record_thread *prect)
 }
 
 /* Simplified method to advance pointer on replay */
-void argsconsume(struct record_thread *prect, u_long size)
+void __argsconsume(struct record_thread *prect, u_long size)
 {
   struct argsalloc_node *node;
   node = list_first_entry(&prect->rp_argsalloc_list, struct argsalloc_node, list);
@@ -39,7 +39,7 @@ void argsconsume(struct record_thread *prect, u_long size)
  * The only use case for this is in case of an error (like copying from user)
  * and the allocated memory needs to be freed
  */
-void argsfree(const void *ptr, size_t size)
+void __argsfree(const void *ptr, size_t size)
 {
   struct record_thread *prect;
   struct argsalloc_node *ra_node;
@@ -68,7 +68,7 @@ void argsfree(const void *ptr, size_t size)
 }
 
 // Free all allocated data values at once
-void argsfreeall(struct record_thread *prect)
+void __argsfreeall(struct record_thread *prect)
 {
   struct argsalloc_node *node;
   struct argsalloc_node *next_node;
@@ -81,7 +81,7 @@ void argsfreeall(struct record_thread *prect)
   }
 }
 
-struct argsalloc_node *new_argsalloc_node(void *slab, size_t size)
+struct argsalloc_node *__new_argsalloc_node(void *slab, size_t size)
 {
   struct argsalloc_node *new_node;
   new_node = KMALLOC(sizeof(struct argsalloc_node), GFP_KERNEL);
@@ -102,10 +102,10 @@ struct argsalloc_node *new_argsalloc_node(void *slab, size_t size)
 /*
  * Adds another slab for args/retparams/signals allocation,
  * if no slab exists, then we create one */
-int add_argsalloc_node(struct record_thread *prect, void *slab, size_t size)
+int __add_argsalloc_node(struct record_thread *prect, void *slab, size_t size)
 {
   struct argsalloc_node *new_node;
-  new_node = new_argsalloc_node(slab, size);
+  new_node = __new_argsalloc_node(slab, size);
   if (new_node == NULL)
   {
     TPRINT("Pid %d add_argsalloc_node: could not create new argsalloc_node\n", prect->rp_record_pid);
@@ -118,7 +118,7 @@ int add_argsalloc_node(struct record_thread *prect, void *slab, size_t size)
   return 0;
 }
 
-void *argsalloc(size_t size)
+void *__argsalloc(size_t size)
 {
   struct record_thread *prect = get_record_thread();
   struct argsalloc_node *node;
@@ -142,7 +142,7 @@ void *argsalloc(size_t size)
       TPRINT("Pid %d argsalloc: couldn't alloc slab with size %lu\n", current->pid, asize);
       return NULL;
     }
-    rc = add_argsalloc_node(prect, slab, asize);
+    rc = __add_argsalloc_node(prect, slab, asize);
     if (rc)
     {
       TPRINT("Pid %d argalloc: problem adding argsalloc_node\n", current->pid);

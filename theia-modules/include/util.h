@@ -116,15 +116,15 @@ extern unsigned int syslog_recs;
 #define VMALLOC vmalloc
 #define VFREE vfree
 #define argsalloc_size (512 * 1024)
-#define ARGSKMALLOC(size, flags...) argsalloc(size)
-#define ARGSKFREE(ptr, size...) argsfree(ptr, size)
-void *argsalloc(size_t);
-void argsfree(const void*, size_t);
-void argsfreeall(struct record_thread*);
-char *argshead(struct record_thread*);
-void argsconsume(struct record_thread*, u_long);
-struct argsalloc_node *new_argsalloc_node(void*, size_t);
-int add_argsalloc_node(struct record_thread*, void*, size_t);
+#define ARGSKMALLOC(size, flags...) __argsalloc(size)
+#define ARGSKFREE(ptr, size...) __argsfree(ptr, size)
+void *__argsalloc(size_t);
+void __argsfree(const void*, size_t);
+void __argsfreeall(struct record_thread*);
+char *__argshead(struct record_thread*);
+void __argsconsume(struct record_thread*, u_long);
+struct argsalloc_node *__new_argsalloc_node(void*, size_t);
+int __add_argsalloc_node(struct record_thread*, void*, size_t);
 
 #define SIGNAL_WHILE_SYSCALL_IGNORED 405
 #define REPLAY_STATUS_RUNNING         0 // I am the running thread - should only be one of these per group
@@ -302,7 +302,7 @@ static inline long __cget_next_syscall_enter(struct replay_thread *prt, struct r
     }
     // log overflowed and we need to read in next batch of records
     MPRINT("Pid %d recpid %d syscall %d reached end of in-memory log -- free previous syscall records and rad in new ones\n", current->pid, prect->rp_record_pid, syscall);
-    argsfreeall(prect);
+    __argsfreeall(prect);
     prect->rp_in_ptr = 0;
     read_log_data(prect);
     if (prect->rp_in_ptr == 0)
@@ -319,8 +319,8 @@ static inline long __cget_next_syscall_enter(struct replay_thread *prt, struct r
   start_clock = prt->rp_expected_clock;
   if (psr->flags & SR_HAS_START_CLOCK_SKIP)
   {
-    pclock = (u_long *) argshead(prect);
-    argsconsume(prect, sizeof(u_long));
+    pclock = (u_long *) __argshead(prect);
+    __argsconsume(prect, sizeof(u_long));
     start_clock += *pclock;
     if (start_clock > 100000000) TPRINT("start_clock %ld, pclock %ld, prt->rp_expected_clock %ld\n", start_clock, *pclock, prt->rp_expected_clock);
   }
@@ -350,18 +350,18 @@ static inline long __cget_next_syscall_enter(struct replay_thread *prt, struct r
   }
   else
   {
-    retval = *((long *) argshead(prect));
+    retval = *((long *) __argshead(prect));
     TPRINT("argsconsume called at %d, size: %lu\n", __LINE__, sizeof(long));
-    argsconsume(prect, sizeof(long));
+    __argsconsume(prect, sizeof(long));
   }
 
   // Pin can interrupt, so we need to save the stop clock in case we need to resume
   prt->rp_stop_clock_save = prt->rp_expected_clock;
   if (psr->flags & SR_HAS_STOP_CLOCK_SKIP)   // Nead to read this in exactly this order but use it later
   {
-    prt->rp_stop_clock_skip = *((u_long *) argshead(prect));
+    prt->rp_stop_clock_skip = *((u_long *) __argshead(prect));
     MPRINT("Stop clock skip is %lu\n", prt->rp_stop_clock_skip);
-    argsconsume(prect, sizeof(u_long));
+    __argsconsume(prect, sizeof(u_long));
     prt->rp_stop_clock_save += prt->rp_stop_clock_skip;
   }
 
@@ -369,7 +369,7 @@ static inline long __cget_next_syscall_enter(struct replay_thread *prt, struct r
   {
     if (psr->flags & SR_HAS_RETPARAMS)
     {
-      *ppretparams = argshead(prect);
+      *ppretparams = __argshead(prect);
     }
     else
     {
