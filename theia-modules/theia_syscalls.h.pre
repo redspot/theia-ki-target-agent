@@ -137,5 +137,11 @@ SC_LTTNG_TRACEPOINT_EVENT(sync,
     TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)))
 )
 
+SC_LTTNG_TRACEPOINT_EVENT(chdir,
+	TP_PROTO(sc_exit(long ret,) const char * filename),
+	TP_ARGS(sc_exit(ret,) filename),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(filename, filename)))
+)
+
 PRAGMA GCC diagnostic pop
 ENDIF
