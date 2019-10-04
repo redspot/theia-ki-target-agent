@@ -114,7 +114,7 @@ static int read_log_data_internal(struct record_thread *prect, struct syscall_re
   if (data_len > 0)
   {
     slab = VMALLOC(data_len);
-    rc = __add_argsalloc_node(prect, slab, data_len);
+    rc = add_argsalloc_node(prect, slab, data_len);
     if (rc)
     {
       TPRINT("read_log_data_internal: pid %d argalloc: problem adding argsalloc_node\n", current->pid);
@@ -180,7 +180,7 @@ void write_and_free_kernel_log(struct record_thread *prect)
   }
   set_fs(old_fs);
 
-  __argsfreeall(prect);
+  argsfreeall(prect);
 }
 
 struct file *init_log_write(struct record_thread *prect, loff_t *ppos, int *pfd)

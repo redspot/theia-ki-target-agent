@@ -318,7 +318,7 @@
   struct replay_thread *rep_th; \
   pr_debug("%s: enter, pid=%d\n", __func__, current->pid); \
   try_module_get(THIS_MODULE); \
-  rec_th = get_record_thread(); \
+  rec_th = theia_recording_toggle ? get_record_thread() : NULL; \
   if (rec_th) { \
     if (rec_th->rp_ignore_flag_addr) { \
       get_user(ignore_flag, rec_th->rp_ignore_flag_addr); \

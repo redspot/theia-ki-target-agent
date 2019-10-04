@@ -351,6 +351,9 @@ extern struct replay_stats rstats;
 long get_replay_stats(struct replay_stats __user*);
 #endif
 
+/* Global runtime flags and other bits */
+extern bool theia_recording_toggle;
+
 /* For synchronization points in kernel outside of replay.c */
 #define TID_WAKE_CALL 500
 

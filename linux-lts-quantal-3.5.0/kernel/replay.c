@@ -3913,7 +3913,7 @@ static struct clog_node *new_clog_node(void *slab, size_t size)
 /*
  * Adds another slab for args/retparams/signals allocation,
  * if no slab exists, then we create one */
-static int add_argsalloc_node(struct record_thread *prect, void *slab, size_t size)
+int add_argsalloc_node(struct record_thread *prect, void *slab, size_t size)
 {
   struct argsalloc_node *new_node;
   new_node = new_argsalloc_node(slab, size);
@@ -3928,6 +3928,7 @@ static int add_argsalloc_node(struct record_thread *prect, void *slab, size_t si
   list_add(&new_node->list, &prect->rp_argsalloc_list);
   return 0;
 }
+EXPORT_SYMBOL(add_argsalloc_node);
 
 #ifdef LOG_COMPRESS_1
 static int add_compress_node(struct record_thread *prect, void *slab, size_t size, struct list_head *rp_list)
@@ -3953,7 +3954,7 @@ static int inline add_clog_node(struct record_thread *prect, void *slab, size_t 
 }
 #endif
 
-static void *argsalloc(size_t size)
+void *argsalloc(size_t size)
 {
   struct record_thread *prect = current->record_thrd;
   struct argsalloc_node *node;
@@ -4051,6 +4052,7 @@ static void *argsalloc(size_t size)
 
   return ptr;
 }
+EXPORT_SYMBOL(argsalloc);
 
 #ifdef LOG_COMPRESS_1
 static void *compressalloc(size_t size, struct list_head *rp_list)
@@ -4104,8 +4106,7 @@ static inline void *clogalloc(size_t size)
 #endif
 
 /* Simplified method to return pointer to next data to consume on replay */
-static char *
-argshead(struct record_thread *prect)
+char *argshead(struct record_thread *prect)
 {
   struct argsalloc_node *node;
   node = list_first_entry(&prect->rp_argsalloc_list, struct argsalloc_node, list);
@@ -4116,11 +4117,10 @@ argshead(struct record_thread *prect)
   }
   return node->pos;
 }
-
+EXPORT_SYMBOL(argshead);
 
 /* Simplified method to advance pointer on replay */
-static void
-argsconsume(struct record_thread *prect, u_long size)
+void argsconsume(struct record_thread *prect, u_long size)
 {
   struct argsalloc_node *node;
   node = list_first_entry(&prect->rp_argsalloc_list, struct argsalloc_node, list);
@@ -4138,6 +4138,7 @@ argsconsume(struct record_thread *prect, u_long size)
   TPRINT("in argsconsume: size %lu\n", size);
   node->pos += size;
 }
+EXPORT_SYMBOL(argsconsume);
 
 #ifdef LOG_COMPRESS_1
 static inline struct clog_node *clog_alloc(int size)
@@ -4202,7 +4203,7 @@ static void argsfree(const void *ptr, size_t size)
 }
 
 // Free all allocated data values at once
-static void argsfreeall(struct record_thread *prect)
+void argsfreeall(struct record_thread *prect)
 {
   struct argsalloc_node *node;
   struct argsalloc_node *next_node;
@@ -4214,6 +4215,7 @@ static void argsfreeall(struct record_thread *prect)
     KFREE(node);
   }
 }
+EXPORT_SYMBOL(argsfreeall);
 
 #ifdef LOG_COMPRESS_1
 static void compressfree(const void *ptr, size_t size, struct list_head *rp_list)
