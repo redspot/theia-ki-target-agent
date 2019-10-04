@@ -215,5 +215,731 @@ SC_LTTNG_TRACEPOINT_EVENT(inotify_init,
 	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)))
 )
 
+SC_LTTNG_TRACEPOINT_EVENT(mknod,
+	TP_PROTO(sc_exit(long ret,) const char * filename, umode_t mode, unsigned dev),
+	TP_ARGS(sc_exit(ret,) filename, mode, dev),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(filename, filename)) sc_in(ctf_integer(umode_t, mode, mode)) sc_in(ctf_integer(unsigned, dev, dev)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(lseek,
+	TP_PROTO(sc_exit(long ret,) unsigned int fd, off_t offset, unsigned int whence),
+	TP_ARGS(sc_exit(ret,) fd, offset, whence),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, fd, fd)) sc_in(ctf_integer(off_t, offset, offset)) sc_in(ctf_integer(unsigned int, whence, whence)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(access,
+	TP_PROTO(sc_exit(long ret,) const char * filename, int mode),
+	TP_ARGS(sc_exit(ret,) filename, mode),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(filename, filename)) sc_in(ctf_integer(int, mode, mode)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(dup,
+	TP_PROTO(sc_exit(long ret,) unsigned int fildes),
+	TP_ARGS(sc_exit(ret,) fildes),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, fildes, fildes)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(dup2,
+	TP_PROTO(sc_exit(long ret,) unsigned int oldfd, unsigned int newfd),
+	TP_ARGS(sc_exit(ret,) oldfd, newfd),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, oldfd, oldfd)) sc_in(ctf_integer(unsigned int, newfd, newfd)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(alarm,
+	TP_PROTO(sc_exit(long ret,) unsigned int seconds),
+	TP_ARGS(sc_exit(ret,) seconds),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, seconds, seconds)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(utime,
+	TP_PROTO(sc_exit(long ret,) char * filename, struct utimbuf * times),
+	TP_ARGS(sc_exit(ret,) filename, times),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(filename, filename)) sc_in(ctf_integer(struct utimbuf *, times, times)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(kill,
+	TP_PROTO(sc_exit(long ret,) pid_t pid, int sig),
+	TP_ARGS(sc_exit(ret,) pid, sig),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(pid_t, pid, pid)) sc_in(ctf_integer(int, sig, sig)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(rename,
+	TP_PROTO(sc_exit(long ret,) const char * oldname, const char * newname),
+	TP_ARGS(sc_exit(ret,) oldname, newname),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(oldname, oldname)) sc_in(ctf_user_string(newname, newname)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(mkdir,
+	TP_PROTO(sc_exit(long ret,) const char * pathname, umode_t mode),
+	TP_ARGS(sc_exit(ret,) pathname, mode),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(pathname, pathname)) sc_in(ctf_integer(umode_t, mode, mode)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(rmdir,
+	TP_PROTO(sc_exit(long ret,) const char * pathname),
+	TP_ARGS(sc_exit(ret,) pathname),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(pathname, pathname)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(acct,
+	TP_PROTO(sc_exit(long ret,) const char * name),
+	TP_ARGS(sc_exit(ret,) name),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(name, name)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(umount,
+	TP_PROTO(sc_exit(long ret,) char * name, int flags),
+	TP_ARGS(sc_exit(ret,) name, flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(name, name)) sc_in(ctf_integer(int, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(umask,
+	TP_PROTO(sc_exit(long ret,) int mask),
+	TP_ARGS(sc_exit(ret,) mask),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, mask, mask)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(chroot,
+	TP_PROTO(sc_exit(long ret,) const char * filename),
+	TP_ARGS(sc_exit(ret,) filename),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(filename, filename)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(sethostname,
+	TP_PROTO(sc_exit(long ret,) char * name, int len),
+	TP_ARGS(sc_exit(ret,) name, len),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(name, name)) sc_in(ctf_integer(int, len, len)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(settimeofday,
+	TP_PROTO(sc_exit(long ret,) struct timeval * tv, struct timezone * tz),
+	TP_ARGS(sc_exit(ret,) tv, tz),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(struct timeval *, tv, tv)) sc_in(ctf_integer(struct timezone *, tz, tz)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(symlink,
+	TP_PROTO(sc_exit(long ret,) const char * oldname, const char * newname),
+	TP_ARGS(sc_exit(ret,) oldname, newname),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(oldname, oldname)) sc_in(ctf_user_string(newname, newname)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(swapon,
+	TP_PROTO(sc_exit(long ret,) const char * specialfile, int swap_flags),
+	TP_ARGS(sc_exit(ret,) specialfile, swap_flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(specialfile, specialfile)) sc_in(ctf_integer(int, swap_flags, swap_flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(reboot,
+	TP_PROTO(sc_exit(long ret,) int magic1, int magic2, unsigned int cmd, void * arg),
+	TP_ARGS(sc_exit(ret,) magic1, magic2, cmd, arg),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, magic1, magic1)) sc_in(ctf_integer(int, magic2, magic2)) sc_in(ctf_integer(unsigned int, cmd, cmd)) sc_in(ctf_integer(void *, arg, arg)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(truncate,
+	TP_PROTO(sc_exit(long ret,) const char * path, long length),
+	TP_ARGS(sc_exit(ret,) path, length),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(path, path)) sc_in(ctf_integer(long, length, length)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(ftruncate,
+	TP_PROTO(sc_exit(long ret,) unsigned int fd, unsigned long length),
+	TP_ARGS(sc_exit(ret,) fd, length),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, fd, fd)) sc_in(ctf_integer(unsigned long, length, length)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(getpriority,
+	TP_PROTO(sc_exit(long ret,) int which, int who),
+	TP_ARGS(sc_exit(ret,) which, who),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, which, which)) sc_in(ctf_integer(int, who, who)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(setpriority,
+	TP_PROTO(sc_exit(long ret,) int which, int who, int niceval),
+	TP_ARGS(sc_exit(ret,) which, who, niceval),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, which, which)) sc_in(ctf_integer(int, who, who)) sc_in(ctf_integer(int, niceval, niceval)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(swapoff,
+	TP_PROTO(sc_exit(long ret,) const char * specialfile),
+	TP_ARGS(sc_exit(ret,) specialfile),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(specialfile, specialfile)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(semget,
+	TP_PROTO(sc_exit(long ret,) key_t key, int nsems, int semflg),
+	TP_ARGS(sc_exit(ret,) key, nsems, semflg),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(key_t, key, key)) sc_in(ctf_integer(int, nsems, nsems)) sc_in(ctf_integer(int, semflg, semflg)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(semop,
+	TP_PROTO(sc_exit(long ret,) int semid, struct sembuf * tsops, unsigned nsops),
+	TP_ARGS(sc_exit(ret,) semid, tsops, nsops),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, semid, semid)) sc_in(ctf_integer(struct sembuf *, tsops, tsops)) sc_in(ctf_integer(unsigned, nsops, nsops)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(semtimedop,
+	TP_PROTO(sc_exit(long ret,) int semid, struct sembuf * tsops, unsigned nsops, const struct timespec * timeout),
+	TP_ARGS(sc_exit(ret,) semid, tsops, nsops, timeout),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, semid, semid)) sc_in(ctf_integer(struct sembuf *, tsops, tsops)) sc_in(ctf_integer(unsigned, nsops, nsops)) sc_inout(ctf_integer(const struct timespec *, timeout, timeout)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(msgget,
+	TP_PROTO(sc_exit(long ret,) key_t key, int msgflg),
+	TP_ARGS(sc_exit(ret,) key, msgflg),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(key_t, key, key)) sc_in(ctf_integer(int, msgflg, msgflg)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(msgsnd,
+	TP_PROTO(sc_exit(long ret,) int msqid, struct msgbuf * msgp, size_t msgsz, int msgflg),
+	TP_ARGS(sc_exit(ret,) msqid, msgp, msgsz, msgflg),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, msqid, msqid)) sc_in(ctf_integer(struct msgbuf *, msgp, msgp)) sc_in(ctf_integer(size_t, msgsz, msgsz)) sc_in(ctf_integer(int, msgflg, msgflg)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(fsync,
+	TP_PROTO(sc_exit(long ret,) unsigned int fd),
+	TP_ARGS(sc_exit(ret,) fd),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, fd, fd)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(setdomainname,
+	TP_PROTO(sc_exit(long ret,) char * name, int len),
+	TP_ARGS(sc_exit(ret,) name, len),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(name, name)) sc_in(ctf_integer(int, len, len)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(init_module,
+	TP_PROTO(sc_exit(long ret,) void * umod, unsigned long len, const char * uargs),
+	TP_ARGS(sc_exit(ret,) umod, len, uargs),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(void *, umod, umod)) sc_in(ctf_integer(unsigned long, len, len)) sc_in(ctf_integer(const char *, uargs, uargs)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(delete_module,
+	TP_PROTO(sc_exit(long ret,) const char * name_user, unsigned int flags),
+	TP_ARGS(sc_exit(ret,) name_user, flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(name_user, name_user)) sc_in(ctf_integer(unsigned int, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(getpgid,
+	TP_PROTO(sc_exit(long ret,) pid_t pid),
+	TP_ARGS(sc_exit(ret,) pid),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(pid_t, pid, pid)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(fchdir,
+	TP_PROTO(sc_exit(long ret,) unsigned int fd),
+	TP_ARGS(sc_exit(ret,) fd),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, fd, fd)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(personality,
+	TP_PROTO(sc_exit(long ret,) unsigned int personality),
+	TP_ARGS(sc_exit(ret,) personality),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, personality, personality)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(flock,
+	TP_PROTO(sc_exit(long ret,) unsigned int fd, unsigned int cmd),
+	TP_ARGS(sc_exit(ret,) fd, cmd),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, fd, fd)) sc_in(ctf_integer(unsigned int, cmd, cmd)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(msync,
+	TP_PROTO(sc_exit(long ret,) unsigned long start, size_t len, int flags),
+	TP_ARGS(sc_exit(ret,) start, len, flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned long, start, start)) sc_in(ctf_integer(size_t, len, len)) sc_in(ctf_integer(int, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(getsid,
+	TP_PROTO(sc_exit(long ret,) pid_t pid),
+	TP_ARGS(sc_exit(ret,) pid),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(pid_t, pid, pid)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(fdatasync,
+	TP_PROTO(sc_exit(long ret,) unsigned int fd),
+	TP_ARGS(sc_exit(ret,) fd),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, fd, fd)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(mlock,
+	TP_PROTO(sc_exit(long ret,) unsigned long start, size_t len),
+	TP_ARGS(sc_exit(ret,) start, len),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned long, start, start)) sc_in(ctf_integer(size_t, len, len)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(munlock,
+	TP_PROTO(sc_exit(long ret,) unsigned long start, size_t len),
+	TP_ARGS(sc_exit(ret,) start, len),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned long, start, start)) sc_in(ctf_integer(size_t, len, len)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(mlockall,
+	TP_PROTO(sc_exit(long ret,) int flags),
+	TP_ARGS(sc_exit(ret,) flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(sched_setparam,
+	TP_PROTO(sc_exit(long ret,) pid_t pid, struct sched_param * param),
+	TP_ARGS(sc_exit(ret,) pid, param),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(pid_t, pid, pid)) sc_in(ctf_integer(struct sched_param *, param, param)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(sched_setscheduler,
+	TP_PROTO(sc_exit(long ret,) pid_t pid, int policy, struct sched_param * param),
+	TP_ARGS(sc_exit(ret,) pid, policy, param),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(pid_t, pid, pid)) sc_in(ctf_integer(int, policy, policy)) sc_in(ctf_integer(struct sched_param *, param, param)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(sched_getscheduler,
+	TP_PROTO(sc_exit(long ret,) pid_t pid),
+	TP_ARGS(sc_exit(ret,) pid),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(pid_t, pid, pid)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(sched_get_priority_max,
+	TP_PROTO(sc_exit(long ret,) int policy),
+	TP_ARGS(sc_exit(ret,) policy),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, policy, policy)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(sched_get_priority_min,
+	TP_PROTO(sc_exit(long ret,) int policy),
+	TP_ARGS(sc_exit(ret,) policy),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, policy, policy)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(rt_sigqueueinfo,
+	TP_PROTO(sc_exit(long ret,) pid_t pid, int sig, siginfo_t * uinfo),
+	TP_ARGS(sc_exit(ret,) pid, sig, uinfo),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(pid_t, pid, pid)) sc_in(ctf_integer(int, sig, sig)) sc_in(ctf_integer(siginfo_t *, uinfo, uinfo)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(rt_sigsuspend,
+	TP_PROTO(sc_exit(long ret,) sigset_t * unewset, size_t sigsetsize),
+	TP_ARGS(sc_exit(ret,) unewset, sigsetsize),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(sigset_t *, unewset, unewset)) sc_in(ctf_integer(size_t, sigsetsize, sigsetsize)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(setpgid,
+	TP_PROTO(sc_exit(long ret,) pid_t pid, pid_t pgid),
+	TP_ARGS(sc_exit(ret,) pid, pgid),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(pid_t, pid, pid)) sc_in(ctf_integer(pid_t, pgid, pgid)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(setregid,
+	TP_PROTO(sc_exit(long ret,) gid_t rgid, gid_t egid),
+	TP_ARGS(sc_exit(ret,) rgid, egid),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(gid_t, rgid, rgid)) sc_in(ctf_integer(gid_t, egid, egid)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(setgroups,
+	TP_PROTO(sc_exit(long ret,) int gidsetsize, gid_t * grouplist),
+	TP_ARGS(sc_exit(ret,) gidsetsize, grouplist),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, gidsetsize, gidsetsize)) sc_in(ctf_integer(gid_t *, grouplist, grouplist)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(setresgid,
+	TP_PROTO(sc_exit(long ret,) gid_t rgid, gid_t egid, gid_t sgid),
+	TP_ARGS(sc_exit(ret,) rgid, egid, sgid),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(gid_t, rgid, rgid)) sc_in(ctf_integer(gid_t, egid, egid)) sc_in(ctf_integer(gid_t, sgid, sgid)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(setgid,
+	TP_PROTO(sc_exit(long ret,) gid_t gid),
+	TP_ARGS(sc_exit(ret,) gid),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(gid_t, gid, gid)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(setfsuid,
+	TP_PROTO(sc_exit(long ret,) uid_t uid),
+	TP_ARGS(sc_exit(ret,) uid),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(uid_t, uid, uid)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(setfsgid,
+	TP_PROTO(sc_exit(long ret,) gid_t gid),
+	TP_ARGS(sc_exit(ret,) gid),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(gid_t, gid, gid)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(pivot_root,
+	TP_PROTO(sc_exit(long ret,) const char * new_root, const char * put_old),
+	TP_ARGS(sc_exit(ret,) new_root, put_old),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(new_root, new_root)) sc_in(ctf_user_string(put_old, put_old)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(readahead,
+	TP_PROTO(sc_exit(long ret,) int fd, loff_t offset, size_t count),
+	TP_ARGS(sc_exit(ret,) fd, offset, count),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, fd, fd)) sc_in(ctf_integer(loff_t, offset, offset)) sc_in(ctf_integer(size_t, count, count)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(setxattr,
+	TP_PROTO(sc_exit(long ret,) const char * pathname, const char * name, const void * value, size_t size, int flags),
+	TP_ARGS(sc_exit(ret,) pathname, name, value, size, flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(pathname, pathname)) sc_in(ctf_user_string(name, name)) sc_in(ctf_integer(const void *, value, value)) sc_in(ctf_integer(size_t, size, size)) sc_in(ctf_integer(int, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(lsetxattr,
+	TP_PROTO(sc_exit(long ret,) const char * pathname, const char * name, const void * value, size_t size, int flags),
+	TP_ARGS(sc_exit(ret,) pathname, name, value, size, flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(pathname, pathname)) sc_in(ctf_user_string(name, name)) sc_in(ctf_integer(const void *, value, value)) sc_in(ctf_integer(size_t, size, size)) sc_in(ctf_integer(int, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(fsetxattr,
+	TP_PROTO(sc_exit(long ret,) int fd, const char * name, const void * value, size_t size, int flags),
+	TP_ARGS(sc_exit(ret,) fd, name, value, size, flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, fd, fd)) sc_in(ctf_user_string(name, name)) sc_in(ctf_integer(const void *, value, value)) sc_in(ctf_integer(size_t, size, size)) sc_in(ctf_integer(int, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(removexattr,
+	TP_PROTO(sc_exit(long ret,) const char * pathname, const char * name),
+	TP_ARGS(sc_exit(ret,) pathname, name),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(pathname, pathname)) sc_in(ctf_user_string(name, name)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(lremovexattr,
+	TP_PROTO(sc_exit(long ret,) const char * pathname, const char * name),
+	TP_ARGS(sc_exit(ret,) pathname, name),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(pathname, pathname)) sc_in(ctf_user_string(name, name)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(fremovexattr,
+	TP_PROTO(sc_exit(long ret,) int fd, const char * name),
+	TP_ARGS(sc_exit(ret,) fd, name),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, fd, fd)) sc_in(ctf_user_string(name, name)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(tkill,
+	TP_PROTO(sc_exit(long ret,) pid_t pid, int sig),
+	TP_ARGS(sc_exit(ret,) pid, sig),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(pid_t, pid, pid)) sc_in(ctf_integer(int, sig, sig)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(sched_setaffinity,
+	TP_PROTO(sc_exit(long ret,) pid_t pid, unsigned int len, unsigned long * user_mask_ptr),
+	TP_ARGS(sc_exit(ret,) pid, len, user_mask_ptr),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(pid_t, pid, pid)) sc_in(ctf_integer(unsigned int, len, len)) sc_in(ctf_integer(unsigned long *, user_mask_ptr, user_mask_ptr)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(io_destroy,
+	TP_PROTO(sc_exit(long ret,) aio_context_t ctx),
+	TP_ARGS(sc_exit(ret,) ctx),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(aio_context_t, ctx, ctx)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(io_submit,
+	TP_PROTO(sc_exit(long ret,) aio_context_t ctx_id, long nr, struct iocb * * iocbpp),
+	TP_ARGS(sc_exit(ret,) ctx_id, nr, iocbpp),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(aio_context_t, ctx_id, ctx_id)) sc_in(ctf_integer(long, nr, nr)) sc_in(ctf_integer(struct iocb * *, iocbpp, iocbpp)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(fadvise64,
+	TP_PROTO(sc_exit(long ret,) int fd, loff_t offset, size_t len, int advice),
+	TP_ARGS(sc_exit(ret,) fd, offset, len, advice),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, fd, fd)) sc_in(ctf_integer(loff_t, offset, offset)) sc_in(ctf_integer(size_t, len, len)) sc_in(ctf_integer(int, advice, advice)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(epoll_create,
+	TP_PROTO(sc_exit(long ret,) int size),
+	TP_ARGS(sc_exit(ret,) size),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, size, size)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(epoll_ctl,
+	TP_PROTO(sc_exit(long ret,) int epfd, int op, int fd, struct epoll_event * event),
+	TP_ARGS(sc_exit(ret,) epfd, op, fd, event),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, epfd, epfd)) sc_in(ctf_integer(int, op, op)) sc_in(ctf_integer(int, fd, fd)) sc_in(ctf_integer(struct epoll_event *, event, event)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(timer_getoverrun,
+	TP_PROTO(sc_exit(long ret,) timer_t timer_id),
+	TP_ARGS(sc_exit(ret,) timer_id),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(timer_t, timer_id, timer_id)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(timer_delete,
+	TP_PROTO(sc_exit(long ret,) timer_t timer_id),
+	TP_ARGS(sc_exit(ret,) timer_id),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(timer_t, timer_id, timer_id)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(clock_settime,
+	TP_PROTO(sc_exit(long ret,) const clockid_t which_clock, const struct timespec * tp),
+	TP_ARGS(sc_exit(ret,) which_clock, tp),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(const clockid_t, which_clock, which_clock)) sc_in(ctf_integer(const struct timespec *, tp, tp)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(tgkill,
+	TP_PROTO(sc_exit(long ret,) pid_t tgid, pid_t pid, int sig),
+	TP_ARGS(sc_exit(ret,) tgid, pid, sig),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(pid_t, tgid, tgid)) sc_in(ctf_integer(pid_t, pid, pid)) sc_in(ctf_integer(int, sig, sig)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(utimes,
+	TP_PROTO(sc_exit(long ret,) char * filename, struct timeval * utimes),
+	TP_ARGS(sc_exit(ret,) filename, utimes),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(filename, filename)) sc_in(ctf_integer(struct timeval *, utimes, utimes)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(mbind,
+	TP_PROTO(sc_exit(long ret,) unsigned long start, unsigned long len, unsigned long mode, unsigned long * nmask, unsigned long maxnode, unsigned flags),
+	TP_ARGS(sc_exit(ret,) start, len, mode, nmask, maxnode, flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned long, start, start)) sc_in(ctf_integer(unsigned long, len, len)) sc_in(ctf_integer(unsigned long, mode, mode)) sc_in(ctf_integer(unsigned long *, nmask, nmask)) sc_in(ctf_integer(unsigned long, maxnode, maxnode)) sc_in(ctf_integer(unsigned, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(set_mempolicy,
+	TP_PROTO(sc_exit(long ret,) int mode, unsigned long * nmask, unsigned long maxnode),
+	TP_ARGS(sc_exit(ret,) mode, nmask, maxnode),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, mode, mode)) sc_in(ctf_integer(unsigned long *, nmask, nmask)) sc_in(ctf_integer(unsigned long, maxnode, maxnode)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(mq_open,
+	TP_PROTO(sc_exit(long ret,) const char * u_name, int oflag, umode_t mode, struct mq_attr * u_attr),
+	TP_ARGS(sc_exit(ret,) u_name, oflag, mode, u_attr),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(u_name, u_name)) sc_in(ctf_integer(int, oflag, oflag)) sc_in(ctf_integer(umode_t, mode, mode)) sc_in(ctf_integer(struct mq_attr *, u_attr, u_attr)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(mq_unlink,
+	TP_PROTO(sc_exit(long ret,) const char * u_name),
+	TP_ARGS(sc_exit(ret,) u_name),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(u_name, u_name)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(mq_timedsend,
+	TP_PROTO(sc_exit(long ret,) mqd_t mqdes, const char * u_msg_ptr, size_t msg_len, unsigned int msg_prio, const struct timespec * u_abs_timeout),
+	TP_ARGS(sc_exit(ret,) mqdes, u_msg_ptr, msg_len, msg_prio, u_abs_timeout),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(mqd_t, mqdes, mqdes)) sc_in(ctf_integer(const char *, u_msg_ptr, u_msg_ptr)) sc_in(ctf_integer(size_t, msg_len, msg_len)) sc_in(ctf_integer(unsigned int, msg_prio, msg_prio)) sc_in(ctf_integer(const struct timespec *, u_abs_timeout, u_abs_timeout)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(mq_notify,
+	TP_PROTO(sc_exit(long ret,) mqd_t mqdes, const struct sigevent * u_notification),
+	TP_ARGS(sc_exit(ret,) mqdes, u_notification),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(mqd_t, mqdes, mqdes)) sc_in(ctf_integer(const struct sigevent *, u_notification, u_notification)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(kexec_load,
+	TP_PROTO(sc_exit(long ret,) unsigned long entry, unsigned long nr_segments, struct kexec_segment * segments, unsigned long flags),
+	TP_ARGS(sc_exit(ret,) entry, nr_segments, segments, flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned long, entry, entry)) sc_in(ctf_integer(unsigned long, nr_segments, nr_segments)) sc_in(ctf_integer(struct kexec_segment *, segments, segments)) sc_in(ctf_integer(unsigned long, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(add_key,
+	TP_PROTO(sc_exit(long ret,) const char * _type, const char * _description, const void * _payload, size_t plen, key_serial_t ringid),
+	TP_ARGS(sc_exit(ret,) _type, _description, _payload, plen, ringid),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(_type, _type)) sc_in(ctf_integer(const char *, _description, _description)) sc_in(ctf_integer(const void *, _payload, _payload)) sc_in(ctf_integer(size_t, plen, plen)) sc_in(ctf_integer(key_serial_t, ringid, ringid)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(request_key,
+	TP_PROTO(sc_exit(long ret,) const char * _type, const char * _description, const char * _callout_info, key_serial_t destringid),
+	TP_ARGS(sc_exit(ret,) _type, _description, _callout_info, destringid),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(_type, _type)) sc_in(ctf_integer(const char *, _description, _description)) sc_in(ctf_integer(const char *, _callout_info, _callout_info)) sc_in(ctf_integer(key_serial_t, destringid, destringid)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(ioprio_set,
+	TP_PROTO(sc_exit(long ret,) int which, int who, int ioprio),
+	TP_ARGS(sc_exit(ret,) which, who, ioprio),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, which, which)) sc_in(ctf_integer(int, who, who)) sc_in(ctf_integer(int, ioprio, ioprio)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(ioprio_get,
+	TP_PROTO(sc_exit(long ret,) int which, int who),
+	TP_ARGS(sc_exit(ret,) which, who),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, which, which)) sc_in(ctf_integer(int, who, who)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(inotify_add_watch,
+	TP_PROTO(sc_exit(long ret,) int fd, const char * pathname, u32 mask),
+	TP_ARGS(sc_exit(ret,) fd, pathname, mask),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, fd, fd)) sc_in(ctf_user_string(pathname, pathname)) sc_in(ctf_integer(u32, mask, mask)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(inotify_rm_watch,
+	TP_PROTO(sc_exit(long ret,) int fd, __s32 wd),
+	TP_ARGS(sc_exit(ret,) fd, wd),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, fd, fd)) sc_in(ctf_integer(__s32, wd, wd)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(migrate_pages,
+	TP_PROTO(sc_exit(long ret,) pid_t pid, unsigned long maxnode, const unsigned long * old_nodes, const unsigned long * new_nodes),
+	TP_ARGS(sc_exit(ret,) pid, maxnode, old_nodes, new_nodes),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(pid_t, pid, pid)) sc_in(ctf_integer(unsigned long, maxnode, maxnode)) sc_in(ctf_integer(const unsigned long *, old_nodes, old_nodes)) sc_in(ctf_integer(const unsigned long *, new_nodes, new_nodes)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(mkdirat,
+	TP_PROTO(sc_exit(long ret,) int dfd, const char * pathname, umode_t mode),
+	TP_ARGS(sc_exit(ret,) dfd, pathname, mode),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, dfd, dfd)) sc_in(ctf_user_string(pathname, pathname)) sc_in(ctf_integer(umode_t, mode, mode)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(mknodat,
+	TP_PROTO(sc_exit(long ret,) int dfd, const char * filename, umode_t mode, unsigned dev),
+	TP_ARGS(sc_exit(ret,) dfd, filename, mode, dev),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, dfd, dfd)) sc_in(ctf_user_string(filename, filename)) sc_in(ctf_integer(umode_t, mode, mode)) sc_in(ctf_integer(unsigned, dev, dev)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(futimesat,
+	TP_PROTO(sc_exit(long ret,) int dfd, const char * filename, struct timeval * utimes),
+	TP_ARGS(sc_exit(ret,) dfd, filename, utimes),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, dfd, dfd)) sc_in(ctf_user_string(filename, filename)) sc_in(ctf_integer(struct timeval *, utimes, utimes)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(renameat,
+	TP_PROTO(sc_exit(long ret,) int olddfd, const char * oldname, int newdfd, const char * newname),
+	TP_ARGS(sc_exit(ret,) olddfd, oldname, newdfd, newname),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, olddfd, olddfd)) sc_in(ctf_user_string(oldname, oldname)) sc_in(ctf_integer(int, newdfd, newdfd)) sc_in(ctf_user_string(newname, newname)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(linkat,
+	TP_PROTO(sc_exit(long ret,) int olddfd, const char * oldname, int newdfd, const char * newname, int flags),
+	TP_ARGS(sc_exit(ret,) olddfd, oldname, newdfd, newname, flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, olddfd, olddfd)) sc_in(ctf_user_string(oldname, oldname)) sc_in(ctf_integer(int, newdfd, newdfd)) sc_in(ctf_user_string(newname, newname)) sc_in(ctf_integer(int, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(symlinkat,
+	TP_PROTO(sc_exit(long ret,) const char * oldname, int newdfd, const char * newname),
+	TP_ARGS(sc_exit(ret,) oldname, newdfd, newname),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_user_string(oldname, oldname)) sc_in(ctf_integer(int, newdfd, newdfd)) sc_in(ctf_user_string(newname, newname)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(faccessat,
+	TP_PROTO(sc_exit(long ret,) int dfd, const char * filename, int mode),
+	TP_ARGS(sc_exit(ret,) dfd, filename, mode),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, dfd, dfd)) sc_in(ctf_user_string(filename, filename)) sc_in(ctf_integer(int, mode, mode)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(unshare,
+	TP_PROTO(sc_exit(long ret,) unsigned long unshare_flags),
+	TP_ARGS(sc_exit(ret,) unshare_flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned long, unshare_flags, unshare_flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(set_robust_list,
+	TP_PROTO(sc_exit(long ret,) struct robust_list_head * head, size_t len),
+	TP_ARGS(sc_exit(ret,) head, len),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(struct robust_list_head *, head, head)) sc_in(ctf_integer(size_t, len, len)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(tee,
+	TP_PROTO(sc_exit(long ret,) int fdin, int fdout, size_t len, unsigned int flags),
+	TP_ARGS(sc_exit(ret,) fdin, fdout, len, flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, fdin, fdin)) sc_in(ctf_integer(int, fdout, fdout)) sc_in(ctf_integer(size_t, len, len)) sc_in(ctf_integer(unsigned int, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(sync_file_range,
+	TP_PROTO(sc_exit(long ret,) int fd, loff_t offset, loff_t nbytes, unsigned int flags),
+	TP_ARGS(sc_exit(ret,) fd, offset, nbytes, flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, fd, fd)) sc_in(ctf_integer(loff_t, offset, offset)) sc_in(ctf_integer(loff_t, nbytes, nbytes)) sc_in(ctf_integer(unsigned int, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(vmsplice,
+	TP_PROTO(sc_exit(long ret,) int fd, const struct iovec * iov, unsigned long nr_segs, unsigned int flags),
+	TP_ARGS(sc_exit(ret,) fd, iov, nr_segs, flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, fd, fd)) sc_in(ctf_integer(const struct iovec *, iov, iov)) sc_in(ctf_integer(unsigned long, nr_segs, nr_segs)) sc_in(ctf_integer(unsigned int, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(utimensat,
+	TP_PROTO(sc_exit(long ret,) int dfd, const char * filename, struct timespec * utimes, int flags),
+	TP_ARGS(sc_exit(ret,) dfd, filename, utimes, flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, dfd, dfd)) sc_in(ctf_user_string(filename, filename)) sc_in(ctf_integer(struct timespec *, utimes, utimes)) sc_in(ctf_integer(int, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(signalfd,
+	TP_PROTO(sc_exit(long ret,) int ufd, sigset_t * user_mask, size_t sizemask),
+	TP_ARGS(sc_exit(ret,) ufd, user_mask, sizemask),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, ufd, ufd)) sc_in(ctf_integer(sigset_t *, user_mask, user_mask)) sc_in(ctf_integer(size_t, sizemask, sizemask)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(timerfd_create,
+	TP_PROTO(sc_exit(long ret,) int clockid, int flags),
+	TP_ARGS(sc_exit(ret,) clockid, flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, clockid, clockid)) sc_in(ctf_integer(int, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(eventfd,
+	TP_PROTO(sc_exit(long ret,) unsigned int count),
+	TP_ARGS(sc_exit(ret,) count),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, count, count)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(fallocate,
+	TP_PROTO(sc_exit(long ret,) int fd, int mode, loff_t offset, loff_t len),
+	TP_ARGS(sc_exit(ret,) fd, mode, offset, len),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, fd, fd)) sc_in(ctf_integer(int, mode, mode)) sc_in(ctf_integer(loff_t, offset, offset)) sc_in(ctf_integer(loff_t, len, len)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(signalfd4,
+	TP_PROTO(sc_exit(long ret,) int ufd, sigset_t * user_mask, size_t sizemask, int flags),
+	TP_ARGS(sc_exit(ret,) ufd, user_mask, sizemask, flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, ufd, ufd)) sc_in(ctf_integer(sigset_t *, user_mask, user_mask)) sc_in(ctf_integer(size_t, sizemask, sizemask)) sc_in(ctf_integer(int, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(eventfd2,
+	TP_PROTO(sc_exit(long ret,) unsigned int count, int flags),
+	TP_ARGS(sc_exit(ret,) count, flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, count, count)) sc_in(ctf_integer(int, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(epoll_create1,
+	TP_PROTO(sc_exit(long ret,) int flags),
+	TP_ARGS(sc_exit(ret,) flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(dup3,
+	TP_PROTO(sc_exit(long ret,) unsigned int oldfd, unsigned int newfd, int flags),
+	TP_ARGS(sc_exit(ret,) oldfd, newfd, flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, oldfd, oldfd)) sc_in(ctf_integer(unsigned int, newfd, newfd)) sc_in(ctf_integer(int, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(inotify_init1,
+	TP_PROTO(sc_exit(long ret,) int flags),
+	TP_ARGS(sc_exit(ret,) flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(rt_tgsigqueueinfo,
+	TP_PROTO(sc_exit(long ret,) pid_t tgid, pid_t pid, int sig, siginfo_t * uinfo),
+	TP_ARGS(sc_exit(ret,) tgid, pid, sig, uinfo),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(pid_t, tgid, tgid)) sc_in(ctf_integer(pid_t, pid, pid)) sc_in(ctf_integer(int, sig, sig)) sc_in(ctf_integer(siginfo_t *, uinfo, uinfo)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(perf_event_open,
+	TP_PROTO(sc_exit(long ret,) struct perf_event_attr * attr_uptr, pid_t pid, int cpu, int group_fd, unsigned long flags),
+	TP_ARGS(sc_exit(ret,) attr_uptr, pid, cpu, group_fd, flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(struct perf_event_attr *, attr_uptr, attr_uptr)) sc_in(ctf_integer(pid_t, pid, pid)) sc_in(ctf_integer(int, cpu, cpu)) sc_in(ctf_integer(int, group_fd, group_fd)) sc_in(ctf_integer(unsigned long, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(fanotify_init,
+	TP_PROTO(sc_exit(long ret,) unsigned int flags, unsigned int event_f_flags),
+	TP_ARGS(sc_exit(ret,) flags, event_f_flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(unsigned int, flags, flags)) sc_in(ctf_integer(unsigned int, event_f_flags, event_f_flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(fanotify_mark,
+	TP_PROTO(sc_exit(long ret,) int fanotify_fd, unsigned int flags, __u64 mask, int dfd, const char * pathname),
+	TP_ARGS(sc_exit(ret,) fanotify_fd, flags, mask, dfd, pathname),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, fanotify_fd, fanotify_fd)) sc_in(ctf_integer(unsigned int, flags, flags)) sc_in(ctf_integer(__u64, mask, mask)) sc_in(ctf_integer(int, dfd, dfd)) sc_in(ctf_user_string(pathname, pathname)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(open_by_handle_at,
+	TP_PROTO(sc_exit(long ret,) int mountdirfd, struct file_handle * handle, int flags),
+	TP_ARGS(sc_exit(ret,) mountdirfd, handle, flags),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, mountdirfd, mountdirfd)) sc_in(ctf_integer(struct file_handle *, handle, handle)) sc_in(ctf_integer(int, flags, flags)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(syncfs,
+	TP_PROTO(sc_exit(long ret,) int fd),
+	TP_ARGS(sc_exit(ret,) fd),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, fd, fd)))
+)
+
+SC_LTTNG_TRACEPOINT_EVENT(setns,
+	TP_PROTO(sc_exit(long ret,) int fd, int nstype),
+	TP_ARGS(sc_exit(ret,) fd, nstype),
+	TP_FIELDS(sc_exit(ctf_integer(long, ret, ret)) sc_in(ctf_integer(int, fd, fd)) sc_in(ctf_integer(int, nstype, nstype)))
+)
+
 PRAGMA GCC diagnostic pop
 ENDIF
