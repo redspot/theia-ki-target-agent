@@ -9,7 +9,10 @@ ifeq "$(shell expr $(GCCVERSION) \< 4.9)" "1"
 	MY_CPP = gcc-4.9 -E
 endif
 
-ccflags-y += -g3 -DDEBUG -I$(src) -I$(src)/include -Werror
+ccflags-y += -g3 -DDEBUG -Werror
+#use for debugging inline functions
+#ccflags-y += -Og -fno-inline
+ccflags-y += -I$(src) -I$(src)/include
 
 #core
 obj-m += theia_core_mod.o
