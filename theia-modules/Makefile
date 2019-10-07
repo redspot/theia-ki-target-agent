@@ -41,6 +41,8 @@ $(src)/theia_syscalls.h: $(src)/theia_syscalls.h.pre
 		| sed -e 's/^IFNDEF/#ifndef/g' \
 		| sed -e 's/^IFDEF/#ifdef/g' \
 		| sed -e 's/^ENDIF/#endif/g' \
+		| sed -e 's/^INCLUDE/#include/g' \
+		| sed -e 's/__LNX__/linux/g' \
 		| grep -v '^# ' \
 		| grep -v '^$$' \
 		> $@

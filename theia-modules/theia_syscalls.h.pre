@@ -1,5 +1,10 @@
 IFNDEF __THEIA_SYSCALLS__
 DEFINE __THEIA_SYSCALLS__
+INCLUDE <__LNX__/utime.h>
+INCLUDE <__LNX__/eventpoll.h>
+INCLUDE <__LNX__/mqueue.h>
+INCLUDE <__LNX__/kexec.h>
+INCLUDE <__LNX__/perf_event.h>
 #include <linux/version.h>
 
 #if defined(CONFIG_X86_64) && (LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0))
