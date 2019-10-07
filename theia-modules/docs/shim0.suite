@@ -1,0 +1,43 @@
+getegid01 getegid01
+getegid01_16 getegid01_16
+getegid02 getegid02
+getegid02_16 getegid02_16
+
+geteuid01 geteuid01
+geteuid01_16 geteuid01_16
+geteuid02 geteuid02
+geteuid02_16 geteuid02_16
+
+getgid01 getgid01
+getgid01_16 getgid01_16
+getgid03 getgid03
+getgid03_16 getgid03_16
+
+getpgrp01 getpgrp01
+
+getppid01 getppid01
+getppid02 getppid02
+
+gettid01 gettid01
+
+getuid01 getuid01
+getuid01_16 getuid01_16
+getuid03 getuid03
+getuid03_16 getuid03_16
+
+#inotify_init01 inotify_init01
+
+munlockall01 munlockall01
+munlockall02 munlockall02
+
+pause01 pause01
+pause02 pause02
+pause03 pause03
+
+setsid01 setsid01
+
+sync01 sync01
+sync02 sync02
+
+vhangup01 vhangup01
+vhangup02 vhangup02

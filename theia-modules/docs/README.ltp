@@ -1,0 +1,24 @@
+after installing Linux Test Project to /opt/ltp, do this to test different syscalls:
+
+```
+sudo cp theia-modules/docs/*.suite /opt/ltp/runtest
+sudo -i
+cd /opt/ltp
+
+#if you want to clear out previous logs
+#rm results/* output/*
+
+#if you want to control the exact names of output files
+./runltp -f shim0.suite -l shim0.log -o shim0.out -C shim0.failed -T shim0.tconf
+#if you dont care about the output filenames
+./runltp -f shim0.suite
+```
+
+there are currently 4 suites to test with:
+shim0.suite
+shim1.suite
+shim2.suite
+inotify.suite
+
+each shimN.suite will test all of the SIMPLE_SHIMs with N arguments.
+the inotify.suite will test all the syscalls related to inotify.

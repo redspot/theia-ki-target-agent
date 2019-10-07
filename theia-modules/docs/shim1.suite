@@ -1,0 +1,127 @@
+acct01 acct01
+
+alarm02 alarm02
+alarm03 alarm03
+alarm05 alarm05
+alarm06 alarm06
+alarm07 alarm07
+
+chdir01A symlink01 -T chdir01
+chdir01 chdir01
+chdir02 chdir02
+chdir03 chdir03
+chdir04 chdir04
+
+chroot01 chroot01
+chroot02 chroot02
+chroot03 chroot03
+chroot04 chroot04
+
+close01 close01
+close02 close02
+close08 close08
+
+dup01 dup01
+dup02 dup02
+dup03 dup03
+dup04 dup04
+dup05 dup05
+dup06 dup06
+dup07 dup07
+
+dup201 dup201
+dup202 dup202
+dup203 dup203
+dup204 dup204
+dup205 dup205
+
+dup3_01 dup3_01
+dup3_02 dup3_02
+
+#test for epoll_create(void) missing
+#epoll_create
+
+epoll_create1_01 epoll_create1_01
+
+eventfd01 eventfd01
+
+fchdir01 fchdir01
+fchdir02 fchdir02
+fchdir03 fchdir03
+
+fdatasync01 fdatasync01
+fdatasync02 fdatasync02
+
+fsync01 fsync01
+fsync02 fsync02
+fsync03 fsync03
+
+getpgid01 getpgid01
+getpgid02 getpgid02
+
+getsid01 getsid01
+getsid02 getsid02
+
+io_destroy01 io_destroy01
+
+mlockall01 mlockall01
+mlockall02 mlockall02
+mlockall03 mlockall03
+
+mq_unlink01 mq_unlink01
+
+personality01 personality01
+personality02 personality02
+
+rmdir01 rmdir01
+rmdir02 rmdir02
+rmdir03A symlink01 -T rmdir03
+rmdir03 rmdir03
+
+sched_get_priority_max01 sched_get_priority_max01
+sched_get_priority_max02 sched_get_priority_max02
+
+sched_get_priority_min01 sched_get_priority_min01
+sched_get_priority_min02 sched_get_priority_min02
+
+sched_getscheduler01 sched_getscheduler01
+sched_getscheduler02 sched_getscheduler02
+
+setfsgid01_16 setfsgid01_16
+setfsgid01 setfsgid01
+setfsgid02_16 setfsgid02_16
+setfsgid02 setfsgid02
+setfsgid03_16 setfsgid03_16
+setfsgid03 setfsgid03
+
+setfsuid01_16 setfsuid01_16
+setfsuid01 setfsuid01
+setfsuid02_16 setfsuid02_16
+setfsuid02 setfsuid02
+setfsuid03_16 setfsuid03_16
+setfsuid03 setfsuid03
+setfsuid04_16 setfsuid04_16
+setfsuid04 setfsuid04
+
+setgid01_16 setgid01_16
+setgid01 setgid01
+setgid02_16 setgid02_16
+setgid02 setgid02
+setgid03_16 setgid03_16
+setgid03 setgid03
+
+swapoff01 swapoff01
+swapoff02 swapoff02
+
+#testcase for syncfs(int fd) missing
+#syncfs
+
+timer_delete02 timer_delete02
+timer_delete03 timer_delete03
+
+timer_getoverrun01 timer_getoverrun01
+
+umask01 umask01
+
+unshare01 unshare01
+unshare02 unshare02

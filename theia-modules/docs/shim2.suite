@@ -1,0 +1,199 @@
+access01 access01
+access02 access02
+access03 access03
+access04 access04
+
+clock_settime02 clock_settime02
+clock_settime03 clock_settime03
+
+delete_module01 delete_module01
+delete_module02 delete_module02
+delete_module03 delete_module03
+
+dup201 dup201
+dup202 dup202
+dup203 dup203
+dup204 dup204
+dup205 dup205
+
+eventfd2_01 eventfd2_01
+eventfd2_02 eventfd2_02
+eventfd2_03 eventfd2_03
+
+#fanotify_init
+
+flock01 flock01
+flock02 flock02
+flock03 flock03
+flock04 flock04
+flock05 flock05
+flock06 flock06
+
+#fremovexattr
+
+ftruncate01_64 ftruncate01_64
+ftruncate01 ftruncate01
+ftruncate02_64 ftruncate02_64
+ftruncate02 ftruncate02
+ftruncate03_64 ftruncate03_64
+ftruncate03 ftruncate03
+ftruncate04_64 ftruncate04_64
+ftruncate04 ftruncate04
+
+getpriority01 getpriority01
+getpriority02 getpriority02
+
+#ioprio_get
+
+kill01 kill01
+kill02 kill02
+kill03 kill03
+kill04 kill04
+kill05 kill05
+kill06 kill06
+kill07 kill07
+kill08 kill08
+kill09 kill09
+kill10 kill10
+kill11 kill11
+kill12 kill12
+
+link01 symlink01 -T link01
+link02 link02
+link03 link03
+link04 link04
+link05 link05
+link06 link06
+link07 link07
+link08 link08
+
+#lremovexattr
+
+mkdir01 mkdir_tests.sh
+mkdir02 mkdir02
+mkdir03 mkdir03
+mkdir04 mkdir04
+mkdir05A symlink01 -T mkdir05
+mkdir05 mkdir05
+mkdir09 mkdir09
+
+mlock01 mlock01
+mlock02 mlock02
+mlock03 mlock03 -i 20
+mlock04 mlock04
+mlockall01 mlockall01
+mlockall02 mlockall02
+mlockall03 mlockall03
+
+mq_notify01 mq_notify01
+mq_notify02 mq_notify02
+
+msgget01 msgget01
+msgget02 msgget02
+msgget03 msgget03
+
+munlock01 munlock01
+munlock02 munlock02
+
+#pivot_root
+
+removexattr01 removexattr01
+removexattr02 removexattr02
+
+rename01A symlink01 -T rename01
+rename01 rename01
+rename02 rename02
+rename03 rename03
+rename04 rename04
+rename05 rename05
+rename06 rename06
+rename07 rename07
+rename08 rename08
+rename09 rename09
+rename10 rename10
+rename11 rename11
+rename12 rename12
+rename13 rename13
+rename14 rename14
+
+rt_sigsuspend01 rt_sigsuspend01
+
+sched_setparam01 sched_setparam01
+sched_setparam02 sched_setparam02
+sched_setparam03 sched_setparam03
+sched_setparam04 sched_setparam04
+sched_setparam05 sched_setparam05
+
+setdomainname01	setdomainname01
+setdomainname02	setdomainname02
+setdomainname03	setdomainname03
+
+setgroups01_16 setgroups01_16
+setgroups01 setgroups01
+setgroups02_16 setgroups02_16
+setgroups02 setgroups02
+setgroups03_16 setgroups03_16
+setgroups03 setgroups03
+setgroups04_16 setgroups04_16
+setgroups04 setgroups04
+
+sethostname01 sethostname01
+sethostname02 sethostname02
+sethostname03 sethostname03
+
+setns01 setns01
+setns02 setns02
+
+setpgid01 setpgid01
+setpgid02 setpgid02
+setpgid03 setpgid03
+
+setregid01_16 setregid01_16
+setregid01 setregid01
+setregid02_16 setregid02_16
+setregid02 setregid02
+setregid03_16 setregid03_16
+setregid03 setregid03
+setregid04_16 setregid04_16
+setregid04 setregid04
+
+set_robust_list01 set_robust_list01
+
+settimeofday01 settimeofday01
+settimeofday02 settimeofday02
+
+swapon01 swapon01
+swapon02 swapon02
+swapon03 swapon03
+
+symlink01 symlink01
+symlink02 symlink02
+symlink03 symlink03
+symlink04 symlink04
+symlink05 symlink05
+
+timerfd_create01 timerfd_create01
+
+tkill01 tkill01
+tkill02 tkill02
+
+truncate01_64 truncate01_64
+truncate01 truncate01
+truncate02_64 truncate02_64
+truncate02 truncate02
+truncate03_64 truncate03_64
+truncate03 truncate03
+
+umount2_01 umount2_01
+umount2_02 umount2_02
+umount2_03 umount2_03
+
+utime01A symlink01 -T utime01
+utime01 utime01
+utime02 utime02
+utime03 utime03
+utime04 utime04
+utime05 utime05
+utime06 utime06
+
+utimes01 utimes01
