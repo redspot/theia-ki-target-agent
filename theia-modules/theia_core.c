@@ -38,7 +38,7 @@ static ssize_t atomic_show(struct kobject *kobj, struct kobj_attribute *attr,
 {
   bool flag;
   struct kobj_attribute *ka;
-  struct kv_entry *e;
+  struct kv_entry *e = NULL;
   int i;
   struct attribute *a = NULL;
 
@@ -75,7 +75,7 @@ static ssize_t atomic_store(struct kobject *kobj, struct kobj_attribute *attr,
   unsigned int flag;
   int error;
   struct kobj_attribute *ka;
-  struct kv_entry *e;
+  struct kv_entry *e = NULL;
   int i;
   struct attribute *a = NULL;
 
