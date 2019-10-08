@@ -28,7 +28,6 @@ getuid03_16 getuid03_16
 #inotify_init01 inotify_init01
 
 munlockall01 munlockall01
-munlockall02 munlockall02
 
 pause01 pause01
 pause02 pause02
