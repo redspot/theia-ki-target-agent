@@ -63,6 +63,7 @@
 #include <linux/slab.h>
 #include <net/route.h>
 #include <linux/dmi.h>
+#include <linux/kmemleak.h>
 
 #include <linux/stacktrace.h>
 #include <asm/stacktrace.h>
@@ -25252,7 +25253,6 @@ static struct ctl_table replay_ctl_root[] =
   },
   {0, },
 };
-struct ctl_table_header *replay_ctl_header;
 #endif
 
 //call in replay_init()
@@ -25379,6 +25379,9 @@ EXPORT_SYMBOL(ensure_replayfs_paths);
 
 static int __init replay_init(void)
 {
+#ifdef CONFIG_SYSCTL
+  struct ctl_table_header *replay_ctl_header;
+#endif
   mm_segment_t old_fs;
   size_t len;
   char proc_whitelist[] = \
@@ -25414,6 +25417,7 @@ static int __init replay_init(void)
   theia_libpath[MAX_LIBPATH_STRLEN] = '\0';
 #ifdef CONFIG_SYSCTL
   replay_ctl_header = register_sysctl_table(replay_ctl_root);
+  kmemleak_not_leak(replay_ctl_header);
 #endif
 
   // setup defaults for proc and dirent hiding
