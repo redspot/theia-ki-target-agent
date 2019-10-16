@@ -102,8 +102,6 @@ SIMPLE_SHIM(getpgrp, 111)
 SIMPLE_SHIM(setsid, 112)
 SIMPLE_SHIM(gettid, 186)
 SIMPLE_SHIM(inotify_init, 253)
-SIMPLE_SHIM(open, 2)
-SIMPLE_SHIM(close, 3)
 SIMPLE_SHIM(mknod, 133)
 SIMPLE_SHIM(lseek, 8)
 SIMPLE_SHIM(access, 21)
@@ -299,8 +297,6 @@ struct ftrace_hook theia_hooks[] = {
   HOOK("sys_setsid", theia_hook_setsid, &real_sys_setsid),
   HOOK("sys_gettid", theia_hook_gettid, &real_sys_gettid),
   HOOK("sys_inotify_init", theia_hook_inotify_init, &real_sys_inotify_init),
-  HOOK("sys_open", theia_hook_open, &real_sys_open),
-  HOOK("sys_close", theia_hook_close, &real_sys_close),
   HOOK("sys_mknod", theia_hook_mknod, &real_sys_mknod),
   HOOK("sys_lseek", theia_hook_lseek, &real_sys_lseek),
   HOOK("sys_access", theia_hook_access, &real_sys_access),
