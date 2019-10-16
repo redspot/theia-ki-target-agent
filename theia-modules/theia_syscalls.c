@@ -217,7 +217,6 @@ SIMPLE_SHIM(epoll_create1, 291)
 SIMPLE_SHIM(dup3, 292)
 SIMPLE_SHIM(inotify_init1, 294)
 SIMPLE_SHIM(rt_tgsigqueueinfo, 297)
-SIMPLE_SHIM(perf_event_open, 298)
 SIMPLE_SHIM(fanotify_init, 300)
 SIMPLE_SHIM(fanotify_mark, 301)
 SIMPLE_SHIM(open_by_handle_at, 304)
@@ -412,7 +411,6 @@ struct ftrace_hook theia_hooks[] = {
   HOOK("sys_dup3", theia_hook_dup3, &real_sys_dup3),
   HOOK("sys_inotify_init1", theia_hook_inotify_init1, &real_sys_inotify_init1),
   HOOK("sys_rt_tgsigqueueinfo", theia_hook_rt_tgsigqueueinfo, &real_sys_rt_tgsigqueueinfo),
-  HOOK("sys_perf_event_open", theia_hook_perf_event_open, &real_sys_perf_event_open),
   HOOK("sys_fanotify_init", theia_hook_fanotify_init, &real_sys_fanotify_init),
   HOOK("sys_fanotify_mark", theia_hook_fanotify_mark, &real_sys_fanotify_mark),
   HOOK("sys_open_by_handle_at", theia_hook_open_by_handle_at, &real_sys_open_by_handle_at),
