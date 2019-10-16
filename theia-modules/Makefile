@@ -11,7 +11,7 @@ endif
 
 ccflags-y += -g3 -DDEBUG -Werror
 #use for debugging inline functions
-#ccflags-y += -Og -fno-inline
+ccflags-y += -Og -fno-inline
 ccflags-y += -I$(src) -I$(src)/include
 
 #core
